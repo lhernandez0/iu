@@ -189,6 +189,18 @@ function defaultThreshold(listId) {
  */
 let activeIndex = -1;
 
+/**
+ * Whether the highlighted cue sits in a gap between two lines.
+ *
+ * Cue times do not tile the timeline — a line ends and the next starts a moment
+ * later — so for a fraction of a second after every line nothing is being said.
+ * The panel dims rather than dropping the highlight, and this is what tells it
+ * which. Kept beside the index because the two always travel together.
+ *
+ * @type {boolean}
+ */
+let activePaused = false;
+
 /** @type {string|null} */
 let pendingError = null;
 
@@ -234,8 +246,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       // Remembered even with no panel attached, so opening one mid-video can
       // start at the live cue rather than at the top of the transcript.
+      //
+      // `paused` travels with it because the index alone cannot say whether that
+      // line is being spoken or is the line that just finished — those are
+      // different states on screen, and only the content script knows which.
       activeIndex = message.index;
-      panelPort?.postMessage({ type: MSG.POSITION, index: message.index, seconds: message.seconds });
+      activePaused = Boolean(message.paused);
+      panelPort?.postMessage({
+        type: MSG.POSITION,
+        index: message.index,
+        seconds: message.seconds,
+        paused: activePaused,
+      });
       return false;
 
     case MSG.CONTENT_VIDEO_CHANGED:
@@ -649,7 +671,10 @@ function adoptVideo(video) {
   // The remembered cue belongs to the video that was playing before. Carrying it
   // across would highlight a line of the NEW transcript at an index measured
   // against the old one — off by as much as the two transcripts differ.
-  if (currentVideoId !== video.videoId) activeIndex = -1;
+  if (currentVideoId !== video.videoId) {
+    activeIndex = -1;
+    activePaused = false;
+  }
 
   currentVideoId = video.videoId;
 
@@ -909,7 +934,10 @@ async function applyMarks(entry) {
   // A cue index is only meaningful against the transcript it was measured on.
   // Re-marking can change the row list, so a remembered index could point at a
   // different line — or past the end.
-  if (activeIndex >= entry.rows.length) activeIndex = -1;
+  if (activeIndex >= entry.rows.length) {
+    activeIndex = -1;
+    activePaused = false;
+  }
 
   const tokensPerLine = segmentSegments(
     entry.rows.map((row) => ({ start: row.start, text: row.text })),
@@ -1040,6 +1068,7 @@ function deriveState() {
       secondary: null,
       rows: [],
       activeIndex,
+      activePaused,
       error: pendingError ?? (trackedTabId === null ? 'No YouTube tab is active.' : null),
       learning: learningState(),
       lists: availableLists,
@@ -1072,6 +1101,9 @@ function deriveState() {
     // Carried in state rather than only as an event, so a panel that opens
     // mid-video starts where playback is instead of at the top.
     activeIndex,
+    // True when that line is the one that just finished rather than the one being
+    // spoken. The panel dims in that case rather than dropping the highlight.
+    activePaused,
     // A translation failure is reported BEFORE the track error. They are
     // separate on purpose: a track error replaces the transcript and blocks the
     // cache, while a translation error means "the text below is the original,
@@ -1096,7 +1128,7 @@ function learningState() {
   const active = availableLists.find((list) => list.id === settings.listId) ?? availableLists[0];
   return {
     view: settings.view,
-    textScale: settings.textScale,
+    fontSize: settings.fontSize,
     listId: settings.listId,
     threshold: settings.threshold,
     primaryLanguage: settings.primaryLanguage,
@@ -1197,7 +1229,7 @@ async function applySetting(id, value) {
     }
 
     default:
-      // view and textScale are pure presentation: the panel applies them and
+      // view and fontSize are pure presentation: the panel applies them and
       // nothing here needs to react.
       break;
   }

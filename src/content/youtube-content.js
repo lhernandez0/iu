@@ -658,17 +658,34 @@
       const index = findActiveIndex(video.segments, seconds);
       if (index === lastActiveIndex) return;
       lastActiveIndex = index;
-      post({ type: MSG.CONTENT_POSITION, target: TARGET.BACKGROUND, index, seconds });
+      post({ type: MSG.CONTENT_POSITION, target: TARGET.BACKGROUND, index, seconds, paused: isPaused(index, seconds) });
     }, POSITION_POLL_MS),
   );
+
+  /**
+   * Whether playback sits in a gap between two cues.
+   *
+   * YouTube's own cue times do not tile the timeline — one line ends and the next
+   * begins a variable fraction of a second later. That gap is real silence, and
+   * the panel shows it by dimming rather than by dropping the highlight.
+   *
+   * @param {number} index
+   * @param {number} seconds
+   * @returns {boolean}
+   */
+  function isPaused(index, seconds) {
+    const segment = video.segments?.[index];
+    if (!segment) return true;
+    // The final cue often has no duration at all, so there is nothing to be
+    // beyond; treating that as paused would dim the last line forever.
+    if (!segment.duration) return false;
+    return seconds > segment.start + segment.duration;
+  }
 
   /** Mirrors findActiveIndex in src/common/transcript.js. @returns {number} */
   function findActiveIndex(segments, seconds) {
     for (let i = segments.length - 1; i >= 0; i--) {
-      if (seconds >= segments[i].start) {
-        const end = segments[i].start + (segments[i].duration || 0);
-        return seconds <= end || i === segments.length - 1 ? i : -1;
-      }
+      if (seconds >= segments[i].start) return i;
     }
     return -1;
   }

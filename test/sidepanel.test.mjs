@@ -47,9 +47,12 @@ const PANEL_IDS = [
   'secondary',
   'translate-primary',
   'translate-secondary',
+  'translate-menu',
+  'translate-toggle-primary',
+  'translate-toggle-secondary',
   'swap',
   'view-mode',
-  'text-scale',
+  'font-size',
   'list',
   'threshold',
   'follow',
@@ -60,6 +63,9 @@ const PANEL_IDS = [
   'save',
 ];
 
+/** Ids the real sidepanel.html starts hidden. */
+const HIDDEN_IDS = ['translate-menu'];
+
 /**
  * Evaluate a fresh copy of the panel against fresh stubs.
  *
@@ -67,7 +73,7 @@ const PANEL_IDS = [
  * @returns {Promise<{ports: object[], lastPort: Function, lastErrorRead: Function, created: object[], byId: Map<string, object>, dom: object}>}
  */
 async function bootPanel(options = {}) {
-  const dom = installDomStub(PANEL_IDS);
+  const dom = installDomStub(PANEL_IDS, { hidden: HIDDEN_IDS });
   const chromeStub = installChromeStubForPanel(options);
   await import(`../src/sidepanel/sidepanel.js?boot=${++bootCount}`);
   await settle();
@@ -118,7 +124,7 @@ const stateWithSettings = (learning, top) => ({
   ...(top ?? {}),
   learning: {
     view: 'all',
-    textScale: 1,
+    fontSize: 13,
     listId: 'hsk3_0',
     threshold: 3,
     primaryLanguage: 'en',
@@ -319,7 +325,7 @@ section('the focus view is a class on the list, so nothing has to be re-rendered
 
   port.emit({ type: 'state', state: stateWithSettings({ view: 'all' }) });
   check('and switching back clears it', transcript.classList.contains('focus'), false);
-  check('the root scale is untouched by the view', dom.document.documentElement.style.getPropertyValue('--text-scale'), '1');
+  check('the text size is untouched by the view', dom.document.documentElement.style.getPropertyValue('--font-size'), '13px');
 }
 
 section('the line after the current one is marked as the preview');
@@ -346,28 +352,53 @@ section('the line after the current one is marked as the preview');
 
 // --- 11. Text size -----------------------------------------------------------
 
-section('text size is a scale factor applied to the document root');
+section('text size is a pixel number applied to the document root');
 
 {
   const { lastPort, dom, byId } = await bootPanel();
 
-  lastPort().emit({ type: 'state', state: stateWithSettings({ textScale: 1 }) });
-  check('the default is 1', dom.document.documentElement.style.getPropertyValue('--text-scale'), '1');
+  lastPort().emit({ type: 'state', state: stateWithSettings({ fontSize: 13 }) });
+  check('13px is applied as 13px', dom.document.documentElement.style.getPropertyValue('--font-size'), '13px');
 
-  lastPort().emit({ type: 'state', state: stateWithSettings({ textScale: 1.45 }) });
-  check('a larger size is applied', dom.document.documentElement.style.getPropertyValue('--text-scale'), '1.45');
+  lastPort().emit({ type: 'state', state: stateWithSettings({ fontSize: 18 }) });
+  // The number the learner picks is the number that lands. A multiplier would
+  // need them to know the base size to predict what 1.4 does.
+  check('18px is applied as 18px', dom.document.documentElement.style.getPropertyValue('--font-size'), '18px');
+  check('and the field shows it', byId.get('font-size').value, '18');
 
   // Sent to the worker too, so the choice survives closing the panel.
   const port = lastPort();
-  byId.get('text-scale').value = '1.75';
-  byId.get('text-scale').dispatch('change');
+  byId.get('font-size').value = '22';
+  byId.get('font-size').dispatch('change');
   check('changing it sends SET_SETTING', port.sent.at(-1)?.type, 'set-setting');
-  check('for the textScale setting', port.sent.at(-1)?.id, 'textScale');
-  check('with a number, not a string', port.sent.at(-1)?.value, 1.75);
-  check('and applies immediately, without waiting for the worker', dom.document.documentElement.style.getPropertyValue('--text-scale'), '1.75');
+  check('for the fontSize setting', port.sent.at(-1)?.id, 'fontSize');
+  check('with a number, not a string', port.sent.at(-1)?.value, 22);
+  check('and applies immediately, without waiting for the worker', dom.document.documentElement.style.getPropertyValue('--font-size'), '22px');
 }
 
-section('the focus view sends its change too, and applies at once');
+section('a nonsense text size cannot reach the stylesheet');
+
+{
+  const { lastPort, dom, byId } = await bootPanel();
+
+  // Clamped on the panel side as well as in the worker, so a value typed by hand
+  // or restored from old storage cannot produce unreadable text.
+  lastPort().emit({ type: 'state', state: stateWithSettings({ fontSize: 400 }) });
+  check('an absurd size is clamped high', dom.document.documentElement.style.getPropertyValue('--font-size'), '32px');
+
+  lastPort().emit({ type: 'state', state: stateWithSettings({ fontSize: 1 }) });
+  check('and low', dom.document.documentElement.style.getPropertyValue('--font-size'), '10px');
+
+  lastPort().emit({ type: 'state', state: stateWithSettings({ fontSize: undefined }) });
+  check('a missing size falls back to the base', dom.document.documentElement.style.getPropertyValue('--font-size'), '13px');
+
+  // The control itself carries the range, taken from the schema, so it cannot
+  // offer a size the worker would clamp away.
+  check('the input knows its minimum', byId.get('font-size').min, '10');
+  check('and its maximum', byId.get('font-size').max, '32');
+}
+
+section('the view sends its change too, and applies at once');
 
 {
   const { lastPort, byId } = await bootPanel();
@@ -390,12 +421,10 @@ section('the controls are built from the schema, not hand-written here');
   lastPort().emit({ type: 'state', state: stateWithSettings() });
 
   const viewOptions = byId.get('view-mode').find((el) => el.tagName === 'OPTION');
-  const scaleOptions = byId.get('text-scale').find((el) => el.tagName === 'OPTION');
 
   check('the view offers both modes', viewOptions.length, 2);
-  check('named as the schema names them', viewOptions.map((o) => o.text), ['All lines', 'Current + next']);
+  check('named as the schema names them', viewOptions.map((o) => o.text), ['Full', 'Current']);
   check('with the schema values', viewOptions.map((o) => o.value), ['all', 'focus']);
-  check('and text sizes are offered', scaleOptions.length > 2, true);
 }
 
 // --- 12. Auto-translate ------------------------------------------------------
@@ -540,6 +569,63 @@ section('the status line distinguishes a translation from a real track');
   // An arrow, because "English" on its own would claim a Japanese track exists
   // when it is English text machine-translated into Japanese.
   check('the translation is shown', status.includes('English→Japanese'), true);
+}
+
+// --- 13. The translate menu behind an icon -----------------------------------
+
+section('the translate menus stay out of the way until asked for');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings() });
+
+  // Four stacked pickers made the bar taller and put a dead control on screen
+  // whenever the video had no second subtitle. One icon reveals both menus.
+  check('the menu starts hidden', byId.get('translate-menu').hidden, true);
+
+  byId.get('translate-toggle-primary').dispatch('click');
+  check('clicking the icon reveals it', byId.get('translate-menu').hidden, false);
+  check('and the icon reports it is expanded', byId.get('translate-toggle-primary').getAttribute('aria-expanded'), 'true');
+  check('and is marked active', byId.get('translate-toggle-primary').classList.contains('on'), true);
+
+  // The second icon opens the same menu: they are different settings but the
+  // same act, so one state to understand rather than two.
+  byId.get('translate-toggle-secondary').dispatch('click');
+  check('either icon closes it again', byId.get('translate-menu').hidden, true);
+  check('and clears the active mark', byId.get('translate-toggle-primary').classList.contains('on'), false);
+}
+
+section('the paused line holds its place in both views');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  const port = lastPort();
+  port.emit({ type: 'state', state: stateWithSettings() });
+  const rows = byId.get('transcript').find((el) => el.classList.contains('row'));
+
+  // In a gap: the line that finished is still the current line, but nothing is
+  // being said. It dims rather than vanishing.
+  port.emit({ type: 'position', index: 1, seconds: 3, paused: true });
+  check('the row keeps the highlight', rows[1].classList.contains('active'), true);
+  check('and is marked as not speaking', rows[1].classList.contains('paused'), true);
+
+  port.emit({ type: 'position', index: 2, seconds: 4.5, paused: false });
+  check('speaking clears the dim', rows[2].classList.contains('paused'), false);
+  check('including on the row that had it', rows[1].classList.contains('paused'), false);
+  check('and the highlight moved on', rows[2].classList.contains('active'), true);
+}
+
+section('a state push carries the paused flag, so a panel opened mid-gap agrees');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  // The flag has to travel in state as well as in the position event, or a panel
+  // opened during a gap would show a line as though it were being spoken.
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { activeIndex: 0, activePaused: true }) });
+
+  const rows = byId.get('transcript').find((el) => el.classList.contains('row'));
+  check('the row is highlighted', rows[0].classList.contains('active'), true);
+  check('and dimmed, because it is a gap', rows[0].classList.contains('paused'), true);
 }
 
 // --- Result ------------------------------------------------------------------

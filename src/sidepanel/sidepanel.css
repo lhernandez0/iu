@@ -6,13 +6,19 @@
   --danger: #ff6b6b;
   --surface: #1e2128;
 
-  /* One multiplier for every size in this file.
-     A single variable holding a size cannot work here, because there are nine
-     separate sizes and a rule lower down would override it. Multiplying each by
-     this instead means the whole panel scales together, and the useful range is
-     wider than Latin text suggests — CJK is denser per character, so a learner
-     often wants 18-20px where 13px reads fine in English. */
-  --text-scale: 1;
+  /* The base size, in px, at the root. Every other size in this file is a
+     multiple of it. A number rather than a multiplier: "18px" is unambiguous
+     and is what a browser's own zoom and font settings speak, while a scale
+     factor forces the reader to do the arithmetic against a base they have to
+     go and look up. */
+  --font-size: 13px;
+  /* Unitless, and it has to be: CSS cannot multiply two lengths, so
+     `calc(12px * var(--text-scale))` only works while this is a plain number.
+     Dividing px by px is what yields one — writing `calc(var(--font-size) / 13)`
+     leaves a length, and every `calc(12px * that)` is then invalid, which
+     silently discards those declarations and falls back to the browser default.
+     The 13px here must match the 13px above. */
+  --text-scale: calc(var(--font-size) / 13px);
   --line-height: 1.5;
   color-scheme: dark;
 }
@@ -28,7 +34,7 @@ body {
   height: 100vh;
   background: var(--bg);
   color: var(--fg);
-  font: calc(13px * var(--text-scale)) / var(--line-height) system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: var(--font-size) / var(--line-height) system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 .bar {
@@ -45,18 +51,82 @@ body {
   margin-top: auto;
 }
 
-/* One language slot: the track you read, and — beneath it — the language to
-   auto-translate it into. Stacking rather than putting all four pickers on one
-   row keeps each one wide enough to read at 1.75x text size. */
+/* One language slot: the picker, and the icon that reveals its translate menu. */
 .lang {
   display: flex;
   flex: 1 1 0;
   min-width: 0;
-  flex-direction: column;
   gap: 4px;
+  align-items: center;
 }
 
-.translate {
+/* Reveal-the-translate-menu control. Small and secondary to the picker, because
+   translating is the occasional act and choosing the subtitle is the constant
+   one. */
+.tr-toggle {
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  line-height: 1;
+  font-size: calc(12px * var(--text-scale));
+  /* Dim until it is doing something, so a translated line is visible at a
+     glance without the control competing with the language picker. */
+  color: var(--muted);
+}
+
+.tr-toggle.on {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.tr-toggle:disabled {
+  opacity: 0.3;
+}
+
+/* The translate menus, shown only when their icon is toggled open. */
+.translate-menu {
+  display: flex;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #2a2e37;
+  background: #1a1d24;
+}
+
+.translate-menu[hidden] {
+  display: none;
+}
+
+.translate-menu select {
+  font-size: calc(12px * var(--text-scale));
+}
+
+/* A numeric size, so the units are part of the control rather than implied. */
+.size {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.size input {
+  width: 3ch;
+  padding: 5px 0;
+  border: none;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: right;
+}
+
+.size input:focus {
+  outline: none;
+}
+
+.size-unit {
   font-size: calc(11px * var(--text-scale));
 }
 
@@ -176,6 +246,31 @@ select:disabled {
 .row.active .primary,
 .row.active .secondary {
   color: #fff;
+}
+
+/* Between spoken lines: nothing is being said, but the transcript must not go
+   blank — a reader looking up mid-gap would lose their place entirely, which is
+   the opposite of what a reading aid is for. So the last line stays lit, dimmed
+   to show it is not being spoken right now.
+
+   Deliberately NOT dimming the marks. A coloured underline is the one thing that
+   says "this word is the one you are learning", and fading it would hide exactly
+   the information the panel exists to show. */
+.row.paused {
+  background: #1b1e25;
+  border-color: transparent;
+}
+
+.row.paused .time,
+.row.paused .primary,
+.row.paused .secondary {
+  color: #c3c8d2;
+}
+
+/* .next is the preview of the line after the current one, used by the Current
+   view to show what is coming. */
+.row.next .secondary {
+  opacity: 0.8;
 }
 
 .time {

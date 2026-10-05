@@ -9,18 +9,26 @@
     <header class="bar">
       <div class="lang">
         <select id="primary" aria-label="Primary language"></select>
-        <select id="translate-primary" class="translate" aria-label="Language to translate the primary line into"></select>
+        <button id="translate-toggle-primary" type="button" class="tr-toggle" aria-label="Translate this line" aria-expanded="false" title="Machine-translate this line">&#127760;</button>
       </div>
       <button id="swap" type="button" title="Swap languages" aria-label="Swap languages">&#8646;</button>
       <div class="lang">
         <select id="secondary" aria-label="Second language"></select>
-        <select id="translate-secondary" class="translate" aria-label="Language to translate the second line into"></select>
+        <button id="translate-toggle-secondary" type="button" class="tr-toggle" aria-label="Translate this line" aria-expanded="false" title="Machine-translate this line">&#127760;</button>
       </div>
     </header>
 
+    <div id="translate-menu" class="translate-menu" hidden>
+      <select id="translate-primary" aria-label="Language to translate the first line into"></select>
+      <select id="translate-secondary" aria-label="Language to translate the second line into"></select>
+    </div>
+
     <header class="bar learning">
       <select id="view-mode" aria-label="How much of the transcript to show"></select>
-      <select id="text-scale" aria-label="Text size"></select>
+      <label class="size" title="Text size in pixels">
+        <input id="font-size" type="number" min="10" max="32" step="1" aria-label="Text size in pixels" />
+        <span class="size-unit">px</span>
+      </label>
       <select id="list" aria-label="Word list"></select>
       <select id="threshold" aria-label="Highlight from level"></select>
     </header>

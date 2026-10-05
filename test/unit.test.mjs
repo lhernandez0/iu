@@ -88,9 +88,15 @@ check('at the very start', findActiveIndex(timeline, 0), 0);
 check('inside the first cue', findActiveIndex(timeline, 1), 0);
 check('at a cue boundary belongs to the new cue', findActiveIndex(timeline, 10), 1);
 check('inside the second cue', findActiveIndex(timeline, 10.5), 1);
-check('in a gap between cues', findActiveIndex(timeline, 5), -1);
+// A gap between cues belongs to the line that just finished, NOT to nothing.
+//
+// This used to return -1, and that was a real bug rather than a design choice:
+// cue times do not tile the timeline, so after every single line the highlight
+// blinked off, and the Current view — which shows only the active row — went
+// completely blank between every pair of lines.
+check('in a gap after a cue, the finished line still holds', findActiveIndex(timeline, 5), 0);
 check('inside the last cue', findActiveIndex(timeline, 21), 2);
-check('past the end clamps to the last cue', findActiveIndex(timeline, 999), 2);
+check('past the end holds the last cue', findActiveIndex(timeline, 999), 2);
 check('empty transcript', findActiveIndex([], 5), -1);
 check('a single cue', findActiveIndex([seg(0, 'only', 1)], 0.5), 0);
 

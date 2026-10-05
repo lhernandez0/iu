@@ -443,6 +443,13 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('the original text is shown first', untranslated, 'こんにちは');
     check('with no machine tag', await page.evaluate(() => document.querySelectorAll('.machine').length), 0);
 
+    // The translate menu is behind an icon, so it has to be opened first — the
+    // same thing a user does. Asserted rather than assumed, because a menu that
+    // failed to open would otherwise look like the fetch failing.
+    check('the menu starts hidden', await page.evaluate(() => document.getElementById('translate-menu').hidden), true);
+    await page.click('#translate-toggle-primary');
+    check('the icon reveals it', await page.evaluate(() => document.getElementById('translate-menu').hidden), false);
+
     // Pick a translation through the real control.
     await page.selectOption('#translate-primary', 'en');
     // The text has to actually change, so waiting on the value alone would pass
@@ -541,18 +548,22 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     });
     check('the preview is dimmed', opacity === null || opacity < 1, true);
 
-    // Text size. Scaled through the same variable the stylesheet reads.
-    await page.selectOption('#text-scale', '1.75');
+    // Text size. The number typed is the number that lands at the root.
+    await page.fill('#font-size', '24');
+    await page.dispatchEvent('#font-size', 'change');
     const scaled = await layout();
-    check('the body text actually grew', scaled.bodyFont > before.bodyFont, true);
-    // Nine separate sizes are scaled by that one variable, so a rule that reads
-    // the variable but was never converted would show up as a size that did not
-    // move.
-    check('the line height scaled with it', scaled.rowLineHeight > before.rowLineHeight, true);
+    // Exact, not just "grew": 24px was asked for, so 24px should be what the
+    // browser reports. A multiplier would only show a ratio, and a bug that
+    // applied the wrong base would still pass an inequality.
+    check('the body font is the size asked for', scaled.bodyFont, 24);
+    // Nine separate sizes derive from it, so a rule that reads the variable but
+    // was never converted would show up as a size that did not move.
+    check('the line height follows it', scaled.rowLineHeight, 24 * 1.5);
     console.log(`        body ${before.bodyFont}px -> ${scaled.bodyFont}px, line ${before.rowLineHeight}px -> ${scaled.rowLineHeight}px`);
 
     // And back, so the two states are not one-way.
-    await page.selectOption('#text-scale', '1');
+    await page.fill('#font-size', '13');
+    await page.dispatchEvent('#font-size', 'change');
     await page.selectOption('#view-mode', 'all');
     const restored = await layout();
     check('text size returns', restored.bodyFont, before.bodyFont);

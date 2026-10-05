@@ -684,7 +684,7 @@ section('a stored setting is restored, and one out of range is corrected');
     providePayload: PROVIDER(VIDEO, SEGMENTS),
     trackPayload: GERMAN,
     storage: {
-      settings: { view: 'focus', textScale: 40, listId: 'nonsense', threshold: 2, primaryLanguage: 'de' },
+      settings: { view: 'focus', fontSize: 400, listId: 'nonsense', threshold: 2, primaryLanguage: 'de' },
     },
     // Storage is slow enough that a panel connecting immediately, as it does in
     // reality, would otherwise be served before the restore finished.
@@ -697,7 +697,7 @@ section('a stored setting is restored, and one out of range is corrected');
     await waitForState(stub.received, (s) => s.learning?.view === 'focus', 'the settings to be restored')
   ).learning;
   check('a valid setting is restored', learning?.view, 'focus');
-  check('an absurd text size is clamped', learning?.textScale, 3);
+  check('an absurd text size is clamped to the maximum', learning?.fontSize, 32);
   check('an unknown word list falls back', learning?.listId !== 'nonsense', true);
   check('and the restored language was applied', stub.received.at(-1)?.state?.primary, 'de');
   check('and its lines were fetched, not the default ones', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hallo');
@@ -708,16 +708,16 @@ section('changing a setting is remembered');
 {
   const stub = await boot(TRACK(GERMAN));
 
-  stub.sendFromPanel({ type: 'set-setting', id: 'textScale', value: 1.45 });
+  stub.sendFromPanel({ type: 'set-setting', id: 'fontSize', value: 18 });
   await settle();
 
-  check('it landed in storage', stub.storage.settings?.textScale, 1.45);
-  check('and is reflected in the state', stub.received.at(-1)?.state?.learning?.textScale, 1.45);
+  check('it landed in storage', stub.storage.settings?.fontSize, 18);
+  check('and is reflected in the state', stub.received.at(-1)?.state?.learning?.fontSize, 18);
 
   stub.sendFromPanel({ type: 'set-setting', id: 'view', value: 'focus' });
   await settle();
   check('a second setting is stored alongside', stub.storage.settings?.view, 'focus');
-  check('without losing the first', stub.storage.settings?.textScale, 1.45);
+  check('without losing the first', stub.storage.settings?.fontSize, 18);
 
   // An unknown id should be ignored rather than written, so a panel from a newer
   // version cannot poison the stored object with keys nothing understands.
@@ -725,11 +725,11 @@ section('changing a setting is remembered');
   await settle();
   check('an unknown setting is ignored', 'notASetting' in (stub.storage.settings ?? {}), false);
   check('and a nonsense value is coerced, not stored raw', (() => {
-    stub.sendFromPanel({ type: 'set-setting', id: 'textScale', value: 'huge' });
+    stub.sendFromPanel({ type: 'set-setting', id: 'fontSize', value: 'huge' });
     return true;
   })(), true);
   await settle();
-  check('the nonsense size fell back to the default', stub.storage.settings?.textScale, 1);
+  check('the nonsense size fell back to the default', stub.storage.settings?.fontSize, 13);
 }
 
 section('the choices a learner makes are all reported back in the learning block');
@@ -740,7 +740,7 @@ section('the choices a learner makes are all reported back in the learning block
 
   // The panel renders its controls from this block, so a missing key is a
   // control that silently never updates.
-  for (const key of ['view', 'textScale', 'listId', 'threshold', 'primaryLanguage', 'secondaryLanguage']) {
+  for (const key of ['view', 'fontSize', 'listId', 'threshold', 'primaryLanguage', 'secondaryLanguage']) {
     check(`${key} is present`, key in (learning ?? {}), true);
   }
   check('the word lists are offered', Array.isArray(learning?.listOptions), true);

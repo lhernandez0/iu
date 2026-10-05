@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 460 checks)
+## Tier 1 — hermetic (`npm test`, 481 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies — plain Node scripts,
@@ -39,9 +39,9 @@ so they run with nothing installed.
 | --- | --- | --- |
 | `unit.test.mjs` | nothing | 48 |
 | `service-worker.test.mjs` | worker + `chrome` stub | 178 |
-| `sidepanel.test.mjs` | panel + DOM stub | 81 |
+| `sidepanel.test.mjs` | panel + DOM stub | 99 |
 | `page-bridge.test.mjs` | bridge + page stub | 42 |
-| `content.test.mjs` | content script | 67 |
+| `content.test.mjs` | content script | 70 |
 | `learn.test.mjs` | segmenter + word list | 44 |
 
 Each file is spawned as its own process, because they all grab the same globals
@@ -68,7 +68,7 @@ The content stub models an **orphaned extension context**: `id` absent, and
 that quietly resolved would not exercise the path at all, and the bug being
 pinned is precisely that the throw escaped.
 
-## Tier 2 — browser, offline (`npm run test:browser`, 80 checks)
+## Tier 2 — browser, offline (`npm run test:browser`, 82 checks)
 
 The real extension in real Chromium. The only thing faked is the network, and it
 is intercepted at the transport layer with `context.route`, so the content script
@@ -89,6 +89,11 @@ Covers what the hermetic tier structurally cannot:
   content script, fetched over a real route, and re-rendered by the real panel,
   then changed back. A hermetic test stubs the fetch, so it can never show the
   parameter arriving.
+- **that derived CSS actually computes**: the font size is asserted as an exact
+  px value rather than "it grew". This caught a real bug immediately —
+  `calc(13px * calc(var(--font-size) / 13))` multiplies two lengths, which CSS
+  rejects, so every one of the nine derived sizes silently fell back to the
+  browser default while every hermetic test stayed green.
 
 Notable details in `test/browser/harness.mjs`, all of which cost time to find:
 

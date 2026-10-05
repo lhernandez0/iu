@@ -24,24 +24,21 @@
  * @property {'select'|'number'} type
  * @property {any} default
  * @property {Array<{value: any, label: string}>} [options] For 'select'.
+ * @property {number} [min]         For 'number'.
+ * @property {number} [max]         For 'number'.
+ * @property {number} [step]        For 'number'.
  * @property {string} [group]       Which section of the panel it belongs to.
  * @property {(value: any, context?: object) => any} [coerce] Normalise a stored value.
  * @property {boolean} [dynamic]    Options are supplied at render time, not here.
  */
 
-/** A reader's eye needs a range wider than Latin text suggests: CJK is denser per character. */
-const TEXT_SCALE_OPTIONS = [
-  { value: 0.9, label: 'Small' },
-  { value: 1, label: 'Normal' },
-  { value: 1.2, label: 'Large' },
-  { value: 1.45, label: 'Larger' },
-  { value: 1.75, label: 'Huge' },
-];
+/** The base size every other size in the panel is a multiple of. */
+export const BASE_FONT_PX = 13;
 
 /** How much of the transcript is shown at once. */
 const VIEW_OPTIONS = [
-  { value: 'all', label: 'All lines' },
-  { value: 'focus', label: 'Current + next' },
+  { value: 'all', label: 'Full' },
+  { value: 'focus', label: 'Current' },
 ];
 
 /**
@@ -58,18 +55,23 @@ export const SETTINGS = [
     coerce: (value) => (VIEW_OPTIONS.some((o) => o.value === value) ? value : 'all'),
   },
   {
-    id: 'textScale',
+    id: 'fontSize',
     label: 'Text size',
     group: 'reading',
-    type: 'select',
-    options: TEXT_SCALE_OPTIONS,
-    default: 1,
+    type: 'number',
+    default: BASE_FONT_PX,
+    min: 10,
+    max: 32,
+    step: 1,
     coerce: (value) => {
-      const number = Number(value);
+      // A size, in px, at the root. Named in px rather than as a preset because
+      // a preset cannot express "the one in between the two I like".
+      //
       // Clamped rather than rejected: a size slightly out of range should still
       // render, and only a nonsense value falls back to the default.
-      if (!Number.isFinite(number) || number <= 0) return 1;
-      return Math.min(3, Math.max(0.5, number));
+      const number = Number(value);
+      if (!Number.isFinite(number)) return BASE_FONT_PX;
+      return Math.min(32, Math.max(10, Math.round(number)));
     },
   },
   {

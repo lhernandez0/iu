@@ -13,7 +13,7 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
-import { definition } from '../common/settings.js';
+import { definition, BASE_FONT_PX } from '../common/settings.js';
 import { attachHover, showEntry, hide as hidePopover, renderTokens } from './marks.js';
 
 /**
@@ -30,7 +30,6 @@ function optionsFor(id) {
 }
 
 const VIEW_OPTIONS = optionsFor('view');
-const TEXT_SCALE_OPTIONS = optionsFor('textScale');
 
 /**
  * Phase switch. True drives the parked tabCapture -> offscreen -> engine path
@@ -51,11 +50,14 @@ const els = {
   secondary: /** @type {HTMLSelectElement} */ (document.getElementById('secondary')),
   translatePrimary: /** @type {HTMLSelectElement} */ (document.getElementById('translate-primary')),
   translateSecondary: /** @type {HTMLSelectElement} */ (document.getElementById('translate-secondary')),
+  translateMenu: /** @type {HTMLElement} */ (document.getElementById('translate-menu')),
+  translateTogglePrimary: /** @type {HTMLButtonElement} */ (document.getElementById('translate-toggle-primary')),
+  translateToggleSecondary: /** @type {HTMLButtonElement} */ (document.getElementById('translate-toggle-secondary')),
   swap: /** @type {HTMLButtonElement} */ (document.getElementById('swap')),
   list: /** @type {HTMLSelectElement} */ (document.getElementById('list')),
   threshold: /** @type {HTMLSelectElement} */ (document.getElementById('threshold')),
   viewMode: /** @type {HTMLSelectElement} */ (document.getElementById('view-mode')),
-  textScale: /** @type {HTMLSelectElement} */ (document.getElementById('text-scale')),
+  fontSize: /** @type {HTMLInputElement} */ (document.getElementById('font-size')),
   follow: /** @type {HTMLInputElement} */ (document.getElementById('follow')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
   transcript: /** @type {HTMLElement} */ (document.getElementById('transcript')),
@@ -80,6 +82,8 @@ const view = {
   hoveredWord: null,
   /** Whether the panel is showing only the current line and the next. */
   focusMode: false,
+  /** Whether the highlighted line is actually being spoken, or is a held gap. */
+  speaking: true,
   /** What each line was machine-translated into, if anything, for the row tags. */
   translatePrimary: null,
   translateSecondary: null,
@@ -170,11 +174,13 @@ function onWorkerMessage(message) {
       // what makes Follow true from the moment the panel appears: without it the
       // panel hears nothing until the next cue change, which on a paused video
       // never comes.
-      if (message.state?.activeIndex >= 0) setActive(message.state.activeIndex);
+      if (message.state?.activeIndex >= 0) {
+        setActive(message.state.activeIndex, !message.state.activePaused);
+      }
       return;
     }
     if (message.type === MSG.POSITION) {
-      if (message.index < view.rows.length) setActive(message.index);
+      if (message.index < view.rows.length) setActive(message.index, !message.paused);
       return;
     }
     if (message.type === MSG.ENTRY) {
@@ -430,13 +436,26 @@ function renderLearning(state) {
 
   fillSelectOptions(els.threshold, learning.thresholdOptions ?? [], learning.threshold, '—');
 
-  fillSelectOptions(els.viewMode, VIEW_OPTIONS, learning.view, 'All lines');
-  fillSelectOptions(els.textScale, TEXT_SCALE_OPTIONS, learning.textScale, 'Normal');
+  fillSelectOptions(els.viewMode, VIEW_OPTIONS, learning.view, 'Full');
+
+  // Bounds come from the schema rather than being repeated in the HTML, so the
+  // control cannot offer a range the worker would clamp away.
+  const size = definition('fontSize');
+  if (size) {
+    els.fontSize.min = String(size.min);
+    els.fontSize.max = String(size.max);
+  }
+  // Rebuilt only when it differs, so typing a size does not fight the user by
+  // resetting the field mid-edit.
+  const sizeValue = String(learning.fontSize ?? '');
+  if (document.activeElement !== els.fontSize && els.fontSize.value !== sizeValue) {
+    els.fontSize.value = sizeValue;
+  }
 
   // Applied here rather than round-tripped through the worker: text size and the
   // focus view are pure presentation, so sending them anywhere would be a
   // message that changes nothing on the other side.
-  applyTextScale(learning.textScale);
+  applyFontSize(learning.fontSize);
   applyView(learning.view);
 }
 
@@ -476,17 +495,22 @@ function fillSelectOptions(select, options, selected, placeholder, { leading = n
 }
 
 /**
- * Text size is a single scale factor on the root element.
+ * Text size is a single pixel size on the root element.
  *
- * Every size in the stylesheet is expressed as `calc(<px> * var(--text-scale))`,
- * because the alternative — one variable holding a size that other rules
- * override — cannot move nine separate sizes together.
+ * Every other size in the stylesheet is expressed as a multiple of it, because
+ * the alternative — one variable holding a size that other rules override —
+ * cannot move nine separate sizes together.
  *
- * @param {number} scale
+ * A px number rather than a preset or a multiplier: "18px" is what the browser's
+ * own zoom and font settings speak, and it needs no arithmetic against a base
+ * the reader would have to go and look up.
+ *
+ * @param {number} pixels
  */
-function applyTextScale(scale) {
-  const value = Number.isFinite(Number(scale)) ? Number(scale) : 1;
-  document.documentElement.style.setProperty('--text-scale', String(value));
+function applyFontSize(pixels) {
+  const value = Number(pixels);
+  const clamped = Number.isFinite(value) ? Math.min(32, Math.max(10, Math.round(value))) : BASE_FONT_PX;
+  document.documentElement.style.setProperty('--font-size', `${clamped}px`);
 }
 
 /**
@@ -552,10 +576,41 @@ els.viewMode.addEventListener('change', () => {
   send({ type: MSG.SET_SETTING, id: 'view', value: els.viewMode.value });
 });
 
-els.textScale.addEventListener('change', () => {
-  applyTextScale(Number(els.textScale.value));
-  send({ type: MSG.SET_SETTING, id: 'textScale', value: Number(els.textScale.value) });
+els.fontSize.addEventListener('input', () => {
+  applyFontSize(els.fontSize.value);
 });
+
+// Committed on change rather than on every keystroke, so a half-typed "1" in
+// "18" is not stored as the size you asked for. The worker clamps too, so a
+// nonsense value cannot reach the stylesheet.
+els.fontSize.addEventListener('change', () => {
+  const value = Number(els.fontSize.value);
+  applyFontSize(value);
+  send({ type: MSG.SET_SETTING, id: 'fontSize', value });
+});
+
+/**
+ * Show or hide the translate menus.
+ *
+ * One menu with both pickers rather than one per icon: they are different
+ * settings but the same act, and revealing them together is one state to
+ * understand instead of two.
+ */
+function toggleTranslateMenu() {
+  const open = els.translateMenu.hidden;
+  els.translateMenu.hidden = !open;
+  for (const toggle of [els.translateTogglePrimary, els.translateToggleSecondary]) {
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.classList.toggle('on', open);
+  }
+  // The pickers are only useful once visible; focus the first one so the
+  // keyboard reaches them without another tab.
+  if (open) (els.translatePrimary.disabled ? els.translateSecondary : els.translatePrimary).focus?.();
+}
+
+for (const toggle of [els.translateTogglePrimary, els.translateToggleSecondary]) {
+  toggle.addEventListener('click', toggleTranslateMenu);
+}
 
 els.swap.addEventListener('click', () => {
   const primary = els.primary.value;
@@ -723,27 +778,47 @@ function buildRow(row, index) {
   return element;
 }
 
-/** @param {number} index */
-function setActive(index) {
-  if (index === view.activeIndex) return;
+/**
+ * Highlight a row, including the case where nothing is being spoken.
+ *
+ * `index` is the last cue that has STARTED, which is not the same as a cue being
+ * in progress: between two lines there is a gap, and during it the honest answer
+ * is "the line that finished". Returning -1 for those gaps — which is what the
+ * worker used to do — made the highlight blink off after every line and blank
+ * the Current view entirely, since it filters to the active row.
+ *
+ * @param {number} index
+ * @param {boolean} [speaking] False in a gap between lines.
+ */
+function setActive(index, speaking = true) {
+  if (index === view.activeIndex && speaking === view.speaking) return;
+
   view.elements[view.activeIndex]?.classList.remove('active');
   // The previous successor is no longer the successor.
   view.elements[view.activeIndex + 1]?.classList.remove('next');
+  // Clear the dim from whichever row had it, so a gap state cannot outlive the
+  // gap it described.
+  for (const element of view.elements) element.classList.remove('paused');
+
   view.activeIndex = index;
+  view.speaking = speaking;
   if (index < 0) return;
 
   const element = view.elements[index];
   if (!element) return;
   element.classList.add('active');
+  // Not being spoken, but still the last line: dimmed rather than gone, so a
+  // reader looking up mid-gap keeps their place.
+  if (!speaking) element.classList.add('paused');
 
-  // The next line is marked so the focus view can reveal it as a preview. The
-  // class is applied in both modes because it costs nothing and switching view
+  // The next line is marked so the Current view can reveal it as a preview. The
+  // class is applied in both views because it costs nothing and switching views
   // should not need a re-render to become correct.
   view.elements[index + 1]?.classList.add('next');
 
   if (!view.autoScroll) return;
-  // In focus mode the current line is centred, because the preview sits below
-  // it and scrolling to the edge would push it off screen.
+  // In Current view the line is centred, because the preview sits below it and
+  // scrolling to the edge would push it off screen.
   element.scrollIntoView({ block: view.focusMode ? 'center' : 'nearest' });
 }
 

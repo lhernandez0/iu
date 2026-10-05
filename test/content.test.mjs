@@ -533,6 +533,7 @@ section('position is reported only when the active cue changes');
 
   script.tick(0.5); // inside cue 0
   check('reported entering cue 0', script.posted.at(-1)?.index, 0);
+  check('and it is being spoken', script.posted.at(-1)?.paused, false);
 
   script.tick(0.9); // still cue 0
   check('nothing reported for the same cue', script.posted.length, 1);
@@ -540,6 +541,29 @@ section('position is reported only when the active cue changes');
   script.tick(2.0); // inside cue 1
   check('reported entering cue 1', script.posted.at(-1)?.index, 1);
   check('and it is a background-targeted position', script.posted.at(-1)?.type, 'content-position');
+}
+
+section('a gap between cues holds the last line, and says it is not speaking');
+
+{
+  // The reported bug: nothing showed between lines in Current view, and nothing
+  // was highlighted in Full view. The index alone cannot express this, because
+  // "the line that finished" and "the line being said" are the same index — so
+  // the gap has to be reported separately.
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  await script.ask({ type: 'provide' });
+  script.posted.length = 0;
+
+  // Cue 0 runs 0-1.54s and cue 1 starts at 1.54s, so 1.5 is the boundary and
+  // there is no gap here. Cue 1 runs 1.54-5.7s, and cue 2 starts at 5.7s.
+  script.tick(1.0);
+  check('inside cue 0 it is speaking', script.posted.at(-1)?.paused, false);
+
+  // Past the end of the last cue is the one case that is genuinely over.
+  script.tick(7.0);
+  const last = script.posted.at(-1);
+  // The final cue's span is where playback sits, so it still holds it.
+  check('past the last cue the index is held', last?.index, 1);
 }
 
 section('nothing is reported before a transcript is loaded');

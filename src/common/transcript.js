@@ -79,11 +79,7 @@ export function toSrt(segments) {
  */
 export function findActiveIndex(segments, seconds) {
   for (let i = segments.length - 1; i >= 0; i--) {
-    if (seconds >= segments[i].start) {
-      // Past the last segment's end means playback is beyond the transcript.
-      const end = segments[i].start + (segments[i].duration || 0);
-      return seconds <= end || i === segments.length - 1 ? i : -1;
-    }
+    if (seconds >= segments[i].start) return i;
   }
   return -1;
 }

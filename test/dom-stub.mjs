@@ -219,13 +219,18 @@ export class FakeStyle {
  * Install the DOM and the browser globals the panel expects.
  *
  * @param {string[]} ids Element ids the panel will look up.
+ * @param {{hidden?: string[]}} [options] Ids the real HTML starts hidden with the
+ *   `hidden` attribute. Without this the stub would report them visible, and a
+ *   test of anything that toggles one would be asserting the stub's default
+ *   rather than the panel's behaviour.
  * @returns {{document: object, created: FakeElement[], byId: Map<string, FakeElement>}}
  */
-export function installDomStub(ids = []) {
+export function installDomStub(ids = [], { hidden = [] } = {}) {
   const byId = new Map();
   for (const id of ids) {
     const element = new FakeElement('div');
     element.id = id;
+    element.hidden = hidden.includes(id);
     byId.set(id, element);
   }
 
