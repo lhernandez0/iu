@@ -1,0 +1,350 @@
+/**
+ * Browser-test scaffolding: launch the real extension, serve a fake YouTube,
+ * drive the real panel.
+ *
+ * Nothing here is stubbed in JavaScript. The extension runs for real — real
+ * service worker, real content scripts injected by `chrome.scripting`, real
+ * panel document — and only the network is intercepted, at the transport layer.
+ * So the content script genuinely fetches, genuinely parses, and the panel
+ * genuinely renders.
+ *
+ * Two details make this deterministic rather than flaky:
+ *
+ *   - The extension id is computed from the extension's absolute path, so a
+ *     test never waits for the worker to appear before it can navigate. That
+ *     matters because an MV3 worker is lazy: it does not start until something
+ *     wakes it, so waiting for it first would deadlock.
+ *   - YouTube is served from fixtures, so there is no network, no video, and no
+ *     dependence on what the site happens to serve today.
+ *
+ * These tests are slow, so they are opt-in. See TESTING.md.
+ */
+
+import { chromium } from 'playwright';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { json3Body, xmlBody, watchPage } from './fixtures.mjs';
+
+export const EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+
+const YOUTUBE_WATCH = 'https://www.youtube.com/watch**';
+
+/**
+ * Chrome derives an unpacked extension's id from its absolute path: the first
+ * 16 bytes of the SHA-256, each hex nibble mapped to a letter a–p.
+ *
+ * @param {string} path
+ * @returns {string}
+ */
+export function extensionIdForPath(path) {
+  const hash = createHash('sha256').update(path).digest();
+  let id = '';
+  for (let i = 0; i < 16; i++) {
+    id += String.fromCharCode(97 + (hash[i] >> 4));
+    id += String.fromCharCode(97 + (hash[i] & 0x0f));
+  }
+  return id;
+}
+
+/**
+ * Find a Chromium that can load extensions.
+ *
+ * The bundled headless shell cannot, so a full browser is needed. Several paths
+ * are tried because this may run in WSL, where the browser was installed by the
+ * editor's tooling rather than by `playwright install`.
+ *
+ * @returns {string|null}
+ */
+export function findChrome() {
+  const candidates = [
+    process.env.CHROME_PATH,
+    `${process.env.HOME}/.cache/ms-playwright/chromium-1224/chrome-linux64/chrome`,
+    `${process.env.HOME}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome`,
+    `${process.env.HOME}/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome`,
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+  ];
+  return candidates.find((path) => path && existsSync(path)) ?? null;
+}
+
+/** Thrown when no usable browser is present, so a caller can skip rather than fail. */
+export class BrowserUnavailable extends Error {}
+
+/**
+ * Launch Chromium with the extension loaded.
+ *
+ * @returns {Promise<{context: object, extensionId: string, close: () => Promise<void>}>}
+ */
+export async function launchExtension() {
+  const executablePath = findChrome();
+  if (!executablePath) {
+    throw new BrowserUnavailable(
+      'No Chromium able to load extensions was found. Set CHROME_PATH, or skip the browser tests.',
+    );
+  }
+
+  const context = await chromium.launchPersistentContext('', {
+    executablePath,
+    // The bundled headless shell cannot load extensions, but this flag makes
+    // full Chromium run without a display — which is what lets this work in a
+    // container and in WSL.
+    headless: true,
+    args: [
+      `--disable-extensions-except=${EXTENSION_ROOT}`,
+      `--load-extension=${EXTENSION_ROOT}`,
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+    ],
+  });
+
+  return {
+    context,
+    extensionId: extensionIdForPath(EXTENSION_ROOT),
+    close: () => context.close(),
+  };
+}
+
+/**
+ * Serve a fake YouTube, so a test never touches the network.
+ *
+ * Safe to call repeatedly for different videos, and a test that covers more than
+ * one video must call it more than once — do NOT instead call it twice and hope.
+ * Playwright matches routes last-registered-first, so two competing `watch**`
+ * handlers would silently serve whichever was registered most recently for every
+ * video. Instead the routes are installed once and dispatch on the `?v=`
+ * parameter against a registry of the videos a test has declared.
+ *
+ * Also records every URL the extension requested, which is how a test asserts
+ * that something was *fetched* rather than merely rendered.
+ *
+ * @param {object} context
+ * @param {object} options
+ * @param {string} [options.videoId]
+ * @param {string} [options.title]
+ * @param {Array<object>} options.tracks
+ * @param {'json3'|'xml'} [options.captionFormat]
+ * @param {boolean} [options.breakBaseUrl] Refuse the direct track URL, to force
+ *   the INERTUBE fallback for this video.
+ * @returns {Promise<{captionRequests: string[], playerRequests: string[]}>}
+ */
+export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = 'Fixture Video', tracks, captionFormat = 'json3', breakBaseUrl = false }) {
+  /** Shared across every call for this browser, so one set of routes serves all. */
+  const registry = (context.__transcribeFixture ??= {
+    videos: new Map(),
+    captionRequests: [],
+    playerRequests: [],
+    installed: false,
+  });
+
+  registry.videos.set(videoId, { title, tracks, captionFormat, breakBaseUrl });
+
+  if (!registry.installed) {
+    registry.installed = true;
+    await installRoutes(context, registry);
+  }
+
+  return { captionRequests: registry.captionRequests, playerRequests: registry.playerRequests };
+}
+
+/**
+ * Install the route handlers once.
+ *
+ * @param {object} context
+ * @param {object} registry
+ */
+async function installRoutes(context, registry) {
+  /** The video a URL refers to. @param {string} url */
+  const videoFor = (url) => registry.videos.get(new URL(url).searchParams.get('v'));
+
+  await context.route(YOUTUBE_WATCH, async (route) => {
+    const url = route.request().url();
+    const fixture = videoFor(url) ?? [...registry.videos.values()][0];
+
+    // Unknown video: a bare page with no player response, so a test can rely on
+    // it not being confused for one of the declared fixtures.
+    if (!fixture) {
+      return route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Unknown</title>' });
+    }
+
+    const videoId = new URL(url).searchParams.get('v');
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: watchPage({ videoId, title: fixture.title, tracks: fixture.tracks }),
+    });
+  });
+
+  await context.route('https://www.youtube.com/', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>YouTube</title>' });
+  });
+
+  await context.route('https://www.youtube.com/youtubei/v1/player**', async (route) => {
+    const body = route.request().postData() ?? '{}';
+    registry.playerRequests.push(route.request().url());
+
+    const videoId = JSON.parse(body)?.videoId;
+    const fixture = registry.videos.get(videoId) ?? [...registry.videos.values()][0];
+
+    // The fallback re-asks for the track list, then fetches the baseUrl it hands
+    // back. Answering with the same tracks is what makes it reachable.
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        captions: {
+          playerCaptionsTracklistRenderer: {
+            captionTracks: (fixture?.tracks ?? []).map((track) => ({
+              baseUrl: `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${track.languageCode}&fresh=1`,
+              languageCode: track.languageCode,
+              name: { simpleText: track.name },
+              kind: track.kind ?? undefined,
+            })),
+          },
+        },
+      }),
+    });
+  });
+
+  await context.route('https://www.youtube.com/api/timedtext**', async (route) => {
+    const url = route.request().url();
+    const params = new URL(url).searchParams;
+    registry.captionRequests.push(url);
+
+    const fixture = registry.videos.get(params.get('v')) ?? [...registry.videos.values()][0];
+
+    // Forces the fallback path: the first, direct attempt is refused.
+    if (fixture?.breakBaseUrl && !params.has('fresh')) {
+      return route.fulfill({ status: 403, body: '' });
+    }
+
+    const track = fixture?.tracks.find((t) => t.languageCode === params.get('lang')) ?? fixture?.tracks[0];
+    if (!track) return route.fulfill({ status: 404, body: '' });
+
+    const body = fixture.captionFormat === 'xml' ? xmlBody(track.segments) : json3Body(track.segments);
+    return route.fulfill({ status: 200, contentType: 'text/plain', body });
+  });
+}
+
+/**
+ * Open a fixture YouTube watch page.
+ *
+ * @param {object} context
+ * @param {string} [videoId]
+ * @returns {Promise<object>}
+ */
+export async function openWatchPage(context, videoId = 'dQw4w9WgXcQ') {
+  const page = await context.newPage();
+  await page.goto(`https://www.youtube.com/watch?v=${videoId}`, { waitUntil: 'domcontentloaded' });
+  return page;
+}
+
+/**
+ * Open the side panel as a document, beside a watch page.
+ *
+ * A real panel is not a tab. It is loaded here as one because that is the only
+ * way to drive it, and the panel document behaves identically — same origin,
+ * same permissions, same service worker.
+ *
+ * One difference matters and is easy to get wrong: opening the panel makes it
+ * the ACTIVE tab, whereas a real side panel never is. Since the worker resolves
+ * the video from the active tab, the watch page has to be brought back to the
+ * front afterwards, or the worker will look at the panel's own tab and correctly
+ * conclude there is no video in it. Doing so also exercises the real path, where
+ * switching to the video tab is what tells the worker which video to show.
+ *
+ * @param {object} context
+ * @param {string} extensionId
+ * @param {object} watchPage The page to sit beside; brought to the front.
+ * @returns {Promise<{page: object, errors: string[]}>}
+ */
+export async function openPanel(context, extensionId, watchPage = null) {
+  const page = await context.newPage();
+  const errors = [];
+
+  page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+  });
+
+  await page.goto(`chrome-extension://${extensionId}/src/sidepanel/sidepanel.html`, { waitUntil: 'domcontentloaded' });
+
+  // Hand focus back to the video, as it would be in real use.
+  if (watchPage) await watchPage.bringToFront();
+
+  return { page, errors };
+}
+
+/**
+ * Wait until the panel stops showing its startup placeholder.
+ *
+ * Note this can return on an error status: the panel reports "no video in the
+ * active tab" long before it finishes retrying. Tests that expect a transcript
+ * should wait with `waitForRows` instead, or they will assert against a panel
+ * that has not got there yet.
+ *
+ * @param {object} page
+ * @param {number} [timeout]
+ * @returns {Promise<string>}
+ */
+export async function waitForStatus(page, timeout = 20000) {
+  await page.waitForFunction(
+    () => {
+      const text = document.getElementById('status')?.textContent ?? '';
+      return text.length > 0 && !text.includes('Looking for a YouTube video');
+    },
+    { timeout },
+  );
+  return page.textContent('#status');
+}
+
+/**
+ * Wait until the panel has rendered transcript lines.
+ *
+ * @param {object} page
+ * @param {number} [count] Minimum rows, defaults to one.
+ * @param {number} [timeout]
+ * @returns {Promise<number>}
+ */
+export async function waitForRows(page, count = 1, timeout = 20000) {
+  await page.waitForFunction(
+    (expected) => document.querySelectorAll('.row').length >= expected,
+    count,
+    { timeout },
+  );
+  return page.locator('.row').count();
+}
+
+/**
+ * Everything the panel is currently showing.
+ *
+ * @param {object} page
+ * @returns {Promise<object>}
+ */
+export async function panelState(page) {
+  return page.evaluate(() => ({
+    status: document.getElementById('status')?.textContent ?? '',
+    isError: document.getElementById('status')?.classList.contains('error') ?? false,
+    rows: [...document.querySelectorAll('.row')].map((row) => ({
+      time: row.querySelector('.time')?.textContent ?? '',
+      text: row.querySelector('.primary')?.textContent ?? '',
+      secondary: row.querySelector('.secondary')?.textContent ?? '',
+      active: row.classList.contains('active'),
+    })),
+    options: [...(document.getElementById('primary')?.options ?? [])].map((option) => option.value),
+    secondaryOptions: [...(document.getElementById('secondary')?.options ?? [])].map((option) => option.value),
+    primary: document.getElementById('primary')?.value ?? '',
+    secondary: document.getElementById('secondary')?.value ?? '',
+  }));
+}
+
+/**
+ * Where the page video was last told to go.
+ *
+ * @param {object} page
+ * @returns {Promise<number|null>}
+ */
+export async function pagePosition(page) {
+  return page.evaluate(() => window.__position?.() ?? null);
+}

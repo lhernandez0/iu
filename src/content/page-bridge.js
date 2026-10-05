@@ -114,6 +114,12 @@
     try {
       if (data.type === 'get-player-response') {
         payload = summarize(getPlayerResponse());
+      } else if (data.type === 'video-id') {
+        // Deliberately cheap: the content script polls this to notice when the
+        // tab has moved to another video, and summarizing the whole track list
+        // several times a second would be wasteful.
+        const playerResponse = getPlayerResponse();
+        payload = playerResponse ? { videoId: playerResponse.videoDetails?.videoId ?? null } : null;
       } else {
         ok = false;
         payload = { error: `Unknown page-bridge request: ${data.type}` };

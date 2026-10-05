@@ -22,6 +22,8 @@ const USE_AUDIO_CAPTURE = false;
 
 /** Worker-connection tuning. Backoff is capped so a long-lived panel keeps trying. */
 const NO_WORKER_MS = 5000;
+/** How long to wait before nudging a silent worker, as opposed to giving up on it. */
+const RETRY_AFTER_MS = 1200;
 const INITIAL_RECONNECT_MS = 500;
 const MAX_RECONNECT_MS = 5000;
 const MAX_RECONNECT_ATTEMPTS = 6;
@@ -159,13 +161,31 @@ function send(message) {
   }
 }
 
+/**
+ * If the worker never answers, nudge it once before complaining.
+ *
+ * The worker resolves the video from whichever tab is active. When the panel is
+ * opened, that can momentarily be the panel's own tab — there is no video in it,
+ * so the worker reports that and has no reason to look again. A retry once
+ * things have settled recovers from that, and from a worker still waking up.
+ *
+ * The retry comes quickly because a healthy worker answers in well under a
+ * second; making the user wait five seconds for a recoverable miss would be
+ * worse than the miss. Only if the retry also goes unanswered is something
+ * actually wrong.
+ */
 workerWatchdog = setTimeout(() => {
   if (heardFromWorker) return;
-  setStatus(
-    'No response from the extension worker. Reload the extension in chrome://extensions, then reopen this panel.',
-    true,
-  );
-}, NO_WORKER_MS);
+  send({ type: MSG.REFRESH });
+
+  workerWatchdog = setTimeout(() => {
+    if (heardFromWorker) return;
+    setStatus(
+      'No response from the extension worker. Reload the extension in chrome://extensions, then reopen this panel.',
+      true,
+    );
+  }, NO_WORKER_MS);
+}, RETRY_AFTER_MS);
 
 // --- State rendering --------------------------------------------------------
 
@@ -367,10 +387,13 @@ function buildRow(row, index) {
   }
 
   element.append(lines);
-  // The index is not used: the worker already knows the offset and the content
-  // script owns the video element.
-  element.addEventListener('click', () => send({ type: MSG.SEEK, seconds: row.start }));
-  void index;
+  // Highlight straight away as well as asking for the seek. Waiting for the
+  // round trip means the highlight lags the click by up to a poll interval, and
+  // if the video is paused, nothing moves at all.
+  element.addEventListener('click', () => {
+    setActive(index);
+    send({ type: MSG.SEEK, seconds: row.start });
+  });
   view.elements.push(element);
   return element;
 }

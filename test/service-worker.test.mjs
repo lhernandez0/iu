@@ -53,14 +53,14 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
  * @returns {Promise<{listeners: object, calls: object, storage: object, received: object[], sendFromPanel: Function}>}
  */
 async function boot(options = {}) {
-  const { listeners, calls, storage } = installChromeStub(options);
+  const stub = installChromeStub(options);
   await import(`../src/background/service-worker.js?boot=${++bootCount}`);
 
   const panel = createPanelPort();
-  for (const listener of listeners.connect) listener(panel.port);
+  for (const listener of stub.listeners.connect) listener(panel.port);
   await settle();
 
-  return { listeners, calls, storage, received: panel.received, sendFromPanel: panel.sendFromPanel };
+  return { ...stub, received: panel.received, sendFromPanel: panel.sendFromPanel };
 }
 
 // --- Fixtures ----------------------------------------------------------------
@@ -95,7 +95,25 @@ const VIDEO = {
 };
 
 const PROVIDE_OK = { ok: true, video: VIDEO, requested: 'en', fetched: ENGLISH };
-const TRACK = (payload) => ({ providePayload: PROVIDE_OK, trackPayload: payload });
+
+/**
+ * The stub's answer to DESCRIBE, which the worker now calls first so it can
+ * consult its cache before paying for a download.
+ *
+ * @param {object} [video]
+ * @param {string} [error]
+ */
+const DESCRIBE = (video = VIDEO, error) => ({ ok: !error, error, video });
+
+/**
+ * @param {any} trackPayload
+ * @param {object} [options]
+ */
+const TRACK = (trackPayload, { video = VIDEO, provide = PROVIDE_OK, error } = {}) => ({
+  describePayload: DESCRIBE(video, error),
+  providePayload: provide,
+  trackPayload,
+});
 
 // --- 1. The worker evaluates ------------------------------------------------
 
@@ -221,7 +239,12 @@ section('content-script reports reach the panel');
 {
   const { listeners, received } = await boot(TRACK(GERMAN));
 
-  listeners.message[0]({ target: 'background', type: 'content-position', index: 1, seconds: 2.5 });
+  // A sender is required now: the worker needs to know which tab reported, so it
+  // can ignore playback from a YouTube tab the user is not looking at.
+  listeners.message[0](
+    { target: 'background', type: 'content-position', index: 1, seconds: 2.5 },
+    { tab: { id: 1 } },
+  );
   await settle();
 
   check('panel received a position', received.at(-1)?.type, 'position');
@@ -229,19 +252,103 @@ section('content-script reports reach the panel');
   check('with the offset', received.at(-1)?.seconds, 2.5);
 }
 
+section('playback from a background YouTube tab is ignored');
+
+{
+  // The panel shows the active tab. A second YouTube tab also reports its
+  // playback, and relaying that would move the highlight against a transcript it
+  // does not belong to.
+  const { listeners, received } = await boot(TRACK(GERMAN));
+  const before = received.length;
+
+  listeners.message[0](
+    { target: 'background', type: 'content-position', index: 9, seconds: 99 },
+    { tab: { id: 7 } }, // a different tab
+  );
+  await settle();
+
+  check('nothing was relayed', received.length, before);
+}
+
 // --- 8. Degraded cases ------------------------------------------------------
 
 section('a video with no captions still reports its title');
 
 {
-  const { received } = await boot({
-    providePayload: { ok: false, error: 'This video has no captions.', video: { ...VIDEO, trackList: [] } },
-  });
+  const { received } = await boot(
+    TRACK(GERMAN, { video: { ...VIDEO, trackList: [] }, provide: { ok: false, error: 'This video has no captions.' } }),
+  );
 
   const state = received.at(-1)?.state;
   check('error surfaced', state?.error, 'This video has no captions.');
   check('title still shown', state?.title, 'Test Video');
   check('no rows', state?.rows?.length, 0);
+}
+
+// --- 9. Caching (the panel follows the active tab) ---------------------------
+
+section('a video already cached is not fetched again');
+
+{
+  // This is what makes switching between YouTube tabs instant. The worker asks
+  // the tab what it is showing first, and if that video is already in hand it
+  // never asks for a download.
+  const { calls, sendFromPanel, received } = await boot(TRACK(GERMAN));
+
+  const provides = () => calls.sendMessage.filter((c) => c?.message?.type === 'provide').length;
+  const afterBoot = provides();
+  check('the first visit fetched once', afterBoot, 1);
+
+  // Ask again, the way switching away and back would.
+  sendFromPanel({ type: 'refresh' });
+  await settle();
+
+  check('the second visit fetched nothing new', provides(), afterBoot);
+  check('rows are still shown', received.at(-1)?.state?.rows?.length, 3);
+  check('from the cache, not a fetch', received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
+}
+
+section('switching to a different video fetches that one, and keeps the first cached');
+
+{
+  // Two videos in one worker, to prove the cache is keyed by video rather than
+  // being one slot that the second video would evict. This is the same-tab
+  // switch that used to leave the previous transcript on screen.
+  const STUB_SWAP = 'zzzzzzzzzzz';
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDE_OK,
+    trackPayload: GERMAN,
+  });
+
+  const provides = () => stub.calls.sendMessage.filter((c) => c?.message?.type === 'provide').length;
+  check('the first video fetched once', provides(), 1);
+  check('and is on screen', stub.received.at(-1)?.state?.videoId, 'dQw4w9WgXcQ');
+
+  // The user switches video in the same tab.
+  stub.setAnswer('describePayload', DESCRIBE({ ...VIDEO, videoId: STUB_SWAP, title: 'Second Video' }));
+  stub.setAnswer('providePayload', {
+    ok: true,
+    video: { ...VIDEO, videoId: STUB_SWAP, title: 'Second Video' },
+    requested: 'en',
+    fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: 'Second content' }] },
+  });
+
+  stub.sendFromPanel({ type: 'refresh' });
+  await settle();
+
+  check('the panel followed to the new video', stub.received.at(-1)?.state?.videoId, STUB_SWAP);
+  check('and reported its title', stub.received.at(-1)?.state?.title, 'Second Video');
+  check('showing the new transcript, not the old one', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Second content');
+  check('which cost one more fetch', provides(), 2);
+
+  // Go back to the first video: it should come straight from the cache.
+  stub.setAnswer('describePayload', DESCRIBE(VIDEO));
+  stub.sendFromPanel({ type: 'refresh' });
+  await settle();
+
+  check('going back reuses the cache', provides(), 2);
+  check('and shows the original transcript', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
 }
 
 section('a non-YouTube tab is reported rather than crashed on');

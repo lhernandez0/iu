@@ -1,5 +1,10 @@
 /**
- * Runs every test file in this folder and aggregates the result.
+ * Runs every hermetic test file in this folder and aggregates the result.
+ *
+ * "Hermetic" is the point: these never touch the network and never launch a
+ * browser, so they are fast enough to run on every change. Anything that opens
+ * a real browser or reaches the network lives in test/browser/ and is opt-in —
+ * see TESTING.md for why that split exists and how to run each tier.
  *
  * Each file is spawned as its own process on purpose. They all reach for the
  * same globals — `chrome`, `document`, and the module cache — and a shared
@@ -20,7 +25,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 /** Files that are shared scaffolding, not suites. */
 const NOT_A_SUITE = new Set(['run.mjs', 'chrome-stub.mjs', 'dom-stub.mjs']);
 
-const files = (await readdir(here)).filter((name) => name.endsWith('.test.mjs') && !NOT_A_SUITE.has(name)).sort();
+// Top level only: test/browser/ holds the opt-in suites, which are deliberately
+// excluded from this count and run by test/browser/run-browser.mjs instead.
+const files = (await readdir(here, { withFileTypes: true }))
+  .filter((entry) => entry.isFile() && entry.name.endsWith('.test.mjs') && !NOT_A_SUITE.has(entry.name))
+  .map((entry) => entry.name)
+  .sort();
 
 if (files.length === 0) {
   console.error('No test files found.');

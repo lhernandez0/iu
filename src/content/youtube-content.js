@@ -30,8 +30,8 @@
   // --- Duplicated contract -------------------------------------------------
   const CHANNEL = 'transcribe-ext';
   const MSG = {
+    DESCRIBE: 'describe',
     PROVIDE: 'provide',
-    PROBE: 'probe',
     FETCH_TRACK: 'fetch-track',
     CONTENT_SEEK: 'content-seek',
     CONTENT_POSITION: 'content-position',
@@ -40,6 +40,9 @@
   const TARGET = { BACKGROUND: 'background', CONTENT: 'content' };
 
   const POSITION_POLL_MS = 250;
+  /** How often to ask the page whether the video changed. One second is often
+   *  enough that a switch feels instant, and cheap enough to run continuously. */
+  const VIDEO_CHECK_MS = 1000;
 
   /**
    * Tracks for the video currently loaded here. Rebuilt on every PROVIDE, and
@@ -263,46 +266,53 @@
   }
 
   /**
-   * Re-read the page and hand back the current video plus its default track.
-   * Recording the segments here is what lets position reporting work without
-   * the worker having to tell us about them.
+   * Re-read the page and hand back the current video plus the requested track.
    *
+   * Recording the segments here is what lets position reporting work without the
+   * worker having to tell us about them.
+   *
+   * @param {string|null} languageCode Which track to load, or null for the default.
    * @returns {Promise<object>} A PROVIDE payload.
    */
-  async function provide() {
-    const description = await describe();
-    if (!description.ok) return description;
-
+  async function provide(languageCode) {
+    const result = await sync();
+    if (!result.ok) return { ok: false, error: result.error, video: describeVideo() };
     if (!video.tracks.length) {
       return { ok: false, error: 'This video has no captions.', video: describeVideo() };
     }
 
-    const first = pickDefaultTrack(video.tracks);
-    const fetched = await fetchTrack(first.languageCode);
+    const wanted = languageCode ? video.tracks.find((t) => t.languageCode === languageCode) : null;
+    const track = wanted ?? pickDefaultTrack(video.tracks);
+    const fetched = await fetchTrack(track.languageCode);
     video.segments = fetched.segments;
 
-    return { ok: true, video: describeVideo(), requested: first.languageCode, fetched };
+    return { ok: true, video: describeVideo(), requested: track.languageCode, fetched };
   }
 
   /**
-   * Report the current video WITHOUT fetching any captions.
+   * Ask the page which video is loaded, and adopt it if it changed.
    *
-   * YouTube fires navigation events for far more than video changes (thumbnail
-   * previews, chapter updates). Fetching a track on each of those would be
-   * wasteful, so the worker probes with this first and only calls PROVIDE when
-   * the video id actually differs.
+   * This, not the page's navigation events, is the authority on which video this
+   * script is looking at. YouTube's SPA events are unreliable — switching video
+   * within a tab does not always fire one the content script hears — and the
+   * failure is ugly: the script would keep reporting the previous video's cues
+   * while reading the new video's currentTime, so the panel would show the old
+   * transcript advancing against the new video.
    *
-   * @returns {Promise<object>}
+   * @returns {Promise<{ok: boolean, changed: boolean, error?: string}>}
    */
-  async function describe() {
+  async function sync() {
     const summary = await askBridge('get-player-response');
     if (!summary) {
+      const changed = video.videoId !== null;
       video = { videoId: null, title: null, isLive: false, tracks: [], segments: null };
-      return { ok: false, error: 'This page has no video player.' };
+      lastActiveIndex = -2;
+      return { ok: false, changed, error: 'This page has no video player.' };
     }
 
-    // The video changed underneath us; drop the segments we were reporting on.
-    if (video.videoId !== summary.videoId) {
+    const changed = video.videoId !== summary.videoId;
+    if (changed) {
+      // Whatever we were reporting belongs to the previous video.
       video.segments = null;
       lastActiveIndex = -2;
     }
@@ -315,7 +325,7 @@
       segments: video.segments,
     };
 
-    return { ok: true, video: describeVideo() };
+    return { ok: true, changed };
   }
 
   /** @returns {object} Video identity plus the track list the panel can offer. */
@@ -338,14 +348,14 @@
     if (!message || message.target !== TARGET.CONTENT) return false;
 
     switch (message.type) {
-      case MSG.PROVIDE:
-        provide()
-          .then(sendResponse)
+      case MSG.DESCRIBE:
+        sync()
+          .then((result) => sendResponse({ ok: result.ok, error: result.error, video: describeVideo() }))
           .catch((error) => sendResponse({ ok: false, error: String(error?.message ?? error) }));
         return true; // async reply
 
-      case MSG.PROBE:
-        describe()
+      case MSG.PROVIDE:
+        provide(message.languageCode ?? null)
           .then(sendResponse)
           .catch((error) => sendResponse({ ok: false, error: String(error?.message ?? error) }));
         return true;
@@ -377,10 +387,35 @@
     });
   }
 
-  // --- Position reporting --------------------------------------------------
+  // --- Watching the page -----------------------------------------------------
+  //
+  // Two loops, because they answer different questions and want different rates:
+  //
+  //   1. Has this tab moved to a different video? Polled every second against
+  //      the page. Cheap (one bridge message, no fetch) but it is the only
+  //      reliable way to notice — YouTube's own navigation events do not always
+  //      fire on an in-tab video switch, and missing one means the panel shows
+  //      the previous video's transcript.
+  //   2. Which cue is playing? Reported only when the active cue changes.
 
-  // Report only when the active segment changes, rather than streaming the raw
-  // playback position four times a second.
+  let lastVideoIdCheck = 0;
+
+  setInterval(() => {
+    const now = Date.now();
+    if (now - lastVideoIdCheck < VIDEO_CHECK_MS) return;
+    lastVideoIdCheck = now;
+
+    void (async () => {
+      const before = video.videoId;
+      await sync();
+      // Announce it ourselves rather than waiting to be asked, so the panel
+      // corrects itself even when the user is not touching it.
+      if (video.videoId !== before) {
+        post({ type: MSG.CONTENT_VIDEO_CHANGED, target: TARGET.BACKGROUND });
+      }
+    })();
+  }, VIDEO_CHECK_MS);
+
   setInterval(() => {
     if (!video.segments?.length) return;
     const seconds = getPosition();

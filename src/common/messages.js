@@ -33,11 +33,11 @@ export const MSG = Object.freeze({
   SEEK: 'seek',
 
   // --- Service worker -> content script -------------------------------------
-  /** background -> content — hand over the current video's transcript. */
+  /** background -> content — identify the current video WITHOUT fetching
+   *  captions. Lets the worker consult its cache before paying for a download. */
+  DESCRIBE: 'describe',
+  /** background -> content. Payload: { languageCode } — fetch and return a track. */
   PROVIDE: 'provide',
-  /** background -> content — report the current video without fetching captions.
-   *  Used to tell whether an SPA navigation actually changed the video. */
-  PROBE: 'probe',
   /** background -> content. Payload: { languageCode } — fetch a specific track. */
   FETCH_TRACK: 'fetch-track',
   /** background -> content. Payload: { seconds } */

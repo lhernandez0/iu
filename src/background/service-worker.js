@@ -115,19 +115,22 @@ let session = null;
 // scripts use chrome.runtime.sendMessage and land here. Panel intents that
 // arrive here anyway — the parked capture control below — are handled too, so
 // the capture path keeps working whether or not a port is connected.
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.target !== TARGET.BACKGROUND) return false;
 
   switch (message.type) {
     // --- From content scripts ------------------------------------------------
     case MSG.CONTENT_POSITION:
-      // The content script's index is against the segments it was given for its
-      // current video, which is the same list we rendered.
-      if (panelPort) panelPort.postMessage({ type: MSG.POSITION, index: message.index, seconds: message.seconds });
+      // Only relayed for the tab the panel is actually showing. A background
+      // YouTube tab also reports playback, and its cues are meaningless for the
+      // transcript on screen. `sender` is the only way to tell them apart.
+      if (sender?.tab?.id === trackedTabId && panelPort) {
+        panelPort.postMessage({ type: MSG.POSITION, index: message.index, seconds: message.seconds });
+      }
       return false;
 
     case MSG.CONTENT_VIDEO_CHANGED:
-      void onNavigation();
+      void onContentVideoChanged(sender?.tab?.id ?? null);
       return false;
 
     // --- Parked capture control ----------------------------------------------
@@ -191,31 +194,59 @@ async function onTabActivated(tabId) {
 }
 
 /**
- * The page fired a navigation event. Probe first: YouTube fires these for
- * things that do not change the video, and fetching a whole track each time
- * would be wasteful.
+ * A content script says the video in its tab changed.
+ *
+ * The reporting tab matters. A tab in the background also notices when its video
+ * changes, and following that would drag the panel away from what the user is
+ * looking at. So the change is only honoured when the tab reporting it is the
+ * active one — which is the same rule the rest of this file follows: whatever is
+ * in the current tab is what the panel shows.
+ *
+ * @param {number|null} tabId The tab that reported, from the message sender.
  */
-async function onNavigation() {
-  if (trackedTabId === null) return;
+async function onContentVideoChanged(tabId) {
+  if (tabId === null) return;
 
-  let probe;
-  try {
-    probe = await sendToContent(trackedTabId, { type: MSG.PROBE });
-  } catch {
-    return; // Tab is mid-navigation; the next event will pick it up.
+  if (tabId !== trackedTabId) {
+    // Adopt it only if it is the tab the user is actually on.
+    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (active?.id !== tabId) return;
   }
 
-  if (probe?.video?.videoId && probe.video.videoId !== currentVideoId) {
-    await refresh();
-    broadcastState();
-  }
+  trackedTabId = tabId;
+  const before = currentVideoId;
+  await refresh();
+  if (currentVideoId !== before) broadcastState();
 }
 
 // --- Resolving the current video --------------------------------------------
 
 /**
- * Find the frame holding the video and make sure both our scripts are running
- * in it.
+ * Frames we have already injected into, as `tabId:frameId`.
+ *
+ * `executeScript` re-runs the file every time it is called, and both content
+ * scripts are called on every round trip — so without this, one refresh would
+ * inject four times. The scripts' own re-entry guards make that harmless, but it
+ * is still work: the file is fetched, compiled and evaluated each time.
+ *
+ * Cleared when a frame navigates, because a real page load discards the scripts
+ * and they have to be put back.
+ *
+ * @type {Set<string>}
+ */
+const injectedFrames = new Set();
+
+/** @param {number} tabId @param {number} frameId */
+const frameKey = (tabId, frameId) => `${tabId}:${frameId}`;
+
+chrome.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
+  // A committed navigation destroys the page's scripts, so allow reinjection.
+  injectedFrames.delete(frameKey(tabId, frameId));
+});
+
+/**
+ * Find the frame holding the video and make sure both our scripts are running in
+ * it.
  *
  * The video is not always in the tab's top frame, so injecting blindly is not
  * safe. `webNavigation.getAllFrames` tells us which frame is a youtube.com
@@ -224,8 +255,7 @@ async function onNavigation() {
  * Both files are injected, not just the content script: on a tab that was
  * already open when the extension loaded, the manifest-declared content scripts
  * are absent too, so the MAIN-world bridge would be missing and every request
- * would come back empty. Both files carry re-entry guards, which is what makes
- * injecting unconditionally safe.
+ * would come back empty.
  *
  * @param {number} tabId
  * @returns {Promise<number|null>} frameId, or null if there is no such frame.
@@ -239,13 +269,17 @@ async function ensureContentScript(tabId) {
     frames.find((f) => YOUTUBE_URL.test(f.url ?? ''));
   if (!frame) return null;
 
+  if (injectedFrames.has(frameKey(tabId, frame.frameId))) return frame.frameId;
+
   const target = { tabId, frameIds: [frame.frameId] };
   try {
     // Bridge first: it is what the content script talks to.
     await chrome.scripting.executeScript({ target, world: 'MAIN', files: ['src/content/page-bridge.js'] });
     await chrome.scripting.executeScript({ target, files: ['src/content/youtube-content.js'] });
+    injectedFrames.add(frameKey(tabId, frame.frameId));
   } catch {
-    // Already injected, or the page refuses. Either way, try to talk to it.
+    // The page refuses injection (a chrome:// page, say). Leave it unmarked so a
+    // later attempt can try again rather than being permanently skipped.
   }
   return frame.frameId;
 }
@@ -316,30 +350,69 @@ async function refreshInner() {
     trackedTabId = tab.id;
   }
 
-  let provided;
+  // Ask what this tab is showing BEFORE deciding anything. Acting on a stale
+  // `currentVideoId` was what let the panel keep the previous video's transcript
+  // after an in-tab switch.
+  //
+  // DESCRIBE rather than PROVIDE on purpose: describing is free, and if the
+  // video is already cached there is no reason to make the content script
+  // download a track we already hold.
+  let described;
   try {
-    provided = await sendToContent(trackedTabId, { type: MSG.PROVIDE });
+    described = await sendToContent(trackedTabId, { type: MSG.DESCRIBE });
   } catch (error) {
     pendingError = `Could not reach the page (${error?.message ?? error}).`;
     broadcastState();
     return;
   }
 
-  if (!provided?.ok) {
-    pendingError = provided?.error ?? 'Could not read this video.';
-    // Still record the video so its title shows even without captions.
-    if (provided?.video) adoptVideo(provided.video);
+  if (!described?.video) {
+    pendingError = described?.error ?? 'Could not read this video.';
     broadcastState();
     return;
   }
 
   pendingError = null;
-  const entry = adoptVideo(provided.video);
+  const entry = adoptVideo(described.video);
 
-  // The PROVIDE call already fetched the default track; record it.
+  // Nothing to fetch and nothing to show: say so rather than leaving the panel
+  // on an empty transcript with no explanation.
+  if (!entry.trackList.length) {
+    entry.error = 'This video has no captions.';
+    entry.rows = [];
+    broadcastState();
+    return;
+  }
+
+  // Already in hand: this is what makes swapping between YouTube tabs instant,
+  // and what keeps a video's transcript alive while you look at others.
+  if (isCached(entry)) {
+    rebuildRows(entry);
+    broadcastState();
+    return;
+  }
+
+  // A cache miss, so pay for a download. The track to load is the one already
+  // chosen for this video, or the content script's default when it is new.
+  let provided;
+  try {
+    provided = await sendToContent(trackedTabId, { type: MSG.PROVIDE, languageCode: entry.primaryLang });
+  } catch (error) {
+    pendingError = `Could not fetch captions (${error?.message ?? error}).`;
+    broadcastState();
+    return;
+  }
+
+  if (!provided?.ok && !provided?.fetched) {
+    entry.error = provided?.error ?? 'Could not load captions.';
+    broadcastState();
+    return;
+  }
+
   if (provided.fetched?.segments?.length) {
     entry.tracks.set(provided.fetched.languageCode, provided.fetched.segments);
-    if (!entry.primaryLang) entry.primaryLang = provided.fetched.languageCode;
+    entry.primaryLang = provided.fetched.languageCode;
+    entry.error = null;
   } else if (provided.fetched?.error) {
     entry.error = provided.fetched.error;
   }
@@ -398,6 +471,20 @@ function adoptVideo(video) {
 /** @param {VideoEntry} entry @param {string} languageCode */
 function hasTrack(entry, languageCode) {
   return entry.trackList.some((t) => t.languageCode === languageCode);
+}
+
+/**
+ * Whether this video's transcript is already in hand, so no fetch is needed.
+ *
+ * A video with an error is never considered cached, so the next attempt retries
+ * rather than leaving a failure pinned in place.
+ *
+ * @param {VideoEntry} entry
+ * @returns {boolean}
+ */
+function isCached(entry) {
+  if (entry.error) return false;
+  return Boolean(entry.primaryLang && entry.tracks.has(entry.primaryLang) && entry.rows.length);
 }
 
 /** Keep the cache bounded. Map iteration order is insertion order, so the first

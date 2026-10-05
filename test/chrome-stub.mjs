@@ -18,6 +18,7 @@
  * @param {object} [options]
  * @param {object[]} [options.tabs]        Tabs that chrome.tabs.query can return.
  * @param {object[]} [options.frames]      Frames that webNavigation reports.
+ * @param {any} [options.describePayload]  What the content script "returns" for DESCRIBE.
  * @param {any} [options.providePayload]   What the content script "returns" for PROVIDE.
  * @param {any} [options.trackPayload]     What it returns for FETCH_TRACK.
  * @returns {{listeners: object, calls: object, storage: object}}
@@ -26,6 +27,7 @@ export function installChromeStub(options = {}) {
   const {
     tabs = [{ id: 1, active: true, url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' }],
     frames = [{ frameId: 0, url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' }],
+    describePayload = null,
     providePayload = null,
     trackPayload = null,
   } = options;
@@ -37,6 +39,7 @@ export function installChromeStub(options = {}) {
     tabActivated: [],
     tabRemoved: [],
     actionClicked: [],
+    navigationCommitted: [],
   };
 
   /** Everything the worker asked the browser to do. */
@@ -67,12 +70,16 @@ export function installChromeStub(options = {}) {
       get: async (id) => tabs.find((t) => t.id === id) ?? null,
       sendMessage: async (tabId, message, frameOptions) => {
         calls.sendMessage.push({ tabId, message, frameOptions });
-        if (message?.type === 'provide') return providePayload;
-        if (message?.type === 'fetch-track') return trackPayload;
+        if (message?.type === 'describe') return answers.describePayload;
+        if (message?.type === 'provide') return answers.providePayload;
+        if (message?.type === 'fetch-track') return answers.trackPayload;
         return { ok: true };
       },
     },
-    webNavigation: { getAllFrames: async () => frames },
+    webNavigation: {
+      getAllFrames: async () => frames,
+      onCommitted: { addListener: addListener('navigationCommitted') },
+    },
     scripting: {
       executeScript: async (arg) => {
         calls.executeScript.push(arg);
@@ -99,7 +106,21 @@ export function installChromeStub(options = {}) {
     },
   };
 
-  return { listeners, calls, storage };
+  // The worker holds no reference to the stub, so mutating these mid-test is how
+  // a test changes what the "page" reports — for instance to simulate the user
+  // switching to a different video in the same tab.
+  const answers = { describePayload, providePayload, trackPayload };
+
+  return {
+    listeners,
+    calls,
+    storage,
+    answers,
+    /** Change what the content script reports from now on. */
+    setAnswer(key, value) {
+      answers[key] = value;
+    },
+  };
 }
 
 /**
