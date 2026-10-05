@@ -137,6 +137,12 @@ function onWorkerMessage(message) {
   try {
     if (message.type === MSG.STATE) {
       renderState(message.state);
+      // A state push carries the current cue, so a panel opened mid-video lands
+      // on the line being spoken instead of the top of the transcript. This is
+      // what makes Follow true from the moment the panel appears: without it the
+      // panel hears nothing until the next cue change, which on a paused video
+      // never comes.
+      if (message.state?.activeIndex >= 0) setActive(message.state.activeIndex);
       return;
     }
     if (message.type === MSG.POSITION) {

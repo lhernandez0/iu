@@ -411,6 +411,11 @@
       // has been withheld. The worker uses this to tell "captions unreadable"
       // apart from "this video has none", which look identical otherwise.
       stale: Boolean(video.needsInnertube),
+      // Reported with the description because the position poll only fires on a
+      // CHANGE. If the worker restarts while this script keeps running, it would
+      // otherwise never hear where playback is — and a panel opened mid-video
+      // would sit at the top of the transcript.
+      activeIndex: video.segments?.length ? findActiveIndex(video.segments, getPosition()) : null,
       trackList: video.tracks.map((t) => ({
         languageCode: t.languageCode,
         name: t.name,

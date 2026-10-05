@@ -152,6 +152,20 @@ function defaultThreshold(listId) {
   return listId?.startsWith('hsk') ? 4 : 1;
 }
 
+/**
+ * Where playback currently is, as a cue index.
+ *
+ * Held here because POSITION from the content script is an *event*: it fires
+ * once per cue change and the content script dedupes on it. A panel opened
+ * afterwards would therefore never hear about the cue that is already playing,
+ * and would sit at the top of the transcript with Follow ticked doing nothing.
+ * Keeping it makes position part of the state, so it can be sent on connect
+ * along with everything else.
+ *
+ * @type {number}
+ */
+let activeIndex = -1;
+
 /** @type {string|null} */
 let pendingError = null;
 
@@ -182,12 +196,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.type) {
     // --- From content scripts ------------------------------------------------
     case MSG.CONTENT_POSITION:
-      // Only relayed for the tab the panel is actually showing. A background
+      // Only trusted from the tab the panel is actually showing. A background
       // YouTube tab also reports playback, and its cues are meaningless for the
       // transcript on screen. `sender` is the only way to tell them apart.
-      if (sender?.tab?.id === trackedTabId && panelPort) {
-        panelPort.postMessage({ type: MSG.POSITION, index: message.index, seconds: message.seconds });
-      }
+      if (sender?.tab?.id !== trackedTabId) return false;
+
+      // Remembered even with no panel attached, so opening one mid-video can
+      // start at the live cue rather than at the top of the transcript.
+      activeIndex = message.index;
+      panelPort?.postMessage({ type: MSG.POSITION, index: message.index, seconds: message.seconds });
       return false;
 
     case MSG.CONTENT_VIDEO_CHANGED:
@@ -484,6 +501,13 @@ async function refreshInner() {
   pendingError = null;
   const entry = adoptVideo(described.video);
 
+  // A position travelling with the description lets a mid-video open land on the
+  // current line. It arrives as a number only when the content script already
+  // holds segments; otherwise the next position tick supplies it.
+  if (typeof described.video.activeIndex === 'number' && described.video.activeIndex >= 0) {
+    activeIndex = described.video.activeIndex;
+  }
+
   // Nothing to fetch and nothing to show: say so rather than leaving the panel
   // on an empty transcript with no explanation.
   //
@@ -551,6 +575,11 @@ async function refreshInner() {
  * @returns {VideoEntry}
  */
 function adoptVideo(video) {
+  // The remembered cue belongs to the video that was playing before. Carrying it
+  // across would highlight a line of the NEW transcript at an index measured
+  // against the old one — off by as much as the two transcripts differ.
+  if (currentVideoId !== video.videoId) activeIndex = -1;
+
   currentVideoId = video.videoId;
 
   let entry = videos.get(video.videoId);
@@ -718,6 +747,11 @@ async function applyMarks(entry) {
   // whatever happens to be current.
   if (videos.get(entry.videoId) !== entry) return;
 
+  // A cue index is only meaningful against the transcript it was measured on.
+  // Re-marking can change the row list, so a remembered index could point at a
+  // different line — or past the end.
+  if (activeIndex >= entry.rows.length) activeIndex = -1;
+
   const tokensPerLine = segmentSegments(
     entry.rows.map((row) => ({ start: row.start, text: row.text })),
     dictionary.words,
@@ -816,6 +850,7 @@ function deriveState() {
       primary: null,
       secondary: null,
       rows: [],
+      activeIndex,
       error: pendingError ?? (trackedTabId === null ? 'No YouTube tab is active.' : null),
       learning: { ...learning },
       lists: availableLists,
@@ -830,6 +865,9 @@ function deriveState() {
     primary: entry.primaryLang,
     secondary: entry.secondaryLang,
     rows: entry.rows,
+    // Carried in state rather than only as an event, so a panel that opens
+    // mid-video starts where playback is instead of at the top.
+    activeIndex,
     error: pendingError ?? entry.error,
     learning: { ...learning },
     lists: availableLists,

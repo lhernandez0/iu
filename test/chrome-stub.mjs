@@ -145,26 +145,37 @@ export function installChromeStub(options = {}) {
 /**
  * A stand-in for the panel's end of the port, recording everything it is sent.
  *
- * @returns {{port: object, received: object[], sendFromPanel: (message: object) => void}}
+ * @returns {{port: object, received: object[], sendFromPanel: (message: object) => void, disconnect: () => void}}
  */
 export function createPanelPort() {
   const received = [];
-  /** @type {((message: object) => void) | null} */
-  let handler = null;
+  const messageHandlers = [];
+  const disconnectHandlers = [];
 
   const port = {
     name: 'panel',
     postMessage: (message) => received.push(message),
-    onMessage: { addListener: (fn) => (handler = fn) },
-    onDisconnect: { addListener: () => {} },
+    // Real ports expose an Event with both add and remove. The worker calls
+    // removeListener when the port disconnects, so a stub without it throws
+    // exactly where the real API would be used.
+    onMessage: {
+      addListener: (fn) => messageHandlers.push(fn),
+      removeListener: (fn) => {
+        const index = messageHandlers.indexOf(fn);
+        if (index >= 0) messageHandlers.splice(index, 1);
+      },
+    },
+    onDisconnect: { addListener: (fn) => disconnectHandlers.push(fn) },
   };
 
   return {
     port,
     received,
     sendFromPanel: (message) => {
-      if (!handler) throw new Error('The worker never subscribed to the panel port.');
-      handler({ ...message, target: 'background' });
+      if (!messageHandlers.length) throw new Error('The worker never subscribed to the panel port.');
+      for (const handler of [...messageHandlers]) handler({ ...message, target: 'background' });
     },
+    /** Simulate the panel closing, so the worker has to cope with no listener. */
+    disconnect: () => disconnectHandlers.forEach((fn) => fn()),
   };
 }

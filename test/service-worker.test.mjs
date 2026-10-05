@@ -50,17 +50,39 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
  * evaluation of the worker — which is what makes the sections independent.
  *
  * @param {object} [options] Passed through to installChromeStub.
- * @returns {Promise<{listeners: object, calls: object, storage: object, received: object[], sendFromPanel: Function}>}
+ * @returns {Promise<{listeners: object, calls: object, storage: object, received: object[], sendFromPanel: Function, disconnect: Function}>}
  */
 async function boot(options = {}) {
   const stub = installChromeStub(options);
   await import(`../src/background/service-worker.js?boot=${++bootCount}`);
 
-  const panel = createPanelPort();
-  for (const listener of stub.listeners.connect) listener(panel.port);
+  const panel = connectPanel(stub);
   await settle();
 
-  return { ...stub, received: panel.received, sendFromPanel: panel.sendFromPanel };
+  return {
+    ...stub,
+    received: panel.received,
+    sendFromPanel: panel.sendFromPanel,
+    disconnect: panel.disconnect,
+    /** Open another panel against the SAME worker, as reopening one does. */
+    reopen: () => connectPanel(stub),
+  };
+}
+
+/**
+ * Attach a panel port to an already-evaluated worker.
+ *
+ * Booting again would evaluate a fresh worker with fresh state, which is not
+ * what reopening a panel does — the worker persists and only the port
+ * reconnects. Testing the wrong one of those would prove nothing.
+ *
+ * @param {object} stub
+ * @returns {object}
+ */
+function connectPanel(stub) {
+  const panel = createPanelPort();
+  for (const listener of stub.listeners.connect) listener(panel.port);
+  return panel;
 }
 
 // --- Fixtures ----------------------------------------------------------------
@@ -611,6 +633,116 @@ section('a word we cannot define stays plain text');
   check('both characters are tokens', tokens.length, 2);
   check('neither is definable', tokens.every((t) => !t.defined), true);
   check('and neither carries a level', tokens.every((t) => t.level === null), true);
+}
+
+section('opening the panel mid-video knows where playback is');
+
+{
+  // The reported bug: on an ongoing video, Follow is ticked but the transcript
+  // does not start at the live line. POSITION is an *event* — the content script
+  // fires it once per cue change and dedupes — so a panel that opens afterwards
+  // never hears about the cue already playing, and sits at the top until the
+  // next change, which on a paused video never comes.
+  //
+  // Position therefore has to be part of the state, not only an event.
+  const stub = await boot(TRACK(GERMAN));
+  const { received, listeners } = stub;
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  // The content script reports a cue while the panel is attached.
+  listeners.message[0](
+    { target: 'background', type: 'content-position', index: 2, seconds: 60 },
+    { tab: { id: 1 } },
+  );
+  await settle();
+  check('the panel is told about a cue change', received.at(-1)?.type, 'position');
+
+  // Now the panel goes away and the SAME worker is reopened — booting again
+  // would build a fresh worker with fresh state, which is not what reopening a
+  // panel does and would make this test prove nothing.
+  stub.disconnect();
+  const reopened = stub.reopen();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  const state = reopened.received.at(-1)?.state;
+  check('and a newly opened panel is told where playback is', state?.activeIndex, 2);
+}
+
+section('the reported cue survives the panel not being there');
+{
+  // A stronger form of the same thing: the report can arrive while no panel is
+  // attached at all, since the content script keeps polling regardless. It still
+  // has to be remembered, or the next panel opens blind.
+  const stub = await boot(TRACK(GERMAN));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  stub.disconnect();
+  stub.listeners.message[0](
+    { target: 'background', type: 'content-position', index: 1, seconds: 30 },
+    { tab: { id: 1 } },
+  );
+  await settle();
+
+  const again = stub.reopen();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  check('a cue reported while the panel was closed is remembered', again.received.at(-1)?.state?.activeIndex, 1);
+}
+
+section('a cue from a background tab is neither relayed nor remembered');
+
+{
+  // Position is per-tab. A YouTube tab the user is not watching also reports its
+  // playback, and adopting its index would highlight the wrong line.
+  const { received, listeners } = await boot(TRACK(GERMAN));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  // The first test block needs the stub handle too, so this one keeps its own.
+  check('a cue is remembered as -1 until reported', received.at(-1)?.state?.activeIndex, -1);
+
+  listeners.message[0](
+    { target: 'background', type: 'content-position', index: 7, seconds: 99 },
+    { tab: { id: 42 } }, // not the tracked tab
+  );
+  await settle();
+
+  check('a cue from another tab is ignored', received.at(-1)?.state?.activeIndex, -1);
+}
+
+section('switching video clears the remembered cue');
+
+{
+  // An index is only meaningful against the transcript it was measured on. Two
+  // transcripts have different lengths, so carrying an index across would
+  // highlight an unrelated line — or run off the end.
+  const stub = await boot(TRACK(GERMAN));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  stub.listeners.message[0](
+    { target: 'background', type: 'content-position', index: 2, seconds: 60 },
+    { tab: { id: 1 } },
+  );
+  await settle();
+  // A cue report is a `position` message, not a `state` one — it carries `index`
+  // rather than `state.activeIndex`. Asking the worker for state afterwards is
+  // what shows the cue was remembered as well as relayed.
+  check('the cue arrived as a position event', stub.received.at(-1)?.index, 2);
+
+  stub.sendFromPanel({ type: 'refresh' });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  check('and it is part of the state', stub.received.at(-1)?.state?.activeIndex, 2);
+
+  stub.setAnswer('describePayload', DESCRIBE({ ...VIDEO, videoId: 'othervid001', title: 'Other' }));
+  stub.setAnswer('providePayload', {
+    ok: true,
+    video: { ...VIDEO, videoId: 'othervid001', title: 'Other' },
+    requested: 'en',
+    fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: 'Different' }] },
+  });
+
+  stub.sendFromPanel({ type: 'refresh' });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  check('the new video starts with no cue', stub.received.at(-1)?.state?.activeIndex, -1);
 }
 
 section('switching language keeps the marks');
