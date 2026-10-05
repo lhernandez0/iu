@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 195 checks)
+## Tier 1 — hermetic (`npm test`, 371 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies — plain Node scripts,
@@ -38,16 +38,23 @@ so they run with nothing installed.
 | Suite | Boots | Checks |
 | --- | --- | --- |
 | `unit.test.mjs` | nothing | 48 |
-| `service-worker.test.mjs` | worker + `chrome` stub | 52 |
-| `sidepanel.test.mjs` | panel + DOM stub | 33 |
-| `page-bridge.test.mjs` | bridge + page stub | 24 |
+| `service-worker.test.mjs` | worker + `chrome` stub | 149 |
+| `sidepanel.test.mjs` | panel + DOM stub | 57 |
+| `page-bridge.test.mjs` | bridge + page stub | 35 |
 | `content.test.mjs` | content script | 38 |
+| `learn.test.mjs` | segmenter + word list | 44 |
 
 Each file is spawned as its own process, because they all grab the same globals
 (`chrome`, `document`, the module cache) and a shared process lets one suite's
 stubs leak into another's — which has already produced a misleading result once.
 
-## Tier 2 — browser, offline (`npm run test:browser`, 37 checks)
+**A stub that ignores its request cannot test behaviour that depends on it.**
+The content-script stub used to return a fixed payload whatever `languageCode`
+was requested, so "it kept the chosen language" passed against code that had lost
+the choice. Payloads may now be functions of the request, and a race can be made
+deterministic with `storageDelay` — otherwise the test passes either way.
+
+## Tier 2 — browser, offline (`npm run test:browser`, 72 checks)
 
 The real extension in real Chromium. The only thing faked is the network, and it
 is intercepted at the transport layer with `context.route`, so the content script
@@ -60,6 +67,10 @@ Covers what the hermetic tier structurally cannot:
 - a real `fetch` of a caption track, and a real seek on a real `<video>`
 - the panel's port surviving, and the worker's cache serving a warm video
 - two languages rendering together after alignment
+- **that the stylesheet does what it says**: the focus view really hides rows
+  (measured as zero-height boxes) and a text-size change really moves the
+  computed font size. A hermetic test only sees the class, so a selector typo
+  would pass it while the panel hid nothing.
 
 Notable details in `test/browser/harness.mjs`, all of which cost time to find:
 
