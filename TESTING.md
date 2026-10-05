@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 371 checks)
+## Tier 1 — hermetic (`npm test`, 450 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies — plain Node scripts,
@@ -38,10 +38,10 @@ so they run with nothing installed.
 | Suite | Boots | Checks |
 | --- | --- | --- |
 | `unit.test.mjs` | nothing | 48 |
-| `service-worker.test.mjs` | worker + `chrome` stub | 149 |
-| `sidepanel.test.mjs` | panel + DOM stub | 57 |
-| `page-bridge.test.mjs` | bridge + page stub | 35 |
-| `content.test.mjs` | content script | 38 |
+| `service-worker.test.mjs` | worker + `chrome` stub | 178 |
+| `sidepanel.test.mjs` | panel + DOM stub | 81 |
+| `page-bridge.test.mjs` | bridge + page stub | 42 |
+| `content.test.mjs` | content script | 57 |
 | `learn.test.mjs` | segmenter + word list | 44 |
 
 Each file is spawned as its own process, because they all grab the same globals
@@ -54,7 +54,16 @@ was requested, so "it kept the chosen language" passed against code that had los
 the choice. Payloads may now be functions of the request, and a race can be made
 deterministic with `storageDelay` — otherwise the test passes either way.
 
-## Tier 2 — browser, offline (`npm run test:browser`, 72 checks)
+The DOM stub models a select's value as its selected option, not as the last
+value assigned. Options are rebuilt on every state push, so the older stub
+reported a stale value the browser never would, and anything depending on the
+selection could not be tested honestly.
+
+PROVIDE and FETCH_TRACK return **different shapes** — `{ok, video, fetched}`
+versus the segment list itself. Using one where the other belongs fails as a
+silently empty transcript.
+
+## Tier 2 — browser, offline (`npm run test:browser`, 80 checks)
 
 The real extension in real Chromium. The only thing faked is the network, and it
 is intercepted at the transport layer with `context.route`, so the content script
@@ -71,6 +80,10 @@ Covers what the hermetic tier structurally cannot:
   (measured as zero-height boxes) and a text-size change really moves the
   computed font size. A hermetic test only sees the class, so a selector typo
   would pass it while the panel hid nothing.
+- **that auto-translate really reaches YouTube**: the `tlang` URL is built by the
+  content script, fetched over a real route, and re-rendered by the real panel,
+  then changed back. A hermetic test stubs the fetch, so it can never show the
+  parameter arriving.
 
 Notable details in `test/browser/harness.mjs`, all of which cost time to find:
 
