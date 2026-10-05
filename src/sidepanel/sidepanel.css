@@ -5,6 +5,15 @@
   --accent: #4f8cff;
   --danger: #ff6b6b;
   --surface: #1e2128;
+
+  /* One multiplier for every size in this file.
+     A single variable holding a size cannot work here, because there are nine
+     separate sizes and a rule lower down would override it. Multiplying each by
+     this instead means the whole panel scales together, and the useful range is
+     wider than Latin text suggests — CJK is denser per character, so a learner
+     often wants 18-20px where 13px reads fine in English. */
+  --text-scale: 1;
+  --line-height: 1.5;
   color-scheme: dark;
 }
 
@@ -19,7 +28,7 @@ body {
   height: 100vh;
   background: var(--bg);
   color: var(--fg);
-  font: 13px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: calc(13px * var(--text-scale)) / var(--line-height) system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 .bar {
@@ -92,7 +101,7 @@ select:disabled {
   gap: 6px;
   margin-right: auto;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   cursor: pointer;
   white-space: nowrap;
 }
@@ -101,7 +110,7 @@ select:disabled {
   margin: 0;
   padding: 6px 10px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 .status.error {
@@ -160,7 +169,7 @@ select:disabled {
   padding-top: 1px;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 /* Primary and secondary stack vertically inside a row. */
@@ -210,12 +219,35 @@ select:disabled {
 .learning-label {
   flex: 0 0 auto;
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
 }
 
 #threshold {
   flex: 0 0 auto;
   max-width: 72px;
+}
+
+/* Focus view: only the current line and the next are shown.
+   The rows are not re-rendered for this — the same rows are filtered by CSS, so
+   marks, hover and seek all keep working and switching modes is instant. */
+.transcript.focus .row {
+  display: none;
+}
+
+.transcript.focus .row.active,
+.transcript.focus .row.next {
+  display: flex;
+}
+
+/* The preview reads as a preview: dimmer, so it is not mistaken for the line
+   being spoken, but legible enough to read ahead. */
+.transcript.focus .row.next {
+  opacity: 0.55;
+}
+
+/* Room around the single line so it does not sit pinned to an edge. */
+.transcript.focus {
+  padding-top: 12px;
 }
 
 /* Definition popover, anchored to the hovered token. */
@@ -228,7 +260,7 @@ select:disabled {
   border-radius: 6px;
   background: #1b1e26;
   box-shadow: 0 6px 18px rgb(0 0 0 / 45%);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   line-height: 1.45;
   pointer-events: none;
 }
@@ -241,7 +273,7 @@ select:disabled {
 }
 
 .popover-head strong {
-  font-size: 15px;
+  font-size: calc(15px * var(--text-scale));
 }
 
 .popover-pinyin {
@@ -269,7 +301,7 @@ select:disabled {
   border-radius: 999px;
   background: color-mix(in srgb, var(--mark) 25%, transparent);
   border: 1px solid var(--mark);
-  font-size: 11px;
+  font-size: calc(11px * var(--text-scale));
   white-space: nowrap;
 }
 
@@ -282,7 +314,7 @@ select:disabled {
    primary line. */
 .secondary {
   color: var(--muted);
-  font-size: 12px;
+  font-size: calc(12px * var(--text-scale));
   white-space: pre-wrap;
   word-break: break-word;
 }

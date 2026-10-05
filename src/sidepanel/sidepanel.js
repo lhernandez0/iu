@@ -13,7 +13,24 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
+import { definition } from '../common/settings.js';
 import { attachHover, showEntry, hide as hidePopover, renderTokens } from './marks.js';
+
+/**
+ * Options for the settings this panel renders itself.
+ *
+ * Read from the schema so a label or a value lives in one place, rather than
+ * being duplicated here and in the worker and drifting apart.
+ *
+ * @param {string} id
+ * @returns {Array<{value: any, label: string}>}
+ */
+function optionsFor(id) {
+  return definition(id)?.options ?? [];
+}
+
+const VIEW_OPTIONS = optionsFor('view');
+const TEXT_SCALE_OPTIONS = optionsFor('textScale');
 
 /**
  * Phase switch. True drives the parked tabCapture -> offscreen -> engine path
@@ -35,6 +52,8 @@ const els = {
   swap: /** @type {HTMLButtonElement} */ (document.getElementById('swap')),
   list: /** @type {HTMLSelectElement} */ (document.getElementById('list')),
   threshold: /** @type {HTMLSelectElement} */ (document.getElementById('threshold')),
+  viewMode: /** @type {HTMLSelectElement} */ (document.getElementById('view-mode')),
+  textScale: /** @type {HTMLSelectElement} */ (document.getElementById('text-scale')),
   follow: /** @type {HTMLInputElement} */ (document.getElementById('follow')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
   transcript: /** @type {HTMLElement} */ (document.getElementById('transcript')),
@@ -57,6 +76,8 @@ const view = {
   palette: undefined,
   /** The word whose definition is being shown, so a late reply is not stale. */
   hoveredWord: null,
+  /** Whether the panel is showing only the current line and the next. */
+  focusMode: false,
 };
 
 // --- Worker port ------------------------------------------------------------
@@ -300,43 +321,106 @@ function renderStatus(state) {
 }
 
 /**
- * The word list and level controls.
+ * The settings controls, rendered from the schema in src/common/settings.js.
+ *
+ * Rendering from a schema rather than hand-writing each control is what keeps
+ * adding a setting to one object plus one line of HTML, instead of a control,
+ * a listener and a message each time.
  *
  * @param {object} state
  */
 function renderLearning(state) {
-  const lists = state.lists ?? [];
   const learning = state.learning ?? {};
 
   fillSelect(
     els.list,
-    lists.map((list) => ({ languageCode: list.id, name: list.label })),
+    (learning.listOptions ?? []).map((option) => ({ languageCode: option.value, name: option.label })),
     learning.listId,
     'Word list',
   );
-  els.list.disabled = lists.length === 0;
+  els.list.disabled = !learning.listOptions?.length;
 
-  // The level options depend on the chosen list, because lists disagree about
-  // how many levels there are — HSK 2.0 has six, HSK 3.0 has nine — and a
-  // threshold only means something relative to its own list.
-  const active = lists.find((list) => list.id === learning.listId);
-  const signature = `${active?.id}:${active?.levelCount}:${learning.threshold}`;
-  if (els.threshold.dataset.signature !== signature) {
-    els.threshold.dataset.signature = signature;
-    els.threshold.replaceChildren();
+  fillSelectOptions(els.threshold, learning.thresholdOptions ?? [], learning.threshold, '—');
 
-    if (!active) {
-      els.threshold.append(new Option('—', ''));
-      els.threshold.disabled = true;
-    } else {
-      els.threshold.disabled = false;
-      for (let level = 1; level <= active.levelCount; level++) {
-        const option = new Option(`${level}+`, String(level));
-        option.selected = level === learning.threshold;
-        els.threshold.append(option);
-      }
-    }
+  fillSelectOptions(els.viewMode, VIEW_OPTIONS, learning.view, 'All lines');
+  fillSelectOptions(els.textScale, TEXT_SCALE_OPTIONS, learning.textScale, 'Normal');
+
+  // Applied here rather than round-tripped through the worker: text size and the
+  // focus view are pure presentation, so sending them anywhere would be a
+  // message that changes nothing on the other side.
+  applyTextScale(learning.textScale);
+  applyView(learning.view);
+}
+
+/**
+ * Fill a select from a list of {value,label}, rebuilding only when it differs.
+ *
+ * @param {HTMLSelectElement} select
+ * @param {Array<{value: any, label: string}>} options
+ * @param {any} selected
+ * @param {string} placeholder Shown when there is nothing to choose.
+ */
+function fillSelectOptions(select, options, selected, placeholder) {
+  const signature = options.map((option) => `${option.value}:${option.label}`).join(',') + `|${selected}`;
+  if (select.dataset.signature === signature) return;
+  select.dataset.signature = signature;
+
+  select.replaceChildren();
+  if (!options.length) {
+    select.append(new Option(placeholder, ''));
+    select.disabled = true;
+    return;
   }
+
+  select.disabled = false;
+  for (const option of options) {
+    const element = new Option(option.label, String(option.value));
+    element.selected = String(option.value) === String(selected);
+    select.append(element);
+  }
+}
+
+/**
+ * Text size is a single scale factor on the root element.
+ *
+ * Every size in the stylesheet is expressed as `calc(<px> * var(--text-scale))`,
+ * because the alternative — one variable holding a size that other rules
+ * override — cannot move nine separate sizes together.
+ *
+ * @param {number} scale
+ */
+function applyTextScale(scale) {
+  const value = Number.isFinite(Number(scale)) ? Number(scale) : 1;
+  document.documentElement.style.setProperty('--text-scale', String(value));
+}
+
+/**
+ * Show either the whole transcript or the current line with the next one.
+ *
+ * Applied as a class on the list rather than by re-rendering, so switching modes
+ * is instant and the marks, hover handling and seek listeners all survive
+ * untouched — the rows are the same rows.
+ *
+ * @param {string} mode
+ */
+function applyView(mode) {
+  view.focusMode = mode === 'focus';
+  els.transcript.classList.toggle('focus', view.focusMode);
+  // Entering focus mode has to reveal the current line, which the normal render
+  // path would not do because nothing about the rows changed.
+  if (view.focusMode) revealNearActive();
+}
+
+/**
+ * Scroll the current line into view.
+ *
+ * Centred rather than nearest, because the focus view keeps the next line
+ * visible too — scrolling to the edge would leave the preview just below the
+ * fold.
+ */
+function revealNearActive() {
+  const row = view.elements[view.activeIndex];
+  if (row) row.scrollIntoView({ block: 'center' });
 }
 
 // --- Controls ---------------------------------------------------------------
@@ -355,6 +439,19 @@ els.list.addEventListener('change', () => {
 
 els.threshold.addEventListener('change', () => {
   send({ type: MSG.SET_THRESHOLD, threshold: Number(els.threshold.value) });
+});
+
+// Both of these are presentation only, so they are applied locally and also
+// sent to be remembered. The worker does nothing with them beyond storing them,
+// which is why there is no round trip that could change what is on screen.
+els.viewMode.addEventListener('change', () => {
+  applyView(els.viewMode.value);
+  send({ type: MSG.SET_SETTING, id: 'view', value: els.viewMode.value });
+});
+
+els.textScale.addEventListener('change', () => {
+  applyTextScale(Number(els.textScale.value));
+  send({ type: MSG.SET_SETTING, id: 'textScale', value: Number(els.textScale.value) });
 });
 
 els.swap.addEventListener('click', () => {
@@ -500,13 +597,24 @@ function buildRow(row, index) {
 function setActive(index) {
   if (index === view.activeIndex) return;
   view.elements[view.activeIndex]?.classList.remove('active');
+  // The previous successor is no longer the successor.
+  view.elements[view.activeIndex + 1]?.classList.remove('next');
   view.activeIndex = index;
   if (index < 0) return;
 
   const element = view.elements[index];
   if (!element) return;
   element.classList.add('active');
-  if (view.autoScroll) element.scrollIntoView({ block: 'nearest' });
+
+  // The next line is marked so the focus view can reveal it as a preview. The
+  // class is applied in both modes because it costs nothing and switching view
+  // should not need a re-render to become correct.
+  view.elements[index + 1]?.classList.add('next');
+
+  if (!view.autoScroll) return;
+  // In focus mode the current line is centred, because the preview sits below
+  // it and scrolling to the edge would push it off screen.
+  element.scrollIntoView({ block: view.focusMode ? 'center' : 'nearest' });
 }
 
 /**

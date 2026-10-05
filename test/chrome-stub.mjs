@@ -27,6 +27,8 @@ const here = dirname(fileURLToPath(import.meta.url));
  * @param {any} [options.describePayload]  What the content script "returns" for DESCRIBE.
  * @param {any} [options.providePayload]   What the content script "returns" for PROVIDE.
  * @param {any} [options.trackPayload]     What it returns for FETCH_TRACK.
+ * @param {object} [options.storage]       Pre-existing chrome.storage.local contents.
+ * @param {number} [options.storageDelay]  Milliseconds the storage read takes.
  * @returns {{listeners: object, calls: object, storage: object}}
  */
 export function installChromeStub(options = {}) {
@@ -36,6 +38,8 @@ export function installChromeStub(options = {}) {
     describePayload = null,
     providePayload = null,
     trackPayload = null,
+    storage = {},
+    storageDelay = 0,
   } = options;
 
   /** Registrations, so a test can fire the events the browser would. */
@@ -50,8 +54,6 @@ export function installChromeStub(options = {}) {
 
   /** Everything the worker asked the browser to do. */
   const calls = { executeScript: [], sendMessage: [], sidePanelOpen: [], offscreen: [] };
-
-  const storage = {};
 
   const addListener = (bucket) => (fn) => listeners[bucket].push(fn);
 
@@ -90,8 +92,8 @@ export function installChromeStub(options = {}) {
       sendMessage: async (tabId, message, frameOptions) => {
         calls.sendMessage.push({ tabId, message, frameOptions });
         if (message?.type === 'describe') return answers.describePayload;
-        if (message?.type === 'provide') return answers.providePayload;
-        if (message?.type === 'fetch-track') return answers.trackPayload;
+        if (message?.type === 'provide') return answerFor(answers.providePayload, message);
+        if (message?.type === 'fetch-track') return answerFor(answers.trackPayload, message);
         return { ok: true };
       },
     },
@@ -107,7 +109,13 @@ export function installChromeStub(options = {}) {
     },
     storage: {
       local: {
-        get: async (key) => (key in storage ? { [key]: storage[key] } : {}),
+        get: async (key) => {
+          // A real storage read is not instant. Making it visibly slow is what
+          // lets a test catch startup code that reads a stored value only after
+          // it has already been used.
+          if (storageDelay) await new Promise((done) => setTimeout(done, storageDelay));
+          return key in storage ? { [key]: storage[key] } : {};
+        },
         set: async (items) => Object.assign(storage, items),
       },
     },
@@ -129,6 +137,25 @@ export function installChromeStub(options = {}) {
   // a test changes what the "page" reports — for instance to simulate the user
   // switching to a different video in the same tab.
   const answers = { describePayload, providePayload, trackPayload };
+
+  /**
+   * Resolve an answer, letting it depend on the request.
+   *
+   * The content script picks the track the worker ASKS for and only falls back to
+   * a default when that track is missing. A stub that always returns the same
+   * payload cannot tell those apart — it would report success for a language the
+   * video does not have, and quietly turn a real bug into a passing test.
+   *
+   * Named `answerFor` rather than `resolve` because `resolve` here is
+   * node:path's, which the dictionary fetch above depends on; shadowing it broke
+   * the word list with an EISDIR.
+   *
+   * @param {any} payload
+   * @param {object} request
+   */
+  function answerFor(payload, request) {
+    return typeof payload === 'function' ? payload(request) : payload;
+  }
 
   return {
     listeners,

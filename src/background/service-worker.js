@@ -18,6 +18,7 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { alignSecondary } from '../common/transcript.js';
+import { defaults, normalise, toStorage, storageKey, definition } from '../common/settings.js';
 import { loadDictionary, levelOf, lookup } from '../learn/wordlist.js';
 import { segmentSegments } from '../learn/segment.js';
 
@@ -43,6 +44,35 @@ const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
 
 /** @type {Map<string, VideoEntry>} videoId -> entry. Insertion order doubles as eviction order. */
 const videos = new Map();
+
+/**
+ * Every learner preference, held as one object.
+ *
+ * Settings live here rather than as a field each because they are already
+ * interdependent — the threshold is meaningless without the word list, and the
+ * word list is meaningless without the dictionary loaded — so keeping them
+ * together is what lets them be normalised, persisted and sent as a unit.
+ *
+ * Language choices are settings too, which is what makes them sticky: they are
+ * the preferred default for the next video, not merely an assignment to the
+ * current one.
+ *
+ * @type {Record<string, any>}
+ */
+let settings = defaults();
+
+/**
+ * Resolves once the stored settings have been read.
+ *
+ * The first refresh is what seeds a video's language choices, and it can be
+ * triggered the moment a panel connects — which is before an async storage read
+ * has finished. Without waiting, the restored choice loses the race and the first
+ * video of every session comes up in the default language, which looks exactly
+ * like the setting not persisting at all.
+ *
+ * @type {Promise<void>}
+ */
+let settingsReady = Promise.resolve();
 
 /** @type {number|null} Tab whose video the panel is showing. */
 let trackedTabId = null;
@@ -101,12 +131,12 @@ function handlePanelMessage(message) {
 
     // --- Learning layer ------------------------------------------------------
     case MSG.SET_LIST:
-      learning.listId = message.listId;
+      settings.listId = message.listId;
       // Take the new list's own default rather than carrying a threshold from a
       // list with a different number of levels, where it would mean something
       // else entirely.
-      learning.threshold = defaultThreshold(message.listId);
-      persistLearning();
+      settings.threshold = defaultThreshold(message.listId);
+      persistSettings();
       // Rows are rebuilt because switching lists can change which levels exist,
       // so the existing marks are no longer valid.
       rebuildRows(currentEntry());
@@ -114,10 +144,14 @@ function handlePanelMessage(message) {
       return;
 
     case MSG.SET_THRESHOLD:
-      learning.threshold = Number(message.threshold);
-      persistLearning();
+      settings.threshold = Number(message.threshold);
+      persistSettings();
       rebuildRows(currentEntry());
       broadcastState();
+      return;
+
+    case MSG.SET_SETTING:
+      void applySetting(message.id, message.value);
       return;
 
     case MSG.LOOKUP:
@@ -129,17 +163,6 @@ function handlePanelMessage(message) {
       return;
   }
 }
-
-/**
- * How the learner's own preferences are held.
- *
- * `threshold` is the lowest level worth marking. It is configurable rather than
- * derived, because the honest answer to "is my own level marked?" is both: a
- * pure difficulty signal starts above you, a study aid starts at you.
- *
- * @type {{listId: string|null, threshold: number}}
- */
-const learning = { listId: null, threshold: 0 };
 
 /**
  * The level a list should mark from, if the learner has not chosen one.
@@ -168,9 +191,6 @@ let activeIndex = -1;
 
 /** @type {string|null} */
 let pendingError = null;
-
-/** @type {string|null} Persisted across restarts; transcripts are not. */
-let secondaryPreference = null;
 
 /**
  * The word lists offered to the panel. Empty until the dictionary loads, which
@@ -264,7 +284,7 @@ async function answerLookup(word) {
       word,
       entry: lookup(dictionary, word),
       levels: levelsFor(dictionary, word),
-      listId: learning.listId,
+      listId: settings.listId,
     });
   } catch (error) {
     broadcastError(`Could not load the dictionary: ${error?.message ?? error}`);
@@ -450,6 +470,10 @@ async function sendToContent(tabId, message) {
  * @returns {Promise<void>}
  */
 async function refresh() {
+  // Nothing here is correct without the settings: which language to load, which
+  // word list to mark with. Waiting is cheap after the first read, because the
+  // promise is already resolved.
+  await settingsReady;
   try {
     await refreshInner();
   } catch (error) {
@@ -590,8 +614,16 @@ function adoptVideo(video) {
       isLive: video.isLive,
       trackList: video.trackList ?? [],
       stale: Boolean(video.stale),
-      primaryLang: null,
-      secondaryLang: secondaryPreference,
+      // Both language choices are seeded from the saved preferences, which is
+      // what makes them sticky. Primary was previously left null here, so every
+      // new video fell back to the content script's own default and a Chinese
+      // subtitle choice was silently lost on the next video.
+      //
+      // A preference that this video cannot satisfy is cleared from the entry
+      // below, but never from the settings — so returning to a video that has
+      // the language brings it back.
+      primaryLang: settings.primaryLanguage,
+      secondaryLang: settings.secondaryLanguage,
       tracks: new Map(),
       rows: [],
       error: null,
@@ -728,7 +760,7 @@ async function applyMarks(entry) {
   // check is on the rows rather than on a remembered flag, because a flag can
   // claim marks that are no longer there — which is precisely how the transcript
   // came back unmarked after a language switch.
-  const wanted = `${learning.listId}:${learning.threshold}`;
+  const wanted = `${settings.listId}:${settings.threshold}`;
   const allMarked = entry.rows.every((row) => Array.isArray(row.tokens));
   if (entry.markedWith === wanted && allMarked) return;
 
@@ -758,8 +790,8 @@ async function applyMarks(entry) {
     dictionary.maxWordLength,
   );
 
-  const list = dictionary.lists.find((l) => l.id === learning.listId) ?? dictionary.lists[0];
-  const threshold = learning.threshold;
+  const list = dictionary.lists.find((l) => l.id === settings.listId) ?? dictionary.lists[0];
+  const threshold = settings.threshold;
 
   entry.rows = entry.rows.map((row, index) => ({
     ...row,
@@ -804,21 +836,30 @@ function markLine(tokens, dictionary, list, threshold) {
 // --- Panel intents ----------------------------------------------------------
 
 /**
+ * Choose a subtitle track for the current video, and remember the choice.
+ *
+ * The choice is written to settings as well as to the entry, because it is a
+ * preference about what the learner wants to read, not an assignment to one
+ * video. That is what makes it sticky across videos and across restarts.
+ *
  * @param {'primary'|'secondary'} which
  * @param {string|null} languageCode
  */
 async function selectTrack(which, languageCode) {
-  const entry = currentEntry();
-  if (!entry) return;
+  if (which === 'primary') settings.primaryLanguage = languageCode || null;
+  else settings.secondaryLanguage = languageCode || null;
+  persistSettings();
 
-  if (which === 'primary') {
-    entry.primaryLang = languageCode ?? entry.primaryLang;
-  } else {
-    // '' from the panel means "none".
-    entry.secondaryLang = languageCode || null;
-    secondaryPreference = entry.secondaryLang;
-    persistPreference();
+  const entry = currentEntry();
+  if (!entry) {
+    broadcastState();
+    return;
   }
+
+  // An empty string from the panel means "none" for the second subtitle; for
+  // the primary it means "fall back to whatever the video offers".
+  if (which === 'primary') entry.primaryLang = settings.primaryLanguage;
+  else entry.secondaryLang = settings.secondaryLanguage;
 
   await loadTrack(entry, which === 'primary' ? entry.primaryLang : entry.secondaryLang);
   rebuildRows(entry);
@@ -852,7 +893,7 @@ function deriveState() {
       rows: [],
       activeIndex,
       error: pendingError ?? (trackedTabId === null ? 'No YouTube tab is active.' : null),
-      learning: { ...learning },
+      learning: learningState(),
       lists: availableLists,
     };
   }
@@ -869,36 +910,104 @@ function deriveState() {
     // mid-video starts where playback is instead of at the top.
     activeIndex,
     error: pendingError ?? entry.error,
-    learning: { ...learning },
+    learning: learningState(),
     lists: availableLists,
   };
 }
 
-// --- Preferences ------------------------------------------------------------
-// Only the language choice is persisted. Transcripts stay in memory: they are
-// large, cheap to refetch, and the worker is kept alive by an open panel.
+/**
+ * Everything the panel needs to render its controls, in one object.
+ *
+ * The panel renders controls from the settings schema, so what it needs is the
+ * current value *and* the options available right now — and the options for the
+ * threshold depend on the chosen word list, which only the worker knows about.
+ *
+ * @returns {object}
+ */
+function learningState() {
+  const active = availableLists.find((list) => list.id === settings.listId) ?? availableLists[0];
+  return {
+    view: settings.view,
+    textScale: settings.textScale,
+    listId: settings.listId,
+    threshold: settings.threshold,
+    primaryLanguage: settings.primaryLanguage,
+    secondaryLanguage: settings.secondaryLanguage,
+    // Supplied here rather than in the schema, because the levels a list has is
+    // a property of the data, not of the setting.
+    listOptions: availableLists.map((list) => ({ value: list.id, label: list.label })),
+    thresholdOptions: active
+      ? Array.from({ length: active.levelCount }, (_, i) => ({ value: i + 1, label: `${i + 1}+` }))
+      : [],
+  };
+}
 
-async function restorePreference() {
+// --- Settings ---------------------------------------------------------------
+// One object, one storage key, one place to read and one to write. Adding a
+// setting is a change to src/common/settings.js and nothing here.
+
+async function restoreSettings() {
   try {
-    const stored = await chrome.storage.local.get(['secondaryLanguage', 'learning']);
-    secondaryPreference = stored?.secondaryLanguage ?? null;
-    if (stored?.learning) {
-      learning.listId = stored.learning.listId ?? null;
-      learning.threshold = Number(stored.learning.threshold) || 0;
-    }
+    const stored = await chrome.storage.local.get(storageKey);
+    settings = normalise(stored?.[storageKey]);
   } catch {
-    // Storage is unavailable (or the worker is mid-shutdown). Missing
-    // preferences are not worth failing startup over.
-    secondaryPreference = null;
+    // Storage unavailable, or the worker is mid-shutdown. Defaults are a fine
+    // answer and not worth failing startup over.
+    settings = defaults();
   }
 }
 
-function persistPreference() {
-  chrome.storage.local.set({ secondaryLanguage: secondaryPreference }).catch(() => {});
+function persistSettings() {
+  chrome.storage.local.set(toStorage(settings)).catch(() => {});
 }
 
-function persistLearning() {
-  chrome.storage.local.set({ learning: { ...learning } }).catch(() => {});
+/**
+ * Apply one setting, doing whatever else that change implies.
+ *
+ * Most settings are just stored. The ones that need follow-up declare it here,
+ * so the panel never has to know which changes are the expensive ones — it
+ * sends a value and the worker decides what that costs.
+ *
+ * @param {string} id
+ * @param {any} value
+ */
+async function applySetting(id, value) {
+  const declared = definition(id);
+  if (!declared) return; // unknown id; nothing to do and nothing to report
+
+  settings[id] = declared.coerce ? declared.coerce(value) : value;
+
+  switch (id) {
+    case 'listId':
+      // A threshold is relative to its list, so moving list takes that list's
+      // own starting point rather than carrying a number that has changed
+      // meaning.
+      settings.threshold = defaultThreshold(settings.listId);
+      rebuildRows(currentEntry());
+      break;
+
+    case 'threshold':
+      rebuildRows(currentEntry());
+      break;
+
+    case 'primaryLanguage':
+      // Clear the cached transcript for the current video so the next refresh
+      // fetches the newly chosen track rather than serving the old one.
+      void selectTrack('primary', settings.primaryLanguage);
+      break;
+
+    case 'secondaryLanguage':
+      void selectTrack('secondary', settings.secondaryLanguage);
+      break;
+
+    default:
+      // view and textScale are pure presentation: the panel applies them and
+      // nothing here needs to react.
+      break;
+  }
+
+  persistSettings();
+  broadcastState();
 }
 
 // Called at the bottom of this file rather than here, so the whole worker is
@@ -969,13 +1078,18 @@ async function ensureOffscreenDocument() {
 }
 
 // --- Startup -----------------------------------------------------------------
-// Everything above is defined by now. restorePreference swallows its own
+// Everything above is defined by now. restoreSettings swallows its own
 // failures, so this cannot reject and abort the worker.
 //
 // The dictionary is primed straight away rather than on first use: it decides
 // which lists the panel can offer, and a learner opening the panel should not
 // have to wait for a 1.4MB fetch to see the controls.
-void restorePreference().then(primeDictionary);
+//
+// `settingsReady` is the same promise the refresh path awaits, so a panel that
+// connects during this read cannot seed a video's languages from the defaults
+// before the stored ones have landed.
+settingsReady = restoreSettings();
+void settingsReady.then(primeDictionary);
 
 /**
  * Load the dictionary once at startup so the panel knows what it can offer, and
@@ -996,12 +1110,12 @@ async function primeDictionary() {
     // opening the panel with no stored preference saw 早安 unmarked and
     // reasonably concluded the highlighting was broken. Defaulting to the
     // widest list shows marks immediately; a narrower list remains a choice.
-    if (!learning.listId || !dictionary.lists.some((list) => list.id === learning.listId)) {
+    if (!settings.listId || !dictionary.lists.some((list) => list.id === settings.listId)) {
       const widest = [...dictionary.lists].sort((a, b) => (b.levelled ?? 0) - (a.levelled ?? 0))[0];
-      learning.listId = widest?.id ?? null;
+      settings.listId = widest?.id ?? null;
 
       // The learner's own level, clamped to what the list actually has.
-      learning.threshold = Math.min(defaultThreshold(learning.listId), widest?.levelCount ?? 1);
+      settings.threshold = Math.min(defaultThreshold(settings.listId), widest?.levelCount ?? 1);
     }
   } catch (error) {
     broadcastError(`Word list unavailable: ${error?.message ?? error}`);

@@ -415,8 +415,82 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     console.log(`        popover: ${unmarkedPopover}`);
   }
 
-  section('rendering cost on a transcript far longer than usual');
+  section('the focus view really hides the other lines, and text size really scales');
 
+  {
+    // The hermetic suite proves the class is applied. Whether the stylesheet then
+    // hides the right rows — and whether a calc() on a custom property survives
+    // the cascade — can only be settled by a browser laying it out. A typo in the
+    // selector would pass every other test in this file.
+    const chinese = {
+      languageCode: 'zh',
+      name: '中文',
+      segments: [
+        { start: 0, duration: 2, text: '我们在岸上等你' },
+        { start: 2, duration: 2, text: '这本书的内容很有意思' },
+        { start: 4, duration: 2, text: '研究生命起源是一个难题' },
+      ],
+    };
+
+    await routeYouTube(context, { videoId: 'focusview01', title: 'Focus', tracks: [chinese] });
+    const watch = await openWatchPage(context, 'focusview01');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 3);
+
+    /** How many rows a real layout is showing, plus the body font size. */
+    const layout = () => page.evaluate(() => {
+      const rows = [...document.querySelectorAll('.row')];
+      const visible = rows.filter((row) => row.getBoundingClientRect().height > 0);
+      return {
+        total: rows.length,
+        visible: visible.length,
+        visibleTexts: visible.map((row) => row.querySelector('.primary')?.textContent ?? ''),
+        bodyFont: parseFloat(getComputedStyle(document.body).fontSize),
+        rowLineHeight: parseFloat(getComputedStyle(rows[0]).lineHeight),
+        transcriptHasFocus: document.getElementById('transcript').classList.contains('focus'),
+      };
+    });
+
+    const before = await layout();
+    check('all three lines start visible', before.visible, 3);
+    check('the view starts unfocused', before.transcriptHasFocus, false);
+
+    // Drive it through the real control, not by setting the class directly.
+    await page.selectOption('#view-mode', 'focus');
+    // Let the current line be reported so there is an active row to keep.
+    await page.waitForFunction(() => document.querySelector('.row.active') !== null, null, { timeout: 20000 });
+
+    const focused = await layout();
+    check('focus mode is on', focused.transcriptHasFocus, true);
+    check('most lines are hidden', focused.visible < 3, true);
+    check('the current line is still shown', focused.visible >= 1, true);
+    check('and all three rows are still in the DOM', focused.total, 3);
+    // The dimmed preview must not be mistaken for the spoken line.
+    const opacity = await page.evaluate(() => {
+      const next = document.querySelector('.row.next');
+      return next ? parseFloat(getComputedStyle(next).opacity) : null;
+    });
+    check('the preview is dimmed', opacity === null || opacity < 1, true);
+
+    // Text size. Scaled through the same variable the stylesheet reads.
+    await page.selectOption('#text-scale', '1.75');
+    const scaled = await layout();
+    check('the body text actually grew', scaled.bodyFont > before.bodyFont, true);
+    // Nine separate sizes are scaled by that one variable, so a rule that reads
+    // the variable but was never converted would show up as a size that did not
+    // move.
+    check('the line height scaled with it', scaled.rowLineHeight > before.rowLineHeight, true);
+    console.log(`        body ${before.bodyFont}px -> ${scaled.bodyFont}px, line ${before.rowLineHeight}px -> ${scaled.rowLineHeight}px`);
+
+    // And back, so the two states are not one-way.
+    await page.selectOption('#text-scale', '1');
+    await page.selectOption('#view-mode', 'all');
+    const restored = await layout();
+    check('text size returns', restored.bodyFont, before.bodyFont);
+    check('and every line is visible again', restored.visible, 3);
+  }
+
+  section('rendering cost on a transcript far longer than usual');
   {
     // The unmeasured risk. A real transcript is a few hundred lines; this is
     // 2,000, roughly an hour of dense speech, to find the ceiling rather than

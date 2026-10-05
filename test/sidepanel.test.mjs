@@ -46,6 +46,8 @@ const PANEL_IDS = [
   'primary',
   'secondary',
   'swap',
+  'view-mode',
+  'text-scale',
   'list',
   'threshold',
   'follow',
@@ -72,6 +74,45 @@ async function bootPanel(options = {}) {
 
 /** @param {object} fakeElement */
 const textOf = (fakeElement) => fakeElement?.textContent ?? '';
+
+/**
+ * A complete STATE payload, with the learning settings overridden.
+ *
+ * The panel renders the settings controls from this, so a test that only wants
+ * to exercise the view or the text size still has to send a state the panel can
+ * render — a partial one would throw while rendering the rest of the bar and the
+ * failure would look like the feature under test.
+ *
+ * @param {object} [learning]
+ */
+const stateWithSettings = (learning) => ({
+  videoId: 'abc',
+  title: 'Test Video',
+  isLive: false,
+  trackList: [
+    { languageCode: 'en', name: 'English', kind: null },
+    { languageCode: 'de', name: 'Deutsch', kind: null },
+  ],
+  primary: 'en',
+  secondary: null,
+  rows: [
+    { start: 0, duration: 2, text: 'Hey there', secondary: '' },
+    { start: 2, duration: 2, text: 'how are you', secondary: '' },
+    { start: 4, duration: 2, text: 'welcome back', secondary: '' },
+  ],
+  error: null,
+  learning: {
+    view: 'all',
+    textScale: 1,
+    listId: 'hsk3_0',
+    threshold: 3,
+    primaryLanguage: 'en',
+    secondaryLanguage: null,
+    listOptions: [{ value: 'hsk2_0', label: 'HSK 2.0' }, { value: 'hsk3_0', label: 'HSK 3.0' }],
+    thresholdOptions: [{ value: 1, label: '1+' }, { value: 2, label: '2+' }, { value: 3, label: '3+' }],
+    ...(learning ?? {}),
+  },
+});
 
 // --- 1. Boots and connects ---------------------------------------------------
 
@@ -237,6 +278,107 @@ section('a malformed state is reported rather than silently ignored');
 
   check('an error is shown', byId.get('status').classList.contains('error'), true);
   check('with something readable', textOf(byId.get('status')).length > 0, true);
+}
+
+// --- 10. The focus view ------------------------------------------------------
+
+section('the focus view is a class on the list, so nothing has to be re-rendered');
+
+{
+  const { lastPort, byId, dom } = await bootPanel();
+  const port = lastPort();
+  const transcript = byId.get('transcript');
+
+  port.emit({ type: 'state', state: stateWithSettings({ view: 'all' }) });
+  check('all-lines view is not focus', transcript.classList.contains('focus'), false);
+
+  port.emit({ type: 'state', state: stateWithSettings({ view: 'focus' }) });
+  check('focus view sets the class', transcript.classList.contains('focus'), true);
+
+  // The rows are filtered by CSS, so the outline of the panel never changes.
+  // Re-rendering instead would drop the marks and the hover listeners with it.
+  const rows = transcript.find((el) => el.classList.contains('row'));
+  check('the rows are still all there', rows.length, 3);
+
+  port.emit({ type: 'state', state: stateWithSettings({ view: 'all' }) });
+  check('and switching back clears it', transcript.classList.contains('focus'), false);
+  check('the root scale is untouched by the view', dom.document.documentElement.style.getPropertyValue('--text-scale'), '1');
+}
+
+section('the line after the current one is marked as the preview');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  const port = lastPort();
+  port.emit({ type: 'state', state: stateWithSettings() });
+
+  const rows = byId.get('transcript').find((el) => el.classList.contains('row'));
+
+  port.emit({ type: 'position', index: 0, seconds: 0.5 });
+  check('the successor is the preview', rows[1].classList.contains('next'), true);
+
+  port.emit({ type: 'position', index: 1, seconds: 2.5 });
+  // Without clearing the old one, every line ever visited would stay dimmed.
+  check('the old preview is cleared', rows[1].classList.contains('next'), false);
+  check('and the new successor is it', rows[2].classList.contains('next'), true);
+  check('the current line is not also the preview', rows[1].classList.contains('active') && rows[1].classList.contains('next'), false);
+
+  port.emit({ type: 'position', index: 2, seconds: 4.5 });
+  check('the last line has no successor to mark', rows[2].classList.contains('next'), false);
+}
+
+// --- 11. Text size -----------------------------------------------------------
+
+section('text size is a scale factor applied to the document root');
+
+{
+  const { lastPort, dom, byId } = await bootPanel();
+
+  lastPort().emit({ type: 'state', state: stateWithSettings({ textScale: 1 }) });
+  check('the default is 1', dom.document.documentElement.style.getPropertyValue('--text-scale'), '1');
+
+  lastPort().emit({ type: 'state', state: stateWithSettings({ textScale: 1.45 }) });
+  check('a larger size is applied', dom.document.documentElement.style.getPropertyValue('--text-scale'), '1.45');
+
+  // Sent to the worker too, so the choice survives closing the panel.
+  const port = lastPort();
+  byId.get('text-scale').value = '1.75';
+  byId.get('text-scale').dispatch('change');
+  check('changing it sends SET_SETTING', port.sent.at(-1)?.type, 'set-setting');
+  check('for the textScale setting', port.sent.at(-1)?.id, 'textScale');
+  check('with a number, not a string', port.sent.at(-1)?.value, 1.75);
+  check('and applies immediately, without waiting for the worker', dom.document.documentElement.style.getPropertyValue('--text-scale'), '1.75');
+}
+
+section('the focus view sends its change too, and applies at once');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  const port = lastPort();
+
+  byId.get('view-mode').value = 'focus';
+  byId.get('view-mode').dispatch('change');
+
+  check('SET_SETTING was sent', port.sent.at(-1)?.type, 'set-setting');
+  check('for the view', port.sent.at(-1)?.id, 'view');
+  check('with the mode', port.sent.at(-1)?.value, 'focus');
+  check('and the class is already on', byId.get('transcript').classList.contains('focus'), true);
+}
+
+section('the controls are built from the schema, not hand-written here');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  // The controls are populated from a state, so one has to arrive first.
+  lastPort().emit({ type: 'state', state: stateWithSettings() });
+
+  const viewOptions = byId.get('view-mode').find((el) => el.tagName === 'OPTION');
+  const scaleOptions = byId.get('text-scale').find((el) => el.tagName === 'OPTION');
+
+  check('the view offers both modes', viewOptions.length, 2);
+  check('named as the schema names them', viewOptions.map((o) => o.text), ['All lines', 'Current + next']);
+  check('with the schema values', viewOptions.map((o) => o.value), ['all', 'focus']);
+  check('and text sizes are offered', scaleOptions.length > 2, true);
 }
 
 // --- Result ------------------------------------------------------------------

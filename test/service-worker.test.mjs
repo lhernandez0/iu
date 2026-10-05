@@ -201,7 +201,200 @@ section('a second language produces aligned rows');
   check('first pair', state?.rows?.[0]?.secondary, 'Hallo');
   check('second pair', state?.rows?.[1]?.secondary, 'wie geht es dir');
   check('third pair', state?.rows?.[2]?.secondary, 'willkommen zurueck');
-  check('choice was persisted', storage.secondaryLanguage, 'de');
+  check('choice was persisted', storage.settings?.secondaryLanguage, 'de');
+}
+
+// --- 3b. Sticky language choices --------------------------------------------
+
+/**
+ * A content script that behaves like the real one: it loads the track it was
+ * asked for, and falls back to the first available only when that track is
+ * absent. Returning a fixed payload regardless of the request cannot test
+ * stickiness, because stickiness IS the request being honoured.
+ *
+ * @param {object} video
+ * @param {Record<string, any>} tracksByLanguage
+ */
+const PROVIDER = (video, tracksByLanguage) => (request) => {
+  const wanted = request?.languageCode;
+  const languageCode = wanted && tracksByLanguage[wanted] ? wanted : video.trackList[0]?.languageCode;
+  const segments = tracksByLanguage[languageCode];
+  if (!segments) return { ok: false, error: 'This video has no captions.' };
+  return { ok: true, video, requested: languageCode, fetched: { languageCode, segments } };
+};
+
+const SEGMENTS = { en: ENGLISH.segments, de: GERMAN.segments };
+
+section('a language choice survives moving to another video');
+
+{
+  // The learner's expectation, in their words: if my first choice is still
+  // available then I expect it to stay my first choice, and the same for the
+  // second. Primary was seeded as `null` on every new video, so a chosen primary
+  // was silently replaced by the default on the next video.
+  const secondVideo = { ...VIDEO, videoId: 'zzzzzzzzzzz', title: 'Second Video' };
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: GERMAN,
+  });
+
+  stub.sendFromPanel({ type: 'set-primary', languageCode: 'de' });
+  await settle();
+  check('primary chosen', stub.received.at(-1)?.state?.primary, 'de');
+  check('and the German lines are on screen', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hallo');
+
+  // Same tab, different video, same two tracks available.
+  stub.setAnswer('describePayload', DESCRIBE(secondVideo));
+  stub.setAnswer('providePayload', PROVIDER(secondVideo, SEGMENTS));
+  stub.sendFromPanel({ type: 'refresh' });
+  await settle();
+
+  check('the new video is on screen', stub.received.at(-1)?.state?.videoId, 'zzzzzzzzzzz');
+  check('and it kept the chosen language', stub.received.at(-1)?.state?.primary, 'de');
+  check('so the German lines are still shown', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hallo');
+}
+
+section('a language choice is kept for the video that has it, and restored later');
+
+{
+  // A video that lacks the chosen track must fall back rather than fail — but
+  // the preference itself has to survive, or returning to a video that has the
+  // language would come up in the wrong one.
+  const portugueseOnly = {
+    ...VIDEO,
+    videoId: 'zzzzzzzzzzz',
+    title: 'Portuguese Video',
+    trackList: [{ languageCode: 'pt', name: 'Portugues', kind: null }],
+  };
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: GERMAN,
+  });
+
+  stub.sendFromPanel({ type: 'set-primary', languageCode: 'de' });
+  await settle();
+
+  stub.setAnswer('describePayload', DESCRIBE(portugueseOnly));
+  stub.setAnswer('providePayload', PROVIDER(portugueseOnly, { pt: [{ start: 0, duration: 2, text: 'Ola' }] }));
+  stub.sendFromPanel({ type: 'refresh' });
+  await settle();
+
+  check('the video without the language falls back', stub.received.at(-1)?.state?.primary, 'pt');
+  check('and shows what it does have', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Ola');
+  check('but the preference is remembered', stub.storage.settings?.primaryLanguage, 'de');
+
+  // Back to a video that has German: the choice comes back on its own.
+  stub.setAnswer('describePayload', DESCRIBE(VIDEO));
+  stub.setAnswer('providePayload', PROVIDER(VIDEO, SEGMENTS));
+  stub.sendFromPanel({ type: 'refresh' });
+  await settle();
+
+  check('returning to a video with the language restores it', stub.received.at(-1)?.state?.primary, 'de');
+  check('and its lines are shown again', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hallo');
+}
+
+section('both languages stay chosen together');
+
+{
+  // The pair has to move as a pair. Selecting a secondary and then switching
+  // video used to keep only one of them.
+  const secondVideo = { ...VIDEO, videoId: 'zzzzzzzzzzz', title: 'Second Video' };
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: GERMAN,
+  });
+
+  stub.sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
+  await settle();
+
+  stub.setAnswer('describePayload', DESCRIBE(secondVideo));
+  stub.setAnswer('providePayload', PROVIDER(secondVideo, SEGMENTS));
+  stub.sendFromPanel({ type: 'refresh' });
+  await settle();
+
+  const state = stub.received.at(-1)?.state;
+  check('primary stayed', state?.primary, 'en');
+  check('secondary stayed', state?.secondary, 'de');
+  check('and paired rows are still produced', state?.rows?.[0]?.secondary, 'Hallo');
+}
+
+// --- 3c. Settings -----------------------------------------------------------
+
+section('a stored setting is restored, and one out of range is corrected');
+
+{
+  // A value that made sense when it was stored may not make sense now — a size
+  // of 40px would blow the panel apart, and an unknown word list has no levels.
+  // The schema's coerce is what turns that into something renderable.
+  //
+  // The provider has to honour the requested language here, or "the restored
+  // language was applied" would pass without the restore having done anything.
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: GERMAN,
+    storage: {
+      settings: { view: 'focus', textScale: 40, listId: 'nonsense', threshold: 2, primaryLanguage: 'de' },
+    },
+    // Storage is slow enough that a panel connecting immediately, as it does in
+    // reality, would otherwise be served before the restore finished.
+    storageDelay: 5,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 60));
+
+  const learning = stub.received.at(-1)?.state?.learning;
+  check('a valid setting is restored', learning?.view, 'focus');
+  check('an absurd text size is clamped', learning?.textScale, 3);
+  check('an unknown word list falls back', learning?.listId !== 'nonsense', true);
+  check('and the restored language was applied', stub.received.at(-1)?.state?.primary, 'de');
+  check('and its lines were fetched, not the default ones', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hallo');
+}
+
+section('changing a setting is remembered');
+
+{
+  const stub = await boot(TRACK(GERMAN));
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'textScale', value: 1.45 });
+  await settle();
+
+  check('it landed in storage', stub.storage.settings?.textScale, 1.45);
+  check('and is reflected in the state', stub.received.at(-1)?.state?.learning?.textScale, 1.45);
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'view', value: 'focus' });
+  await settle();
+  check('a second setting is stored alongside', stub.storage.settings?.view, 'focus');
+  check('without losing the first', stub.storage.settings?.textScale, 1.45);
+
+  // An unknown id should be ignored rather than written, so a panel from a newer
+  // version cannot poison the stored object with keys nothing understands.
+  stub.sendFromPanel({ type: 'set-setting', id: 'notASetting', value: 'x' });
+  await settle();
+  check('an unknown setting is ignored', 'notASetting' in (stub.storage.settings ?? {}), false);
+  check('and a nonsense value is coerced, not stored raw', (() => {
+    stub.sendFromPanel({ type: 'set-setting', id: 'textScale', value: 'huge' });
+    return true;
+  })(), true);
+  await settle();
+  check('the nonsense size fell back to the default', stub.storage.settings?.textScale, 1);
+}
+
+section('the choices a learner makes are all reported back in the learning block');
+
+{
+  const stub = await boot(TRACK(GERMAN));
+  const learning = stub.received.at(-1)?.state?.learning;
+
+  // The panel renders its controls from this block, so a missing key is a
+  // control that silently never updates.
+  for (const key of ['view', 'textScale', 'listId', 'threshold', 'primaryLanguage', 'secondaryLanguage']) {
+    check(`${key} is present`, key in (learning ?? {}), true);
+  }
+  check('the word lists are offered', Array.isArray(learning?.listOptions), true);
+  check('and the levels of the chosen list', Array.isArray(learning?.thresholdOptions), true);
 }
 
 // --- 4. Mismatched tracks ---------------------------------------------------

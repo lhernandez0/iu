@@ -39,6 +39,7 @@ export class FakeElement {
     this.id = '';
     this.classList = new FakeClassList();
     this.dataset = {};
+    this.style = new FakeStyle();
     this.children = [];
     this.parent = null;
     this.listeners = new Map();
@@ -148,6 +149,23 @@ export class FakeFragment extends FakeElement {
   }
 }
 
+/** Inline styles, as much as the panel uses: setting a custom property. */
+export class FakeStyle {
+  constructor() {
+    /** @type {Map<string, string>} */
+    this.properties = new Map();
+  }
+
+  /** @param {string} name @param {string} value */
+  setProperty(name, value) {
+    this.properties.set(name, String(value));
+  }
+
+  /** @param {string} name */
+  getPropertyValue(name) {
+    return this.properties.get(name) ?? '';
+  }
+}
 /**
  * Install the DOM and the browser globals the panel expects.
  *
@@ -165,7 +183,14 @@ export function installDomStub(ids = []) {
   /** Every element ever constructed, so a test can inspect what was rendered. */
   const created = [...byId.values()];
 
+  // Text size is set as a custom property on the root, so the stub needs a root
+  // to hang it on. It is not in `byId` because the panel reaches it through
+  // `document.documentElement`, not by id.
+  const documentElement = new FakeElement('html');
+  created.push(documentElement);
+
   const document = {
+    documentElement,
     getElementById: (id) => byId.get(id) ?? null,
     createElement: (tag) => {
       const element = new FakeElement(tag);

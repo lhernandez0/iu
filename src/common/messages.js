@@ -25,12 +25,26 @@ export const MSG = Object.freeze({
   // content scripts, so the panel never needs to know tab ids or track state.
   /** panel -> background — (re)resolve the video and return the whole table. */
   REFRESH: 'refresh',
-  /** panel -> background. Payload: { languageCode } */
+  /**
+   * panel -> background. Payload: { languageCode }
+   *
+   * Remembered as a preference, not just applied to the current video, so the
+   * choice survives moving to another one when that language is available there.
+   */
   SET_PRIMARY: 'set-primary',
-  /** panel -> background. Payload: { languageCode | null } */
+  /**
+   * panel -> background. Payload: { languageCode | null }
+   *
+   * Also remembered. `null` means "no second subtitle", which is a preference in
+   * its own right rather than the absence of one.
+   */
   SET_SECONDARY: 'set-secondary',
   /** panel -> background. Payload: { seconds } */
   SEEK: 'seek',
+
+  // --- Settings ---------------------------------------------------------------
+  /** panel -> background. Payload: { id, value } — one setting changed. */
+  SET_SETTING: 'set-setting',
 
   // --- Learning layer --------------------------------------------------------
   /** panel -> background. Payload: { listId } — which word list to grade against. */
