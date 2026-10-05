@@ -141,10 +141,14 @@ function handlePanelMessage(message) {
  */
 const learning = { listId: null, threshold: 0 };
 
-/** The level a list should mark from, if the learner has not chosen one. */
+/**
+ * The level a list should mark from, if the learner has not chosen one.
+ *
+ * HSK 4 is where the user is studying, so marking starts there. Clamped by the
+ * caller to the list's own range, because a threshold only means something
+ * relative to the list it applies to.
+ */
 function defaultThreshold(listId) {
-  // Default to marking everything at or beyond the learner's frontier. The user
-  // studies HSK 4, so that is where it starts until they say otherwise.
   return listId?.startsWith('hsk') ? 4 : 1;
 }
 
@@ -647,10 +651,22 @@ async function loadTrack(entry, languageCode) {
  * with the rows. Segmenting in the panel on every render would redo the same
  * work thousands of times, and the worker is where the dictionary already lives.
  *
+ * Tokens are carried over by text where possible. Rows are rebuilt whenever the
+ * track changes, which discards them — and without this, switching language
+ * silently unmarked the whole transcript until a control was touched by hand.
+ *
  * @param {VideoEntry|null} entry
  */
 function rebuildRows(entry) {
   if (!entry) return;
+
+  // Keep the marks for any line whose text is unchanged. Tokens are a pure
+  // function of the text, so if the text is the same the tokens still hold.
+  /** @type {Map<string, object[]>} */
+  const previous = new Map();
+  for (const row of entry.rows) {
+    if (row.tokens) previous.set(row.text, row.tokens);
+  }
 
   const primary = entry.tracks.get(entry.primaryLang ?? '') ?? [];
   const secondary = entry.secondaryLang ? entry.tracks.get(entry.secondaryLang) ?? [] : [];
@@ -661,6 +677,7 @@ function rebuildRows(entry) {
     duration: segment.duration,
     text: segment.text,
     secondary: aligned ? aligned[index] : '',
+    tokens: previous.get(segment.text),
   }));
 
   // Segmentation is deferred and may not have run yet, so marks are applied
@@ -678,11 +695,13 @@ function rebuildRows(entry) {
 async function applyMarks(entry) {
   if (!entry || !entry.rows.length) return;
 
-  // Already marked for the current list and threshold. Without this, every tab
-  // switch would re-segment the whole transcript and re-broadcast, which is
-  // wasted work on a cache hit — the case the cache exists to make cheap.
+  // Skip only when every row is genuinely marked for the current settings. The
+  // check is on the rows rather than on a remembered flag, because a flag can
+  // claim marks that are no longer there — which is precisely how the transcript
+  // came back unmarked after a language switch.
   const wanted = `${learning.listId}:${learning.threshold}`;
-  if (entry.markedWith === wanted) return;
+  const allMarked = entry.rows.every((row) => Array.isArray(row.tokens));
+  if (entry.markedWith === wanted && allMarked) return;
 
   let dictionary;
   try {
@@ -926,14 +945,28 @@ async function primeDictionary() {
     const dictionary = await loadDictionary();
     availableLists = dictionary.lists;
 
-    // Fall back to the first list when there is no usable preference — either
-    // none was stored, or the stored one no longer exists in the data.
+    // Fall back to the list that can actually mark the most words, rather than
+    // to whichever happens to be first in the data.
+    //
+    // This was a real bug: the first list was HSK 2.0, which places 4,993 of
+    // 11,470 words. The remaining 6,477 exist only in HSK 3.0, so a learner
+    // opening the panel with no stored preference saw 早安 unmarked and
+    // reasonably concluded the highlighting was broken. Defaulting to the
+    // widest list shows marks immediately; a narrower list remains a choice.
     if (!learning.listId || !dictionary.lists.some((list) => list.id === learning.listId)) {
-      learning.listId = dictionary.lists[0]?.id ?? null;
-      learning.threshold = defaultThreshold(learning.listId);
+      const widest = [...dictionary.lists].sort((a, b) => (b.levelled ?? 0) - (a.levelled ?? 0))[0];
+      learning.listId = widest?.id ?? null;
+
+      // The learner's own level, clamped to what the list actually has.
+      learning.threshold = Math.min(defaultThreshold(learning.listId), widest?.levelCount ?? 1);
     }
   } catch (error) {
     broadcastError(`Word list unavailable: ${error?.message ?? error}`);
   }
   broadcastState();
+
+  // Mark whatever is already on screen. The transcript usually arrives before
+  // the word list does, so without this the rows would sit unmarked until
+  // something else happened to rebuild them.
+  rebuildRows(currentEntry());
 }

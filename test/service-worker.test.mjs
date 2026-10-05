@@ -377,9 +377,61 @@ section('the panel is told which word lists exist, and a default is chosen');
   check('and the 3.0 list', lists[1]?.id, 'hsk3_0');
   check('each declares its level count', lists[0]?.levelCount, 6);
   check('and 3.0 declares nine', lists[1]?.levelCount, 9);
-  check('a list was selected by default', state?.learning?.listId, 'hsk2_0');
+
+  // The default must be the list that can mark the most, not whichever is first
+  // in the data. HSK 2.0 places 4,993 of 11,470 words; the other 6,477 exist
+  // only in 3.0, so defaulting to 2.0 makes most of the dictionary silently
+  // invisible — which looks exactly like the highlighting being broken.
+  check('the widest list is chosen by default', state?.learning?.listId, 'hsk3_0');
   // The learner studies HSK 4, so marking starts there until told otherwise.
   check('threshold defaults to 4', state?.learning?.threshold, 4);
+}
+
+section('the default list is the one that can mark the most words');
+
+{
+  const { received } = await boot(TRACK(GERMAN));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  const lists = received.at(-1)?.state?.lists ?? [];
+  const chosen = lists.find((l) => l.id === received.at(-1)?.state?.learning?.listId);
+  const widest = [...lists].sort((a, b) => (b.levelled ?? 0) - (a.levelled ?? 0))[0];
+
+  check('the chosen list is the widest', chosen?.id, widest?.id);
+  check('which places real words', chosen?.levelled > 9000, true);
+}
+
+section('a word only the 3.0 list knows is still marked by default');
+
+{
+  // 早安 is the case the user reported. It is not a headword, so it segments
+  // into 早 and 安 — and neither has an HSK 2.0 level, so under that list both
+  // stayed blank. Both are levelled in 3.0 (1 and 4), so the default list has to
+  // be 3.0 for the marks to appear at all.
+  const { received } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '早安' }] },
+    },
+    trackPayload: GERMAN,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  const row = received.at(-1)?.state?.rows?.[0];
+  const texts = row?.tokens?.map((t) => t.text) ?? [];
+  check('早安 breaks into its characters', texts, ['早', '安']);
+
+  // Which of the two is marked depends on the threshold, and the default is 4.
+  // 早 is HSK 3.0 level 1 and 安 is level 4, so exactly one should be marked —
+  // the one at the learner's frontier. This is the "surface the unknown"
+  // behaviour working: the known character stays quiet.
+  const byText = Object.fromEntries((row?.tokens ?? []).map((t) => [t.text, t.level]));
+  check('the level-1 character stays unmarked', byText['早'], null);
+  check('the level-4 character is marked', byText['安'], 4);
+  check('exactly one of the two is marked', row?.tokens?.filter((t) => t.level !== null).length, 1);
 }
 
 section('rows carry tokens, and only words at or beyond the threshold are marked');
@@ -449,6 +501,41 @@ section('lowering the threshold marks more');
   check('the threshold was reported back', received.at(-1).state.learning.threshold, 1);
 }
 
+section('switching language keeps the marks');
+
+{
+  // The other reported bug. Choosing a second subtitle track rebuilds the rows,
+  // which discarded the tokens — and because the "already marked" flag was still
+  // set, nothing re-attached them. The transcript came back unmarked until a
+  // learning control was touched by hand, which changed the flag and forced it.
+  const { received, sendFromPanel } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+    },
+    trackPayload: {
+      languageCode: 'de',
+      segments: [{ start: 0, duration: 2, text: 'Wir warten am Ufer' }],
+    },
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const before = received.at(-1).state.rows[0].tokens.filter((t) => t.level !== null).length;
+  check('marked to begin with', before > 0, true);
+
+  // Choose a second subtitle language, which rebuilds every row.
+  sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  const after = received.at(-1).state.rows[0];
+  check('the second language arrived', after.secondary.length > 0, true);
+  check('the text is unchanged', after.text, '我们在岸上等你');
+  check('and the marks survived', after.tokens.filter((t) => t.level !== null).length, before);
+}
+
 section('switching word list re-marks rather than reusing the old levels');
 
 {
@@ -475,7 +562,36 @@ section('switching word list re-marks rather than reusing the old levels');
   check('rows were rebuilt', Array.isArray(state.rows[0]?.tokens), true);
 }
 
-section('a hover asks for a definition');
+section('marks appear without the learner having to touch the controls');
+
+{
+  // The reported bug: subs render, but no highlighting until a dropdown is
+  // changed by hand. Changing a control calls rebuildRows, so the symptom means
+  // the marks were never applied on their own — the dictionary finished loading
+  // and nothing re-marked the rows that were already on screen.
+  const { received } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+    },
+    trackPayload: GERMAN,
+  });
+
+  // Wait long enough for the word list to load and for anything it triggers.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  const row = received.at(-1)?.state?.rows?.[0];
+  check('the row ended up with tokens', Array.isArray(row?.tokens), true);
+  check('and at least one is marked', row?.tokens?.some((t) => t.level !== null), true);
+  check(
+    'without any control being touched',
+    received.some((m) => m.type === 'state' && m.state?.rows?.[0]?.tokens?.some((t) => t.level !== null)),
+    true,
+  );
+}
 
 {
   const { received, sendFromPanel } = await boot({

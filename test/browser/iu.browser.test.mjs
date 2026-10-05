@@ -307,13 +307,19 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const marks = await page.evaluate(() => {
       const first = document.querySelector('.mark');
       const style = first ? getComputedStyle(first) : null;
+      const listSelect = document.getElementById('list');
+      const chosen = listSelect?.value ?? '';
       return {
         count: document.querySelectorAll('.mark').length,
         text: first?.textContent ?? '',
         borderColour: style?.borderBottomColor ?? '',
         hasTooltip: Boolean(first?.getAttribute('title')),
-        listOptions: [...document.querySelectorAll('#list option')].map((o) => o.value),
+        listOptions: [...(listSelect?.options ?? [])].map((o) => o.value),
+        chosenList: chosen,
         thresholdOptions: [...document.querySelectorAll('#threshold option')].map((o) => o.value),
+        // Whatever the label says, so the count can be checked against it rather
+        // than against a hardcoded number that moves when the default changes.
+        chosenLabel: [...(listSelect?.options ?? [])].find((o) => o.value === chosen)?.textContent ?? '',
       };
     });
 
@@ -321,7 +327,14 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('the mark has a coloured underline', marks.borderColour !== 'rgba(0, 0, 0, 0)', true);
     check('and a level tooltip', marks.hasTooltip, true);
     check('both HSK lists are offered', marks.listOptions, ['hsk2_0', 'hsk3_0']);
-    check('the threshold lists the levels of the chosen list', marks.thresholdOptions.length, 6);
+    // 2.0 has six levels, 3.0 has nine, so the count has to match the list in
+    // use. Asserting the relationship keeps this true whichever is default.
+    const expectedLevels = marks.chosenLabel.includes('3.0') ? 9 : 6;
+    check(`the threshold offers ${expectedLevels} levels for ${marks.chosenLabel}`,
+      marks.thresholdOptions.length, expectedLevels);
+    // The default must be the list that can mark the most words, not whichever
+    // happens to be first — otherwise most of the dictionary is invisible.
+    check('the default list is HSK 3.0, the widest', marks.chosenList, 'hsk3_0');
 
     // The line must still read correctly with spans in it, which is the thing
     // that silently breaks when token indices are wrong.
