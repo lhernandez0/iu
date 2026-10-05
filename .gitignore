@@ -16,5 +16,7 @@ Thumbs.db
 *.log
 
 # Local notes and working documents — deliberately never committed.
-# Private thinking, preferences and roadmap notes live here.
-docs/private/
+# All of docs/ is private: planning, preferences, roadmap thinking. Nothing
+# under it belongs in the repository. (docs/PLAN.md and the private notes were
+# both committed by mistake and had to be purged from history.)
+docs/
