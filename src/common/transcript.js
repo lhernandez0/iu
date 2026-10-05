@@ -99,11 +99,17 @@ export function findActiveIndex(segments, seconds) {
  * millisecond, and the counts differ because one language needs more cues.
  * There is no id linking them.
  *
- * So this walks both lists once, matching each primary cue to the nearest
- * secondary cue by start time. A pair further apart than `maxDriftMs` is
- * treated as unmatched: the secondary text is left empty. That threshold is
- * the whole safety property — without it a drift of several seconds would
- * leave every row carrying a plausible-looking but wrongly-timed translation.
+ * So both lists are walked once with a cursor, matching each primary cue to the
+ * nearest secondary cue by start time. Two properties matter, and both are load
+ * bearing:
+ *
+ *   - **A cue is used at most once.** Without this, a sparse second track would
+ *     repeat one cue across several primary lines — the same translation of one
+ *     sentence shown against two different sentences.
+ *   - **A pair further apart than `maxDriftMs` is unmatched** and left blank.
+ *     Without this, a track offset by a few seconds would put a
+ *     plausible-looking but wrongly-timed translation on every line, which is
+ *     worse than showing nothing.
  *
  * @param {Segment[]} primary
  * @param {Segment[]} secondary
@@ -112,26 +118,35 @@ export function findActiveIndex(segments, seconds) {
  */
 export function alignSecondary(primary, secondary, maxDriftMs = 1500) {
   const aligned = new Array(primary.length).fill('');
-  if (!secondary.length) return aligned;
+  if (!secondary.length || !primary.length) return aligned;
 
+  const tolerance = maxDriftMs / 1000;
   let cursor = 0;
+
   for (let i = 0; i < primary.length; i++) {
     const target = primary[i].start;
 
-    // Advance the cursor while the next secondary cue is still closer.
-    while (
+    // Drop secondary cues that sit too far behind this cue to ever be its
+    // translation. A later primary cue starts even later, so they cannot match
+    // it either — they are spent.
+    while (cursor < secondary.length && secondary[cursor].start < target - tolerance) cursor++;
+    if (cursor >= secondary.length) break; // nothing left to match; the rest stay blank
+
+    // If the cue after the cursor is a closer match, step to it and reconsider
+    // this same primary cue. The cursor only moves forward, so this terminates.
+    if (
       cursor + 1 < secondary.length &&
-      Math.abs(secondary[cursor + 1].start - target) <= Math.abs(secondary[cursor].start - target)
+      Math.abs(secondary[cursor + 1].start - target) < Math.abs(secondary[cursor].start - target)
     ) {
       cursor++;
+      i--;
+      continue;
     }
 
-    const candidate = secondary[cursor];
-    if (Math.abs(candidate.start - target) * 1000 <= maxDriftMs) aligned[i] = candidate.text;
-
-    // Do not let one secondary cue match several primary cues: a cue that ends
-    // before the next primary starts is spent.
-    if (cursor + 1 < secondary.length && secondary[cursor + 1].start <= target) cursor++;
+    if (Math.abs(secondary[cursor].start - target) <= tolerance) {
+      aligned[i] = secondary[cursor].text;
+      cursor++; // spoken for: this cue cannot translate a second line
+    }
   }
 
   return aligned;

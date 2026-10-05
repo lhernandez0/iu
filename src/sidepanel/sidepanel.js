@@ -20,6 +20,12 @@ import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcrip
  */
 const USE_AUDIO_CAPTURE = false;
 
+/** Worker-connection tuning. Backoff is capped so a long-lived panel keeps trying. */
+const NO_WORKER_MS = 5000;
+const INITIAL_RECONNECT_MS = 500;
+const MAX_RECONNECT_MS = 5000;
+const MAX_RECONNECT_ATTEMPTS = 6;
+
 const els = {
   primary: /** @type {HTMLSelectElement} */ (document.getElementById('primary')),
   secondary: /** @type {HTMLSelectElement} */ (document.getElementById('secondary')),
@@ -46,17 +52,75 @@ const view = {
 // --- Worker port ------------------------------------------------------------
 // A connected port keeps the service worker alive, which is what preserves its
 // cache while the panel is open.
+//
+// Connecting can fail, and did: an MV3 worker is stopped when idle, and a panel
+// left open across an extension reload belongs to a dead extension instance. In
+// both cases `connect` has no receiver, Chrome reports "Could not establish
+// connection. Receiving end does not exist", and a panel with no reconnect path
+// sits on its placeholder forever. So the port is re-established on disconnect.
 
-const port = chrome.runtime.connect({ name: 'panel' });
+/** @type {chrome.runtime.Port|null} */
+let port = null;
+let reconnectDelay = INITIAL_RECONNECT_MS;
+let reconnectTimer = 0;
+let reconnectAttempts = 0;
 
-// If the worker never answers — it crashed, or never woke — the panel would
-// otherwise sit on its placeholder forever with no hint as to why. A worker that
-// is merely slow will have answered well inside this window.
-const NO_WORKER_MS = 5000;
+// If the worker never answers — it crashed, or never woke — say so rather than
+// showing the startup placeholder indefinitely. A slow worker answers well
+// inside this window.
 let heardFromWorker = false;
 let workerWatchdog = 0;
 
-port.onMessage.addListener((message) => {
+function connectToWorker() {
+  clearTimeout(reconnectTimer);
+
+  try {
+    port = chrome.runtime.connect({ name: 'panel' });
+  } catch (error) {
+    // "Extension context invalidated": this panel document outlived the
+    // extension it belongs to. Only reopening the panel can fix that, and no
+    // amount of retrying will help.
+    setStatus(
+      `This panel is out of date (${error?.message ?? error}). Close and reopen it.`,
+      true,
+    );
+    return;
+  }
+
+  port.onMessage.addListener(onWorkerMessage);
+  port.onDisconnect.addListener(() => {
+    // Reading lastError is required even though we only want the message: an
+    // unread lastError is what Chrome logs as "Unchecked runtime.lastError".
+    const reason = chrome.runtime.lastError?.message ?? 'the worker stopped';
+    port = null;
+    scheduleReconnect(reason);
+  });
+
+  reconnectDelay = INITIAL_RECONNECT_MS;
+  reconnectAttempts = 0;
+
+  // The worker resolves the current tab when the port connects, so no outgoing
+  // request is needed here.
+}
+
+/** @param {string} reason */
+function scheduleReconnect(reason) {
+  reconnectAttempts++;
+  if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+    setStatus(
+      `Lost the extension worker (${reason}) and could not reconnect. Reload the extension in chrome://extensions, then reopen this panel.`,
+      true,
+    );
+    return;
+  }
+
+  setStatus(`Lost the extension worker (${reason}). Reconnecting…`, true);
+  reconnectTimer = setTimeout(connectToWorker, reconnectDelay);
+  reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_MS);
+}
+
+/** @param {object} message */
+function onWorkerMessage(message) {
   heardFromWorker = true;
   clearTimeout(workerWatchdog);
 
@@ -77,7 +141,23 @@ port.onMessage.addListener((message) => {
     // screen, which looks exactly like the extension doing nothing.
     setStatus(`Panel error: ${error?.message ?? error}`, true);
   }
-});
+}
+
+/**
+ * @param {object} message
+ * @returns {boolean} Whether it was sent.
+ */
+function send(message) {
+  if (!port) return false;
+  try {
+    port.postMessage({ ...message, target: TARGET.BACKGROUND });
+    return true;
+  } catch {
+    // The port died between the check and the send; the disconnect handler will
+    // reconnect and refresh, which restores whatever this intent would have done.
+    return false;
+  }
+}
 
 workerWatchdog = setTimeout(() => {
   if (heardFromWorker) return;
@@ -86,14 +166,6 @@ workerWatchdog = setTimeout(() => {
     true,
   );
 }, NO_WORKER_MS);
-
-/** @param {object} message */
-function send(message) {
-  port.postMessage({ ...message, target: TARGET.BACKGROUND });
-}
-
-// No initial REFRESH is sent: the worker resolves the current tab when the port
-// connects, so asking here would duplicate the content-script round trip.
 
 // --- State rendering --------------------------------------------------------
 
@@ -351,4 +423,7 @@ async function enableAudioCapture() {
 
 if (USE_AUDIO_CAPTURE) void enableAudioCapture();
 
+// --- Boot -------------------------------------------------------------------
+
 setStatus('Looking for a YouTube video…');
+connectToWorker();
