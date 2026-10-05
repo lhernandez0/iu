@@ -131,7 +131,7 @@ export async function launchExtension() {
  */
 export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = 'Fixture Video', tracks, captionFormat = 'json3', breakBaseUrl = false }) {
   /** Shared across every call for this browser, so one set of routes serves all. */
-  const registry = (context.__transcribeFixture ??= {
+  const registry = (context.__iuFixture ??= {
     videos: new Map(),
     captionRequests: [],
     playerRequests: [],

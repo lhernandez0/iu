@@ -114,7 +114,7 @@ async function bootBridge({
         handler({
           source: pageWindow,
           origin: pageWindow.location.origin,
-          data: { channel: 'transcribe-ext', direction: 'request', requestId, type },
+          data: { channel: 'iu-ext', direction: 'request', requestId, type },
         });
       }
       await settle();

@@ -92,7 +92,7 @@ headless browser on a datacenter IP is often served a consent wall instead of a
 video, and the suite prints what it actually saw so a failure is diagnosable. A
 failure here is a prompt to look, not a broken build.
 
-Override the video with `TRANSCRIBE_LIVE_VIDEO=<id>`.
+Override the video with `IU_LIVE_VIDEO=<id>`.
 
 ## Where the browser comes from
 

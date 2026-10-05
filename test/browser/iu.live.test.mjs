@@ -23,10 +23,10 @@ import { openWatchPage, openPanel, waitForStatus, panelState } from './harness.m
 import { runBrowserSuite } from './runner.mjs';
 
 /**
- * A stable public video that has captions. Override with TRANSCRIBE_LIVE_VIDEO
+ * A stable public video that has captions. Override with IU_LIVE_VIDEO
  * if it ever stops working.
  */
-const VIDEO_ID = process.env.TRANSCRIBE_LIVE_VIDEO ?? 'dQw4w9WgXcQ';
+const VIDEO_ID = process.env.IU_LIVE_VIDEO ?? 'dQw4w9WgXcQ';
 
 // Nothing is routed here: the whole point is the real site.
 await runBrowserSuite(async ({ context, extensionId }, report) => {
@@ -68,7 +68,7 @@ await runBrowserSuite(async ({ context, extensionId }, report) => {
   check('and a <video> element', pageProbe.hasVideo, true);
 
   if (pageProbe.trackCount === 0) {
-    console.log('\n  No caption tracks on this video. Try TRANSCRIBE_LIVE_VIDEO=<another id>.');
+    console.log('\n  No caption tracks on this video. Try IU_LIVE_VIDEO=<another id>.');
     return;
   }
 

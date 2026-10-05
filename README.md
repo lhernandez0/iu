@@ -1,9 +1,14 @@
-# Transcribe (Chrome extension)
+# IU
 
-Personal-use Chrome extension that shows a **YouTube video's transcript in the
-side panel**, where clicking a line seeks the video to that moment. Two caption
-tracks can be shown at once (bilingual), and every video you visit stays cached
-so switching back is instant.
+Personal-use Chrome extension for learning a language by watching video. It
+shows a **YouTube video's captions in the side panel**, where clicking a line
+seeks the video to that moment. Two caption tracks can be shown at once
+(bilingual), and every video you visit stays cached so switching back is
+instant.
+
+> **IU** — *I* and *you*, the two of us.
+> 友 is *iú* in Hokkien, *yǒu* in Mandarin, *tomo* in Japanese — and it means
+> **friend** in all three. A companion to read beside you.
 
 Status: **captions phase**. The panel reads YouTube's own caption tracks — no
 audio capture is involved. The tab-capture + speech-recognition path is built
@@ -207,7 +212,7 @@ Content scripts are injected as **classic** scripts and cannot use `import`, so
 `youtube-content.js` repeats the message names and the `findActiveIndex` helper
 that also live in `src/common/`. Both places carry a comment saying so.
 
-Both content scripts also carry a **re-entry guard** (`window.__transcribe*`
+Both content scripts also carry a **re-entry guard** (`window.__iu*`
 flags). The worker injects them with `chrome.scripting` on every request, so
 without the guard each injection would add another set of listeners and answers
 would arrive twice.

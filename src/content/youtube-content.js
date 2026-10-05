@@ -24,11 +24,11 @@
   // The worker injects this file on demand with chrome.scripting, which re-runs
   // it even when a copy is already live on the page. Without this guard each
   // injection would add another position-reporting interval.
-  if (window.__transcribeContentLoaded) return;
-  window.__transcribeContentLoaded = true;
+  if (window.__iuContentLoaded) return;
+  window.__iuContentLoaded = true;
 
   // --- Duplicated contract -------------------------------------------------
-  const CHANNEL = 'transcribe-ext';
+  const CHANNEL = 'iu-ext';
   const MSG = {
     DESCRIBE: 'describe',
     PROVIDE: 'provide',

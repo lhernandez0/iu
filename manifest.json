@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Transcribe",
+  "name": "IU",
   "version": "0.1.0",
-  "description": "Personal-use live transcription of the current tab's audio.",
+  "description": "Personal-use language-learning companion: reads a YouTube video's captions in the side panel.",
   "minimum_chrome_version": "116",
   "background": {
     "service_worker": "src/background/service-worker.js",
     "type": "module"
   },
   "action": {
-    "default_title": "Transcribe"
+    "default_title": "IU"
   },
   "side_panel": {
     "default_path": "src/sidepanel/sidepanel.html"

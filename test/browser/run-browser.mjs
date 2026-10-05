@@ -17,8 +17,8 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const live = process.argv.includes('--live');
 
-const suites = ['transcribe.browser.test.mjs'];
-if (live) suites.push('transcribe.live.test.mjs');
+const suites = ['iu.browser.test.mjs'];
+if (live) suites.push('iu.live.test.mjs');
 
 console.log(live ? 'Browser tests: offline, then LIVE (real network)\n' : 'Browser tests: offline only\n');
 

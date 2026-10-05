@@ -27,10 +27,10 @@
   // it even when a copy is already live. Without this guard each injection would
   // add another set of window listeners, and every request would be answered
   // twice.
-  if (window.__transcribeBridgeLoaded) return;
-  window.__transcribeBridgeLoaded = true;
+  if (window.__iuBridgeLoaded) return;
+  window.__iuBridgeLoaded = true;
 
-  const CHANNEL = 'transcribe-ext';
+  const CHANNEL = 'iu-ext';
 
   /**
    * The player response for whatever is playing NOW.
