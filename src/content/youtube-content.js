@@ -62,6 +62,9 @@
   };
   let lastActiveIndex = -2;
 
+  /** Interval handles, so they can all be stopped at once. @type {number[]} */
+  const timers = [];
+
   // --- Page bridge ---------------------------------------------------------
 
   let nextRequestId = 0;
@@ -486,27 +489,45 @@
 
   // --- Service-worker requests ---------------------------------------------
 
+  /**
+   * Answer the worker, tolerating a context that died mid-request.
+   *
+   * Every branch below answers asynchronously, so the extension can be reloaded
+   * while a caption fetch is in flight — and `sendResponse` then throws the same
+   * invalidation error, from inside a promise, where nothing is listening for it.
+   *
+   * @param {Function} sendResponse
+   * @param {object} payload
+   */
+  function reply(sendResponse, payload) {
+    try {
+      sendResponse(payload);
+    } catch {
+      teardown();
+    }
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || message.target !== TARGET.CONTENT) return false;
 
     switch (message.type) {
       case MSG.DESCRIBE:
         sync()
-          .then((result) => sendResponse({ ok: result.ok, error: result.error, video: describeVideo() }))
-          .catch((error) => sendResponse({ ok: false, error: String(error?.message ?? error) }));
+          .then((result) => reply(sendResponse, { ok: result.ok, error: result.error, video: describeVideo() }))
+          .catch((error) => reply(sendResponse, { ok: false, error: String(error?.message ?? error) }));
         return true; // async reply
 
       case MSG.PROVIDE:
         provide(message.languageCode ?? null, message.translateTo ?? null)
-          .then(sendResponse)
-          .catch((error) => sendResponse({ ok: false, error: String(error?.message ?? error) }));
+          .then((payload) => reply(sendResponse, payload))
+          .catch((error) => reply(sendResponse, { ok: false, error: String(error?.message ?? error) }));
         return true;
 
       case MSG.FETCH_TRACK:
         fetchTrack(message.languageCode, message.translateTo ?? null)
-          .then(sendResponse)
+          .then((payload) => reply(sendResponse, payload))
           .catch((error) =>
-            sendResponse({
+            reply(sendResponse, {
               languageCode: message.languageCode,
               translateTo: null,
               segments: [],
@@ -518,7 +539,7 @@
       case MSG.CONTENT_SEEK: {
         const element = getVideo();
         if (element && Number.isFinite(message.seconds)) element.currentTime = message.seconds;
-        sendResponse({ ok: Boolean(element) });
+        reply(sendResponse, { ok: Boolean(element) });
         return false;
       }
 
@@ -527,11 +548,71 @@
     }
   });
 
+  /**
+   * Whether this script's extension context is still usable.
+   *
+   * When the extension is reloaded or updated, content scripts already running
+   * in open tabs are orphaned: `chrome.runtime` survives as an object but loses
+   * its id, and every call into it throws "Extension context invalidated." A
+   * YouTube tab left open across a reload therefore keeps running this script
+   * against a dead context — and the result is not one error but an endless
+   * stream of them, because both polling loops keep waking.
+   *
+   * Reading the id is cheap and, unlike the calls it guards, does not throw.
+   *
+   * @returns {boolean}
+   */
+  function contextAlive() {
+    try {
+      return Boolean(chrome?.runtime?.id);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Stop everything this script is doing, once its context has gone.
+   *
+   * Clearing the intervals is the important part: without it both loops keep
+   * waking and keep throwing, and nothing can silence them. Chrome does not
+   * re-inject into pages that were already open, so there is nothing to recover
+   * — the tab has to be reloaded, and this says so once rather than failing
+   * forever.
+   */
+  function teardown() {
+    if (!timers.length) return; // already down; do not warn twice
+    for (const handle of timers) clearInterval(handle);
+    timers.length = 0;
+
+    // Free the page for a fresh copy. Whether a later injection can SEE this
+    // depends on how Chrome handles isolated worlds across an extension reload,
+    // so the tab may still need reloading — but if the flag is shared, the
+    // worker's next injection takes the page back instead of being skipped by
+    // the re-entry guard as though a live copy were still here.
+    try {
+      window.__iuContentLoaded = false;
+    } catch {
+      /* nothing left to do if even this is refused */
+    }
+
+    console.warn('[IU] The extension was reloaded or updated. Reload this tab to reconnect.');
+  }
+
   /** @param {object} payload */
   function post(payload) {
-    chrome.runtime.sendMessage(payload).catch(() => {
-      // No receiver (worker restarting) is a normal state.
-    });
+    if (!contextAlive()) {
+      teardown();
+      return;
+    }
+
+    try {
+      // No receiver is a normal state, not a failure: the worker stops when
+      // idle, and it is not this script's job to restart it.
+      chrome.runtime.sendMessage(payload)?.catch(() => {});
+    } catch {
+      // Thrown synchronously when the context died between the check and here.
+      teardown();
+    }
   }
 
   // --- Watching the page -----------------------------------------------------
@@ -547,30 +628,39 @@
 
   let lastVideoIdCheck = 0;
 
-  setInterval(() => {
-    const now = Date.now();
-    if (now - lastVideoIdCheck < VIDEO_CHECK_MS) return;
-    lastVideoIdCheck = now;
+  timers.push(
+    setInterval(() => {
+      // Stop before doing any work. An orphaned script has nothing left to talk
+      // to, and reporting that forever is what fills the console.
+      if (!contextAlive()) return teardown();
 
-    void (async () => {
-      const before = video.videoId;
-      await sync();
-      // Announce it ourselves rather than waiting to be asked, so the panel
-      // corrects itself even when the user is not touching it.
-      if (video.videoId !== before) {
-        post({ type: MSG.CONTENT_VIDEO_CHANGED, target: TARGET.BACKGROUND });
-      }
-    })();
-  }, VIDEO_CHECK_MS);
+      const now = Date.now();
+      if (now - lastVideoIdCheck < VIDEO_CHECK_MS) return;
+      lastVideoIdCheck = now;
 
-  setInterval(() => {
-    if (!video.segments?.length) return;
-    const seconds = getPosition();
-    const index = findActiveIndex(video.segments, seconds);
-    if (index === lastActiveIndex) return;
-    lastActiveIndex = index;
-    post({ type: MSG.CONTENT_POSITION, target: TARGET.BACKGROUND, index, seconds });
-  }, POSITION_POLL_MS);
+      void (async () => {
+        const before = video.videoId;
+        await sync();
+        // Announce it ourselves rather than waiting to be asked, so the panel
+        // corrects itself even when the user is not touching it.
+        if (video.videoId !== before) {
+          post({ type: MSG.CONTENT_VIDEO_CHANGED, target: TARGET.BACKGROUND });
+        }
+      })();
+    }, VIDEO_CHECK_MS),
+  );
+
+  timers.push(
+    setInterval(() => {
+      if (!contextAlive()) return teardown();
+      if (!video.segments?.length) return;
+      const seconds = getPosition();
+      const index = findActiveIndex(video.segments, seconds);
+      if (index === lastActiveIndex) return;
+      lastActiveIndex = index;
+      post({ type: MSG.CONTENT_POSITION, target: TARGET.BACKGROUND, index, seconds });
+    }, POSITION_POLL_MS),
+  );
 
   /** Mirrors findActiveIndex in src/common/transcript.js. @returns {number} */
   function findActiveIndex(segments, seconds) {

@@ -39,6 +39,11 @@ function section(name) {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Swap the global warning sink so tests can read what the script logged. */
+let warnings = [];
+const realWarn = console.warn;
+console.warn = (...args) => warnings.push(args.join(' '));
+
 // --- Stubs -------------------------------------------------------------------
 
 /**
@@ -147,15 +152,27 @@ async function bootContent({
     return respond(true, captionBody);
   });
   // Captured rather than scheduled, so a test can step playback deterministically
-  // and the process does not stay alive on a real timer.
+  // and the process does not stay alive on a real timer. `active` tracks which
+  // are still running, so stopping them can be observed — that is how the
+  // orphaned-context teardown is tested.
   define('setInterval', (fn) => {
-    intervals.push(fn);
-    return intervals.length;
+    const handle = intervals.length + 1;
+    intervals.push({ handle, fn, active: true });
+    return handle;
+  });
+  define('clearInterval', (handle) => {
+    const entry = intervals.find((i) => i.handle === handle);
+    if (entry) entry.active = false;
   });
   define('setTimeout', globalThis.setTimeout);
 
   define('chrome', {
     runtime: {
+      // Present on a live context and absent once the extension is reloaded,
+      // which is what the script reads to notice it has been orphaned. A stub
+      // without it looks dead, and the script correctly stops talking — so this
+      // has to be here for anything to be reported at all.
+      id: 'test-extension-id',
       onMessage: {
         addListener: (handler) => {
           onMessage = handler;
@@ -176,18 +193,43 @@ async function bootContent({
     ask(message) {
       return new Promise((resolve) => {
         if (!onMessage) throw new Error('content script never registered onMessage');
-        onMessage({ ...message, target: 'content' }, {}, resolve);
+        // A real `sendResponse` is a callback into the extension, so calling it
+        // after a reload throws rather than quietly resolving. Modelling that is
+        // what makes the "context died mid-request" path reachable.
+        const sendResponse = (payload) => {
+          if (!globalThis.chrome.runtime.id) throw new Error('Extension context invalidated.');
+          resolve(payload);
+        };
+        onMessage({ ...message, target: 'content' }, {}, sendResponse);
       });
     },
     /** Advance the simulated video and fire the position poll. */
     tick(seconds) {
       video.currentTime = seconds;
-      for (const fn of intervals) fn();
+      for (const entry of intervals) if (entry.active) entry.fn();
+    },
+    /**
+     * Simulate the extension being reloaded out from under this script.
+     *
+     * Chrome strips the id from an orphaned context; every call into it then
+     * throws. The throw is part of the simulation — a stub that quietly returned
+     * undefined would not exercise the same path.
+     */
+    orphan() {
+      Object.defineProperty(globalThis.chrome.runtime, 'id', {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
+      globalThis.chrome.runtime.sendMessage = () => {
+        throw new Error('Extension context invalidated.');
+      };
     },
     posted,
     fetched,
     video,
     intervalCount: () => intervals.length,
+    runningIntervals: () => intervals.filter((i) => i.active).length,
   };
 }
 
@@ -521,6 +563,107 @@ section('re-evaluating does not stack up duplicate interval timers');
   const before = script.intervalCount();
   await import(`../src/content/youtube-content.js?again=${Date.now()}`);
   check('no extra interval registered', script.intervalCount(), before);
+}
+
+// --- 8. An orphaned extension context ----------------------------------------
+//
+// When the extension is reloaded or updated, content scripts already running in
+// open tabs are orphaned. `chrome.runtime` is still an object but has lost its
+// id, and every call into it throws "Extension context invalidated." Both polling
+// loops keep waking, so the result was not one error but one every 250ms until
+// the tab was reloaded — and nothing could silence it.
+
+section('a live context reports position as usual');
+
+{
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  await script.ask({ type: 'provide', languageCode: 'en' });
+
+  script.tick(0.5);
+  check('a position was reported', script.posted.some((p) => p.type === 'content-position'), true);
+  check('the intervals are running', script.runningIntervals(), 2);
+}
+
+section('once orphaned, it stops instead of throwing every tick');
+
+{
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  await script.ask({ type: 'provide', languageCode: 'en' });
+
+  const quiet = [];
+  const realError = console.error;
+  console.error = (...args) => quiet.push(args.join(' '));
+
+  script.orphan();
+  // This is the reported failure: the interval wakes, posts, and throws.
+  let thrown = null;
+  warnings = [];
+  try {
+    script.tick(0.5);
+  } catch (error) {
+    thrown = error;
+  }
+
+  check('nothing was thrown', thrown, null);
+  check('both intervals stopped', script.runningIntervals(), 0);
+  // Case-insensitive on purpose: the assertion is about the message existing,
+  // not about its capitalisation. A case-sensitive match here failed against a
+  // correct warning and looked like the fix was broken.
+  check('and it said so once', warnings.filter((w) => /reload this tab/i.test(w)).length, 1);
+
+  // The important part: it does not keep trying. A second wake must be silent,
+  // not another error and another warning.
+  warnings = [];
+  try {
+    script.tick(1.5);
+  } catch (error) {
+    thrown = error;
+  }
+  check('a further tick throws nothing', thrown, null);
+  check('and says nothing more', warnings.length, 0);
+
+  console.error = realError;
+}
+
+section('a dead context is not posted to at all');
+
+{
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  await script.ask({ type: 'provide', languageCode: 'en' });
+  const before = script.posted.length;
+
+  script.orphan();
+  script.tick(0.5);
+
+  check('no further messages were sent', script.posted.length, before);
+}
+
+section('a reply to a request that outlived the context does not throw');
+
+{
+  // Every branch answers asynchronously, so the extension can be reloaded while
+  // a caption fetch is in flight — and `sendResponse` then throws from inside a
+  // promise, where nothing is listening for it.
+  //
+  // The reply never arrives, which is faithful: the worker's own timeout is what
+  // covers that. What matters is that the throw does not escape and that the
+  // script stops rather than continuing to poll.
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  script.orphan();
+
+  let thrown = null;
+  warnings = [];
+  try {
+    // Deliberately not awaited — it cannot settle.
+    void script.ask({ type: 'fetch-track', languageCode: 'en' }).catch(() => {});
+    await settle();
+    await settle();
+  } catch (error) {
+    thrown = error;
+  }
+
+  check('nothing was thrown', thrown, null);
+  check('and it stopped cleanly', script.runningIntervals(), 0);
 }
 
 // --- Result ------------------------------------------------------------------

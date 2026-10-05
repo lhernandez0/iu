@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 450 checks)
+## Tier 1 — hermetic (`npm test`, 460 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies — plain Node scripts,
@@ -41,7 +41,7 @@ so they run with nothing installed.
 | `service-worker.test.mjs` | worker + `chrome` stub | 178 |
 | `sidepanel.test.mjs` | panel + DOM stub | 81 |
 | `page-bridge.test.mjs` | bridge + page stub | 42 |
-| `content.test.mjs` | content script | 57 |
+| `content.test.mjs` | content script | 67 |
 | `learn.test.mjs` | segmenter + word list | 44 |
 
 Each file is spawned as its own process, because they all grab the same globals
@@ -62,6 +62,11 @@ selection could not be tested honestly.
 PROVIDE and FETCH_TRACK return **different shapes** — `{ok, video, fetched}`
 versus the segment list itself. Using one where the other belongs fails as a
 silently empty transcript.
+
+The content stub models an **orphaned extension context**: `id` absent, and
+`sendMessage`/`sendResponse` throwing "Extension context invalidated." A stub
+that quietly resolved would not exercise the path at all, and the bug being
+pinned is precisely that the throw escaped.
 
 ## Tier 2 — browser, offline (`npm run test:browser`, 80 checks)
 
