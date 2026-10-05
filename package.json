@@ -1,0 +1,10 @@
+{
+  "name": "transcribe-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Personal-use Chrome extension: YouTube transcripts in the side panel.",
+  "scripts": {
+    "test": "node test/service-worker.test.mjs"
+  }
+}

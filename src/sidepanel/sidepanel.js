@@ -49,19 +49,43 @@ const view = {
 
 const port = chrome.runtime.connect({ name: 'panel' });
 
+// If the worker never answers — it crashed, or never woke — the panel would
+// otherwise sit on its placeholder forever with no hint as to why. A worker that
+// is merely slow will have answered well inside this window.
+const NO_WORKER_MS = 5000;
+let heardFromWorker = false;
+let workerWatchdog = 0;
+
 port.onMessage.addListener((message) => {
-  if (message.type === MSG.STATE) {
-    renderState(message.state);
-    return;
-  }
-  if (message.type === MSG.POSITION) {
-    if (message.index < view.rows.length) setActive(message.index);
-    return;
-  }
-  if (message.type === MSG.ERROR) {
-    setStatus(message.error, true);
+  heardFromWorker = true;
+  clearTimeout(workerWatchdog);
+
+  try {
+    if (message.type === MSG.STATE) {
+      renderState(message.state);
+      return;
+    }
+    if (message.type === MSG.POSITION) {
+      if (message.index < view.rows.length) setActive(message.index);
+      return;
+    }
+    if (message.type === MSG.ERROR) {
+      setStatus(message.error, true);
+    }
+  } catch (error) {
+    // Surface it. A render failure would otherwise leave the placeholder text on
+    // screen, which looks exactly like the extension doing nothing.
+    setStatus(`Panel error: ${error?.message ?? error}`, true);
   }
 });
+
+workerWatchdog = setTimeout(() => {
+  if (heardFromWorker) return;
+  setStatus(
+    'No response from the extension worker. Reload the extension in chrome://extensions, then reopen this panel.',
+    true,
+  );
+}, NO_WORKER_MS);
 
 /** @param {object} message */
 function send(message) {
@@ -75,6 +99,10 @@ function send(message) {
 
 /** @param {object} state */
 function renderState(state) {
+  if (!state || typeof state !== 'object') {
+    setStatus('The worker sent an empty state.', true);
+    return;
+  }
   renderPickers(state);
   renderStatus(state);
   renderRows(state);

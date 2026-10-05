@@ -250,6 +250,11 @@ async function ensureContentScript(tabId) {
   return frame.frameId;
 }
 
+/** How long to wait for a content script before giving up on it. Without this
+ *  a missing or wedged script leaves refresh() pending forever, and the panel
+ *  shows nothing at all — which reads as "broken", with no clue why. */
+const CONTENT_TIMEOUT_MS = 4000;
+
 /**
  * @param {number} tabId
  * @param {object} message
@@ -257,21 +262,54 @@ async function ensureContentScript(tabId) {
  */
 async function sendToContent(tabId, message) {
   const frameId = await ensureContentScript(tabId);
-  if (frameId === null) throw new Error('no YouTube frame');
+  if (frameId === null) throw new Error('no youtube frame');
 
-  return chrome.tabs.sendMessage(tabId, { ...message, target: TARGET.CONTENT }, { frameId });
+  let timer = 0;
+  try {
+    return await Promise.race([
+      chrome.tabs.sendMessage(tabId, { ...message, target: TARGET.CONTENT }, { frameId }),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`the content script did not answer ${message.type} within ${CONTENT_TIMEOUT_MS}ms`)),
+          CONTENT_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
  * Re-read the active tab and rebuild the current video's entry.
  *
+ * Wrapped so that ANY failure ends in a broadcast. A refresh that throws before
+ * broadcasting leaves the panel on its placeholder indefinitely, which is
+ * indistinguishable from the extension not being installed.
+ *
  * @returns {Promise<void>}
  */
 async function refresh() {
+  try {
+    await refreshInner();
+  } catch (error) {
+    pendingError = `Could not read the video: ${error?.message ?? error}`;
+    broadcastState();
+  }
+}
+
+/** @returns {Promise<void>} */
+async function refreshInner() {
+  if (trackedTabId !== null) {
+    // A tracked tab can be closed or navigated away since we last looked.
+    const alive = await chrome.tabs.get(trackedTabId).catch(() => null);
+    if (!alive || !YOUTUBE_URL.test(alive.url ?? '')) trackedTabId = null;
+  }
+
   if (trackedTabId === null) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !YOUTUBE_URL.test(tab.url ?? '')) {
-      pendingError = 'No YouTube tab is active.';
+      pendingError = 'No YouTube video in the active tab.';
       broadcastState();
       return;
     }
@@ -282,7 +320,7 @@ async function refresh() {
   try {
     provided = await sendToContent(trackedTabId, { type: MSG.PROVIDE });
   } catch (error) {
-    pendingError = `Could not reach the page (${error?.message ?? error}). Reload the YouTube tab.`;
+    pendingError = `Could not reach the page (${error?.message ?? error}).`;
     broadcastState();
     return;
   }
@@ -486,15 +524,24 @@ function deriveState() {
 // large, cheap to refetch, and the worker is kept alive by an open panel.
 
 async function restorePreference() {
-  const stored = await chrome.storage.local.get('secondaryLanguage').catch(() => null);
-  secondaryPreference = stored?.secondaryLanguage ?? null;
+  try {
+    const stored = await chrome.storage.local.get('secondaryLanguage');
+    secondaryPreference = stored?.secondaryLanguage ?? null;
+  } catch {
+    // Storage is unavailable (or the worker is mid-shutdown). A missing
+    // preference is not worth failing startup over.
+    secondaryPreference = null;
+  }
 }
 
 function persistPreference() {
   chrome.storage.local.set({ secondaryLanguage: secondaryPreference }).catch(() => {});
 }
 
-void restorePreference();
+// Called at the bottom of this file rather than here, so the whole worker is
+// defined before anything asynchronous can run. A module-scope rejection would
+// abort evaluation, and a worker that fails to evaluate never answers the panel
+// — which looks, from the panel's side, exactly like nothing happening.
 
 // --- Action -----------------------------------------------------------------
 
@@ -557,3 +604,8 @@ async function ensureOffscreenDocument() {
       if (!String(error?.message ?? error).includes('Only a single offscreen')) throw error;
     });
 }
+
+// --- Startup -----------------------------------------------------------------
+// Everything above is defined by now. restorePreference swallows its own
+// failures, so this cannot reject and abort the worker.
+void restorePreference();
