@@ -51,7 +51,7 @@
    * @type {{videoId: string|null, title: string|null, isLive: boolean,
    *         tracks: object[], segments: object[]|null}}
    */
-  let video = { videoId: null, title: null, isLive: false, tracks: [], segments: null };
+  let video = { videoId: null, title: null, isLive: false, tracks: [], segments: null, needsInnertube: false };
   let lastActiveIndex = -2;
 
   // --- Page bridge ---------------------------------------------------------
@@ -231,13 +231,72 @@
    */
   async function fetchTrack(languageCode) {
     const summary = await askBridge('get-player-response');
-    if (!summary) return { languageCode, segments: [], error: 'This page has no video player.' };
+
+    // After an in-tab navigation the page's track list belongs to the previous
+    // video, so it cannot be used: its URLs point at the wrong captions. The
+    // internal player API has to be asked for this video's tracks instead.
+    if (!summary || summary.stale) {
+      return fetchTrackViaInnertube(languageCode);
+    }
 
     const track = summary.tracks.find((t) => t.languageCode === languageCode) ?? summary.tracks[0];
-    if (!track) return { languageCode, segments: [], error: 'This video has no captions.' };
+    if (!track) return fetchTrackViaInnertube(languageCode);
 
     try {
       const segments = await fetchSegments(track, summary.videoId, summary.innertubeApiKey, null);
+      return {
+        languageCode: track.languageCode,
+        segments,
+        error: segments.length ? null : 'The caption track came back empty.',
+      };
+    } catch (error) {
+      return { languageCode, segments: [], error: `Could not load captions: ${error?.message ?? error}` };
+    }
+  }
+
+  /**
+   * Resolve a track by re-asking the internal player API.
+   *
+   * This is the fallback path jdepoix/youtube-transcript-api documents, and it
+   * earns its place here for a different reason: it is the only way to get the
+   * RIGHT tracks when the page's cached player response is stale, which is the
+   * normal state after switching video inside a tab.
+   *
+   * @param {string} languageCode
+   * @returns {Promise<{languageCode: string, segments: object[], error: string|null}>}
+   */
+  async function fetchTrackViaInnertube(languageCode) {
+    // This can be reached without a prior sync — the worker asks for a specific
+    // track on its own — so make sure we know which video we are asking about.
+    if (!video.videoId) await sync();
+
+    const summary = await askBridge('get-player-response');
+    const key = summary?.innertubeApiKey ?? null;
+
+    if (!key || !video.videoId) {
+      return { languageCode, segments: [], error: 'Could not read this video captions.' };
+    }
+
+    const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${key}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38', androidSdkVersion: 30, hl: 'en' } },
+        videoId: video.videoId,
+      }),
+    }).catch(() => null);
+
+    if (!response?.ok) return { languageCode, segments: [], error: 'Could not reach the player API.' };
+
+    const fresh = await response.json().catch(() => null);
+    const tracks = fresh?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
+
+    if (!tracks.length) return { languageCode, segments: [], error: 'This video has no captions.' };
+
+    const track = tracks.find((t) => t.languageCode === languageCode) ?? tracks[0];
+    try {
+      const segments = await fetchSegments(track, video.videoId, key, null);
       return {
         languageCode: track.languageCode,
         segments,
@@ -277,8 +336,18 @@
   async function provide(languageCode) {
     const result = await sync();
     if (!result.ok) return { ok: false, error: result.error, video: describeVideo() };
-    if (!video.tracks.length) {
-      return { ok: false, error: 'This video has no captions.', video: describeVideo() };
+
+    // Go through the player API when the page cannot be trusted: either its
+    // track list belongs to the previous video (stale), or it has no player
+    // data at all. In both cases we still know the video id from the URL, which
+    // is all the player API needs.
+    if (result.stale || !video.tracks.length) {
+      const fetched = await fetchTrackViaInnertube(languageCode ?? 'en');
+      video.segments = fetched.segments;
+      if (fetched.segments.length) {
+        return { ok: true, video: describeVideo(), requested: fetched.languageCode, fetched };
+      }
+      return { ok: false, error: fetched.error, video: describeVideo(), fetched };
     }
 
     const wanted = languageCode ? video.tracks.find((t) => t.languageCode === languageCode) : null;
@@ -299,15 +368,15 @@
    * while reading the new video's currentTime, so the panel would show the old
    * transcript advancing against the new video.
    *
-   * @returns {Promise<{ok: boolean, changed: boolean, error?: string}>}
+   * @returns {Promise<{ok: boolean, changed: boolean, stale: boolean, error?: string}>}
    */
   async function sync() {
     const summary = await askBridge('get-player-response');
     if (!summary) {
       const changed = video.videoId !== null;
-      video = { videoId: null, title: null, isLive: false, tracks: [], segments: null };
+      video = { videoId: null, title: null, isLive: false, tracks: [], segments: null, needsInnertube: false };
       lastActiveIndex = -2;
-      return { ok: false, changed, error: 'This page has no video player.' };
+      return { ok: false, changed, stale: false, error: 'This page has no video player.' };
     }
 
     const changed = video.videoId !== summary.videoId;
@@ -317,15 +386,19 @@
       lastActiveIndex = -2;
     }
 
+    // A stale track list is the previous video's. Keep it out of `video.tracks`
+    // so it can never be fetched, but remember that captions still need
+    // resolving through the internal player API for this video.
     video = {
       videoId: summary.videoId,
       title: summary.title,
       isLive: summary.isLive,
-      tracks: summary.tracks,
+      tracks: summary.stale ? [] : summary.tracks,
       segments: video.segments,
+      needsInnertube: Boolean(summary.stale),
     };
 
-    return { ok: true, changed };
+    return { ok: true, changed, stale: Boolean(summary.stale) };
   }
 
   /** @returns {object} Video identity plus the track list the panel can offer. */
@@ -334,6 +407,10 @@
       videoId: video.videoId,
       title: video.title,
       isLive: video.isLive,
+      // True when the page's own track list belongs to a different video and so
+      // has been withheld. The worker uses this to tell "captions unreadable"
+      // apart from "this video has none", which look identical otherwise.
+      stale: Boolean(video.needsInnertube),
       trackList: video.tracks.map((t) => ({
         languageCode: t.languageCode,
         name: t.name,

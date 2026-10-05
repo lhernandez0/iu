@@ -77,6 +77,8 @@ export function watchPage({ videoId, title, tracks, serveAsrNames = false }) {
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${title}</title></head>
 <body>
+  <h1 class="ytd-watch-metadata"><yt-formatted-string>${title}</yt-formatted-string></h1>
+  <div id="movie_player"></div>
   <video id="player"></video>
   <script>
     window.ytInitialPlayerResponse = ${JSON.stringify(playerResponse)};
@@ -96,6 +98,35 @@ export function watchPage({ videoId, title, tracks, serveAsrNames = false }) {
     // Record navigation events so a test can tell an SPA transition happened.
     window.__navigations = 0;
     document.addEventListener('yt-navigate-finish', () => { window.__navigations++; });
+
+    /**
+     * Simulate an in-tab navigation, which is the case that broke the extension.
+     *
+     * What matters is what is deliberately NOT done here: the cached
+     * \`ytInitialPlayerResponse\` is left describing the FIRST video, because
+     * that is what YouTube does. The live player and the page heading move on.
+     *
+     * Set \`updatePlayer\` to false to model the harder case where even the live
+     * player has not caught up yet, leaving the URL as the only signal.
+     */
+    window.__navigateTo = (videoId, newTitle, { updatePlayer = false } = {}) => {
+      history.pushState({}, '', '/watch?v=' + videoId);
+      document.querySelector('h1.ytd-watch-metadata yt-formatted-string').textContent = newTitle;
+      if (updatePlayer) {
+        window.__liveResponse = {
+          videoDetails: { videoId, title: newTitle, isLiveContent: false },
+          captions: window.ytInitialPlayerResponse.captions,
+        };
+      }
+      const player = document.getElementById('player');
+      if (player) player.currentTime = 0;
+      document.dispatchEvent(new CustomEvent('yt-navigate-finish'));
+    };
+
+    // Only present when a navigation has updated the live player.
+    window.__liveResponse = null;
+
+    document.getElementById('movie_player').getPlayerResponse = () => window.__liveResponse;
   </script>
 </body></html>`;
 }

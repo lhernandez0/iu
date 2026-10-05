@@ -40,19 +40,41 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
  * Install globals and evaluate a fresh copy of the bridge.
  *
  * @param {object} options
- * @param {object} [options.playerResponse]  What the page exposes.
+ * @param {object} [options.playerResponse]  What the cached page global holds.
  * @param {string} [options.rawPlayerResponse] Alternative shape, as a JSON string.
  * @param {object} [options.ytcfg]           Page config, for the INNERTUBE key.
+ * @param {string} [options.urlVideoId]       The video id in the page URL.
+ * @param {object} [options.liveResponse]     What the live player reports, which
+ *   is the only source that tracks an in-tab navigation.
+ * @param {string} [options.domTitle]         The page's heading.
+ * @param {boolean} [options.withVideoElement] Whether the page has a <video>.
  * @returns {Promise<object>} Handles for driving the bridge.
  */
-async function bootBridge({ playerResponse = null, rawPlayerResponse = null, ytcfg = null } = {}) {
+async function bootBridge({
+  playerResponse = null,
+  rawPlayerResponse = null,
+  ytcfg = null,
+  urlVideoId = 'dQw4w9WgXcQ',
+  liveResponse = null,
+  domTitle = null,
+  withVideoElement = false,
+} = {}) {
   /** Everything the bridge posted to the window. */
   const posted = [];
   const windowListeners = [];
   const documentListeners = new Map();
 
+  // Stands in for the player element. `getPlayerResponse` is the live source, so
+  // a test can make the page global stale while this stays current — which is
+  // exactly the state after an in-tab navigation.
+  const playerElement = withVideoElement
+    ? { getPlayerResponse: () => liveResponse ?? playerResponse }
+    : null;
+
+  const domTitleElement = domTitle ? { textContent: domTitle } : null;
+
   const pageWindow = {
-    location: { origin: 'https://www.youtube.com' },
+    location: { origin: 'https://www.youtube.com', href: `https://www.youtube.com/watch?v=${urlVideoId ?? videoId ?? ''}` },
     ytInitialPlayerResponse: playerResponse ?? undefined,
     ytplayer: rawPlayerResponse ? { config: { args: { raw_player_response: rawPlayerResponse } } } : undefined,
     ytcfg: ytcfg ?? undefined,
@@ -68,6 +90,11 @@ async function bootBridge({ playerResponse = null, rawPlayerResponse = null, ytc
       if (!documentListeners.has(type)) documentListeners.set(type, []);
       documentListeners.get(type).push(handler);
     },
+    // The bridge reads the live player and the page's heading. Both are absent
+    // by default here, so a test only gets them by asking for them — which is
+    // how the stale-response cases are exercised.
+    getElementById: (id) => (id === 'movie_player' ? playerElement : null),
+    querySelector: (selector) => (selector.includes('ytd-watch-metadata') ? domTitleElement : null),
   });
 
   await import(`../src/content/page-bridge.js?boot=${++bootCount}`);
@@ -179,13 +206,16 @@ section('reports the video and its caption tracks');
 
 // --- 3. Degraded pages ------------------------------------------------------
 
-section('a page with no player data answers nothing, rather than guessing');
+section('a URL with no player data still identifies the video');
 
 {
-  const bridge = await bootBridge({ playerResponse: null });
+  // Better than reporting nothing: the id comes from the URL, which is enough
+  // for the caller to resolve captions through the internal player API.
+  const bridge = await bootBridge({ playerResponse: null, urlVideoId: 'knownvideo1' });
   const reply = await bridge.ask('get-player-response');
-  check('answered', reply?.ok, true);
-  check('with a null payload', reply?.payload, null);
+  check('the video is identified', reply?.payload?.videoId, 'knownvideo1');
+  check('with no tracks', reply?.payload?.tracks?.length, 0);
+  check('and nothing claimed as stale', reply?.payload?.stale, false);
 }
 
 section('a video with no captions reports an empty track list');
@@ -193,10 +223,91 @@ section('a video with no captions reports an empty track list');
 {
   const bridge = await bootBridge({
     playerResponse: { videoDetails: { videoId: 'x', title: 'No Captions', isLiveContent: false } },
+    urlVideoId: 'x',
   });
   const reply = await bridge.ask('get-player-response');
   check('the video is still identified', reply?.payload?.videoId, 'x');
   check('no tracks', reply?.payload?.tracks?.length, 0);
+}
+
+// --- In-tab navigation -------------------------------------------------------
+//
+// The bug this pins: `ytInitialPlayerResponse` is only correct for the page as
+// first loaded. YouTube does NOT replace it when you switch video inside a tab,
+// so a bridge that trusts it keeps reporting the first video watched. That left
+// the panel showing the old transcript while the highlight tracked the new
+// video.
+
+section('after an in-tab navigation the URL is the authority, not the page global');
+
+{
+  const bridge = await bootBridge({
+    // The stale global still describes the FIRST video.
+    playerResponse: PLAYER_RESPONSE,
+    urlVideoId: 'newvideo123',
+    domTitle: 'The New Video',
+    withVideoElement: true,
+    // The live player was not replaced either, in this scenario.
+    liveResponse: null,
+  });
+
+  const reply = await bridge.ask('get-player-response');
+  check('it reports the video from the URL', reply?.payload?.videoId, 'newvideo123');
+  check('and flags the response as stale', reply?.payload?.stale, true);
+  check('the title comes from the page, not the stale response', reply?.payload?.title, 'The New Video');
+}
+
+section('a stale track list is still reported, so the caller can avoid using it');
+
+{
+  const bridge = await bootBridge({
+    playerResponse: PLAYER_RESPONSE,
+    urlVideoId: 'newvideo123',
+    withVideoElement: true,
+  });
+
+  const reply = await bridge.ask('get-player-response');
+  // The tracks belong to the previous video. They are passed through rather than
+  // silently dropped so the caller can see how many there were, but `stale` is
+  // what tells it not to fetch them.
+  check('the previous video tracks are visible', reply?.payload?.tracks?.length, 2);
+  check('and marked stale', reply?.payload?.stale, true);
+}
+
+section('the live player wins when it has a fresh response');
+
+{
+  const fresh = {
+    videoDetails: { videoId: 'freshvideo1', title: 'Fresh', isLiveContent: false },
+    captions: {
+      playerCaptionsTracklistRenderer: {
+        captionTracks: [
+          { baseUrl: 'https://www.youtube.com/api/timedtext?v=fresh&lang=en', languageCode: 'en', name: { simpleText: 'English' } },
+        ],
+      },
+    },
+  };
+
+  const bridge = await bootBridge({
+    playerResponse: PLAYER_RESPONSE, // stale global
+    liveResponse: fresh, // live player knows better
+    urlVideoId: 'freshvideo1',
+    withVideoElement: true,
+  });
+
+  const reply = await bridge.ask('get-player-response');
+  check('the live response is used', reply?.payload?.videoId, 'freshvideo1');
+  check('so nothing is stale', reply?.payload?.stale, false);
+  check('and the fresh tracks are offered', reply?.payload?.tracks?.length, 1);
+  check('with the fresh title', reply?.payload?.title, 'Fresh');
+}
+
+section('a page with no video id at all is not mistaken for a watch page');
+
+{
+  const bridge = await bootBridge({ playerResponse: PLAYER_RESPONSE, urlVideoId: '' });
+  const reply = await bridge.ask('get-player-response');
+  check('nothing is reported', reply?.payload, null);
 }
 
 section('falls back to ytplayer.config.args.raw_player_response when needed');

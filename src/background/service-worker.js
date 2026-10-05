@@ -29,6 +29,7 @@ const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
  * @property {string} title
  * @property {boolean} isLive
  * @property {object[]} trackList            Available tracks, as offered to the panel.
+ * @property {boolean} stale                 The page could not report its tracks.
  * @property {string|null} primaryLang
  * @property {string|null} secondaryLang
  * @property {Map<string, object[]>} tracks  languageCode -> segments.
@@ -377,7 +378,11 @@ async function refreshInner() {
 
   // Nothing to fetch and nothing to show: say so rather than leaving the panel
   // on an empty transcript with no explanation.
-  if (!entry.trackList.length) {
+  //
+  // An empty list only means that when the page could actually report its
+  // tracks. If the page was stale it simply could not tell us, and the captions
+  // are still worth asking the player API for.
+  if (!entry.trackList.length && !entry.stale) {
     entry.error = 'This video has no captions.';
     entry.rows = [];
     broadcastState();
@@ -446,6 +451,7 @@ function adoptVideo(video) {
       title: video.title,
       isLive: video.isLive,
       trackList: video.trackList ?? [],
+      stale: Boolean(video.stale),
       primaryLang: null,
       secondaryLang: secondaryPreference,
       tracks: new Map(),
@@ -459,6 +465,7 @@ function adoptVideo(video) {
     entry.title = video.title ?? entry.title;
     entry.isLive = video.isLive;
     entry.trackList = video.trackList ?? entry.trackList;
+    entry.stale = Boolean(video.stale);
   }
 
   // Drop any selection whose track no longer exists on this video.

@@ -32,13 +32,35 @@
 
   const CHANNEL = 'transcribe-ext';
 
-  /** @returns {object | null} The live player response object, if any. */
+  /**
+   * The player response for whatever is playing NOW.
+   *
+   * `ytInitialPlayerResponse` is only correct for the page as it was first
+   * loaded. On an in-tab navigation to another video YouTube does NOT replace
+   * it, so reading it alone pins the extension to the first video watched in a
+   * tab — the panel keeps the old transcript, and the highlight drifts because
+   * it is matching old cue times against new playback.
+   *
+   * The player element exposes the live response, and that one does change.
+   *
+   * @returns {object | null}
+   */
   function getPlayerResponse() {
+    // Live player first: this is the only source that tracks in-tab navigation.
+    try {
+      const player = document.getElementById('movie_player');
+      const live = player?.getPlayerResponse?.();
+      if (live?.videoDetails?.videoId) return live;
+    } catch {
+      /* the element is not always present or callable; fall through */
+    }
+
     try {
       if (window.ytInitialPlayerResponse?.videoDetails) return window.ytInitialPlayerResponse;
     } catch {
       /* page may have redefined the property; fall through */
     }
+
     try {
       // Some page types expose it as a JSON string instead of an object.
       const raw = window.ytplayer?.config?.args?.raw_player_response;
@@ -46,7 +68,44 @@
     } catch {
       /* ignore */
     }
+
     return null;
+  }
+
+  /**
+   * The video id from the URL.
+   *
+   * This, not the player response, is authoritative for what the user is
+   * looking at: it is updated by navigation even when the cached response is
+   * not, which makes it the reliable signal that the video changed.
+   *
+   * @returns {string | null}
+   */
+  function getUrlVideoId() {
+    try {
+      const url = new URL(window.location.href);
+      return (
+        url.searchParams.get('v') ??
+        /^\/shorts\/([\w-]+)/.exec(url.pathname)?.[1] ??
+        /^\/live\/([\w-]+)/.exec(url.pathname)?.[1] ??
+        null
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /** The title, read from the page when the response cannot supply it. */
+  function getDomTitle() {
+    try {
+      return (
+        document.querySelector('h1.ytd-watch-metadata yt-formatted-string')?.textContent?.trim() ??
+        document.querySelector('h1.title yt-formatted-string')?.textContent?.trim() ??
+        null
+      );
+    } catch {
+      return null;
+    }
   }
 
   /** @returns {string | null} Key for the internal player API (INNERTUBE). */
@@ -66,13 +125,22 @@
    * Trim the player response down to what the panel needs. The full object is
    * tens of kilobytes and mostly irrelevant to us.
    *
+   * The video id deliberately comes from the URL rather than from the response.
+   * They disagree after an in-tab navigation — the response is stale — and the
+   * URL is the one that matches what is on screen, so it is what every
+   * identity decision downstream should be made on.
+   *
    * @param {object | null} playerResponse
    * @returns {object | null}
    */
   function summarize(playerResponse) {
-    if (!playerResponse?.videoDetails) return null;
+    const details = playerResponse?.videoDetails;
+    const videoId = getUrlVideoId() ?? details?.videoId ?? null;
 
-    const renderer = playerResponse.captions?.playerCaptionsTracklistRenderer;
+    // No video id at all means this is not a watch page; nothing useful to say.
+    if (!videoId) return null;
+
+    const renderer = playerResponse?.captions?.playerCaptionsTracklistRenderer;
     const tracks = (renderer?.captionTracks ?? []).map((track) => ({
       baseUrl: track.baseUrl,
       languageCode: track.languageCode,
@@ -84,10 +152,21 @@
       isTranslatable: Boolean(track.isTranslatable),
     }));
 
+    // True when the response describes a DIFFERENT video than the one in the
+    // URL — an in-tab navigation whose response we could not get fresh. The
+    // track list is then the previous video's, and fetching those URLs would
+    // download the wrong captions, so the caller is told and can go through the
+    // internal player API instead.
+    const responseVideoId = details?.videoId ?? null;
+    const stale = Boolean(responseVideoId && responseVideoId !== videoId);
+
     return {
-      videoId: playerResponse.videoDetails.videoId ?? null,
-      title: playerResponse.videoDetails.title ?? null,
-      isLive: Boolean(playerResponse.videoDetails.isLiveContent),
+      videoId,
+      stale,
+      // The page's own heading is authoritative for what is on screen, and it
+      // updates on navigation even when the cached response does not.
+      title: getDomTitle() ?? (stale ? null : details?.title) ?? null,
+      isLive: Boolean(details?.isLiveContent),
       tracks,
       innertubeApiKey: getInnertubeKey(),
     };
@@ -118,8 +197,7 @@
         // Deliberately cheap: the content script polls this to notice when the
         // tab has moved to another video, and summarizing the whole track list
         // several times a second would be wasteful.
-        const playerResponse = getPlayerResponse();
-        payload = playerResponse ? { videoId: playerResponse.videoDetails?.videoId ?? null } : null;
+        payload = { videoId: getUrlVideoId() };
       } else {
         ok = false;
         payload = { error: `Unknown page-bridge request: ${data.type}` };

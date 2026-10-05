@@ -213,6 +213,74 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
   // --- 8. A second video --------------------------------------------------
 
+  section('switching to another video IN THE SAME TAB replaces the transcript');
+
+  {
+    // This is the case that broke, and the earlier version of this file could not
+    // catch it because it opened the second video in a NEW tab — a fresh page
+    // load with a correct player response. An in-tab switch is different:
+    // YouTube does NOT update ytInitialPlayerResponse, so the extension kept
+    // reporting the first video's captions while the highlight moved to the
+    // second video's clock. That is exactly what the user saw.
+    await routeYouTube(context, { videoId: 'tabsA000001', title: 'First In Tab', tracks: [ENGLISH] });
+    await routeYouTube(context, { videoId: 'tabsB000002', title: 'Second In Tab', tracks: [OTHER_ENGLISH] });
+
+    const watch = await openWatchPage(context, 'tabsA000001');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 3);
+    check('the first video loaded', (await panelState(page)).rows[0]?.text, 'Hey there');
+
+    // Navigate inside the tab. The page global is left stale, as YouTube leaves it.
+    await watch.evaluate(() => window.__navigateTo('tabsB000002', 'Second In Tab'));
+
+    await page.waitForFunction(() => document.querySelectorAll('.row').length === 2, null, { timeout: 20000 });
+    const state = await panelState(page);
+
+    check('the panel switched to the new transcript', state.rows[0]?.text, 'Second video');
+    check('with the new line count', state.rows.length, 2);
+    check('and the new title in the status', state.status.includes('Second In Tab'), true);
+  }
+
+  section('the highlight follows the new video rather than sticking to the last line');
+
+  {
+    // The follow symptom: with the old transcript still loaded, every position
+    // was past the end of it, so the highlight pinned to the final row instead of
+    // tracking anything. Once the transcript is correct it must move again.
+    await routeYouTube(context, { videoId: 'followA00001', title: 'Follow One', tracks: [ENGLISH] });
+    await routeYouTube(context, { videoId: 'followB00002', title: 'Follow Two', tracks: [OTHER_ENGLISH] });
+
+    const watch = await openWatchPage(context, 'followA00001');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 3);
+
+    await watch.evaluate(() => window.__navigateTo('followB00002', 'Follow Two'));
+    await page.waitForFunction(() => document.querySelectorAll('.row').length === 2, null, { timeout: 20000 });
+
+    const activeIndex = async () =>
+      page.evaluate(() => [...document.querySelectorAll('.row')].findIndex((row) => row.classList.contains('active')));
+
+    await watch.evaluate(() => {
+      document.getElementById('player').currentTime = 0.5;
+    });
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.row')][0]?.classList.contains('active'),
+      null,
+      { timeout: 10000 },
+    );
+    check('the first line highlights at the start', await activeIndex(), 0);
+
+    await watch.evaluate(() => {
+      document.getElementById('player').currentTime = 4;
+    });
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.row')][1]?.classList.contains('active'),
+      null,
+      { timeout: 10000 },
+    );
+    check('and moves to the second line later', await activeIndex(), 1);
+  }
+
   section('a different video gets its own transcript');
 
   {
