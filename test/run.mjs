@@ -51,15 +51,34 @@ function run(file) {
   });
 }
 
-const results = [];
-for (const file of files) {
-  const result = await run(file);
-  results.push(result);
+/**
+ * Run every suite at once and report as they finish.
+ *
+ * These were run one at a time. Because each file is already its own process,
+ * that bought nothing: the suites are independent, the machine has cores to
+ * spare, and the slowest one is slow for a reason that needs fixing separately
+ * (it sleeps on real timers waiting for the dictionary) rather than by serialising
+ * everyone behind it. Running them together makes the wall time the slowest
+ * suite rather than the sum.
+ *
+ * The output is deliberately ordered by the declaration above rather than by
+ * completion, so a run looks the same every time — a report that reorders itself
+ * between runs is hard to diff against the last one.
+ *
+ * @param {string[]} names
+ * @returns {Promise<Array<{file: string, code: number, output: string}>>}
+ */
+function runAll(names) {
+  return Promise.all(names.map(run));
+}
 
+const results = await runAll(files);
+
+for (const result of results) {
   const passed = /(\d+)\/(\d+) checks passed/.exec(result.output);
   const label = result.code === 0 ? 'ok  ' : 'FAIL';
   const summary = passed ? `${passed[1]}/${passed[2]}` : '—';
-  console.log(`${label}  ${file.padEnd(28)} ${summary}`);
+  console.log(`${label}  ${result.file.padEnd(28)} ${summary}`);
 
   // Only print detail for failures; a green run should be quiet.
   if (result.code !== 0) console.log(result.output);

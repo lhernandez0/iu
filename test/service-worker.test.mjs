@@ -44,6 +44,87 @@ function section(name) {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /**
+ * Wait until the panel's latest message satisfies a predicate.
+ *
+ * Marking, refetching and lookup all happen across asynchronous hops, so none of
+ * them can be awaited directly. This used to be handled by sleeping: first 50ms,
+ * then 100, then 200, each bump fixing one flaky test and together totalling
+ * 3.5s of a 3.9s suite. A sleep is a guess in both directions — too short and the
+ * test is intermittently wrong, too long and every run pays for the worst case.
+ *
+ * Returns as soon as the predicate holds, so a condition that is already true
+ * costs nothing.
+ *
+ * @param {object[]} received  The panel's message log.
+ * @param {(message: object) => boolean} predicate
+ * @param {string} description  Named in the failure, so a timeout says what it waited for.
+ * @param {number} [timeoutMs]
+ * @returns {Promise<object>} The message that satisfied it.
+ */
+function waitForMessage(received, predicate, description, timeoutMs = 4000) {
+  const current = received.at(-1);
+  if (current && predicate(current)) return Promise.resolve(current);
+
+  return new Promise((resolve, reject) => {
+    const started = Date.now();
+    const poll = setInterval(() => {
+      const message = received.at(-1);
+      if (message && predicate(message)) {
+        clearInterval(poll);
+        resolve(message);
+      } else if (Date.now() - started > timeoutMs) {
+        clearInterval(poll);
+        reject(new Error(`timed out after ${timeoutMs}ms waiting for: ${description}`));
+      }
+    }, 4);
+  });
+}
+
+/**
+ * The same, for a STATE push specifically.
+ *
+ * @param {object[]} received
+ * @param {(state: object) => boolean} predicate
+ * @param {string} description
+ * @returns {Promise<object>} The state that satisfied it.
+ */
+async function waitForState(received, predicate, description) {
+  const message = await waitForMessage(
+    received,
+    (m) => Boolean(m.state) && predicate(m.state),
+    description,
+  );
+  return message.state;
+}
+
+/**
+ * Wait until the transcript has been segmented and marked.
+ *
+ * "Every row has tokens" is exactly the condition `applyMarks` uses to decide
+ * there is nothing left to do, so this watches the real completion signal.
+ *
+ * Only safe for a FIRST marking. `rebuildRows` carries tokens over by text, so
+ * after a settings change every row already has tokens from the previous
+ * marking — this would return immediately and hand back stale levels. Waiting
+ * for a re-mark has to assert what actually changed.
+ *
+ * @param {object[]} received
+ * @returns {Promise<object>}
+ */
+function waitForMarks(received) {
+  const marked = (state) => {
+    const rows = state?.rows ?? [];
+    return rows.length > 0 && rows.every((row) => Array.isArray(row.tokens));
+  };
+  return waitForState(received, marked, 'the transcript to be marked');
+}
+
+/** Wait for the worker's first state push, so its initial refresh has finished. */
+function waitForFirstState(received) {
+  return waitForState(received, () => true, 'the first state push');
+}
+
+/**
  * Install a stub and evaluate the worker against it, with the panel connected.
  *
  * A unique query string defeats the module cache, so each call gets a fresh
@@ -609,9 +690,12 @@ section('a stored setting is restored, and one out of range is corrected');
     // reality, would otherwise be served before the restore finished.
     storageDelay: 5,
   });
-  await new Promise((resolve) => setTimeout(resolve, 60));
-
-  const learning = stub.received.at(-1)?.state?.learning;
+  // The restore is deliberately slow here (storageDelay), and the first refresh
+  // waits on it — so this waits for the restored value rather than for a
+  // duration. Reading too early sees no state at all, not default settings.
+  const learning = (
+    await waitForState(stub.received, (s) => s.learning?.view === 'focus', 'the settings to be restored')
+  ).learning;
   check('a valid setting is restored', learning?.view, 'focus');
   check('an absurd text size is clamped', learning?.textScale, 3);
   check('an unknown word list falls back', learning?.listId !== 'nonsense', true);
@@ -872,7 +956,6 @@ section('the default list is the one that can mark the most words');
 
 {
   const { received } = await boot(TRACK(GERMAN));
-  await new Promise((resolve) => setTimeout(resolve, 100));
 
   const lists = received.at(-1)?.state?.lists ?? [];
   const chosen = lists.find((l) => l.id === received.at(-1)?.state?.learning?.listId);
@@ -899,7 +982,7 @@ section('a word only the 3.0 list knows is still marked by default');
     },
     trackPayload: GERMAN,
   });
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await waitForMarks(received);
 
   const row = received.at(-1)?.state?.rows?.[0];
   const texts = row?.tokens?.map((t) => t.text) ?? [];
@@ -934,8 +1017,7 @@ section('rows carry tokens, and only words at or beyond the threshold are marked
     trackPayload: GERMAN,
   });
 
-  // Marking happens after the dictionary resolves, so wait for it.
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await waitForMarks(received);
 
   const row = received.at(-1)?.state?.rows?.[0];
   check('the row has tokens', Array.isArray(row?.tokens), true);
@@ -969,14 +1051,21 @@ section('lowering the threshold marks more');
     },
     trackPayload: GERMAN,
   });
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await waitForMarks(received);
 
   const high = received.at(-1).state.rows[0].tokens.filter((t) => t.level !== null).length;
 
   sendFromPanel({ type: 'set-threshold', threshold: 1 });
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  // A threshold change re-marks, and the tokens carried over from the previous
+  // marking mean "every row has tokens" is already true — so this has to wait
+  // for the number of marks to actually move, not for tokens to exist.
+  const lowState = await waitForState(
+    received,
+    (s) => (s.rows?.[0]?.tokens ?? []).filter((t) => t.level !== null).length !== high,
+    'the lower threshold to re-mark',
+  );
 
-  const low = received.at(-1).state.rows[0].tokens.filter((t) => t.level !== null).length;
+  const low = lowState.rows[0].tokens.filter((t) => t.level !== null).length;
   check('a lower threshold marks at least as many', low >= high, true);
   check('and strictly more in this case', low > high, true);
   check('the threshold was reported back', received.at(-1).state.learning.threshold, 1);
@@ -1002,13 +1091,23 @@ section('a word the list cannot place is still hoverable, just unmarked');
     },
     trackPayload: GERMAN,
   });
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await waitForMarks(received);
 
   // Choose HSK 2.0 explicitly, the list the bug was reported on.
   sendFromPanel({ type: 'set-list', listId: 'hsk2_0' });
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await waitForState(
+    received,
+    (s) => s.learning?.listId === 'hsk2_0',
+    'the HSK 2.0 list to be adopted',
+  );
+  // Adopting the list happens before the re-mark, so wait for the tokens too.
+  const inTwo = await waitForState(
+    received,
+    (s) => (s.rows?.[0]?.tokens ?? []).some((t) => t.text === '这样'),
+    'the transcript to be segmented',
+  );
 
-  const row = received.at(-1)?.state?.rows?.[0];
+  const row = inTwo.rows?.[0];
   const byText = Object.fromEntries((row?.tokens ?? []).map((t) => [t.text, t]));
 
   check('这样 is a token', Boolean(byText['这样']), true);
@@ -1023,9 +1122,13 @@ section('a word the list cannot place is still hoverable, just unmarked');
   // unmarked in both lists — a reminder that "no level" and "below threshold"
   // both render as unmarked and only the `defined` flag distinguishes them.)
   sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  const back = await waitForState(
+    received,
+    (s) => s.learning?.listId === 'hsk3_0',
+    'the HSK 3.0 list to be re-adopted',
+  );
 
-  const row3 = received.at(-1)?.state?.rows?.[0];
+  const row3 = back.rows?.[0];
   const byText3 = Object.fromEntries((row3?.tokens ?? []).map((t) => [t.text, t]));
 
   check('这样 is definable in every list', byText3['这样']?.defined, true);
@@ -1053,22 +1156,31 @@ section('the same word marks differently in the two lists');
     },
     trackPayload: GERMAN,
   });
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await waitForMarks(received);
 
   const levelFor = (state) =>
     Object.fromEntries((state.rows?.[0]?.tokens ?? []).map((t) => [t.text, t]))['挨着'];
 
-  sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  const inThree = levelFor(received.at(-1).state);
-  check('marked in HSK 3.0', inThree?.level, 6);
-  check('and definable', inThree?.defined, true);
+  // The list is already HSK 3.0 by default, so switching to it changes nothing
+  // and there is no way to tell the re-mark apart from the one already done.
+  // Wait on the LEVEL instead, which is what this test is actually about: 挨着
+  // is level 6 under 3.0.
+  const inThree = await waitForState(
+    received,
+    (s) => levelFor(s)?.level === 6,
+    '挨着 to be marked level 6 under HSK 3.0',
+  );
+  check('marked in HSK 3.0', inThree ? levelFor(inThree)?.level : null, 6);
+  check('and definable', levelFor(inThree)?.defined, true);
 
   sendFromPanel({ type: 'set-list', listId: 'hsk2_0' });
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  const inTwo = levelFor(received.at(-1).state);
-  check('unmarked in HSK 2.0', inTwo?.level, null);
-  check('but still definable, so hover still works', inTwo?.defined, true);
+  const inTwo = await waitForState(
+    received,
+    (s) => levelFor(s)?.level === null && s.learning?.listId === 'hsk2_0',
+    '挨着 to lose its level under HSK 2.0',
+  );
+  check('unmarked in HSK 2.0', levelFor(inTwo)?.level, null);
+  check('but still definable, so hover still works', levelFor(inTwo)?.defined, true);
 }
 
 section('a word we cannot define stays plain text');
@@ -1086,7 +1198,7 @@ section('a word we cannot define stays plain text');
     },
     trackPayload: GERMAN,
   });
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await waitForMarks(received);
 
   const tokens = received.at(-1)?.state?.rows?.[0]?.tokens ?? [];
   check('both characters are tokens', tokens.length, 2);
@@ -1106,7 +1218,7 @@ section('opening the panel mid-video knows where playback is');
   // Position therefore has to be part of the state, not only an event.
   const stub = await boot(TRACK(GERMAN));
   const { received, listeners } = stub;
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForFirstState(received);
 
   // The content script reports a cue while the panel is attached.
   listeners.message[0](
@@ -1121,7 +1233,7 @@ section('opening the panel mid-video knows where playback is');
   // panel does and would make this test prove nothing.
   stub.disconnect();
   const reopened = stub.reopen();
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForFirstState(reopened.received);
 
   const state = reopened.received.at(-1)?.state;
   check('and a newly opened panel is told where playback is', state?.activeIndex, 2);
@@ -1133,7 +1245,7 @@ section('the reported cue survives the panel not being there');
   // attached at all, since the content script keeps polling regardless. It still
   // has to be remembered, or the next panel opens blind.
   const stub = await boot(TRACK(GERMAN));
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForFirstState(stub.received);
 
   stub.disconnect();
   stub.listeners.message[0](
@@ -1143,7 +1255,7 @@ section('the reported cue survives the panel not being there');
   await settle();
 
   const again = stub.reopen();
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForFirstState(again.received);
   check('a cue reported while the panel was closed is remembered', again.received.at(-1)?.state?.activeIndex, 1);
 }
 
@@ -1153,7 +1265,7 @@ section('a cue from a background tab is neither relayed nor remembered');
   // Position is per-tab. A YouTube tab the user is not watching also reports its
   // playback, and adopting its index would highlight the wrong line.
   const { received, listeners } = await boot(TRACK(GERMAN));
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForFirstState(received);
 
   // The first test block needs the stub handle too, so this one keeps its own.
   check('a cue is remembered as -1 until reported', received.at(-1)?.state?.activeIndex, -1);
@@ -1174,7 +1286,7 @@ section('switching video clears the remembered cue');
   // transcripts have different lengths, so carrying an index across would
   // highlight an unrelated line — or run off the end.
   const stub = await boot(TRACK(GERMAN));
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForFirstState(stub.received);
 
   stub.listeners.message[0](
     { target: 'background', type: 'content-position', index: 2, seconds: 60 },
@@ -1187,7 +1299,7 @@ section('switching video clears the remembered cue');
   check('the cue arrived as a position event', stub.received.at(-1)?.index, 2);
 
   stub.sendFromPanel({ type: 'refresh' });
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForState(stub.received, (s) => s.activeIndex === 2, 'the cue to reach the state');
   check('and it is part of the state', stub.received.at(-1)?.state?.activeIndex, 2);
 
   stub.setAnswer('describePayload', DESCRIBE({ ...VIDEO, videoId: 'othervid001', title: 'Other' }));
@@ -1199,7 +1311,7 @@ section('switching video clears the remembered cue');
   });
 
   stub.sendFromPanel({ type: 'refresh' });
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await waitForState(stub.received, (s) => s.videoId === 'othervid001', 'the new video to be adopted');
 
   check('the new video starts with no cue', stub.received.at(-1)?.state?.activeIndex, -1);
 }
@@ -1225,18 +1337,24 @@ section('switching language keeps the marks');
     },
   });
 
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  const before = received.at(-1).state.rows[0].tokens.filter((t) => t.level !== null).length;
-  check('marked to begin with', before > 0, true);
+  const before = await waitForMarks(received);
+  const markedBefore = before.rows[0].tokens.filter((t) => t.level !== null).length;
+  check('marked to begin with', markedBefore > 0, true);
 
-  // Choose a second subtitle language, which rebuilds every row.
+  // Choose a second subtitle language, which rebuilds every row. The marks have
+  // to survive that — the bug was that the rebuild discarded the tokens while
+  // the "already marked" flag stayed set, so nothing re-attached them.
   sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  const after = await waitForState(
+    received,
+    (s) => Boolean(s.rows?.[0]?.secondary?.length),
+    'the second language to arrive',
+  );
 
-  const after = received.at(-1).state.rows[0];
-  check('the second language arrived', after.secondary.length > 0, true);
-  check('the text is unchanged', after.text, '我们在岸上等你');
-  check('and the marks survived', after.tokens.filter((t) => t.level !== null).length, before);
+  const row = after.rows[0];
+  check('the second language arrived', row.secondary.length > 0, true);
+  check('the text is unchanged', row.text, '我们在岸上等你');
+  check('and the marks survived', row.tokens.filter((t) => t.level !== null).length, markedBefore);
 }
 
 section('switching word list re-marks rather than reusing the old levels');
@@ -1252,12 +1370,15 @@ section('switching word list re-marks rather than reusing the old levels');
     },
     trackPayload: GERMAN,
   });
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await waitForMarks(received);
 
   sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  const state = await waitForState(
+    received,
+    (s) => s.learning?.listId === 'hsk3_0',
+    'the HSK 3.0 list to be adopted',
+  );
 
-  const state = received.at(-1).state;
   check('the list changed', state.learning.listId, 'hsk3_0');
   // Levels are numbered differently between the lists, so a threshold cannot be
   // carried across: 4 means something else in a 9-level list.
@@ -1283,10 +1404,16 @@ section('marks appear without the learner having to touch the controls');
     trackPayload: GERMAN,
   });
 
-  // Wait long enough for the word list to load and for anything it triggers.
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  // Wait for the marks themselves, which is what this test is about — the bug
+  // was that the dictionary loaded and nothing re-marked the rows already on
+  // screen. A fixed sleep here was both slower and a guess.
+  const state = await waitForState(
+    received,
+    (s) => (s.rows?.[0]?.tokens ?? []).some((t) => t.level !== null),
+    'the marks to appear without any control being touched',
+  );
 
-  const row = received.at(-1)?.state?.rows?.[0];
+  const row = state.rows?.[0];
   check('the row ended up with tokens', Array.isArray(row?.tokens), true);
   check('and at least one is marked', row?.tokens?.some((t) => t.level !== null), true);
   check(
@@ -1307,12 +1434,11 @@ section('marks appear without the learner having to touch the controls');
     },
     trackPayload: GERMAN,
   });
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  await waitForMarks(received);
 
   sendFromPanel({ type: 'lookup', word: '我们' });
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  const reply = await waitForMessage(received, (m) => m.type === 'entry', 'the definition reply');
 
-  const reply = received.at(-1);
   check('an entry was sent back', reply?.type, 'entry');
   check('for the word asked about', reply?.word, '我们');
   check('with a definition', typeof reply?.entry?.m, 'string');
@@ -1324,14 +1450,12 @@ section('a word with no level still gets a definition');
 
 {
   const { received, sendFromPanel } = await boot(TRACK(GERMAN));
-  await new Promise((resolve) => setTimeout(resolve, 50));
 
   // The user's own instruction: unlevelled words should still be looked up,
   // they simply carry no HSK colour or badge.
   sendFromPanel({ type: 'lookup', word: '囍' });
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  const reply = await waitForMessage(received, (m) => m.type === 'entry', 'the definition reply');
 
-  const reply = received.at(-1);
   check('an entry was sent', reply?.type, 'entry');
   check('it has no levels', reply?.levels?.length, 0);
   check('and no dictionary entry either, so entry is null', reply?.entry, null);
