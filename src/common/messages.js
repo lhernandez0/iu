@@ -32,6 +32,16 @@ export const MSG = Object.freeze({
   /** panel -> background. Payload: { seconds } */
   SEEK: 'seek',
 
+  // --- Learning layer --------------------------------------------------------
+  /** panel -> background. Payload: { listId } — which word list to grade against. */
+  SET_LIST: 'set-list',
+  /** panel -> background. Payload: { threshold } — lowest level to mark. */
+  SET_THRESHOLD: 'set-threshold',
+  /** panel -> background. Payload: { word } — ask for a definition on hover. */
+  LOOKUP: 'lookup',
+  /** background -> panel. Payload: { word, entry } — entry is null when unknown. */
+  ENTRY: 'entry',
+
   // --- Service worker -> content script -------------------------------------
   /** background -> content — identify the current video WITHOUT fetching
    *  captions. Lets the worker consult its cache before paying for a download. */

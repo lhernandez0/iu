@@ -42,7 +42,19 @@ function section(name) {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** The ids sidepanel.html actually declares. */
-const PANEL_IDS = ['primary', 'secondary', 'swap', 'follow', 'status', 'transcript', 'copy', 'format', 'save'];
+const PANEL_IDS = [
+  'primary',
+  'secondary',
+  'swap',
+  'list',
+  'threshold',
+  'follow',
+  'status',
+  'transcript',
+  'copy',
+  'format',
+  'save',
+];
 
 /**
  * Evaluate a fresh copy of the panel against fresh stubs.

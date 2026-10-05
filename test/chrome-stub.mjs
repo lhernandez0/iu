@@ -1,3 +1,9 @@
+import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+
 /**
  * Minimal stand-in for the `chrome.*` surface the service worker touches.
  *
@@ -48,6 +54,19 @@ export function installChromeStub(options = {}) {
   const storage = {};
 
   const addListener = (bucket) => (fn) => listeners[bucket].push(fn);
+
+  // The worker loads its word list through `fetch` on an extension URL, so the
+  // data has to be reachable here. Only that one URL is served; anything else
+  // throws, so an unexpected network call in a test that is supposed to be
+  // hermetic is loud rather than silently returning nothing.
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+    if (href.includes('learn/data/')) {
+      const body = await readFile(resolve(here, '../src/learn/data/chinese.json'), 'utf8');
+      return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body };
+    }
+    throw new Error(`unexpected fetch in a hermetic test: ${href}`);
+  };
 
   globalThis.chrome = {
     runtime: {

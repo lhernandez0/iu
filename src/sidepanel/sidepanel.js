@@ -13,6 +13,7 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
+import { attachHover, showEntry, hide as hidePopover, renderTokens } from './marks.js';
 
 /**
  * Phase switch. True drives the parked tabCapture -> offscreen -> engine path
@@ -32,6 +33,8 @@ const els = {
   primary: /** @type {HTMLSelectElement} */ (document.getElementById('primary')),
   secondary: /** @type {HTMLSelectElement} */ (document.getElementById('secondary')),
   swap: /** @type {HTMLButtonElement} */ (document.getElementById('swap')),
+  list: /** @type {HTMLSelectElement} */ (document.getElementById('list')),
+  threshold: /** @type {HTMLSelectElement} */ (document.getElementById('threshold')),
   follow: /** @type {HTMLInputElement} */ (document.getElementById('follow')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
   transcript: /** @type {HTMLElement} */ (document.getElementById('transcript')),
@@ -40,7 +43,7 @@ const els = {
   save: /** @type {HTMLButtonElement} */ (document.getElementById('save')),
 };
 
-/** Render bookkeeping only — the transcript itself lives in the service worker. */
+/** Bookkeeping only — the transcript itself lives in the service worker. */
 const view = {
   /** @type {object[]} */ rows: [],
   /** @type {HTMLElement[]} */ elements: [],
@@ -49,6 +52,11 @@ const view = {
   title: '',
   /** Primary language the current rows were rendered from. */
   renderedPrimary: null,
+  /** Levels in the active word list, which the colour ramp divides by. */
+  levelCount: 0,
+  palette: undefined,
+  /** The word whose definition is being shown, so a late reply is not stale. */
+  hoveredWord: null,
 };
 
 // --- Worker port ------------------------------------------------------------
@@ -135,6 +143,12 @@ function onWorkerMessage(message) {
       if (message.index < view.rows.length) setActive(message.index);
       return;
     }
+    if (message.type === MSG.ENTRY) {
+      // Ignore a reply for a word the pointer has already left, so a slow lookup
+      // cannot pop a definition over the wrong token.
+      if (message.word === view.hoveredWord) showEntry(message);
+      return;
+    }
     if (message.type === MSG.ERROR) {
       setStatus(message.error, true);
     }
@@ -144,6 +158,21 @@ function onWorkerMessage(message) {
     setStatus(`Panel error: ${error?.message ?? error}`, true);
   }
 }
+
+// Hover is delegated to the transcript container rather than attached per token:
+// a long transcript is thousands of tokens, and one listener costs less than the
+// marks themselves.
+attachHover(els.transcript, (word) => {
+  view.hoveredWord = word;
+  send({ type: MSG.LOOKUP, word });
+});
+
+// Leaving the transcript entirely dismisses the popover. The delegated handler
+// cannot see this, because it only fires inside the container.
+els.transcript.addEventListener('mouseleave', () => {
+  view.hoveredWord = null;
+  hidePopover();
+});
 
 /**
  * @param {object} message
@@ -196,6 +225,7 @@ function renderState(state) {
     return;
   }
   renderPickers(state);
+  renderLearning(state);
   renderStatus(state);
   renderRows(state);
 }
@@ -263,6 +293,46 @@ function renderStatus(state) {
   setStatus(`${state.rows.length} lines · ${langs} · ${state.title}`);
 }
 
+/**
+ * The word list and level controls.
+ *
+ * @param {object} state
+ */
+function renderLearning(state) {
+  const lists = state.lists ?? [];
+  const learning = state.learning ?? {};
+
+  fillSelect(
+    els.list,
+    lists.map((list) => ({ languageCode: list.id, name: list.label })),
+    learning.listId,
+    'Word list',
+  );
+  els.list.disabled = lists.length === 0;
+
+  // The level options depend on the chosen list, because lists disagree about
+  // how many levels there are — HSK 2.0 has six, HSK 3.0 has nine — and a
+  // threshold only means something relative to its own list.
+  const active = lists.find((list) => list.id === learning.listId);
+  const signature = `${active?.id}:${active?.levelCount}:${learning.threshold}`;
+  if (els.threshold.dataset.signature !== signature) {
+    els.threshold.dataset.signature = signature;
+    els.threshold.replaceChildren();
+
+    if (!active) {
+      els.threshold.append(new Option('—', ''));
+      els.threshold.disabled = true;
+    } else {
+      els.threshold.disabled = false;
+      for (let level = 1; level <= active.levelCount; level++) {
+        const option = new Option(`${level}+`, String(level));
+        option.selected = level === learning.threshold;
+        els.threshold.append(option);
+      }
+    }
+  }
+}
+
 // --- Controls ---------------------------------------------------------------
 
 els.primary.addEventListener('change', () => {
@@ -271,6 +341,14 @@ els.primary.addEventListener('change', () => {
 
 els.secondary.addEventListener('change', () => {
   send({ type: MSG.SET_SECONDARY, languageCode: els.secondary.value || null });
+});
+
+els.list.addEventListener('change', () => {
+  send({ type: MSG.SET_LIST, listId: els.list.value });
+});
+
+els.threshold.addEventListener('change', () => {
+  send({ type: MSG.SET_THRESHOLD, threshold: Number(els.threshold.value) });
 });
 
 els.swap.addEventListener('click', () => {
@@ -330,8 +408,14 @@ function toBilingualSrt() {
 function renderRows(state) {
   const rows = state.rows ?? [];
 
-  // Rebuild only when the data actually changed. A STATE push that only moved
-  // a dropdown must not tear down thousands of rows.
+  // The colour ramp needs the active list's level count before any row renders,
+  // so it is captured here rather than looked up per token.
+  const active = (state.lists ?? []).find((list) => list.id === state.learning?.listId);
+  view.levelCount = active?.levelCount ?? 0;
+
+  // A row's tokens are attached after the transcript arrives, so the rows array
+  // is replaced rather than mutated — which is what makes this identity check
+  // work for both the initial render and the later marked render.
   if (rows === view.rows && state.primary === view.renderedPrimary) return;
 
   view.rows = rows;
@@ -356,7 +440,7 @@ function renderRows(state) {
 }
 
 /**
- * @param {{start: number, text: string, secondary: string}} row
+ * @param {{start: number, text: string, secondary: string, tokens?: Array<{text: string, level: number|null}>}} row
  * @param {number} index
  * @returns {HTMLElement}
  */
@@ -376,7 +460,15 @@ function buildRow(row, index) {
 
   const primary = document.createElement('span');
   primary.className = 'primary';
-  primary.textContent = row.text;
+
+  // Tokens arrive from the worker once the word list has loaded, which is not
+  // necessarily by the time the transcript does. Until then the line renders as
+  // plain text, so the transcript is never withheld waiting on the dictionary.
+  if (row.tokens) {
+    primary.append(renderTokens(row.tokens, view.levelCount, view.palette));
+  } else {
+    primary.textContent = row.text;
+  }
   lines.append(primary);
 
   if (row.secondary) {

@@ -18,6 +18,8 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { alignSecondary } from '../common/transcript.js';
+import { loadDictionary, levelOf, lookup } from '../learn/wordlist.js';
+import { segmentSegments } from '../learn/segment.js';
 
 /** How many videos to keep transcripts for before evicting the oldest. */
 const MAX_CACHED_VIDEOS = 6;
@@ -26,6 +28,7 @@ const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
 
 /**
  * @typedef {Object} VideoEntry
+ * @property {string} videoId
  * @property {string} title
  * @property {boolean} isLive
  * @property {object[]} trackList            Available tracks, as offered to the panel.
@@ -33,8 +36,9 @@ const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
  * @property {string|null} primaryLang
  * @property {string|null} secondaryLang
  * @property {Map<string, object[]>} tracks  languageCode -> segments.
- * @property {object[]} rows                 Primary segments with secondary text aligned.
+ * @property {object[]} rows                 Primary segments, with tokens where marked.
  * @property {string|null} error
+ * @property {string|null} [markedWith]      `listId:threshold` the rows were marked for.
  */
 
 /** @type {Map<string, VideoEntry>} videoId -> entry. Insertion order doubles as eviction order. */
@@ -94,10 +98,54 @@ function handlePanelMessage(message) {
     case MSG.SEEK:
       void forwardSeek(message.seconds);
       return;
+
+    // --- Learning layer ------------------------------------------------------
+    case MSG.SET_LIST:
+      learning.listId = message.listId;
+      // Take the new list's own default rather than carrying a threshold from a
+      // list with a different number of levels, where it would mean something
+      // else entirely.
+      learning.threshold = defaultThreshold(message.listId);
+      persistLearning();
+      // Rows are rebuilt because switching lists can change which levels exist,
+      // so the existing marks are no longer valid.
+      rebuildRows(currentEntry());
+      broadcastState();
+      return;
+
+    case MSG.SET_THRESHOLD:
+      learning.threshold = Number(message.threshold);
+      persistLearning();
+      rebuildRows(currentEntry());
+      broadcastState();
+      return;
+
+    case MSG.LOOKUP:
+      void answerLookup(message.word);
+      return;
+
     default:
       // Anything else from the panel is ignored rather than thrown on.
       return;
   }
+}
+
+/**
+ * How the learner's own preferences are held.
+ *
+ * `threshold` is the lowest level worth marking. It is configurable rather than
+ * derived, because the honest answer to "is my own level marked?" is both: a
+ * pure difficulty signal starts above you, a study aid starts at you.
+ *
+ * @type {{listId: string|null, threshold: number}}
+ */
+const learning = { listId: null, threshold: 0 };
+
+/** The level a list should mark from, if the learner has not chosen one. */
+function defaultThreshold(listId) {
+  // Default to marking everything at or beyond the learner's frontier. The user
+  // studies HSK 4, so that is where it starts until they say otherwise.
+  return listId?.startsWith('hsk') ? 4 : 1;
 }
 
 /** @type {string|null} */
@@ -105,6 +153,14 @@ let pendingError = null;
 
 /** @type {string|null} Persisted across restarts; transcripts are not. */
 let secondaryPreference = null;
+
+/**
+ * The word lists offered to the panel. Empty until the dictionary loads, which
+ * is why the panel has to tolerate an empty list rather than assume one.
+ *
+ * @type {object[]}
+ */
+let availableLists = [];
 
 /** @type {{tabId: number, streamId: string, tabTitle: string}|null} */
 let session = null;
@@ -163,6 +219,54 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 /** Push the whole table to the panel. */
 function broadcastState() {
   panelPort?.postMessage({ type: MSG.STATE, state: deriveState() });
+}
+
+/**
+ * Answer a hover with the definition and the levels this word carries.
+ *
+ * The dictionary is asked even when the word has no level, because a word
+ * outside the graded lists is exactly the case the learner may not know and
+ * would want defined. Absent level is not absent meaning.
+ *
+ * `levels` is always an array, never null, even when there is no definition:
+ * the two are independent axes, and a caller should not have to distinguish
+ * "no levels" from "we did not look".
+ *
+ * @param {string} word
+ */
+async function answerLookup(word) {
+  if (!panelPort || !word) return;
+  try {
+    const dictionary = await loadDictionary();
+    panelPort.postMessage({
+      type: MSG.ENTRY,
+      word,
+      entry: lookup(dictionary, word),
+      levels: levelsFor(dictionary, word),
+      listId: learning.listId,
+    });
+  } catch (error) {
+    broadcastError(`Could not load the dictionary: ${error?.message ?? error}`);
+  }
+}
+
+/**
+ * Every list that places this word, so hover can show them all rather than only
+ * the selected one — a word is HSK 4 in 2.0 and HSK 6 in 3.0, and both are true.
+ *
+ * @param {object} dictionary
+ * @param {string} word
+ * @returns {Array<{id: string, label: string, level: number, levelCount: number}>}
+ */
+function levelsFor(dictionary, word) {
+  const out = [];
+  for (const list of dictionary.lists) {
+    const level = levelOf(dictionary, list.id, word);
+    if (level !== null) {
+      out.push({ id: list.id, label: list.label, level, levelCount: list.levelCount });
+    }
+  }
+  return out;
 }
 
 /** @param {string} message */
@@ -448,6 +552,7 @@ function adoptVideo(video) {
   let entry = videos.get(video.videoId);
   if (!entry) {
     entry = {
+      videoId: video.videoId,
       title: video.title,
       isLive: video.isLive,
       trackList: video.trackList ?? [],
@@ -457,6 +562,7 @@ function adoptVideo(video) {
       tracks: new Map(),
       rows: [],
       error: null,
+      markedWith: null,
     };
     videos.set(video.videoId, entry);
     evictOldest();
@@ -533,9 +639,19 @@ async function loadTrack(entry, languageCode) {
   }
 }
 
-/** Line up the secondary track against the primary, ready for rendering.
- *  Carries `duration` so the panel's SRT export has real cue ends. */
+/**
+ * Line up the secondary track against the primary, ready for rendering, and
+ * attach the learning marks to each line.
+ *
+ * The segmentation happens HERE, once per transcript, and the tokens travel
+ * with the rows. Segmenting in the panel on every render would redo the same
+ * work thousands of times, and the worker is where the dictionary already lives.
+ *
+ * @param {VideoEntry|null} entry
+ */
 function rebuildRows(entry) {
+  if (!entry) return;
+
   const primary = entry.tracks.get(entry.primaryLang ?? '') ?? [];
   const secondary = entry.secondaryLang ? entry.tracks.get(entry.secondaryLang) ?? [] : [];
   const aligned = secondary.length && primary.length ? alignSecondary(primary, secondary) : null;
@@ -546,6 +662,85 @@ function rebuildRows(entry) {
     text: segment.text,
     secondary: aligned ? aligned[index] : '',
   }));
+
+  // Segmentation is deferred and may not have run yet, so marks are applied
+  // separately from the rows being built. A new video therefore renders its text
+  // immediately and gains its highlighting a moment later, rather than the panel
+  // waiting on a 1.4MB fetch before showing anything.
+  applyMarks(entry);
+}
+
+/**
+ * Load the dictionary if needed, segment the transcript, and mark the rows.
+ *
+ * @param {VideoEntry|null} entry
+ */
+async function applyMarks(entry) {
+  if (!entry || !entry.rows.length) return;
+
+  // Already marked for the current list and threshold. Without this, every tab
+  // switch would re-segment the whole transcript and re-broadcast, which is
+  // wasted work on a cache hit — the case the cache exists to make cheap.
+  const wanted = `${learning.listId}:${learning.threshold}`;
+  if (entry.markedWith === wanted) return;
+
+  let dictionary;
+  try {
+    dictionary = await loadDictionary();
+  } catch (error) {
+    // A missing word list must not take the transcript down with it: the panel
+    // still shows captions, just without marks.
+    broadcastError(`Word list unavailable: ${error?.message ?? error}`);
+    return;
+  }
+
+  // The entry may have been rebuilt, or the panel may have moved to another
+  // video, while the dictionary was loading. Re-check rather than marking
+  // whatever happens to be current.
+  if (videos.get(entry.videoId) !== entry) return;
+
+  const tokensPerLine = segmentSegments(
+    entry.rows.map((row) => ({ start: row.start, text: row.text })),
+    dictionary.words,
+    dictionary.maxWordLength,
+  );
+
+  const list = dictionary.lists.find((l) => l.id === learning.listId) ?? dictionary.lists[0];
+  const threshold = learning.threshold;
+
+  entry.rows = entry.rows.map((row, index) => ({
+    ...row,
+    tokens: markLine(tokensPerLine[index], dictionary, list, threshold),
+  }));
+  entry.markedWith = wanted;
+
+  broadcastState();
+}
+
+/**
+ * Turn tokens into renderable spans: text, plus a level when it is worth
+ * marking.
+ *
+ * A token is marked only when the list places it and that level is at or beyond
+ * the threshold. A token with no level is deliberately left unmarked rather than
+ * guessed at — it may be a word the learner knows perfectly well, and implying
+ * otherwise would be worse than saying nothing.
+ *
+ * @param {Array<{text: string, known: boolean}>} tokens
+ * @param {object} dictionary
+ * @param {object|undefined} list
+ * @param {number} threshold
+ * @returns {Array<{text: string, level: number|null}>}
+ */
+function markLine(tokens, dictionary, list, threshold) {
+  if (!list) return tokens.map((token) => ({ text: token.text, level: null }));
+
+  return tokens.map((token) => {
+    if (!token.known) return { text: token.text, level: null };
+    const level = levelOf(dictionary, list.id, token.text);
+    if (level === null || level < threshold) return { text: token.text, level: null };
+    return { text: token.text, level };
+  });
 }
 
 // --- Panel intents ----------------------------------------------------------
@@ -598,6 +793,8 @@ function deriveState() {
       secondary: null,
       rows: [],
       error: pendingError ?? (trackedTabId === null ? 'No YouTube tab is active.' : null),
+      learning: { ...learning },
+      lists: availableLists,
     };
   }
 
@@ -610,6 +807,8 @@ function deriveState() {
     secondary: entry.secondaryLang,
     rows: entry.rows,
     error: pendingError ?? entry.error,
+    learning: { ...learning },
+    lists: availableLists,
   };
 }
 
@@ -619,17 +818,25 @@ function deriveState() {
 
 async function restorePreference() {
   try {
-    const stored = await chrome.storage.local.get('secondaryLanguage');
+    const stored = await chrome.storage.local.get(['secondaryLanguage', 'learning']);
     secondaryPreference = stored?.secondaryLanguage ?? null;
+    if (stored?.learning) {
+      learning.listId = stored.learning.listId ?? null;
+      learning.threshold = Number(stored.learning.threshold) || 0;
+    }
   } catch {
-    // Storage is unavailable (or the worker is mid-shutdown). A missing
-    // preference is not worth failing startup over.
+    // Storage is unavailable (or the worker is mid-shutdown). Missing
+    // preferences are not worth failing startup over.
     secondaryPreference = null;
   }
 }
 
 function persistPreference() {
   chrome.storage.local.set({ secondaryLanguage: secondaryPreference }).catch(() => {});
+}
+
+function persistLearning() {
+  chrome.storage.local.set({ learning: { ...learning } }).catch(() => {});
 }
 
 // Called at the bottom of this file rather than here, so the whole worker is
@@ -702,4 +909,31 @@ async function ensureOffscreenDocument() {
 // --- Startup -----------------------------------------------------------------
 // Everything above is defined by now. restorePreference swallows its own
 // failures, so this cannot reject and abort the worker.
-void restorePreference();
+//
+// The dictionary is primed straight away rather than on first use: it decides
+// which lists the panel can offer, and a learner opening the panel should not
+// have to wait for a 1.4MB fetch to see the controls.
+void restorePreference().then(primeDictionary);
+
+/**
+ * Load the dictionary once at startup so the panel knows what it can offer, and
+ * settle on a default list if the learner has not chosen one.
+ *
+ * @returns {Promise<void>}
+ */
+async function primeDictionary() {
+  try {
+    const dictionary = await loadDictionary();
+    availableLists = dictionary.lists;
+
+    // Fall back to the first list when there is no usable preference — either
+    // none was stored, or the stored one no longer exists in the data.
+    if (!learning.listId || !dictionary.lists.some((list) => list.id === learning.listId)) {
+      learning.listId = dictionary.lists[0]?.id ?? null;
+      learning.threshold = defaultThreshold(learning.listId);
+    }
+  } catch (error) {
+    broadcastError(`Word list unavailable: ${error?.message ?? error}`);
+  }
+  broadcastState();
+}

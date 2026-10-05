@@ -177,6 +177,99 @@ select:disabled {
   word-break: break-word;
 }
 
+/* A marked word.
+   A soft rounded underline rather than text-decoration, which cannot round its
+   ends. The padding keeps the rule clear of descenders, and the colour comes
+   from --mark, set per token because it depends on the list's length. */
+.mark {
+  padding-bottom: 2px;
+  border-bottom: 2px solid var(--mark, transparent);
+  border-radius: 2px;
+  cursor: help;
+}
+
+.row:hover .mark {
+  /* Brighter on hover so the word under the pointer is unambiguous among
+     several marks. */
+  filter: brightness(1.35);
+}
+
+/* The learning controls, visually separate from the language pickers. */
+.learning {
+  gap: 6px;
+}
+
+.learning-label {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#threshold {
+  flex: 0 0 auto;
+  max-width: 72px;
+}
+
+/* Definition popover, anchored to the hovered token. */
+.popover {
+  position: fixed;
+  z-index: 10;
+  max-width: 260px;
+  padding: 8px 10px;
+  border: 1px solid #3a3f4b;
+  border-radius: 6px;
+  background: #1b1e26;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 45%);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.popover-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 2px;
+}
+
+.popover-head strong {
+  font-size: 15px;
+}
+
+.popover-pinyin {
+  color: var(--accent);
+}
+
+.popover-meaning {
+  color: var(--fg);
+}
+
+.popover-missing {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.popover-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mark) 25%, transparent);
+  border: 1px solid var(--mark);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.popover-traditional {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
 /* The second language, when one is selected. Muted so the eye stays on the
    primary line. */
 .secondary {

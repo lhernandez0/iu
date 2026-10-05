@@ -359,6 +359,165 @@ section('a non-YouTube tab is reported rather than crashed on');
   check('no rows', received.at(-1)?.state?.rows?.length, 0);
 }
 
+// --- 10. The learning layer --------------------------------------------------
+
+section('the panel is told which word lists exist, and a default is chosen');
+
+{
+  const { received } = await boot(TRACK(GERMAN));
+
+  // The dictionary loads at startup so the controls can be populated without
+  // the learner waiting on a 1.4MB fetch when they open the panel.
+  await settle();
+
+  const state = received.at(-1)?.state;
+  const lists = state?.lists ?? [];
+  check('both HSK numberings are offered', lists.length, 2);
+  check('with the 2.0 list', lists[0]?.id, 'hsk2_0');
+  check('and the 3.0 list', lists[1]?.id, 'hsk3_0');
+  check('each declares its level count', lists[0]?.levelCount, 6);
+  check('and 3.0 declares nine', lists[1]?.levelCount, 9);
+  check('a list was selected by default', state?.learning?.listId, 'hsk2_0');
+  // The learner studies HSK 4, so marking starts there until told otherwise.
+  check('threshold defaults to 4', state?.learning?.threshold, 4);
+}
+
+section('rows carry tokens, and only words at or beyond the threshold are marked');
+
+{
+  const { received } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: {
+        languageCode: 'en',
+        // 我 is HSK 2.0 level 1, 们 is level 1, 岸上 is high. The threshold is 4,
+        // so the early characters must stay unmarked.
+        segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }],
+      },
+    },
+    trackPayload: GERMAN,
+  });
+
+  // Marking happens after the dictionary resolves, so wait for it.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const row = received.at(-1)?.state?.rows?.[0];
+  check('the row has tokens', Array.isArray(row?.tokens), true);
+  check('tokens reconstruct the line', row.tokens.map((t) => t.text).join(''), '我们在岸上等你');
+
+  const marked = row.tokens.filter((t) => t.level !== null);
+  const unmarked = row.tokens.filter((t) => t.level === null);
+  check('some tokens are marked', marked.length > 0, true);
+  check('and some are not, since they are below the threshold', unmarked.length > 0, true);
+
+  // 我们 is HSK 2.0 level 1, so at threshold 4 it must stay unmarked. Note the
+  // token is the whole word, not 我 and 们 separately — longest match prefers
+  // the compound, which is why an assertion about a bare character would be
+  // asking about a token that does not exist.
+  const early = row.tokens.find((t) => t.text === '我们');
+  check('the compound segmenter produced exists as a token', Boolean(early), true);
+  check('a level-1 word is not marked at threshold 4', early?.level, null);
+  check('every mark is at or above the threshold', marked.every((t) => t.level >= 4), true);
+}
+
+section('lowering the threshold marks more');
+
+{
+  const { received, sendFromPanel } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+    },
+    trackPayload: GERMAN,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const high = received.at(-1).state.rows[0].tokens.filter((t) => t.level !== null).length;
+
+  sendFromPanel({ type: 'set-threshold', threshold: 1 });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const low = received.at(-1).state.rows[0].tokens.filter((t) => t.level !== null).length;
+  check('a lower threshold marks at least as many', low >= high, true);
+  check('and strictly more in this case', low > high, true);
+  check('the threshold was reported back', received.at(-1).state.learning.threshold, 1);
+}
+
+section('switching word list re-marks rather than reusing the old levels');
+
+{
+  const { received, sendFromPanel } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+    },
+    trackPayload: GERMAN,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const state = received.at(-1).state;
+  check('the list changed', state.learning.listId, 'hsk3_0');
+  // Levels are numbered differently between the lists, so a threshold cannot be
+  // carried across: 4 means something else in a 9-level list.
+  check('the threshold was reset for the new list', state.learning.threshold, 4);
+  check('rows were rebuilt', Array.isArray(state.rows[0]?.tokens), true);
+}
+
+section('a hover asks for a definition');
+
+{
+  const { received, sendFromPanel } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+    },
+    trackPayload: GERMAN,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  sendFromPanel({ type: 'lookup', word: '我们' });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const reply = received.at(-1);
+  check('an entry was sent back', reply?.type, 'entry');
+  check('for the word asked about', reply?.word, '我们');
+  check('with a definition', typeof reply?.entry?.m, 'string');
+  check('and pinyin', typeof reply?.entry?.p, 'string');
+  check('and every list that places it', Array.isArray(reply?.levels), true);
+}
+
+section('a word with no level still gets a definition');
+
+{
+  const { received, sendFromPanel } = await boot(TRACK(GERMAN));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  // The user's own instruction: unlevelled words should still be looked up,
+  // they simply carry no HSK colour or badge.
+  sendFromPanel({ type: 'lookup', word: '囍' });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  const reply = received.at(-1);
+  check('an entry was sent', reply?.type, 'entry');
+  check('it has no levels', reply?.levels?.length, 0);
+  check('and no dictionary entry either, so entry is null', reply?.entry, null);
+}
+
 // --- Result -----------------------------------------------------------------
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

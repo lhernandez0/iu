@@ -281,6 +281,125 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('and moves to the second line later', await activeIndex(), 1);
   }
 
+  section('the learning layer marks words, and hover defines them');
+
+  {
+    // Chinese text, so the segmenter and the word list actually engage.
+    const chinese = {
+      languageCode: 'zh',
+      name: '中文',
+      segments: [
+        { start: 0, duration: 2, text: '我们在岸上等你' },
+        { start: 2, duration: 2, text: '这本书的内容很有意思' },
+        { start: 4, duration: 2, text: '研究生命起源是一个难题' },
+      ],
+    };
+
+    await routeYouTube(context, { videoId: 'learned0001', title: 'Learning', tracks: [chinese] });
+    const watch = await openWatchPage(context, 'learned0001');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 3);
+
+    // Marks are applied after the word list loads, so wait for one to appear
+    // rather than assuming it is synchronous with the transcript.
+    await page.waitForFunction(() => document.querySelectorAll('.mark').length > 0, null, { timeout: 20000 });
+
+    const marks = await page.evaluate(() => {
+      const first = document.querySelector('.mark');
+      const style = first ? getComputedStyle(first) : null;
+      return {
+        count: document.querySelectorAll('.mark').length,
+        text: first?.textContent ?? '',
+        borderColour: style?.borderBottomColor ?? '',
+        hasTooltip: Boolean(first?.getAttribute('title')),
+        listOptions: [...document.querySelectorAll('#list option')].map((o) => o.value),
+        thresholdOptions: [...document.querySelectorAll('#threshold option')].map((o) => o.value),
+      };
+    });
+
+    check('words are marked', marks.count > 0, true);
+    check('the mark has a coloured underline', marks.borderColour !== 'rgba(0, 0, 0, 0)', true);
+    check('and a level tooltip', marks.hasTooltip, true);
+    check('both HSK lists are offered', marks.listOptions, ['hsk2_0', 'hsk3_0']);
+    check('the threshold lists the levels of the chosen list', marks.thresholdOptions.length, 6);
+
+    // The line must still read correctly with spans in it, which is the thing
+    // that silently breaks when token indices are wrong.
+    const lineText = await page.evaluate(() => document.querySelector('.row .primary')?.textContent ?? '');
+    check('the line still reads as its original text', lineText, '我们在岸上等你');
+
+    section('hovering a marked word shows its definition');
+
+    await page.locator('.mark').first().hover();
+    await page.waitForFunction(
+      () => {
+        const pop = document.querySelector('.popover');
+        return pop && !pop.hidden && (pop.textContent ?? '').length > 0;
+      },
+      null,
+      { timeout: 10000 },
+    );
+
+    const popover = await page.evaluate(() => {
+      const pop = document.querySelector('.popover');
+      return {
+        text: pop?.textContent ?? '',
+        hidden: pop?.hidden,
+        badges: pop?.querySelectorAll('.badge').length ?? 0,
+      };
+    });
+
+    check('a definition is shown', popover.text.length > 0, true);
+    check('it is visible', popover.hidden, false);
+    check('with at least one level badge', popover.badges > 0, true);
+    console.log(`        popover: ${popover.text}`);
+  }
+
+  section('rendering cost on a transcript far longer than usual');
+
+  {
+    // The unmeasured risk. A real transcript is a few hundred lines; this is
+    // 2,000, roughly an hour of dense speech, to find the ceiling rather than
+    // assume one. Measured end to end: fetch, segment, mark, and paint.
+    const many = [];
+    const pool = ['我们在岸上等你', '研究生命起源是一个难题', '这本书的内容很有意思', '他挨着我坐了下来', '我们下个月要搬家'];
+    for (let i = 0; i < 2000; i++) {
+      many.push({ start: i * 2, duration: 2, text: pool[i % pool.length] });
+    }
+
+    await routeYouTube(context, {
+      videoId: 'bigtrans01',
+      title: 'Long',
+      tracks: [{ languageCode: 'zh', name: '中文', segments: many }],
+    });
+    const watch = await openWatchPage(context, 'bigtrans01');
+    const { page } = await openPanel(context, extensionId, watch);
+
+    const started = Date.now();
+    await page.waitForFunction(() => document.querySelectorAll('.row').length >= 2000, null, { timeout: 30000 });
+    const rowsMs = Date.now() - started;
+
+    const markStart = Date.now();
+    await page.waitForFunction(() => document.querySelectorAll('.mark').length > 0, null, { timeout: 30000 });
+    const markMs = Date.now() - markStart;
+
+    const stats = await page.evaluate(() => ({
+      rows: document.querySelectorAll('.row').length,
+      marks: document.querySelectorAll('.mark').length,
+      nodes: document.querySelectorAll('*').length,
+    }));
+
+    console.log(
+      `        2000 lines / ${stats.rows} rows / ${stats.marks} marks / ` +
+        `${stats.nodes} DOM nodes — rows ${rowsMs}ms, marks +${markMs}ms`,
+    );
+
+    check('all lines rendered', stats.rows, 2000);
+    check('words were marked', stats.marks > 0, true);
+    check('the transcript appeared in reasonable time', rowsMs < 15000, true);
+    check('marking completed in reasonable time', markMs < 15000, true);
+  }
+
   section('a different video gets its own transcript');
 
   {
