@@ -7,9 +7,15 @@
   </head>
   <body>
     <header class="bar">
-      <select id="primary" aria-label="Primary language"></select>
+      <div class="lang">
+        <select id="primary" aria-label="Primary language"></select>
+        <select id="translate-primary" class="translate" aria-label="Language to translate the primary line into"></select>
+      </div>
       <button id="swap" type="button" title="Swap languages" aria-label="Swap languages">&#8646;</button>
-      <select id="secondary" aria-label="Second language"></select>
+      <div class="lang">
+        <select id="secondary" aria-label="Second language"></select>
+        <select id="translate-secondary" class="translate" aria-label="Language to translate the second line into"></select>
+      </div>
     </header>
 
     <header class="bar learning">

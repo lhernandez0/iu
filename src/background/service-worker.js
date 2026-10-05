@@ -120,10 +120,10 @@ function handlePanelMessage(message) {
       void refresh();
       return;
     case MSG.SET_PRIMARY:
-      void selectTrack('primary', message.languageCode);
+      void chooseTrack('primary', message.languageCode);
       return;
     case MSG.SET_SECONDARY:
-      void selectTrack('secondary', message.languageCode);
+      void chooseTrack('secondary', message.languageCode);
       return;
     case MSG.SEEK:
       void forwardSeek(message.seconds);
@@ -191,6 +191,17 @@ let activeIndex = -1;
 
 /** @type {string|null} */
 let pendingError = null;
+
+/**
+ * A translation that could not be produced, kept apart from the transcript.
+ *
+ * `entry.error` replaces the whole transcript on screen and blocks the cache, so
+ * a failed second line must not go there — the first line is already correct and
+ * readable. This clears as soon as a translation succeeds.
+ *
+ * @type {string|null}
+ */
+let translationError = null;
 
 /**
  * The word lists offered to the panel. Empty until the dictionary loads, which
@@ -555,9 +566,17 @@ async function refreshInner() {
 
   // A cache miss, so pay for a download. The track to load is the one already
   // chosen for this video, or the content script's default when it is new.
+  //
+  // The translation target travels with the request rather than being applied
+  // afterwards, because the provider has to choose a source track that actually
+  // supports translation — and it cannot know that from a second round trip.
   let provided;
   try {
-    provided = await sendToContent(trackedTabId, { type: MSG.PROVIDE, languageCode: entry.primaryLang });
+    provided = await sendToContent(trackedTabId, {
+      type: MSG.PROVIDE,
+      languageCode: entry.primaryLang,
+      translateTo: effectiveTranslation(entry, 'primary'),
+    });
   } catch (error) {
     pendingError = `Could not fetch captions (${error?.message ?? error}).`;
     broadcastState();
@@ -570,26 +589,54 @@ async function refreshInner() {
     return;
   }
 
-  if (provided.fetched?.segments?.length) {
-    entry.tracks.set(provided.fetched.languageCode, provided.fetched.segments);
+  if (recordTrack(entry, provided.fetched)) {
     entry.primaryLang = provided.fetched.languageCode;
-    entry.error = null;
   } else if (provided.fetched?.error) {
-    entry.error = provided.fetched.error;
+    // A failed translation must not empty a transcript that loaded fine. The
+    // text is already on screen; the error belongs to the line that could not
+    // be produced, so it is reported and the rows are left alone.
+    const failed = provided.fetched.translateTo === null && suppliedTranslation(provided.fetched);
+    if (!failed) entry.error = provided.fetched.error;
+    if (failed) translationError = provided.fetched.error;
   }
 
   rebuildRows(entry);
 
   // Show the primary immediately, then fill in the second language.
-  const wantsSecondary = entry.secondaryLang && !entry.tracks.has(entry.secondaryLang);
+  const wantsSecondary =
+    entry.secondaryLang &&
+    !entry.tracks.has(entry.secondaryLang) &&
+    entry.secondaryLang !== entry.primaryLang;
   if (wantsSecondary) broadcastState();
 
   if (wantsSecondary) {
-    await loadTrack(entry, entry.secondaryLang);
+    const result = await loadTrack(entry, entry.secondaryLang, effectiveTranslation(entry, 'secondary'));
+    // Same rule as the primary: a translation that could not be produced is
+    // reported without discarding a secondary line that did.
+    if (result?.error) {
+      if (result.translateTo === null && suppliedTranslation(result)) translationError = result.error;
+      else entry.error = result.error;
+    }
     rebuildRows(entry);
   }
 
   broadcastState();
+}
+
+/**
+ * Whether a failed result was a translation that never happened.
+ *
+ * The provider reports `translateTo: null` for BOTH "no translation wanted"
+ * and "the translation failed", so the error text is the only thing that
+ * separates them. Matching on it is ugly, but the alternative is discarding a
+ * working transcript because its second line could not be translated, and that
+ * is worse than a string comparison.
+ *
+ * @param {object} fetched
+ * @returns {boolean}
+ */
+function suppliedTranslation(fetched) {
+  return /translat/i.test(String(fetched?.error ?? ''));
 }
 
 /**
@@ -613,6 +660,7 @@ function adoptVideo(video) {
       title: video.title,
       isLive: video.isLive,
       trackList: video.trackList ?? [],
+      translationLanguages: video.translationLanguages ?? [],
       stale: Boolean(video.stale),
       // Both language choices are seeded from the saved preferences, which is
       // what makes them sticky. Primary was previously left null here, so every
@@ -636,6 +684,9 @@ function adoptVideo(video) {
     entry.title = video.title ?? entry.title;
     entry.isLive = video.isLive;
     entry.trackList = video.trackList ?? entry.trackList;
+    entry.translationLanguages = video.translationLanguages?.length
+      ? video.translationLanguages
+      : entry.translationLanguages;
     entry.stale = Boolean(video.stale);
   }
 
@@ -662,7 +713,50 @@ function hasTrack(entry, languageCode) {
  */
 function isCached(entry) {
   if (entry.error) return false;
-  return Boolean(entry.primaryLang && entry.tracks.has(entry.primaryLang) && entry.rows.length);
+  if (!entry.primaryLang || !entry.rows.length) return false;
+
+  const cached = entry.tracks.get(entry.primaryLang);
+  if (!cached) return false;
+
+  // The cached text has to be the rendering now being asked for.
+  //
+  // A guard rather than a tested path: changing the translation already goes
+  // through loadTrack, which compares the same thing. This catches the case
+  // where the cache and the wanted rendering diverge WITHOUT that path running —
+  // most plausibly a video whose track list stops reporting `isTranslatable`
+  // between refreshes, which would otherwise leave translated text on screen
+  // while the extension believed the setting no longer applied.
+  return cached.translateTo === (effectiveTranslation(entry, 'primary') ?? null);
+}
+
+/**
+ * The translation actually worth asking for.
+ *
+ * The preference is global and sticky, but a video may not support it: only
+ * tracks YouTube flags `isTranslatable` can be translated, in practice the
+ * auto-generated ones. Returning null instead of the preference is what stops
+ * a refresh re-requesting a translation this video will never produce, which
+ * would otherwise retry on every single refresh.
+ *
+ * The preference itself is never cleared, so moving to a video that DOES
+ * support it brings the translation back on its own — the same stickiness the
+ * language choices already have.
+ *
+ * @param {VideoEntry} entry
+ * @param {'primary'|'secondary'} which
+ * @returns {string|null}
+ */
+function effectiveTranslation(entry, which) {
+  const wanted = which === 'primary' ? settings.translatePrimary : settings.translateSecondary;
+  if (!wanted) return null;
+
+  const languageCode = which === 'primary' ? entry.primaryLang : entry.secondaryLang;
+  // No track chosen yet: the provider picks the default, and it is asked for the
+  // translation so that its choice can be made with that in mind.
+  if (!languageCode) return wanted;
+
+  const track = entry.trackList.find((t) => t.languageCode === languageCode);
+  return track?.isTranslatable ? wanted : null;
 }
 
 /** Keep the cache bounded. Map iteration order is insertion order, so the first
@@ -681,27 +775,60 @@ function currentEntry() {
 }
 
 /**
+ * Store a fetched track, keyed by its SOURCE language.
+ *
+ * A translation is recorded as a field on the source track rather than filed
+ * under the target's code. Keying it by target would mean a video with both a
+ * real Japanese track and an English-to-Japanese translation would have the two
+ * silently overwrite one another, and the rows would be built from whichever
+ * arrived last. It also keeps `hasTrack` honest: a translated line exists
+ * because its source track does.
+ *
+ * @param {VideoEntry} entry
+ * @param {object} fetched
+ */
+function recordTrack(entry, fetched) {
+  if (!fetched?.languageCode || !fetched.segments?.length) return false;
+
+  entry.tracks.set(fetched.languageCode, {
+    segments: fetched.segments,
+    translateTo: fetched.translateTo ?? null,
+  });
+  entry.error = null;
+  return true;
+}
+
+/**
  * @param {VideoEntry} entry
  * @param {string|null} languageCode
- * @returns {Promise<void>}
+ * @param {string|null} [translateTo]
+ * @returns {Promise<object|null>} The fetch result, so the caller can report a failure.
  */
-async function loadTrack(entry, languageCode) {
-  if (!languageCode || entry.tracks.has(languageCode) || trackedTabId === null) return;
+async function loadTrack(entry, languageCode, translateTo = null) {
+  if (!languageCode || trackedTabId === null) return null;
+
+  // Already the right rendering — same track AND same translation. A different
+  // translation of the same track is NOT a hit, which is the whole point.
+  //
+  // The check is deliberately about what is cached rather than about deleting
+  // the cache and refetching: a translation can fail, and dropping the track
+  // first would leave the video with no transcript at all when it does. This
+  // way the old text stays on screen and only the error is new.
+  const cached = entry.tracks.get(languageCode);
+  if (cached && cached.translateTo === (translateTo ?? null)) return null;
 
   let result;
   try {
-    result = await sendToContent(trackedTabId, { type: MSG.FETCH_TRACK, languageCode });
+    result = await sendToContent(trackedTabId, { type: MSG.FETCH_TRACK, languageCode, translateTo });
   } catch (error) {
     entry.error = `Could not load ${languageCode}: ${error?.message ?? error}`;
-    return;
+    return null;
   }
 
-  if (result?.segments?.length) {
-    entry.tracks.set(result.languageCode, result.segments);
-    entry.error = null;
-  } else {
-    entry.error = result?.error ?? `No captions for ${languageCode}.`;
+  if (!recordTrack(entry, result)) {
+    return result ?? { languageCode, translateTo: null, segments: [], error: `No captions for ${languageCode}.` };
   }
+  return result;
 }
 
 /**
@@ -729,8 +856,8 @@ function rebuildRows(entry) {
     if (row.tokens) previous.set(row.text, row.tokens);
   }
 
-  const primary = entry.tracks.get(entry.primaryLang ?? '') ?? [];
-  const secondary = entry.secondaryLang ? entry.tracks.get(entry.secondaryLang) ?? [] : [];
+  const primary = entry.tracks.get(entry.primaryLang ?? '')?.segments ?? [];
+  const secondary = entry.secondaryLang ? entry.tracks.get(entry.secondaryLang)?.segments ?? [] : [];
   const aligned = secondary.length && primary.length ? alignSecondary(primary, secondary) : null;
 
   entry.rows = primary.map((segment, index) => ({
@@ -836,20 +963,37 @@ function markLine(tokens, dictionary, list, threshold) {
 // --- Panel intents ----------------------------------------------------------
 
 /**
- * Choose a subtitle track for the current video, and remember the choice.
+ * The learner chose a subtitle track. Remember it, then apply it.
  *
- * The choice is written to settings as well as to the entry, because it is a
- * preference about what the learner wants to read, not an assignment to one
- * video. That is what makes it sticky across videos and across restarts.
+ * Separate from `selectTrack` because choosing and rendering are different
+ * operations: a choice is a preference that should outlive the video, while
+ * re-rendering an existing choice must not overwrite the preference with
+ * whatever happens to be on screen.
+ *
+ * @param {'primary'|'secondary'} which
+ * @param {string|null} languageCode
+ */
+async function chooseTrack(which, languageCode) {
+  if (which === 'primary') settings.primaryLanguage = languageCode || null;
+  else settings.secondaryLanguage = languageCode || null;
+  persistSettings();
+  await selectTrack(which, languageCode);
+}
+
+/**
+ * Put a track on screen for the current video.
+ *
+ * Deliberately does NOT touch settings. It used to, and that was wrong in a way
+ * that stayed hidden until translation needed to re-render without changing the
+ * choice: the stored preference is null on any video where the learner has not
+ * picked a language, because the refresh path adopts the provider's default
+ * without writing it back. Re-applying the preference on a re-render therefore
+ * cleared the track that was already loaded, and the transcript went blank.
  *
  * @param {'primary'|'secondary'} which
  * @param {string|null} languageCode
  */
 async function selectTrack(which, languageCode) {
-  if (which === 'primary') settings.primaryLanguage = languageCode || null;
-  else settings.secondaryLanguage = languageCode || null;
-  persistSettings();
-
   const entry = currentEntry();
   if (!entry) {
     broadcastState();
@@ -858,10 +1002,10 @@ async function selectTrack(which, languageCode) {
 
   // An empty string from the panel means "none" for the second subtitle; for
   // the primary it means "fall back to whatever the video offers".
-  if (which === 'primary') entry.primaryLang = settings.primaryLanguage;
-  else entry.secondaryLang = settings.secondaryLanguage;
+  if (which === 'primary') entry.primaryLang = languageCode || null;
+  else entry.secondaryLang = languageCode || null;
 
-  await loadTrack(entry, which === 'primary' ? entry.primaryLang : entry.secondaryLang);
+  await loadTrack(entry, languageCode, effectiveTranslation(entry, which));
   rebuildRows(entry);
   broadcastState();
 }
@@ -888,6 +1032,10 @@ function deriveState() {
       title: '',
       isLive: false,
       trackList: [],
+      translationLanguages: [],
+      translationAvailable: {},
+      translatePrimary: null,
+      translateSecondary: null,
       primary: null,
       secondary: null,
       rows: [],
@@ -903,13 +1051,33 @@ function deriveState() {
     title: entry.title,
     isLive: Boolean(entry.isLive),
     trackList: entry.trackList,
+    // Which languages this video can be auto-translated into. Supplied per
+    // video rather than built into the panel, so the options can never drift
+    // from what YouTube will actually serve for what is on screen.
+    translationLanguages: entry.translationLanguages ?? [],
+    // Whether each track can be translated at all, so the panel can disable the
+    // menu for a track that cannot. YouTube reports `isTranslatable` per track
+    // and applying a translation to a track that lacks it returns the original
+    // text — a menu that appears to work and changes nothing.
+    translationAvailable: Object.fromEntries(
+      (entry.trackList ?? []).map((track) => [track.languageCode, Boolean(track.isTranslatable)]),
+    ),
+    // What is actually on screen, which is not always what was asked for: a
+    // video whose tracks cannot be translated falls back to the original text.
+    translatePrimary: effectiveTranslation(entry, 'primary'),
+    translateSecondary: effectiveTranslation(entry, 'secondary'),
     primary: entry.primaryLang,
     secondary: entry.secondaryLang,
     rows: entry.rows,
     // Carried in state rather than only as an event, so a panel that opens
     // mid-video starts where playback is instead of at the top.
     activeIndex,
-    error: pendingError ?? entry.error,
+    // A translation failure is reported BEFORE the track error. They are
+    // separate on purpose: a track error replaces the transcript and blocks the
+    // cache, while a translation error means "the text below is the original,
+    // not the language you asked for" — which the learner needs to know even
+    // though there is a perfectly good transcript on screen.
+    error: pendingError ?? translationError ?? entry.error,
     learning: learningState(),
     lists: availableLists,
   };
@@ -933,6 +1101,8 @@ function learningState() {
     threshold: settings.threshold,
     primaryLanguage: settings.primaryLanguage,
     secondaryLanguage: settings.secondaryLanguage,
+    translatePrimary: settings.translatePrimary,
+    translateSecondary: settings.translateSecondary,
     // Supplied here rather than in the schema, because the levels a list has is
     // a property of the data, not of the setting.
     listOptions: availableLists.map((list) => ({ value: list.id, label: list.label })),
@@ -991,14 +1161,40 @@ async function applySetting(id, value) {
       break;
 
     case 'primaryLanguage':
-      // Clear the cached transcript for the current video so the next refresh
-      // fetches the newly chosen track rather than serving the old one.
-      void selectTrack('primary', settings.primaryLanguage);
+      // The learner picked a different language, so the fetched track is no
+      // longer what is wanted. Re-choosing is what re-fetches it.
+      void chooseTrack('primary', settings.primaryLanguage);
+      break;
+    case 'secondaryLanguage':
+      void chooseTrack('secondary', settings.secondaryLanguage);
       break;
 
-    case 'secondaryLanguage':
-      void selectTrack('secondary', settings.secondaryLanguage);
+    case 'translatePrimary':
+    case 'translateSecondary': {
+      // Only the RENDERING changes, not the chosen language, so this re-renders
+      // rather than re-choosing. The language is taken from what is on screen,
+      // which on a video the learner has not chosen for is the provider's
+      // default and not anything in settings.
+      // No cache surgery: loadTrack compares the cached rendering against the
+      // one wanted, so a different target refetches and an unreachable target
+      // leaves the existing text alone.
+      const which = id === 'translatePrimary' ? 'primary' : 'secondary';
+      const entry = currentEntry();
+      const languageCode = (which === 'primary' ? entry?.primaryLang : entry?.secondaryLang) ?? null;
+
+      // The track cannot be translated, so there is nothing to fetch and the
+      // rendering is already the original. Say WHY rather than silently doing
+      // nothing — the learner asked for Japanese and is looking at English, and
+      // without this the feature simply appears broken.
+      const wanted = which === 'primary' ? settings.translatePrimary : settings.translateSecondary;
+      translationError =
+        wanted && languageCode && !effectiveTranslation(entry, which)
+          ? 'This caption track cannot be auto-translated.'
+          : null;
+
+      void selectTrack(which, languageCode);
       break;
+    }
 
     default:
       // view and textScale are pure presentation: the panel applies them and

@@ -49,6 +49,8 @@ const MAX_RECONNECT_ATTEMPTS = 6;
 const els = {
   primary: /** @type {HTMLSelectElement} */ (document.getElementById('primary')),
   secondary: /** @type {HTMLSelectElement} */ (document.getElementById('secondary')),
+  translatePrimary: /** @type {HTMLSelectElement} */ (document.getElementById('translate-primary')),
+  translateSecondary: /** @type {HTMLSelectElement} */ (document.getElementById('translate-secondary')),
   swap: /** @type {HTMLButtonElement} */ (document.getElementById('swap')),
   list: /** @type {HTMLSelectElement} */ (document.getElementById('list')),
   threshold: /** @type {HTMLSelectElement} */ (document.getElementById('threshold')),
@@ -78,6 +80,11 @@ const view = {
   hoveredWord: null,
   /** Whether the panel is showing only the current line and the next. */
   focusMode: false,
+  /** What each line was machine-translated into, if anything, for the row tags. */
+  translatePrimary: null,
+  translateSecondary: null,
+  /** The last state received, so a row tag can name the target language. */
+  state: null,
 };
 
 // --- Worker port ------------------------------------------------------------
@@ -251,6 +258,11 @@ function renderState(state) {
     setStatus('The worker sent an empty state.', true);
     return;
   }
+  // Kept so row tags and the status line can name a language they only know
+  // about from the state that is currently on screen.
+  view.state = state;
+  view.translatePrimary = state.translatePrimary ?? null;
+  view.translateSecondary = state.translateSecondary ?? null;
   renderPickers(state);
   renderLearning(state);
   renderStatus(state);
@@ -264,6 +276,53 @@ function renderPickers(state) {
   fillSelect(els.primary, tracks, state.primary, 'Primary');
   // "Off" first, so a second language is opt-in rather than a surprise.
   fillSelect(els.secondary, tracks, state.secondary, 'Off', { includeNone: true });
+
+  // Only offer translations a track can actually take. YouTube offers
+  // auto-translate for any video, but applying it to a human-authored track
+  // silently returns the ORIGINAL text — so offering it would produce a menu
+  // that appears to work and changes nothing.
+  //
+  // When nothing is translatable the picker is disabled, with the language list
+  // kept in place: an empty control reads as broken, while a disabled one with
+  // "Japanese" in it reads as unavailable for this video.
+  const languages = state.translationLanguages ?? [];
+  const overrides = state.translationAvailable ?? {};
+  const optionsForSlot = (language, translate) => {
+    if (!language) return [];
+    if (overrides[language] === false) return [];
+    return languages
+      .filter((l) => l.languageCode !== language)
+      .map((l) => ({ value: l.languageCode, label: l.name }));
+  };
+
+  const primaryOptions = optionsForSlot(state.primary, state.translatePrimary);
+  const secondaryOptions = optionsForSlot(state.secondary, state.translateSecondary);
+
+  // "Original" is a real option, not a placeholder. Without it there is no way
+  // back off a translation, because the placeholder only appears when the list
+  // is empty.
+  fillSelectOptions(els.translatePrimary, primaryOptions, state.translatePrimary, 'Original', {
+    leading: state.primary ? { value: '', label: 'Original' } : null,
+  });
+  fillSelectOptions(els.translateSecondary, secondaryOptions, state.translateSecondary, 'Original', {
+    leading: state.secondary ? { value: '', label: 'Original' } : null,
+  });
+
+  // A slot with no translatable source explains itself on hover; a slot with
+  // nothing to choose is disabled. Both are needed: the primary always has a
+  // track, so it is only ever the former.
+  els.translatePrimary.disabled = !primaryOptions.length;
+  els.translatePrimary.title = primaryOptions.length
+    ? 'Translate the line above'
+    : state.primary
+      ? 'This track cannot be auto-translated'
+      : 'No subtitle selected';
+  els.translateSecondary.disabled = !secondaryOptions.length;
+  els.translateSecondary.title = state.secondary
+    ? secondaryOptions.length
+      ? 'Translate the line above'
+      : 'This track cannot be auto-translated'
+    : 'No subtitle selected';
 
   els.swap.disabled = !state.secondary;
   els.swap.title = state.secondary
@@ -304,6 +363,26 @@ function fillSelect(select, tracks, selected, placeholder, { includeNone = false
   }
 }
 
+/**
+ * A short readable name for a language code, for the status line.
+ *
+ * Both lists are consulted because a translation target is often not a track on
+ * the video at all — "en" may only exist as something to translate into, and
+ * looking in the track list alone would print the bare code.
+ *
+ * @param {object} state
+ * @param {string} code
+ * @returns {string}
+ */
+function shortName(state, code) {
+  const found =
+    state.translationLanguages?.find((l) => l.languageCode === code) ??
+    state.trackList?.find((t) => t.languageCode === code);
+  // First word only: YouTube's names carry parentheticals like
+  // "Chinese (Traditional)" that would crowd the status line.
+  return (found?.name ?? code).split(' (')[0];
+}
+
 /** @param {object} state */
 function renderStatus(state) {
   view.title = state.title ?? '';
@@ -316,7 +395,16 @@ function renderStatus(state) {
     setStatus('No transcript for this video.');
     return;
   }
-  const langs = state.secondary ? `${state.primary} + ${state.secondary}` : state.primary;
+  // Say what is actually on screen, including a translation that is in effect.
+  // Without the arrow a translated line reads as a real track in that language,
+  // which is a materially different thing to be looking at.
+  const shown = (language, translate) => {
+    if (!language) return null;
+    const name = shortName(state, language);
+    return translate ? `${name}→${shortName(state, translate)}` : name;
+  };
+  const parts = [shown(state.primary, state.translatePrimary), shown(state.secondary, state.translateSecondary)];
+  const langs = parts.filter(Boolean).join(' + ');
   setStatus(`${state.rows.length} lines · ${langs} · ${state.title}`);
 }
 
@@ -360,22 +448,29 @@ function renderLearning(state) {
  * @param {any} selected
  * @param {string} placeholder Shown when there is nothing to choose.
  */
-function fillSelectOptions(select, options, selected, placeholder) {
-  const signature = options.map((option) => `${option.value}:${option.label}`).join(',') + `|${selected}`;
+function fillSelectOptions(select, options, selected, placeholder, { leading = null, disabled = null } = {}) {
+  const signature =
+    (leading ? `lead:${leading.value}:${leading.label}|` : '') +
+    options.map((option) => `${option.value}:${option.label}`).join(',') +
+    `|${selected}`;
   if (select.dataset.signature === signature) return;
   select.dataset.signature = signature;
 
   select.replaceChildren();
   if (!options.length) {
     select.append(new Option(placeholder, ''));
-    select.disabled = true;
+    select.disabled = disabled ?? true;
     return;
   }
 
-  select.disabled = false;
+  // The "back to the original" entry, when the caller wants one.
+  if (leading) select.append(new Option(leading.label, leading.value));
+
+  select.disabled = disabled ?? false;
   for (const option of options) {
     const element = new Option(option.label, String(option.value));
-    element.selected = String(option.value) === String(selected);
+    // An empty `selected` means the original, which the leading option covers.
+    element.selected = String(option.value) === String(selected ?? '');
     select.append(element);
   }
 }
@@ -433,6 +528,14 @@ els.secondary.addEventListener('change', () => {
   send({ type: MSG.SET_SECONDARY, languageCode: els.secondary.value || null });
 });
 
+els.translatePrimary.addEventListener('change', () => {
+  send({ type: MSG.SET_SETTING, id: 'translatePrimary', value: els.translatePrimary.value || null });
+});
+
+els.translateSecondary.addEventListener('change', () => {
+  send({ type: MSG.SET_SETTING, id: 'translateSecondary', value: els.translateSecondary.value || null });
+});
+
 els.list.addEventListener('change', () => {
   send({ type: MSG.SET_LIST, listId: els.list.value });
 });
@@ -460,6 +563,13 @@ els.swap.addEventListener('click', () => {
   if (!secondary) return;
   send({ type: MSG.SET_PRIMARY, languageCode: secondary });
   send({ type: MSG.SET_SECONDARY, languageCode: primary || null });
+
+  // The translations belong to their slot, so they swap with it. Leaving them
+  // behind would apply the primary line's target to whatever language ended up
+  // there — the wrong translation, silently.
+  const translatePrimary = els.translatePrimary.value;
+  send({ type: MSG.SET_SETTING, id: 'translatePrimary', value: els.translateSecondary.value || null });
+  send({ type: MSG.SET_SETTING, id: 'translateSecondary', value: translatePrimary || null });
 });
 
 els.follow.addEventListener('change', () => {
@@ -572,12 +682,32 @@ function buildRow(row, index) {
   } else {
     primary.textContent = row.text;
   }
+
+  // Mark machine output. A translated line is not a transcript, and machine
+  // translation of Chinese paraphrases rather than glosses — so it should not be
+  // readable as a human translation of the spoken words. The tag is attached to
+  // the line rather than to the bar because the two lines can be translated
+  // independently, so it has to say WHICH one.
+  if (view.translatePrimary) {
+    const tag = document.createElement('span');
+    tag.className = 'machine';
+    tag.textContent = 'MT';
+    tag.title = `Machine-translated into ${shortName(view.state ?? {}, view.translatePrimary)}`;
+    primary.append(tag);
+  }
   lines.append(primary);
 
   if (row.secondary) {
     const secondary = document.createElement('span');
     secondary.className = 'secondary';
     secondary.textContent = row.secondary;
+    if (view.translateSecondary) {
+      const tag = document.createElement('span');
+      tag.className = 'machine';
+      tag.textContent = 'MT';
+      tag.title = `Machine-translated into ${shortName(view.state ?? {}, view.translateSecondary)}`;
+      secondary.append(tag);
+    }
     lines.append(secondary);
   }
 

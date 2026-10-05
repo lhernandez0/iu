@@ -159,6 +159,24 @@ const PLAYER_RESPONSE = {
           isTranslatable: false,
         },
       ],
+      // The languages this video can be translated into. NOTE the label shape:
+      // these use `runs[0].text` where the tracks above mostly use
+      // `simpleText`, which is an inconsistency in YouTube's own payload.
+      translationLanguages: [
+        {
+          languageCode: 'en',
+          languageName: { runs: [{ text: 'English' }] },
+        },
+        {
+          languageCode: 'ja',
+          languageName: { runs: [{ text: 'Japanese' }] },
+        },
+        {
+          languageCode: 'zh-Hant',
+          languageName: { runs: [{ text: 'Chinese (Traditional)' }] },
+          translationSourceTrackIndices: [4],
+        },
+      ],
     },
   },
 };
@@ -202,6 +220,46 @@ section('reports the video and its caption tracks');
   check('translatable flag carried', payload?.tracks?.[0]?.isTranslatable, true);
   check('the baseUrl is passed through', payload?.tracks?.[0]?.baseUrl?.includes('timedtext'), true);
   check('the INNERTUBE key is exposed', payload?.innertubeApiKey, 'KEY123');
+
+  // The translate menu is per video, so it has to travel with the description.
+  // Without it the panel has no list to offer and no way to learn one, since it
+  // must not hardcode YouTube's languages.
+  check('the translation languages are reported', payload?.translationLanguages?.length, 3);
+  check('with their codes', payload?.translationLanguages?.map((l) => l.languageCode), ['en', 'ja', 'zh-Hant']);
+  // Read from runs, unlike the track names above. Getting this backwards yields
+  // blank options in the picker rather than an error.
+  check('and their names from runs[0].text', payload?.translationLanguages?.[1]?.name, 'Japanese');
+  check('including ones with a region suffix', payload?.translationLanguages?.[2]?.name, 'Chinese (Traditional)');
+}
+
+section('a video that offers no translations reports an empty list');
+
+{
+  // Not every video can be translated. An absent list must be a list, not
+  // undefined, or the panel has to defend against it everywhere it is used.
+  const bridge = await bootBridge({
+    playerResponse: {
+      videoDetails: { videoId: 'notransl1', title: 'No Translations', isLiveContent: false },
+      captions: {
+        playerCaptionsTracklistRenderer: {
+          captionTracks: [
+            {
+              baseUrl: 'https://www.youtube.com/api/timedtext?v=x&lang=en',
+              languageCode: 'en',
+              name: { simpleText: 'English' },
+              isTranslatable: false,
+            },
+          ],
+        },
+      },
+    },
+    urlVideoId: 'notransl1',
+  });
+
+  const payload = (await bridge.ask('get-player-response'))?.payload;
+  check('the track is still reported', payload?.tracks?.length, 1);
+  check('the translation list is empty', payload?.translationLanguages?.length, 0);
+  check('and it is an array, not undefined', Array.isArray(payload?.translationLanguages), true);
 }
 
 // --- 3. Degraded pages ------------------------------------------------------

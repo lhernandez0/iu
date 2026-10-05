@@ -70,6 +70,12 @@ export function watchPage({ videoId, title, tracks, serveAsrNames = false }) {
           kind: track.kind ?? undefined,
           isTranslatable: true,
         })),
+        // The translate menu, per video. Only two entries: the picker only needs
+        // to prove the list came from the fixture rather than from a constant.
+        translationLanguages: [
+          { languageCode: 'en', languageName: { runs: [{ text: 'English' }] } },
+          { languageCode: 'ja', languageName: { runs: [{ text: 'Japanese' }] } },
+        ],
       },
     },
   };

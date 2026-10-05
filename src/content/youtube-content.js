@@ -51,7 +51,15 @@
    * @type {{videoId: string|null, title: string|null, isLive: boolean,
    *         tracks: object[], segments: object[]|null}}
    */
-  let video = { videoId: null, title: null, isLive: false, tracks: [], segments: null, needsInnertube: false };
+  let video = {
+    videoId: null,
+    title: null,
+    isLive: false,
+    tracks: [],
+    translationLanguages: [],
+    segments: null,
+    needsInnertube: false,
+  };
   let lastActiveIndex = -2;
 
   // --- Page bridge ---------------------------------------------------------
@@ -223,34 +231,57 @@
   }
 
   /**
-   * Fetch a track by language. Returns a plain result object rather than
-   * touching shared state, so one request cannot corrupt another.
+   * Fetch a track by language, optionally translated.
    *
-   * @param {string} languageCode
-   * @returns {Promise<{languageCode: string, segments: object[], error: string|null}>}
+   * A translation is not a separate track on YouTube: it is the SAME track's
+   * baseUrl with `&tlang=` added, so the cue timings are byte-for-byte the same
+   * and only the text differs. That is why this composes with alignment and
+   * seeking for free, and why one function covers both.
+   *
+   * The returned `languageCode` is the SOURCE track's code, never the target.
+   * The worker keys its cache and its rows by the source track, and reports the
+   * target separately, so a translated track is "en, translated into ja" rather
+   * than becoming an `ja` track that would collide with a real Japanese one.
+   *
+   * @param {string} languageCode Source track.
+   * @param {string|null} [translateTo]
+   * @returns {Promise<{languageCode: string, translateTo: string|null, segments: object[], error: string|null}>}
    */
-  async function fetchTrack(languageCode) {
+  async function fetchTrack(languageCode, translateTo = null) {
     const summary = await askBridge('get-player-response');
 
     // After an in-tab navigation the page's track list belongs to the previous
     // video, so it cannot be used: its URLs point at the wrong captions. The
     // internal player API has to be asked for this video's tracks instead.
     if (!summary || summary.stale) {
-      return fetchTrackViaInnertube(languageCode);
+      return fetchTrackViaInnertube(languageCode, translateTo);
     }
 
     const track = summary.tracks.find((t) => t.languageCode === languageCode) ?? summary.tracks[0];
-    if (!track) return fetchTrackViaInnertube(languageCode);
+    if (!track) return fetchTrackViaInnertube(languageCode, translateTo);
 
-    try {
-      const segments = await fetchSegments(track, summary.videoId, summary.innertubeApiKey, null);
+    // Only some tracks carry translations. Asking anyway returns the untranslated
+    // text, which would be silently wrong — a "Japanese" line that is actually
+    // English. Better to say so.
+    if (translateTo && !track.isTranslatable) {
       return {
         languageCode: track.languageCode,
+        translateTo: null,
+        segments: [],
+        error: 'This caption track cannot be auto-translated.',
+      };
+    }
+
+    try {
+      const segments = await fetchSegments(track, summary.videoId, summary.innertubeApiKey, translateTo);
+      return {
+        languageCode: track.languageCode,
+        translateTo: translateTo ?? null,
         segments,
         error: segments.length ? null : 'The caption track came back empty.',
       };
     } catch (error) {
-      return { languageCode, segments: [], error: `Could not load captions: ${error?.message ?? error}` };
+      return { languageCode, translateTo: null, segments: [], error: `Could not load captions: ${error?.message ?? error}` };
     }
   }
 
@@ -263,9 +294,10 @@
    * normal state after switching video inside a tab.
    *
    * @param {string} languageCode
-   * @returns {Promise<{languageCode: string, segments: object[], error: string|null}>}
+   * @param {string|null} [translateTo]
+   * @returns {Promise<{languageCode: string, translateTo: string|null, segments: object[], error: string|null}>}
    */
-  async function fetchTrackViaInnertube(languageCode) {
+  async function fetchTrackViaInnertube(languageCode, translateTo = null) {
     // This can be reached without a prior sync — the worker asks for a specific
     // track on its own — so make sure we know which video we are asking about.
     if (!video.videoId) await sync();
@@ -274,7 +306,7 @@
     const key = summary?.innertubeApiKey ?? null;
 
     if (!key || !video.videoId) {
-      return { languageCode, segments: [], error: 'Could not read this video captions.' };
+      return { languageCode, translateTo: null, segments: [], error: 'Could not read this video captions.' };
     }
 
     const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${key}`, {
@@ -287,23 +319,33 @@
       }),
     }).catch(() => null);
 
-    if (!response?.ok) return { languageCode, segments: [], error: 'Could not reach the player API.' };
+    if (!response?.ok) return { languageCode, translateTo: null, segments: [], error: 'Could not reach the player API.' };
 
     const fresh = await response.json().catch(() => null);
     const tracks = fresh?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
 
-    if (!tracks.length) return { languageCode, segments: [], error: 'This video has no captions.' };
+    if (!tracks.length) return { languageCode, translateTo: null, segments: [], error: 'This video has no captions.' };
 
     const track = tracks.find((t) => t.languageCode === languageCode) ?? tracks[0];
-    try {
-      const segments = await fetchSegments(track, video.videoId, key, null);
+    if (translateTo && !track.isTranslatable) {
       return {
         languageCode: track.languageCode,
+        translateTo: null,
+        segments: [],
+        error: 'This caption track cannot be auto-translated.',
+      };
+    }
+
+    try {
+      const segments = await fetchSegments(track, video.videoId, key, translateTo);
+      return {
+        languageCode: track.languageCode,
+        translateTo: translateTo ?? null,
         segments,
         error: segments.length ? null : 'The caption track came back empty.',
       };
     } catch (error) {
-      return { languageCode, segments: [], error: `Could not load captions: ${error?.message ?? error}` };
+      return { languageCode, translateTo: null, segments: [], error: `Could not load captions: ${error?.message ?? error}` };
     }
   }
 
@@ -331,9 +373,10 @@
    * worker having to tell us about them.
    *
    * @param {string|null} languageCode Which track to load, or null for the default.
+   * @param {string|null} [translateTo] Target language, or null for the original text.
    * @returns {Promise<object>} A PROVIDE payload.
    */
-  async function provide(languageCode) {
+  async function provide(languageCode, translateTo = null) {
     const result = await sync();
     if (!result.ok) return { ok: false, error: result.error, video: describeVideo() };
 
@@ -342,9 +385,12 @@
     // data at all. In both cases we still know the video id from the URL, which
     // is all the player API needs.
     if (result.stale || !video.tracks.length) {
-      const fetched = await fetchTrackViaInnertube(languageCode ?? 'en');
-      video.segments = fetched.segments;
+      const fetched = await fetchTrackViaInnertube(languageCode ?? 'en', translateTo);
+      // Only record the segments when they are the ones the worker will render.
+      // A failed translation returns an empty list, and storing that would blank
+      // the transcript it was only supposed to translate.
       if (fetched.segments.length) {
+        video.segments = fetched.segments;
         return { ok: true, video: describeVideo(), requested: fetched.languageCode, fetched };
       }
       return { ok: false, error: fetched.error, video: describeVideo(), fetched };
@@ -352,8 +398,8 @@
 
     const wanted = languageCode ? video.tracks.find((t) => t.languageCode === languageCode) : null;
     const track = wanted ?? pickDefaultTrack(video.tracks);
-    const fetched = await fetchTrack(track.languageCode);
-    video.segments = fetched.segments;
+    const fetched = await fetchTrack(track.languageCode, translateTo);
+    if (fetched.segments.length) video.segments = fetched.segments;
 
     return { ok: true, video: describeVideo(), requested: track.languageCode, fetched };
   }
@@ -374,7 +420,15 @@
     const summary = await askBridge('get-player-response');
     if (!summary) {
       const changed = video.videoId !== null;
-      video = { videoId: null, title: null, isLive: false, tracks: [], segments: null, needsInnertube: false };
+      video = {
+        videoId: null,
+        title: null,
+        isLive: false,
+        tracks: [],
+        translationLanguages: [],
+        segments: null,
+        needsInnertube: false,
+      };
       lastActiveIndex = -2;
       return { ok: false, changed, stale: false, error: 'This page has no video player.' };
     }
@@ -394,6 +448,7 @@
       title: summary.title,
       isLive: summary.isLive,
       tracks: summary.stale ? [] : summary.tracks,
+      translationLanguages: summary.stale ? [] : (summary.translationLanguages ?? []),
       segments: video.segments,
       needsInnertube: Boolean(summary.stale),
     };
@@ -420,7 +475,12 @@
         languageCode: t.languageCode,
         name: t.name,
         kind: t.kind,
+        isTranslatable: Boolean(t.isTranslatable),
       })),
+      // Which languages this video can be translated into. The panel offers
+      // these rather than a built-in list, so it can never drift from what
+      // YouTube will actually serve.
+      translationLanguages: video.translationLanguages ?? [],
     };
   }
 
@@ -437,16 +497,21 @@
         return true; // async reply
 
       case MSG.PROVIDE:
-        provide(message.languageCode ?? null)
+        provide(message.languageCode ?? null, message.translateTo ?? null)
           .then(sendResponse)
           .catch((error) => sendResponse({ ok: false, error: String(error?.message ?? error) }));
         return true;
 
       case MSG.FETCH_TRACK:
-        fetchTrack(message.languageCode)
+        fetchTrack(message.languageCode, message.translateTo ?? null)
           .then(sendResponse)
           .catch((error) =>
-            sendResponse({ languageCode: message.languageCode, segments: [], error: String(error?.message ?? error) }),
+            sendResponse({
+              languageCode: message.languageCode,
+              translateTo: null,
+              segments: [],
+              error: String(error?.message ?? error),
+            }),
           );
         return true;
 

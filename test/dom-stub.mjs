@@ -44,12 +44,43 @@ export class FakeElement {
     this.parent = null;
     this.listeners = new Map();
     this.attributes = new Map();
-    this.value = '';
+    // Set through the backing field, NOT the setter: assigning would mark the
+    // element as explicitly overridden, and a select would then never report
+    // its selected option.
+    this._value = '';
+    this._valueOverride = false;
     this.disabled = false;
     this.hidden = false;
     this.title = '';
     this.type = '';
     this._text = '';
+  }
+
+  /**
+   * An element with options reports the value of its selected one.
+   *
+   * The real `<select>` does this, and a stub that only keeps whatever `value`
+   * was last assigned drifts from it: options are rebuilt on every state push,
+   * so reading a select afterwards returns a stale value the browser would never
+   * report. Anything depending on the selection — the swap carrying each
+   * translation with its slot, for instance — then cannot be tested honestly.
+   *
+   * Keyed on having options rather than on `tagName`, because the fixture
+   * creates every id as a plain element and never learns which are selects.
+   *
+   * Assignment still wins, since that is how a test simulates a user choice.
+   */
+  get value() {
+    if (this._valueOverride) return this._value ?? '';
+    const options = this.find((el) => el.tagName === 'OPTION');
+    if (!options.length) return this._value ?? '';
+    const selected = options.find((option) => option.selected);
+    return String((selected ?? options[0]).value);
+  }
+
+  set value(next) {
+    this._value = String(next ?? '');
+    this._valueOverride = true;
   }
 
   // `className` and `classList` are two views of one thing in the real DOM, so
@@ -124,6 +155,24 @@ export class FakeElement {
   /** @param {object} [options] */
   scrollIntoView() {
     // Layout is meaningless here.
+  }
+
+  /**
+   * A `<select>` reports the value of its selected option.
+   *
+   * Without this the stub keeps whatever `value` was last assigned, so reading
+   * a select after its options were rebuilt returns a stale value that the real
+   * element would never report — and a test asserting on that passes or fails
+   * for no reason connected to the code.
+   *
+   * @returns {string}
+   */
+  get selectedValue() {
+    if (this.tagName !== 'SELECT') return this.value;
+    const selected = this.find((el) => el.tagName === 'OPTION' && el.selected);
+    if (selected.length) return String(selected[0].value);
+    const first = this.find((el) => el.tagName === 'OPTION')[0];
+    return first ? String(first.value) : '';
   }
 
   /**

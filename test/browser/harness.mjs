@@ -222,7 +222,16 @@ async function installRoutes(context, registry) {
     const track = fixture?.tracks.find((t) => t.languageCode === params.get('lang')) ?? fixture?.tracks[0];
     if (!track) return route.fulfill({ status: 404, body: '' });
 
-    const body = fixture.captionFormat === 'xml' ? xmlBody(track.segments) : json3Body(track.segments);
+    // Auto-translate is not a separate track: YouTube serves the SAME track with
+    // `tlang` added and re-renders the text. The fixture has to do the same, or
+    // the picker would appear to work while returning the original language —
+    // and the browser tier is the only place the real URL is built.
+    const translateTo = params.get('tlang');
+    const segments = translateTo
+      ? track.segments.map((segment) => ({ ...segment, text: `[${translateTo}] ${segment.text}` }))
+      : track.segments;
+
+    const body = fixture.captionFormat === 'xml' ? xmlBody(segments) : json3Body(segments);
     return route.fulfill({ status: 200, contentType: 'text/plain', body });
   });
 }

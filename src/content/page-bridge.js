@@ -152,6 +152,24 @@
       isTranslatable: Boolean(track.isTranslatable),
     }));
 
+    // The languages THIS video can be auto-translated into.
+    //
+    // Not a constant we could hardcode: it depends on the video and the source
+    // track, and YouTube varies it (it is 18 entries on one of our reference
+    // videos, far more on others). Reporting what YouTube actually offers is
+    // why the panel needs no built-in language list at all.
+    //
+    // Note these are rendered as `runs[0].text` rather than `simpleText`, which
+    // is the opposite of the track names above — an inconsistency in YouTube's
+    // own payload rather than a choice here.
+    const translationLanguages = (renderer?.translationLanguages ?? []).map((language) => ({
+      languageCode: language.languageCode,
+      name:
+        language.languageName?.runs?.[0]?.text ??
+        language.languageName?.simpleText ??
+        language.languageCode,
+    }));
+
     // True when the response describes a DIFFERENT video than the one in the
     // URL — an in-tab navigation whose response we could not get fresh. The
     // track list is then the previous video's, and fetching those URLs would
@@ -168,6 +186,7 @@
       title: getDomTitle() ?? (stale ? null : details?.title) ?? null,
       isLive: Boolean(details?.isLiveContent),
       tracks,
+      translationLanguages,
       innertubeApiKey: getInnertubeKey(),
     };
   }

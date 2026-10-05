@@ -203,8 +203,12 @@ const SUMMARY = {
   title: 'Test Video',
   isLive: false,
   tracks: [
-    { baseUrl: 'https://www.youtube.com/api/timedtext?v=abc&lang=en', languageCode: 'en', name: 'English', kind: null },
-    { baseUrl: 'https://www.youtube.com/api/timedtext?v=abc&lang=de', languageCode: 'de', name: 'Deutsch', kind: null },
+    { baseUrl: 'https://www.youtube.com/api/timedtext?v=abc&lang=en', languageCode: 'en', name: 'English', kind: null, isTranslatable: true },
+    { baseUrl: 'https://www.youtube.com/api/timedtext?v=abc&lang=de', languageCode: 'de', name: 'Deutsch', kind: null, isTranslatable: false },
+  ],
+  translationLanguages: [
+    { languageCode: 'en', name: 'English' },
+    { languageCode: 'ja', name: 'Japanese' },
   ],
   innertubeApiKey: 'KEY',
 };
@@ -372,6 +376,96 @@ section('a video with no caption tracks says so plainly');
   const result = await script.ask({ type: 'fetch-track', languageCode: 'en' });
   check('no segments', result?.segments?.length, 0);
   check('a clear message', result?.error, 'This video has no captions.');
+}
+
+// --- 5b. Auto-translate ------------------------------------------------------
+//
+// YouTube's "auto-translate" is not a separate track. It is the SAME track's
+// baseUrl with `&tlang=` added, which is why the cue timings are identical and
+// why this composes with alignment and seeking for free. These tests pin that
+// mechanism, since nothing else in the pipeline can: the worker only ever sees
+// the resulting text.
+
+section('a translation is requested by adding tlang to the track URL');
+
+{
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  const result = await script.ask({ type: 'fetch-track', languageCode: 'en', translateTo: 'ja' });
+
+  check('no error', result?.error, null);
+  check('segments came back', result?.segments?.length, 2);
+
+  const url = script.fetched.find((u) => u.includes('timedtext'));
+  check('the track URL was used', Boolean(url), true);
+  check('tlang was appended', url?.includes('tlang=ja'), true);
+  check('and the requested track was kept', url?.includes('lang=en'), true);
+  // fmt is set alongside, so the translation is still parsed as JSON3 rather
+  // than falling back to XML.
+  check('the format is still pinned', url?.includes('fmt=json3'), true);
+}
+
+section('without a translation the URL is left alone');
+
+{
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  await script.ask({ type: 'fetch-track', languageCode: 'en' });
+
+  const url = script.fetched.find((u) => u.includes('timedtext'));
+  check('no tlang parameter', url?.includes('tlang'), false);
+  check('but the format is still pinned', url?.includes('fmt=json3'), true);
+}
+
+section('the reported language is the SOURCE, with the target reported separately');
+
+{
+  // The worker keys its cache and its rows by the source track. Reporting the
+  // TARGET as the language would file an English-to-Japanese translation under
+  // `ja`, where it would collide with a real Japanese track on the same video —
+  // and the two would silently overwrite each other.
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  const result = await script.ask({ type: 'fetch-track', languageCode: 'en', translateTo: 'ja' });
+
+  check('languageCode is the source', result?.languageCode, 'en');
+  check('the target is reported apart from it', result?.translateTo, 'ja');
+}
+
+section('translating a track that cannot be translated is refused, not faked');
+
+{
+  // `de` is marked isTranslatable: false. Asking anyway returns the UNTRANSLATED
+  // German, which would be silently presented as Japanese — a wrong answer that
+  // looks like a right one, which is the failure mode worth guarding.
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  const result = await script.ask({ type: 'fetch-track', languageCode: 'de', translateTo: 'ja' });
+
+  check('no segments are returned', result?.segments?.length, 0);
+  check('the error explains why', result?.error, 'This caption track cannot be auto-translated.');
+  check('and no tlang request was made', script.fetched.some((u) => u.includes('tlang')), false);
+  check('the source language is still reported', result?.languageCode, 'de');
+}
+
+section('a translation into the source language is still just a fetch');
+
+{
+  // Not special-cased in the content script; the panel filters it out of the
+  // menu so this cannot be chosen. Asserted so the behaviour is pinned.
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  const result = await script.ask({ type: 'fetch-track', languageCode: 'en', translateTo: 'en' });
+  check('it fetches normally', result?.segments?.length, 2);
+  check('with the parameter set', script.fetched.some((u) => u.includes('tlang=en')), true);
+}
+
+section('describe reports the translation languages for this video');
+
+{
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+  const result = await script.ask({ type: 'describe' });
+
+  check('they are reported', result?.video?.translationLanguages?.length, 2);
+  check('with their codes', result?.video?.translationLanguages?.map((l) => l.languageCode), ['en', 'ja']);
+  // isTranslatable has to reach the worker, which uses it to decide whether a
+  // stored translation preference is worth acting on for this video.
+  check('and tracks carry translatability', result?.video?.trackList?.map((t) => t.isTranslatable), [true, false]);
 }
 
 // --- 6. Seek -----------------------------------------------------------------

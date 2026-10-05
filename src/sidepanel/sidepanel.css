@@ -45,6 +45,21 @@ body {
   margin-top: auto;
 }
 
+/* One language slot: the track you read, and — beneath it — the language to
+   auto-translate it into. Stacking rather than putting all four pickers on one
+   row keeps each one wide enough to read at 1.75x text size. */
+.lang {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.translate {
+  font-size: calc(11px * var(--text-scale));
+}
+
 button {
   flex: 0 0 auto;
   padding: 6px 12px;
@@ -303,6 +318,20 @@ select:disabled {
   border: 1px solid var(--mark);
   font-size: calc(11px * var(--text-scale));
   white-space: nowrap;
+}
+
+/* Marks a machine-translated line.
+   Deliberately quiet: it is a caveat on the line, not something to read. Without
+   it a translated line is indistinguishable from a real subtitle track, which is
+   a materially different thing to be reading while studying. */
+.machine {
+  margin-left: 4px;
+  padding: 0 3px;
+  border: 1px solid var(--muted);
+  border-radius: 3px;
+  color: var(--muted);
+  font-size: calc(9px * var(--text-scale));
+  vertical-align: middle;
 }
 
 .popover-traditional {

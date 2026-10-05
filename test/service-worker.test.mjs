@@ -111,8 +111,15 @@ const VIDEO = {
   title: 'Test Video',
   isLive: false,
   trackList: [
-    { languageCode: 'en', name: 'English', kind: null },
-    { languageCode: 'de', name: 'Deutsch', kind: null },
+    { languageCode: 'en', name: 'English', kind: null, isTranslatable: true },
+    { languageCode: 'de', name: 'Deutsch', kind: null, isTranslatable: true },
+  ],
+  // The translate menu, per video. Note `en` is offered even though it is also a
+  // track: YouTube lists the source among its own targets.
+  translationLanguages: [
+    { languageCode: 'en', name: 'English' },
+    { languageCode: 'ja', name: 'Japanese' },
+    { languageCode: 'ko', name: 'Korean' },
   ],
 };
 
@@ -208,9 +215,12 @@ section('a second language produces aligned rows');
 
 /**
  * A content script that behaves like the real one: it loads the track it was
- * asked for, and falls back to the first available only when that track is
- * absent. Returning a fixed payload regardless of the request cannot test
- * stickiness, because stickiness IS the request being honoured.
+ * asked for, falls back to the first available only when that track is absent,
+ * and honours a translation by changing the TEXT while keeping the source
+ * language.
+ *
+ * Returning a fixed payload regardless of the request cannot test stickiness or
+ * translation, because both ARE the request being honoured.
  *
  * @param {object} video
  * @param {Record<string, any>} tracksByLanguage
@@ -220,10 +230,65 @@ const PROVIDER = (video, tracksByLanguage) => (request) => {
   const languageCode = wanted && tracksByLanguage[wanted] ? wanted : video.trackList[0]?.languageCode;
   const segments = tracksByLanguage[languageCode];
   if (!segments) return { ok: false, error: 'This video has no captions.' };
-  return { ok: true, video, requested: languageCode, fetched: { languageCode, segments } };
+
+  const translateTo = request?.translateTo ?? null;
+  if (translateTo) {
+    const track = video.trackList.find((t) => t.languageCode === languageCode);
+    // A track that cannot be translated is refused rather than served
+    // untranslated, which is what the real content script does.
+    if (track && track.isTranslatable === false) {
+      return { ok: false, error: 'This caption track cannot be auto-translated.', fetched: { languageCode, translateTo: null, segments: [], error: 'This caption track cannot be auto-translated.' } };
+    }
+    // Marked so a test can tell translated text from the original at a glance.
+    return {
+      ok: true,
+      video,
+      requested: languageCode,
+      fetched: {
+        languageCode,
+        translateTo,
+        segments: segments.map((s) => ({ ...s, text: `[${translateTo}] ${s.text}` })),
+      },
+    };
+  }
+
+  return { ok: true, video, requested: languageCode, fetched: { languageCode, translateTo: null, segments } };
 };
 
 const SEGMENTS = { en: ENGLISH.segments, de: GERMAN.segments };
+
+/**
+ * A FETCH_TRACK payload, which is the segment list itself rather than the
+ * `{ok, video, fetched}` envelope PROVIDE returns. The two are different shapes
+ * and using one where the other belongs fails as a silently empty transcript.
+ *
+ * @param {object} video
+ * @param {Record<string, any>} tracksByLanguage
+ */
+const TRACK_FETCHER = (video, tracksByLanguage) => (request) => {
+  const languageCode = request?.languageCode;
+  const segments = tracksByLanguage[languageCode];
+  if (!segments) return { languageCode, translateTo: null, segments: [], error: `No captions for ${languageCode}.` };
+
+  const translateTo = request?.translateTo ?? null;
+  if (translateTo) {
+    const track = video.trackList.find((t) => t.languageCode === languageCode);
+    if (track && track.isTranslatable === false) {
+      return {
+        languageCode,
+        translateTo: null,
+        segments: [],
+        error: 'This caption track cannot be auto-translated.',
+      };
+    }
+    return {
+      languageCode,
+      translateTo,
+      segments: segments.map((s) => ({ ...s, text: `[${translateTo}] ${s.text}` })),
+    };
+  }
+  return { languageCode, translateTo: null, segments };
+};
 
 section('a language choice survives moving to another video');
 
@@ -319,6 +384,207 @@ section('both languages stay chosen together');
   check('primary stayed', state?.primary, 'en');
   check('secondary stayed', state?.secondary, 'de');
   check('and paired rows are still produced', state?.rows?.[0]?.secondary, 'Hallo');
+}
+
+// --- 3d. Auto-translate ------------------------------------------------------
+
+section('choosing a translation re-fetches the track and shows translated text');
+
+{
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
+  });
+
+  check('the untranslated text is on screen first', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  await settle();
+
+  const state = stub.received.at(-1)?.state;
+  check('the translated text is shown', state?.rows?.[0]?.text, '[ja] Hey there');
+  // The cache is keyed on the SOURCE track, so this must not have become a `ja`
+  // track — that would collide with a real Japanese track on the same video.
+  check('the primary language is still the source', state?.primary, 'en');
+  check('and the target is reported apart from it', state?.translatePrimary, 'ja');
+  check('no error', state?.error, null);
+}
+
+section('the translate menu comes from the video, and excludes the source language');
+
+{
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
+  });
+
+  const state = stub.received.at(-1)?.state;
+  check('the languages are offered', state?.translationLanguages?.length, 3);
+  check('with their codes', state?.translationLanguages?.map((l) => l.languageCode), ['en', 'ja', 'ko']);
+  // Translating a track into itself does nothing, so it must not be offered as
+  // an option that appears to have no effect.
+  check('the panel can filter the source out', state?.translationLanguages?.some((l) => l.languageCode === state.primary), true);
+}
+
+section('going back to the original refetches rather than keeping the translation');
+
+{
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
+  });
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  await settle();
+  check('translated', stub.received.at(-1)?.state?.rows?.[0]?.text, '[ja] Hey there');
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: null });
+  await settle();
+
+  const state = stub.received.at(-1)?.state;
+  check('back to the original text', state?.rows?.[0]?.text, 'Hey there');
+  check('and the target is cleared', state?.translatePrimary, null);
+}
+
+section('a translation survives moving to another video');
+
+{
+  // Same stickiness as the language choices: the preference is global, and the
+  // rendering is per video.
+  const secondVideo = { ...VIDEO, videoId: 'zzzzzzzzzzz', title: 'Second Video' };
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
+  });
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  await settle();
+
+  stub.setAnswer('describePayload', DESCRIBE(secondVideo));
+  stub.setAnswer('providePayload', PROVIDER(secondVideo, SEGMENTS));
+  stub.sendFromPanel({ type: 'refresh' });
+  await settle();
+
+  const state = stub.received.at(-1)?.state;
+  check('the new video is on screen', state?.videoId, 'zzzzzzzzzzz');
+  check('and it is translated too', state?.rows?.[0]?.text, '[ja] Hey there');
+}
+
+section('a video whose track cannot be translated falls back to the original');
+
+{
+  // The important one. A translation is a nice-to-have; the transcript is not.
+  // Asking for a translation a video cannot produce must not blank the screen or
+  // wipe the transcript from the cache.
+  const untranslatable = {
+    ...VIDEO,
+    trackList: [{ languageCode: 'en', name: 'English', kind: 'asr', isTranslatable: false }],
+  };
+  const stub = await boot({
+    describePayload: DESCRIBE(untranslatable),
+    providePayload: PROVIDER(untranslatable, SEGMENTS),
+    trackPayload: TRACK_FETCHER(untranslatable, SEGMENTS),
+  });
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  await settle();
+
+  const state = stub.received.at(-1)?.state;
+  check('the original text is still on screen', state?.rows?.[0]?.text, 'Hey there');
+  check('with no translation applied', state?.translatePrimary, null);
+  check('and the reason is reported', String(state?.error ?? '').includes('translat'), true);
+
+  // And it recovers: clearing the translation clears the message.
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: null });
+  await settle();
+  check('clearing it clears the error', stub.received.at(-1)?.state?.error, null);
+  check('and the transcript is intact', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
+}
+
+section('a cached track still refetches when the translation changed');
+{
+  // A translation is a different RENDERING of the same track, so "the track is
+  // in the cache" and "the right text is on screen" are different questions. The
+  // cache check has to compare the rendering too, or switching the target keeps
+  // the old language because the source track is present either way.
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
+  });
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  await settle();
+  check('translated to Japanese', stub.received.at(-1)?.state?.rows?.[0]?.text, '[ja] Hey there');
+
+  // Switch target. The track is cached; the rendering is not.
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ko' });
+  await settle();
+  check('the new target is rendered', stub.received.at(-1)?.state?.rows?.[0]?.text, '[ko] Hey there');
+  check('and reported', stub.received.at(-1)?.state?.translatePrimary, 'ko');
+
+  // And the reverse: re-selecting the SAME target must not refetch.
+  const before = stub.calls.sendMessage.filter((c) => c?.message?.type === 'fetch-track').length;
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ko' });
+  await settle();
+  const after = stub.calls.sendMessage.filter((c) => c.message?.type === 'fetch-track').length;
+  check('re-selecting the same target does not refetch', after, before);
+}
+
+section('an untranslatable video is not asked again on every refresh');
+{
+  // The preference stays set, so without the translatability check every refresh
+  // would re-request a translation that cannot exist — a wasted round trip and a
+  // permanent error on screen.
+  const untranslatable = {
+    ...VIDEO,
+    trackList: [{ languageCode: 'en', name: 'English', kind: 'asr', isTranslatable: false }],
+  };
+  const stub = await boot({
+    describePayload: DESCRIBE(untranslatable),
+    providePayload: PROVIDER(untranslatable, SEGMENTS),
+    trackPayload: TRACK_FETCHER(untranslatable, SEGMENTS),
+  });
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  await settle();
+
+  const before = stub.calls.sendMessage.filter((c) => c?.message?.type === 'provide').length;
+  stub.sendFromPanel({ type: 'refresh' });
+  await settle();
+  const after = stub.calls.sendMessage.filter((c) => c.message?.type === 'provide').length;
+
+  check('the second refresh fetched nothing', after, before);
+  check('the transcript is still shown', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
+}
+
+section('a translation needs its own track, and skips one that is already loaded');
+
+{
+  // A second subtitle is a track like any other. Translating a track that is not
+  // loaded must fetch it rather than silently showing nothing.
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
+  });
+
+  stub.sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
+  await settle();
+  check('second track loaded', stub.received.at(-1)?.state?.secondary, 'de');
+  check('untranslated to start', stub.received.at(-1)?.state?.rows?.[0]?.secondary, 'Hallo');
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'translateSecondary', value: 'ja' });
+  await settle();
+
+  const state = stub.received.at(-1)?.state;
+  check('the second line is translated', state?.rows?.[0]?.secondary, '[ja] Hallo');
+  check('the first line is untouched', state?.rows?.[0]?.text, 'Hey there');
+  check('and the second language is still the source', state?.secondary, 'de');
 }
 
 // --- 3c. Settings -----------------------------------------------------------

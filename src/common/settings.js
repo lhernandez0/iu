@@ -111,6 +111,27 @@ export const SETTINGS = [
     dynamic: true,
     coerce: (value) => (typeof value === 'string' && value ? value : null),
   },
+  {
+    // YouTube's "auto-translate". Not a separate track: the same track's URL with
+    // `&tlang=` added, so cue timings are identical and only the text changes.
+    // That is why it composes with alignment and seeking for free.
+    id: 'translatePrimary',
+    label: 'Translate',
+    group: 'language',
+    type: 'select',
+    default: null,
+    dynamic: true,
+    coerce: (value) => (typeof value === 'string' && value ? value : null),
+  },
+  {
+    id: 'translateSecondary',
+    label: 'Translate second',
+    group: 'language',
+    type: 'select',
+    default: null,
+    dynamic: true,
+    coerce: (value) => (typeof value === 'string' && value ? value : null),
+  },
 ];
 
 /** @type {Map<string, SettingDefinition>} */

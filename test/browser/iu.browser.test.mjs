@@ -113,7 +113,10 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('first pair', state.rows[0]?.secondary, 'Hallo');
     check('second pair', state.rows[1]?.secondary, 'wie geht es dir');
     check('third pair', state.rows[2]?.secondary, 'willkommen zurueck');
-    check('status names both languages', state.status.includes('en + de'), true);
+    // Readable names rather than the raw codes: a status line is for reading,
+    // and "en + de" was the schema's vocabulary leaking into the UI. Asserted as
+    // two separate facts so it does not depend on the fixture's exact spacing.
+    check('status names both languages', state.status.includes('English') && state.status.includes('Deutsch'), true);
   }
 
   // --- 5. Caching across tab switches -------------------------------------
@@ -413,6 +416,72 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const unmarkedPopover = await page.evaluate(() => document.querySelector('.popover')?.textContent ?? '');
     check('hovering an unmarked word still defines it', unmarkedPopover.length > 0, true);
     console.log(`        popover: ${unmarkedPopover}`);
+  }
+
+  section('auto-translate really re-renders the text through a real fetch');
+
+  {
+    // Only a browser can prove this end to end: the URL is built by the content
+    // script, fetched over a real route, and rendered by the real panel. A
+    // hermetic test stubs the fetch, so it cannot show that `tlang` reaches
+    // YouTube — which is the entire mechanism.
+    const japanese = {
+      languageCode: 'ja',
+      name: '日本語',
+      segments: [
+        { start: 0, duration: 2, text: 'こんにちは' },
+        { start: 2, duration: 2, text: 'お元気ですか' },
+      ],
+    };
+
+    await routeYouTube(context, { videoId: 'translat01', title: 'Translate', tracks: [japanese] });
+    const watch = await openWatchPage(context, 'translat01');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 2);
+
+    const untranslated = await page.textContent('.row .primary');
+    check('the original text is shown first', untranslated, 'こんにちは');
+    check('with no machine tag', await page.evaluate(() => document.querySelectorAll('.machine').length), 0);
+
+    // Pick a translation through the real control.
+    await page.selectOption('#translate-primary', 'en');
+    // The text has to actually change, so waiting on the value alone would pass
+    // before the refetch landed.
+    await page.waitForFunction(
+      () => (document.querySelector('.row .primary')?.textContent ?? '').includes('[en]'),
+      null,
+      { timeout: 20000 },
+    );
+
+    const translated = await page.textContent('.row .primary');
+    // The MT tag is part of the line's text because it is inside the same span.
+    check('the translated text replaced it', translated, '[en] こんにちはMT');
+    // And it is tagged as machine output, so a translated line is not mistaken
+    // for a real subtitle track.
+    const tag = await page.evaluate(() => document.querySelector('.row .primary .machine')?.textContent ?? '');
+    check('the line is marked as machine output', tag, 'MT');
+
+    // The source track is unchanged in the picker: a translation is a rendering
+    // of the same track, not a switch to a different one.
+    const primary = await page.inputValue('#primary');
+    check('the source language is still selected', primary, 'ja');
+
+    // And the options exclude the source, since translating ja into ja is a
+    // no-op that would look like a working menu entry.
+    const options = await page.evaluate(() =>
+      [...document.querySelectorAll('#translate-primary option')].map((o) => o.value),
+    );
+    check('the source is not offered as a target', options.includes('ja'), false);
+    check('but other languages are', options.includes('en'), true);
+
+    // Switching back to the original must refetch, not keep the translation.
+    await page.selectOption('#translate-primary', '');
+    await page.waitForFunction(
+      () => (document.querySelector('.row .primary')?.textContent ?? '') === 'こんにちは',
+      null,
+      { timeout: 20000 },
+    );
+    check('and the original comes back', await page.textContent('.row .primary'), 'こんにちは');
   }
 
   section('the focus view really hides the other lines, and text size really scales');
