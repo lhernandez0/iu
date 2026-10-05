@@ -19,5 +19,23 @@
     "offscreen",
     "storage",
     "sidePanel"
+  ],
+  "host_permissions": [
+    "https://*.youtube.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*.youtube.com/*"],
+      "js": ["src/content/page-bridge.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://*.youtube.com/*"],
+      "js": ["src/content/youtube-content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
   ]
 }

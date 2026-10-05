@@ -1,181 +1,236 @@
 /**
  * Side panel — the user-facing surface.
  *
- * It owns no audio: it asks the service worker to start a capture and then
- * renders whatever the offscreen document's engine reports. The capture is
- * scoped to the tab that was active when Start was pressed.
+ * This phase reads YouTube's OWN captions rather than capturing audio: it asks
+ * the page's content script for the transcript, renders one clickable row per
+ * segment, and seeks the page's video when a row is clicked. The audio path is
+ * parked behind USE_AUDIO_CAPTURE.
  */
 
 import { MSG, TARGET } from '../common/messages.js';
+import { formatTimestamp, toPlainText, toSrt } from '../common/transcript.js';
+
+/**
+ * Phase switch. True drives the parked tabCapture -> offscreen -> engine path
+ * (whose engine is still a stub). False reads captions from the page.
+ */
+const USE_AUDIO_CAPTURE = false;
 
 const els = {
-  toggle: /** @type {HTMLButtonElement} */ (document.getElementById('toggle')),
-  monitor: /** @type {HTMLInputElement} */ (document.getElementById('monitor')),
+  load: /** @type {HTMLButtonElement} */ (document.getElementById('load')),
+  track: /** @type {HTMLSelectElement} */ (document.getElementById('track')),
+  follow: /** @type {HTMLInputElement} */ (document.getElementById('follow')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
   transcript: /** @type {HTMLElement} */ (document.getElementById('transcript')),
   copy: /** @type {HTMLButtonElement} */ (document.getElementById('copy')),
   clear: /** @type {HTMLButtonElement} */ (document.getElementById('clear')),
+  format: /** @type {HTMLSelectElement} */ (document.getElementById('format')),
   save: /** @type {HTMLButtonElement} */ (document.getElementById('save')),
 };
 
-/**
- * @typedef {Object} PanelState
- * @property {boolean} capturing
- * @property {string[]} finals       Committed text, in order.
- * @property {string} partial        Current hypothesis ('' when none).
- * @property {string} tabTitle
- */
+/** @typedef {{start: number, duration: number, text: string}} Segment */
 
-/** @type {PanelState} */
-const state = { capturing: false, finals: [], partial: '', tabTitle: '' };
+const state = {
+  /** @type {Segment[]} */ segments: [],
+  activeIndex: -1,
+  title: '',
+  loading: false,
+  /** @type {number|null} */ activeTabId: null,
+  /** @type {HTMLElement[]} */ rows: [],
+  autoScroll: true,
+};
+
+// --- Content-script channel -------------------------------------------------
+
+/** @returns {Promise<number|null>} Id of a tab showing YouTube, if any. */
+async function findYouTubeTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id && /^https:\/\/[^/]*youtube\.com\//.test(tab.url ?? '')) return tab.id;
+
+  // The side panel is its own context, so the active tab is not necessarily
+  // the one playing video.
+  const candidates = await chrome.tabs.query({ url: 'https://*.youtube.com/*' });
+  return candidates[0]?.id ?? null;
+}
+
+/**
+ * @param {object} message
+ * @returns {Promise<any>}
+ */
+async function askContent(message) {
+  const tabId = state.activeTabId ?? (await findYouTubeTab());
+  if (tabId === null) throw new Error('No YouTube tab found.');
+  state.activeTabId = tabId;
+
+  try {
+    return await chrome.tabs.sendMessage(tabId, { ...message, target: TARGET.CONTENT });
+  } catch {
+    // Usually means the content script is not there: not a watch page, or the
+    // extension was reloaded after the tab loaded. Retrying will not help.
+    throw new Error('Could not reach the page. Reload the YouTube tab and try again.');
+  }
+}
+
+// --- Loading ----------------------------------------------------------------
+
+/** @param {string} [languageCode] */
+async function load(languageCode) {
+  if (state.loading) return;
+  state.loading = true;
+  els.load.disabled = true;
+  setStatus('Loading captions…');
+
+  try {
+    const snapshot = await askContent({ type: MSG.GET_TRANSCRIPT, languageCode: languageCode ?? null });
+    state.segments = snapshot?.segments ?? [];
+    state.title = snapshot?.title ?? '';
+    state.activeIndex = -1;
+    renderTracks(snapshot?.tracks ?? [], snapshot?.languageCode ?? null);
+    render();
+
+    if (snapshot?.error) setStatus(snapshot.error, true);
+    else if (state.segments.length) setStatus(`${state.segments.length} lines · ${state.title}`);
+    else setStatus('No caption text came back for this video.', true);
+  } catch (error) {
+    setStatus(String(error.message ?? error), true);
+  } finally {
+    state.loading = false;
+    els.load.disabled = false;
+  }
+}
+
+/**
+ * @param {object[]} tracks
+ * @param {string|null} current
+ */
+function renderTracks(tracks, current) {
+  els.track.replaceChildren();
+  if (!tracks.length) {
+    els.track.disabled = true;
+    return;
+  }
+  els.track.disabled = false;
+  for (const track of tracks) {
+    const option = document.createElement('option');
+    option.value = track.languageCode;
+    option.textContent = track.kind === 'asr' ? `${track.name} (auto)` : track.name;
+    option.selected = track.languageCode === current;
+    els.track.append(option);
+  }
+}
 
 // --- Controls ---------------------------------------------------------------
 
-els.toggle.addEventListener('click', () => {
-  void (state.capturing ? stop() : start());
+els.load.addEventListener('click', () => void load(els.track.value || undefined));
+
+els.track.addEventListener('change', () => {
+  state.segments = [];
+  render();
+  void load(els.track.value);
 });
 
-els.monitor.addEventListener('change', () => {
-  void chrome.runtime
-    .sendMessage({
-      type: MSG.SET_MONITOR_MUTED,
-      target: TARGET.BACKGROUND,
-      muted: !els.monitor.checked,
-    })
-    .catch(() => {});
+els.follow.addEventListener('change', () => {
+  state.autoScroll = els.follow.checked;
+  if (state.autoScroll) scrollToActive();
 });
 
 els.copy.addEventListener('click', () => {
-  const text = state.finals.join('\n');
+  const text = toPlainText(state.segments);
   if (text) void navigator.clipboard.writeText(text);
 });
 
 els.clear.addEventListener('click', () => {
-  state.finals = [];
-  state.partial = '';
+  state.segments = [];
+  state.activeIndex = -1;
+  els.track.replaceChildren();
+  els.track.disabled = true;
   render();
+  setStatus('Cleared.');
 });
 
 els.save.addEventListener('click', () => {
-  const text = state.finals.join('\n');
-  if (!text) return;
-  const name = (state.tabTitle || 'transcript').replace(/[^\w.-]+/g, '_').slice(0, 60);
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+  if (!state.segments.length) return;
+
+  const format = els.format.value;
+  const body = format === 'srt' ? toSrt(state.segments) : toPlainText(state.segments);
+  const name = (state.title || 'transcript').replace(/[^\w.-]+/g, '_').slice(0, 60);
+  const url = URL.createObjectURL(new Blob([body], { type: 'text/plain' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `${name}.txt`;
+  link.download = `${name}.${format}`;
   link.click();
   URL.revokeObjectURL(url);
 });
-
-// --- Capture lifecycle ------------------------------------------------------
-
-async function start() {
-  setStatus('Starting…');
-  try {
-    // Capture the tab the side panel is open beside, not the panel's own tab.
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) throw new Error('No active tab to capture.');
-
-    // Only the service worker may mint the stream id ($1 in the worker comment).
-    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
-
-    const reply = await chrome.runtime.sendMessage({
-      type: MSG.START_CAPTURE,
-      target: TARGET.BACKGROUND,
-      streamId,
-      tabId: tab.id,
-      tabTitle: tab.title ?? '',
-    });
-    if (!reply?.ok) throw new Error(reply?.error ?? 'Capture failed.');
-
-    state.tabTitle = tab.title ?? '';
-  } catch (error) {
-    setStatus(String(error.message ?? error), true);
-    state.capturing = false;
-    renderControls();
-  }
-}
-
-async function stop() {
-  await chrome.runtime.sendMessage({ type: MSG.STOP_CAPTURE, target: TARGET.BACKGROUND }).catch(() => {});
-}
-
-// --- Messages from the offscreen document -----------------------------------
-
-chrome.runtime.onMessage.addListener((message) => {
-  if (!message || message.target !== TARGET.SIDEPANEL) return;
-
-  switch (message.type) {
-    case MSG.CAPTURE_STARTED:
-      state.capturing = true;
-      state.tabTitle = message.tabTitle || state.tabTitle;
-      setStatus(state.tabTitle ? `Capturing: ${state.tabTitle}` : 'Capturing');
-      renderControls();
-      break;
-
-    case MSG.CAPTURE_STOPPED:
-      state.capturing = false;
-      setStatus('Stopped');
-      renderControls();
-      break;
-
-    case MSG.CAPTURE_ERROR:
-      state.capturing = false;
-      setStatus(message.error, true);
-      renderControls();
-      break;
-
-    case MSG.ENGINE_EVENT:
-      applyEvent(message.event);
-      break;
-  }
-});
-
-/** @param {import('../engines/engine.js').TranscriptEvent} event */
-function applyEvent(event) {
-  if (event.kind === 'final') {
-    state.finals.push(event.text);
-    state.partial = '';
-  } else {
-    state.partial = event.text;
-  }
-  render();
-}
 
 // --- Rendering --------------------------------------------------------------
 
 function render() {
   els.transcript.replaceChildren();
+  state.rows = [];
 
-  if (state.finals.length === 0 && !state.partial) {
+  if (!state.segments.length) {
     const empty = document.createElement('p');
     empty.className = 'empty';
-    empty.textContent = state.capturing ? 'Listening…' : 'Press Start to transcribe the current tab.';
+    empty.textContent = 'No transcript loaded.';
     els.transcript.append(empty);
     return;
   }
 
-  for (const text of state.finals) {
-    const p = document.createElement('p');
-    p.className = 'segment';
-    p.textContent = text;
-    els.transcript.append(p);
+  const fragment = document.createDocumentFragment();
+  for (const [index, segment] of state.segments.entries()) {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'row';
+    row.title = 'Jump to this line';
+
+    const time = document.createElement('span');
+    time.className = 'time';
+    time.textContent = formatTimestamp(segment.start);
+    row.append(time);
+
+    const text = document.createElement('span');
+    text.className = 'text';
+    text.textContent = segment.text;
+    row.append(text);
+
+    row.addEventListener('click', () => void seekTo(segment.start, index));
+    fragment.append(row);
+    state.rows.push(row);
   }
 
-  if (state.partial) {
-    const partialEl = document.createElement('p');
-    partialEl.className = 'partial';
-    partialEl.textContent = state.partial;
-    els.transcript.append(partialEl);
-  }
-
-  els.transcript.scrollTop = els.transcript.scrollHeight;
+  els.transcript.append(fragment);
 }
 
-function renderControls() {
-  els.toggle.textContent = state.capturing ? 'Stop' : 'Start';
-  els.toggle.setAttribute('aria-pressed', String(state.capturing));
+/** @param {number} index */
+function setActive(index) {
+  if (index === state.activeIndex) return;
+  state.rows[state.activeIndex]?.classList.remove('active');
+  state.activeIndex = index;
+  if (index < 0) return;
+
+  const row = state.rows[index];
+  if (!row) return;
+  row.classList.add('active');
+  if (state.autoScroll) row.scrollIntoView({ block: 'nearest' });
+}
+
+function scrollToActive() {
+  state.rows[state.activeIndex]?.scrollIntoView({ block: 'nearest' });
+}
+
+/**
+ * @param {number} seconds
+ * @param {number} index
+ */
+async function seekTo(seconds, index) {
+  try {
+    await askContent({ type: MSG.SEEK, seconds });
+    // Move the highlight immediately rather than waiting for the page to
+    // report its new position.
+    setActive(index);
+  } catch (error) {
+    setStatus(String(error.message ?? error), true);
+  }
 }
 
 /**
@@ -187,5 +242,54 @@ function setStatus(text, isError = false) {
   els.status.classList.toggle('error', isError);
 }
 
+// --- Messages from the content script ---------------------------------------
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.target !== TARGET.SIDEPANEL) return;
+
+  if (message.type === MSG.POSITION) {
+    // Guard against a stale index from a previous transcript.
+    if (message.index < state.segments.length) setActive(message.index);
+    return;
+  }
+
+  if (message.type === MSG.TRANSCRIPT_INVALIDATED) {
+    state.segments = [];
+    state.activeIndex = -1;
+    els.track.replaceChildren();
+    els.track.disabled = true;
+    render();
+    setStatus('Video changed — load the transcript again.');
+  }
+});
+
+// --- Parked audio path -------------------------------------------------------
+// Kept wired so the capture phase can be re-enabled by flipping
+// USE_AUDIO_CAPTURE. The offscreen document and stub engine are untouched.
+
+async function enableAudioCapture() {
+  const { startAudioCapture, stopAudioCapture } = await import('./audio-capture.js');
+  els.load.textContent = 'Start';
+  els.track.hidden = true;
+  els.follow.hidden = true;
+  els.load.addEventListener('click', () => {
+    const running = els.load.getAttribute('aria-pressed') === 'true';
+    const action = running ? stopAudioCapture() : startAudioCapture();
+    void action
+      .then(() => els.load.setAttribute('aria-pressed', String(!running)))
+      .catch((error) => setStatus(String(error.message ?? error), true));
+  });
+}
+
+if (USE_AUDIO_CAPTURE) void enableAudioCapture();
+
+// --- Boot -------------------------------------------------------------------
+
 render();
-renderControls();
+void (async () => {
+  const tabId = await findYouTubeTab();
+  if (tabId !== null) {
+    state.activeTabId = tabId;
+    await load();
+  }
+})();

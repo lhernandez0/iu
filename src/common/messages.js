@@ -10,12 +10,13 @@
  *   { type: MSG.*, target: TARGET.*, ...payload }
  */
 
-/** @typedef {'background' | 'offscreen' | 'sidepanel'} MessageTarget */
+/** @typedef {'background' | 'offscreen' | 'sidepanel' | 'content'} MessageTarget */
 
 export const TARGET = Object.freeze({
   BACKGROUND: 'background',
   OFFSCREEN: 'offscreen',
   SIDEPANEL: 'sidepanel',
+  CONTENT: 'content',
 });
 
 export const MSG = Object.freeze({
@@ -33,4 +34,21 @@ export const MSG = Object.freeze({
   ENGINE_EVENT: 'engine-event',
   /** sidepanel -> background -> offscreen. Payload: { muted } — local playback only. */
   SET_MONITOR_MUTED: 'set-monitor-muted',
+
+  // --- Captions phase -------------------------------------------------------
+  // NOTE: content scripts are injected as CLASSIC scripts and cannot
+  // `import`, so src/content/youtube-content.js repeats these names as string
+  // literals. Change one, change the other.
+  /** sidepanel -> content. Payload: { languageCode? } */
+  GET_TRANSCRIPT: 'get-transcript',
+  /** sidepanel -> content. Payload: { seconds } */
+  SEEK: 'seek',
+  /** sidepanel -> content. Payload: { languageCode } */
+  SELECT_TRACK: 'select-track',
+  /** sidepanel -> content — read the video's current playback position. */
+  GET_POSITION: 'get-position',
+  /** content -> sidepanel. Payload: { index, seconds } — the active segment changed. */
+  POSITION: 'position',
+  /** content -> sidepanel — the video changed, the transcript is stale. */
+  TRANSCRIPT_INVALIDATED: 'transcript-invalidated',
 });

@@ -7,23 +7,28 @@
   </head>
   <body>
     <header class="bar">
-      <button id="toggle" type="button" class="primary" aria-pressed="false">Start</button>
-      <label class="monitor">
-        <input type="checkbox" id="monitor" checked />
-        Hear tab
+      <button id="load" type="button" class="primary">Load</button>
+      <select id="track" class="track" aria-label="Caption track"></select>
+      <label class="follow">
+        <input type="checkbox" id="follow" checked />
+        Follow
       </label>
     </header>
 
-    <p id="status" class="status" role="status">Idle</p>
+    <p id="status" class="status" role="status">Open a YouTube video, then load its transcript.</p>
 
-    <main id="transcript" class="transcript" aria-live="polite" aria-label="Transcript">
-      <p class="empty">Press Start to transcribe the current tab.</p>
+    <main id="transcript" class="transcript" aria-label="Transcript">
+      <p class="empty">No transcript loaded.</p>
     </main>
 
     <footer class="bar">
       <button id="copy" type="button">Copy</button>
       <button id="clear" type="button">Clear</button>
-      <button id="save" type="button">Save .txt</button>
+      <select id="format" class="format" aria-label="Export format">
+        <option value="txt">.txt</option>
+        <option value="srt">.srt</option>
+      </select>
+      <button id="save" type="button">Save</button>
     </footer>
 
     <script type="module" src="sidepanel.js"></script>
