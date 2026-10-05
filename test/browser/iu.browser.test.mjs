@@ -313,7 +313,9 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
         count: document.querySelectorAll('.mark').length,
         text: first?.textContent ?? '',
         borderColour: style?.borderBottomColor ?? '',
-        hasTooltip: Boolean(first?.getAttribute('title')),
+        // No native title tooltip on purpose: the level is shown in the popover
+        // as a badge, and a browser tooltip on top of that would fight it.
+        hasNativeTooltip: Boolean(first?.getAttribute('title')),
         listOptions: [...(listSelect?.options ?? [])].map((o) => o.value),
         chosenList: chosen,
         thresholdOptions: [...document.querySelectorAll('#threshold option')].map((o) => o.value),
@@ -325,7 +327,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     check('words are marked', marks.count > 0, true);
     check('the mark has a coloured underline', marks.borderColour !== 'rgba(0, 0, 0, 0)', true);
-    check('and a level tooltip', marks.hasTooltip, true);
+    check('and no native tooltip competing with the popover', marks.hasNativeTooltip, false);
     check('both HSK lists are offered', marks.listOptions, ['hsk2_0', 'hsk3_0']);
     // 2.0 has six levels, 3.0 has nine, so the count has to match the list in
     // use. Asserting the relationship keeps this true whichever is default.
@@ -366,6 +368,51 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('it is visible', popover.hidden, false);
     check('with at least one level badge', popover.badges > 0, true);
     console.log(`        popover: ${popover.text}`);
+
+    section('words the list cannot place are hoverable, not invisible');
+
+    // The reported bug. On HSK 2.0, 这样 and 这么 have no level, so they must
+    // render as hoverable but unmarked — not as bare text with no hover at all,
+    // which made whole sentences look dead.
+    await page.selectOption('#list', 'hsk2_0');
+    await page.waitForFunction(() => document.querySelectorAll('.row').length > 0, null, { timeout: 10000 });
+    await page.waitForTimeout(400);
+
+    const shape = await page.evaluate(() => ({
+      marks: document.querySelectorAll('.mark').length,
+      words: document.querySelectorAll('.word').length,
+    }));
+
+    check('some words are marked', shape.marks > 0, true);
+    // 这样 appears in the fixture and has no HSK 2.0 level, so it must land in
+    // `.word` rather than vanishing into a text node.
+    const unmarkedHoverable = await page.evaluate(() => {
+      const spans = [...document.querySelectorAll('.word')];
+      return {
+        count: spans.length,
+        sample: spans.slice(0, 5).map((s) => s.textContent),
+        words: spans.map((s) => s.dataset.word),
+      };
+    });
+
+    check('and some are hoverable without a mark', unmarkedHoverable.count > 0, true);
+    check('with their word recorded for lookup', unmarkedHoverable.words.every((w) => w && w.length > 0), true);
+    console.log(`        unmarked but hoverable: ${unmarkedHoverable.words.slice(0, 6).join(', ')}`);
+
+    // Hovering one of those must still produce a definition — the whole point.
+    await page.locator('.word').first().hover();
+    await page.waitForFunction(
+      () => {
+        const pop = document.querySelector('.popover');
+        return pop && !pop.hidden && (pop.textContent ?? '').length > 0;
+      },
+      null,
+      { timeout: 10000 },
+    );
+
+    const unmarkedPopover = await page.evaluate(() => document.querySelector('.popover')?.textContent ?? '');
+    check('hovering an unmarked word still defines it', unmarkedPopover.length > 0, true);
+    console.log(`        popover: ${unmarkedPopover}`);
   }
 
   section('rendering cost on a transcript far longer than usual');

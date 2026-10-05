@@ -188,6 +188,14 @@ select:disabled {
   cursor: help;
 }
 
+/* A word we can define but the current list does not place.
+   Deliberately looks like ordinary text rather than a subdued mark: it has no
+   level, so showing a colour would claim knowledge we do not have. It is still
+   hoverable, which is the point — the definition is available either way. */
+.word {
+  cursor: help;
+}
+
 .row:hover .mark {
   /* Brighter on hover so the word under the pointer is unambiguous among
      several marks. */

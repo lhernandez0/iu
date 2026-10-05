@@ -737,28 +737,33 @@ async function applyMarks(entry) {
 }
 
 /**
- * Turn tokens into renderable spans: text, plus a level when it is worth
- * marking.
+ * Turn tokens into renderable pieces: text, whether we can define it, and a
+ * level when the selected list places it at or beyond the threshold.
  *
- * A token is marked only when the list places it and that level is at or beyond
- * the threshold. A token with no level is deliberately left unmarked rather than
- * guessed at — it may be a word the learner knows perfectly well, and implying
- * otherwise would be worse than saying nothing.
+ * `defined` is separate from `level` on purpose, and the distinction is the
+ * whole point of keeping the dictionary independent of the graded lists. A word
+ * can be perfectly ordinary, absent from the list being used, and still be a
+ * word the learner wants defined — 这样 has no HSK 2.0 level but is HSK 3.0
+ * level 2, so on HSK 2.0 it is "definition yes, colour no", not invisible.
+ *
+ * Conflating the two is what made whole sentences look unmarked.
  *
  * @param {Array<{text: string, known: boolean}>} tokens
  * @param {object} dictionary
  * @param {object|undefined} list
  * @param {number} threshold
- * @returns {Array<{text: string, level: number|null}>}
+ * @returns {Array<{text: string, defined: boolean, level: number|null}>}
  */
 function markLine(tokens, dictionary, list, threshold) {
-  if (!list) return tokens.map((token) => ({ text: token.text, level: null }));
-
   return tokens.map((token) => {
-    if (!token.known) return { text: token.text, level: null };
+    // Only words we hold a definition for are worth making interactive. An
+    // unknown token has nothing to show, so it stays plain text.
+    const defined = token.known && Boolean(lookup(dictionary, token.text));
+    if (!defined || !list) return { text: token.text, defined, level: null };
+
     const level = levelOf(dictionary, list.id, token.text);
-    if (level === null || level < threshold) return { text: token.text, level: null };
-    return { text: token.text, level };
+    if (level === null || level < threshold) return { text: token.text, defined, level: null };
+    return { text: token.text, defined, level };
   });
 }
 

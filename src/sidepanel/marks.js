@@ -25,9 +25,19 @@ import { levelColour } from '../learn/wordlist.js';
  */
 
 /**
- * Build the text of one transcript line, marking the tokens that warrant it.
+ * Build the text of one transcript line.
  *
- * @param {Token[]} tokens
+ * A word becomes interactive whenever we hold a definition for it, whether or
+ * not it carries a mark. Conflating the two was a real bug: on HSK 2.0, 这样 and
+ * 这么 have no level, so they rendered as bare text and had no hover — whole
+ * sentences looked unmarked and undefined even though the words were known.
+ *
+ * So there are three cases, not two:
+ *   - unknown to us        → plain text, nothing to show
+ *   - known, no level here → hoverable, no underline
+ *   - known and levelled   → hoverable, underlined in its level's colour
+ *
+ * @param {Array<{text: string, defined?: boolean, level: number|null}>} tokens
  * @param {number} levelCount  Total levels in the list being used, for the ramp.
  * @param {string[]} [palette]
  * @returns {DocumentFragment}
@@ -36,20 +46,27 @@ export function renderTokens(tokens, levelCount, palette) {
   const fragment = document.createDocumentFragment();
 
   for (const token of tokens) {
-    if (token.level === null || token.level === undefined) {
-      // Plain text, no element. Keeps the DOM small for the common case.
+    if (!token.defined) {
+      // Nothing to define, so nothing to interact with.
       fragment.append(document.createTextNode(token.text));
       continue;
     }
 
     const span = document.createElement('span');
-    span.className = 'mark';
     span.textContent = token.text;
     span.dataset.word = token.text;
-    // The colour is computed here rather than in CSS because it depends on the
-    // list's length, which CSS cannot know.
-    span.style.setProperty('--mark', levelColour(token.level, levelCount, palette));
-    span.title = `HSK ${token.level}`;
+
+    if (token.level === null || token.level === undefined) {
+      // A word we can define but this list does not place. Styled as a word, not
+      // as a mark, so it reads as ordinary text that happens to be hoverable.
+      span.className = 'word';
+    } else {
+      span.className = 'mark';
+      // The colour is computed here rather than in CSS because it depends on the
+      // list's length, which CSS cannot know.
+      span.style.setProperty('--mark', levelColour(token.level, levelCount, palette));
+    }
+
     fragment.append(span);
   }
 
@@ -73,15 +90,19 @@ function ensurePopover() {
 /**
  * Attach hover handling to a container, once.
  *
+ * Selects both classes: a `.mark` carries a level, a `.word` does not, but both
+ * can be defined and so both should respond.
+ *
  * @param {HTMLElement} container
  * @param {(word: string) => void} onHover  Called with the word under the pointer.
  * @returns {() => void} Detach.
  */
 export function attachHover(container, onHover) {
   let current = null;
+  const INTERACTIVE = '.mark, .word';
 
   const over = (event) => {
-    const target = event.target.closest?.('.mark');
+    const target = event.target.closest?.(INTERACTIVE);
     if (!target || target === current) return;
     current = target;
     onHover(target.dataset.word);
@@ -89,11 +110,11 @@ export function attachHover(container, onHover) {
   };
 
   const out = (event) => {
-    const target = event.target.closest?.('.mark');
+    const target = event.target.closest?.(INTERACTIVE);
     if (!target || target !== current) return;
-    // Moving between marks hides then shows, which is fine and avoids tracking
+    // Moving between words hides then shows, which is fine and avoids tracking
     // pointer position continuously.
-    if (event.relatedTarget?.closest?.('.mark') === target) return;
+    if (event.relatedTarget?.closest?.(INTERACTIVE) === target) return;
     current = null;
     hide();
   };

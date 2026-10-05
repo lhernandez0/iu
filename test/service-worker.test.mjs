@@ -501,6 +501,118 @@ section('lowering the threshold marks more');
   check('the threshold was reported back', received.at(-1).state.learning.threshold, 1);
 }
 
+section('a word the list cannot place is still hoverable, just unmarked');
+
+{
+  // The reported bug: "the whole zhe yang le didn't get highlighted". 这样 and
+  // 这么 have no HSK 2.0 level at all — they are HSK 3.0 level 2 — so on HSK 2.0
+  // they carried no mark. Rendering unmarked tokens as bare text then meant no
+  // span, so no hover either, and a whole sentence looked dead.
+  //
+  // A word can be known, definable, and simply absent from the list in use. That
+  // is "definition yes, colour no", not "invisible".
+  const { received, sendFromPanel } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '你这样说了吗' }] },
+    },
+    trackPayload: GERMAN,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  // Choose HSK 2.0 explicitly, the list the bug was reported on.
+  sendFromPanel({ type: 'set-list', listId: 'hsk2_0' });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  const row = received.at(-1)?.state?.rows?.[0];
+  const byText = Object.fromEntries((row?.tokens ?? []).map((t) => [t.text, t]));
+
+  check('这样 is a token', Boolean(byText['这样']), true);
+  check('it is marked as definable', byText['这样']?.defined, true);
+  check('but carries no level in HSK 2.0', byText['这样']?.level, null);
+  check('so the panel can still make it hoverable', byText['这样']?.defined && byText['这样']?.level === null, true);
+
+  // The contrast needs a word that is above the threshold in one list and
+  // absent from the other, so the same text marks differently. 挨着 is HSK 3.0
+  // level 6; HSK 2.0 does not place it at all. (这样 would not work: it is HSK
+  // 3.0 level 2, which is below the default threshold of 4, so it is correctly
+  // unmarked in both lists — a reminder that "no level" and "below threshold"
+  // both render as unmarked and only the `defined` flag distinguishes them.)
+  sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  const row3 = received.at(-1)?.state?.rows?.[0];
+  const byText3 = Object.fromEntries((row3?.tokens ?? []).map((t) => [t.text, t]));
+
+  check('这样 is definable in every list', byText3['这样']?.defined, true);
+  check('and is below the threshold, so unmarked', byText3['这样']?.level, null);
+
+  // Words below the threshold must stay hoverable too, not only words the list
+  // omits entirely.
+  check('a below-threshold word is still definable', byText3['你']?.defined, true);
+  check('with no level shown', byText3['你']?.level, null);
+}
+
+section('the same word marks differently in the two lists');
+
+{
+  // 挨着 is HSK 3.0 level 6 and absent from HSK 2.0 entirely. At threshold 4 it
+  // must be marked under 3.0 and unmarked under 2.0 — while remaining hoverable
+  // in both, which is the bug that was reported.
+  const { received, sendFromPanel } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '他挨着我' }] },
+    },
+    trackPayload: GERMAN,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  const levelFor = (state) =>
+    Object.fromEntries((state.rows?.[0]?.tokens ?? []).map((t) => [t.text, t]))['挨着'];
+
+  sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const inThree = levelFor(received.at(-1).state);
+  check('marked in HSK 3.0', inThree?.level, 6);
+  check('and definable', inThree?.defined, true);
+
+  sendFromPanel({ type: 'set-list', listId: 'hsk2_0' });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  const inTwo = levelFor(received.at(-1).state);
+  check('unmarked in HSK 2.0', inTwo?.level, null);
+  check('but still definable, so hover still works', inTwo?.defined, true);
+}
+
+section('a word we cannot define stays plain text');
+
+{
+  // The other side of the same distinction: an unknown word has nothing to show,
+  // so it must not become an interactive span that does nothing.
+  const { received, sendFromPanel } = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: 'en',
+      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '囍嚻' }] },
+    },
+    trackPayload: GERMAN,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  const tokens = received.at(-1)?.state?.rows?.[0]?.tokens ?? [];
+  check('both characters are tokens', tokens.length, 2);
+  check('neither is definable', tokens.every((t) => !t.defined), true);
+  check('and neither carries a level', tokens.every((t) => t.level === null), true);
+}
+
 section('switching language keeps the marks');
 
 {
