@@ -22,6 +22,14 @@
  */
 
 (() => {
+  // --- Re-entry guard ------------------------------------------------------
+  // The worker injects this file on demand with chrome.scripting, which re-runs
+  // it even when a copy is already live. Without this guard each injection would
+  // add another set of window listeners, and every request would be answered
+  // twice.
+  if (window.__transcribeBridgeLoaded) return;
+  window.__transcribeBridgeLoaded = true;
+
   const CHANNEL = 'transcribe-ext';
 
   /** @returns {object | null} The live player response object, if any. */

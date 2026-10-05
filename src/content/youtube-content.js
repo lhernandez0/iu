@@ -1,13 +1,18 @@
 /**
  * YouTube content script — runs in the ISOLATED world.
  *
- * Responsibilities:
- *   1. Ask the MAIN-world page bridge for the player response (see
+ * This is a FETCH PROVIDER, not the owner of anything. The service worker holds
+ * the transcript table and decides what is wanted; this script:
+ *   1. Asks the MAIN-world page bridge for the player response (see
  *      page-bridge.js for why that indirection is necessary).
- *   2. Fetch the caption track and parse it into segments.
- *   3. Answer side-panel requests: give me the transcript / seek / select a
- *      language / tell me where we are.
- *   4. Tell the panel when the video changes so it can drop a stale transcript.
+ *   2. Fetches and parses caption tracks on request.
+ *   3. Reports the active segment as the video plays.
+ *   4. Reports SPA navigation.
+ *
+ * It keeps no cross-request cache: the part of a track that embeds the video id
+ * has a limited lifetime, so tracks are fetched, handed to the worker, and
+ * dropped. Any extra fetch costs one HTTP request and keeps stale state
+ * impossible.
  *
  * Injected as a CLASSIC script (content scripts cannot use `import`), so the
  * message names below duplicate src/common/messages.js and the segment helpers
@@ -15,33 +20,35 @@
  */
 
 (() => {
+  // --- Re-entry guard ------------------------------------------------------
+  // The worker injects this file on demand with chrome.scripting, which re-runs
+  // it even when a copy is already live on the page. Without this guard each
+  // injection would add another position-reporting interval.
+  if (window.__transcribeContentLoaded) return;
+  window.__transcribeContentLoaded = true;
+
   // --- Duplicated contract -------------------------------------------------
   const CHANNEL = 'transcribe-ext';
   const MSG = {
-    GET_TRANSCRIPT: 'get-transcript',
-    SEEK: 'seek',
-    SELECT_TRACK: 'select-track',
-    GET_POSITION: 'get-position',
-    TRANSCRIPT_INVALIDATED: 'transcript-invalidated',
-    POSITION: 'position',
+    PROVIDE: 'provide',
+    PROBE: 'probe',
+    FETCH_TRACK: 'fetch-track',
+    CONTENT_SEEK: 'content-seek',
+    CONTENT_POSITION: 'content-position',
+    CONTENT_VIDEO_CHANGED: 'content-video-changed',
   };
-  const TARGET = { SIDEPANEL: 'sidepanel', CONTENT: 'content' };
+  const TARGET = { BACKGROUND: 'background', CONTENT: 'content' };
 
   const POSITION_POLL_MS = 250;
 
-  /** @type {{videoId: string|null, title: string|null, isLive: boolean, tracks: object[], languageCode: string|null, segments: object[]|null, error: string|null, innertubeApiKey: string|null}} */
-  let state = {
-    videoId: null,
-    title: null,
-    isLive: false,
-    tracks: [],
-    languageCode: null,
-    segments: null,
-    error: null,
-    innertubeApiKey: null,
-  };
-
-  let loading = null;
+  /**
+   * Tracks for the video currently loaded here. Rebuilt on every PROVIDE, and
+   * replaced wholesale when the page navigates.
+   *
+   * @type {{videoId: string|null, title: string|null, isLive: boolean,
+   *         tracks: object[], segments: object[]|null}}
+   */
+  let video = { videoId: null, title: null, isLive: false, tracks: [], segments: null };
   let lastActiveIndex = -2;
 
   // --- Page bridge ---------------------------------------------------------
@@ -79,8 +86,10 @@
     }
 
     if (data.direction === 'event' && data.type === 'navigated') {
-      // Single-page app navigation: whatever we cached belongs to the old video.
-      invalidate();
+      // Single-page app navigation. Do not discard the cached tracks here — the
+      // worker decides whether the video actually changed, and re-requesting
+      // on every navigation event would refetch needlessly.
+      post({ type: MSG.CONTENT_VIDEO_CHANGED, target: TARGET.BACKGROUND });
     }
   });
 
@@ -169,10 +178,12 @@
    * callers), fall back to the internal player API.
    *
    * @param {object} track
+   * @param {string} videoId
+   * @param {string|null} innertubeApiKey
    * @param {string|null} translateTo
    * @returns {Promise<object[]>}
    */
-  async function fetchSegments(track, translateTo) {
+  async function fetchSegments(track, videoId, innertubeApiKey, translateTo) {
     const url = buildTrackUrl(track.baseUrl, translateTo);
 
     const direct = await fetch(url, { credentials: 'include' }).catch(() => null);
@@ -184,16 +195,15 @@
     // --- Fallback: INNERTUBE ------------------------------------------------
     // Re-ask the internal player API for the track list, which hands back a
     // freshly signed baseUrl that is valid for this session.
-    const key = state.innertubeApiKey;
-    if (!key || !state.videoId) return [];
+    if (!innertubeApiKey || !videoId) return [];
 
-    const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${key}`, {
+    const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${innertubeApiKey}`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         context: { client: { clientName: 'ANDROID', clientVersion: '20.10.38', androidSdkVersion: 30, hl: 'en' } },
-        videoId: state.videoId,
+        videoId,
       }),
     }).catch(() => null);
     if (!response?.ok) return [];
@@ -210,57 +220,28 @@
   }
 
   /**
-   * Load the transcript for the current video, reusing whatever is cached.
+   * Fetch a track by language. Returns a plain result object rather than
+   * touching shared state, so one request cannot corrupt another.
    *
-   * @param {string|null} languageCode
-   * @returns {Promise<void>}
+   * @param {string} languageCode
+   * @returns {Promise<{languageCode: string, segments: object[], error: string|null}>}
    */
-  async function ensureTranscript(languageCode = null) {
-    if (loading) return loading;
+  async function fetchTrack(languageCode) {
+    const summary = await askBridge('get-player-response');
+    if (!summary) return { languageCode, segments: [], error: 'This page has no video player.' };
 
-    loading = (async () => {
-      const summary = await askBridge('get-player-response');
-      if (!summary) {
-        state = { ...state, segments: null, error: 'This page has no video player.' };
-        return;
-      }
-
-      const sameVideo = summary.videoId === state.videoId;
-      state = { ...state, ...summary, videoId: summary.videoId, title: summary.title };
-
-      if (!summary.tracks.length) {
-        state.segments = null;
-        state.error = 'This video has no captions.';
-        return;
-      }
-
-      const wanted =
-        languageCode ??
-        (sameVideo ? state.languageCode : null) ??
-        pickDefaultTrack(summary.tracks)?.languageCode ??
-        summary.tracks[0].languageCode;
-
-      // Already loaded for this video and language — nothing to do.
-      if (sameVideo && state.segments && state.languageCode === wanted) return;
-
-      const track = summary.tracks.find((t) => t.languageCode === wanted) ?? summary.tracks[0];
-      state.languageCode = track.languageCode;
-      state.error = null;
-
-      try {
-        const segments = await fetchSegments(track, null);
-        state.segments = segments;
-        if (!segments.length) state.error = 'The caption track came back empty.';
-      } catch (error) {
-        state.segments = null;
-        state.error = `Could not load captions: ${error?.message ?? error}`;
-      }
-    })();
+    const track = summary.tracks.find((t) => t.languageCode === languageCode) ?? summary.tracks[0];
+    if (!track) return { languageCode, segments: [], error: 'This video has no captions.' };
 
     try {
-      await loading;
-    } finally {
-      loading = null;
+      const segments = await fetchSegments(track, summary.videoId, summary.innertubeApiKey, null);
+      return {
+        languageCode: track.languageCode,
+        segments,
+        error: segments.length ? null : 'The caption track came back empty.',
+      };
+    } catch (error) {
+      return { languageCode, segments: [], error: `Could not load captions: ${error?.message ?? error}` };
     }
   }
 
@@ -281,78 +262,132 @@
     );
   }
 
-  /** Drop cached state; the next request reloads. */
-  function invalidate() {
-    state = { ...state, videoId: null, segments: null, languageCode: null, error: null };
-    lastActiveIndex = -2;
-    post({ type: MSG.TRANSCRIPT_INVALIDATED, target: TARGET.SIDEPANEL });
+  /**
+   * Re-read the page and hand back the current video plus its default track.
+   * Recording the segments here is what lets position reporting work without
+   * the worker having to tell us about them.
+   *
+   * @returns {Promise<object>} A PROVIDE payload.
+   */
+  async function provide() {
+    const description = await describe();
+    if (!description.ok) return description;
+
+    if (!video.tracks.length) {
+      return { ok: false, error: 'This video has no captions.', video: describeVideo() };
+    }
+
+    const first = pickDefaultTrack(video.tracks);
+    const fetched = await fetchTrack(first.languageCode);
+    video.segments = fetched.segments;
+
+    return { ok: true, video: describeVideo(), requested: first.languageCode, fetched };
   }
 
-  // --- Side-panel requests -------------------------------------------------
+  /**
+   * Report the current video WITHOUT fetching any captions.
+   *
+   * YouTube fires navigation events for far more than video changes (thumbnail
+   * previews, chapter updates). Fetching a track on each of those would be
+   * wasteful, so the worker probes with this first and only calls PROVIDE when
+   * the video id actually differs.
+   *
+   * @returns {Promise<object>}
+   */
+  async function describe() {
+    const summary = await askBridge('get-player-response');
+    if (!summary) {
+      video = { videoId: null, title: null, isLive: false, tracks: [], segments: null };
+      return { ok: false, error: 'This page has no video player.' };
+    }
+
+    // The video changed underneath us; drop the segments we were reporting on.
+    if (video.videoId !== summary.videoId) {
+      video.segments = null;
+      lastActiveIndex = -2;
+    }
+
+    video = {
+      videoId: summary.videoId,
+      title: summary.title,
+      isLive: summary.isLive,
+      tracks: summary.tracks,
+      segments: video.segments,
+    };
+
+    return { ok: true, video: describeVideo() };
+  }
+
+  /** @returns {object} Video identity plus the track list the panel can offer. */
+  function describeVideo() {
+    return {
+      videoId: video.videoId,
+      title: video.title,
+      isLive: video.isLive,
+      trackList: video.tracks.map((t) => ({
+        languageCode: t.languageCode,
+        name: t.name,
+        kind: t.kind,
+      })),
+    };
+  }
+
+  // --- Service-worker requests ---------------------------------------------
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || message.target !== TARGET.CONTENT) return false;
 
     switch (message.type) {
-      case MSG.GET_TRANSCRIPT:
-        ensureTranscript(message.languageCode ?? null)
-          .then(() => sendResponse(snapshot()))
-          .catch((error) => sendResponse({ error: String(error?.message ?? error) }));
+      case MSG.PROVIDE:
+        provide()
+          .then(sendResponse)
+          .catch((error) => sendResponse({ ok: false, error: String(error?.message ?? error) }));
         return true; // async reply
 
-      case MSG.SEEK: {
-        const video = getVideo();
-        if (video && Number.isFinite(message.seconds)) video.currentTime = message.seconds;
-        sendResponse({ ok: Boolean(video) });
-        return false;
-      }
-
-      case MSG.SELECT_TRACK:
-        state.segments = null;
-        ensureTranscript(message.languageCode ?? null)
-          .then(() => sendResponse(snapshot()))
-          .catch((error) => sendResponse({ error: String(error?.message ?? error) }));
+      case MSG.PROBE:
+        describe()
+          .then(sendResponse)
+          .catch((error) => sendResponse({ ok: false, error: String(error?.message ?? error) }));
         return true;
 
-      case MSG.GET_POSITION:
-        sendResponse({ seconds: getPosition(), paused: getVideo()?.paused ?? true });
+      case MSG.FETCH_TRACK:
+        fetchTrack(message.languageCode)
+          .then(sendResponse)
+          .catch((error) =>
+            sendResponse({ languageCode: message.languageCode, segments: [], error: String(error?.message ?? error) }),
+          );
+        return true;
+
+      case MSG.CONTENT_SEEK: {
+        const element = getVideo();
+        if (element && Number.isFinite(message.seconds)) element.currentTime = message.seconds;
+        sendResponse({ ok: Boolean(element) });
         return false;
+      }
 
       default:
         return false;
     }
   });
 
-  /** @returns {object} The panel's view of the world. */
-  function snapshot() {
-    return {
-      videoId: state.videoId,
-      title: state.title,
-      isLive: state.isLive,
-      error: state.error,
-      languageCode: state.languageCode,
-      tracks: state.tracks.map((t) => ({ languageCode: t.languageCode, name: t.name, kind: t.kind })),
-      segments: state.segments ?? [],
-    };
-  }
-
   /** @param {object} payload */
   function post(payload) {
     chrome.runtime.sendMessage(payload).catch(() => {
-      // No receiver (panel closed) is a normal state.
+      // No receiver (worker restarting) is a normal state.
     });
   }
 
   // --- Position reporting --------------------------------------------------
 
-  // Send an update only when the active segment changes, rather than streaming
-  // the raw playback position four times a second.
+  // Report only when the active segment changes, rather than streaming the raw
+  // playback position four times a second.
   setInterval(() => {
-    if (!state.segments?.length) return;
-    const index = findActiveIndex(state.segments, getPosition());
+    if (!video.segments?.length) return;
+    const seconds = getPosition();
+    const index = findActiveIndex(video.segments, seconds);
     if (index === lastActiveIndex) return;
     lastActiveIndex = index;
-    post({ type: MSG.POSITION, target: TARGET.SIDEPANEL, index, seconds: getPosition() });
+    post({ type: MSG.CONTENT_POSITION, target: TARGET.BACKGROUND, index, seconds });
   }, POSITION_POLL_MS);
 
   /** Mirrors findActiveIndex in src/common/transcript.js. @returns {number} */
@@ -366,6 +401,6 @@
     return -1;
   }
 
-  // Warm the cache as soon as we land on a video, so the panel is instant.
-  ensureTranscript().catch(() => {});
+  // Deliberately nothing at load: the worker asks for a PROVIDE only when a
+  // panel is open and needs data, so an idle tab stays idle.
 })();

@@ -7,23 +7,23 @@
   </head>
   <body>
     <header class="bar">
-      <button id="load" type="button" class="primary">Load</button>
-      <select id="track" class="track" aria-label="Caption track"></select>
-      <label class="follow">
-        <input type="checkbox" id="follow" checked />
-        Follow
-      </label>
+      <select id="primary" aria-label="Primary language"></select>
+      <button id="swap" type="button" title="Swap languages" aria-label="Swap languages">&#8646;</button>
+      <select id="secondary" aria-label="Second language"></select>
     </header>
 
-    <p id="status" class="status" role="status">Open a YouTube video, then load its transcript.</p>
+    <p id="status" class="status" role="status">Looking for a YouTube video…</p>
 
     <main id="transcript" class="transcript" aria-label="Transcript">
       <p class="empty">No transcript loaded.</p>
     </main>
 
     <footer class="bar">
+      <label class="follow">
+        <input type="checkbox" id="follow" checked />
+        Follow
+      </label>
       <button id="copy" type="button">Copy</button>
-      <button id="clear" type="button">Clear</button>
       <select id="format" class="format" aria-label="Export format">
         <option value="txt">.txt</option>
         <option value="srt">.srt</option>

@@ -87,3 +87,53 @@ export function findActiveIndex(segments, seconds) {
   }
   return -1;
 }
+
+/** @typedef {{start: number, duration: number, text: string}} Segment */
+
+/**
+ * Line up a second track against the first, so both can be drawn together.
+ *
+ * Two caption tracks for the same video are separate downloads with
+ * independent cue boundaries: a cue in one language usually starts within a
+ * fraction of a second of its counterpart, but never at exactly the same
+ * millisecond, and the counts differ because one language needs more cues.
+ * There is no id linking them.
+ *
+ * So this walks both lists once, matching each primary cue to the nearest
+ * secondary cue by start time. A pair further apart than `maxDriftMs` is
+ * treated as unmatched: the secondary text is left empty. That threshold is
+ * the whole safety property — without it a drift of several seconds would
+ * leave every row carrying a plausible-looking but wrongly-timed translation.
+ *
+ * @param {Segment[]} primary
+ * @param {Segment[]} secondary
+ * @param {number} [maxDriftMs] Maximum start-time difference to accept.
+ * @returns {string[]} One entry per primary segment; '' where unmatched.
+ */
+export function alignSecondary(primary, secondary, maxDriftMs = 1500) {
+  const aligned = new Array(primary.length).fill('');
+  if (!secondary.length) return aligned;
+
+  let cursor = 0;
+  for (let i = 0; i < primary.length; i++) {
+    const target = primary[i].start;
+
+    // Advance the cursor while the next secondary cue is still closer.
+    while (
+      cursor + 1 < secondary.length &&
+      Math.abs(secondary[cursor + 1].start - target) <= Math.abs(secondary[cursor].start - target)
+    ) {
+      cursor++;
+    }
+
+    const candidate = secondary[cursor];
+    if (Math.abs(candidate.start - target) * 1000 <= maxDriftMs) aligned[i] = candidate.text;
+
+    // Do not let one secondary cue match several primary cues: a cue that ends
+    // before the next primary starts is spent.
+    if (cursor + 1 < secondary.length && secondary[cursor + 1].start <= target) cursor++;
+  }
+
+  return aligned;
+}
+

@@ -1,14 +1,18 @@
 /**
- * Side panel — the user-facing surface.
+ * Side panel — a subscriber, not a controller.
  *
- * This phase reads YouTube's OWN captions rather than capturing audio: it asks
- * the page's content script for the transcript, renders one clickable row per
- * segment, and seeks the page's video when a row is clicked. The audio path is
- * parked behind USE_AUDIO_CAPTURE.
+ * It holds no transcript cache and makes no decisions: the service worker owns
+ * the table, resolves the video, and pushes STATE whenever anything changes.
+ * The panel renders what it is handed and sends back intents (pick a language,
+ * seek, refresh). That split is what lets the panel be closed and reopened, or
+ * the active tab switched, without losing anything.
+ *
+ * The only state here is render bookkeeping, so a STATE push can avoid
+ * rebuilding every row when nothing but a dropdown changed.
  */
 
 import { MSG, TARGET } from '../common/messages.js';
-import { formatTimestamp, toPlainText, toSrt } from '../common/transcript.js';
+import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
 
 /**
  * Phase switch. True drives the parked tabCapture -> offscreen -> engine path
@@ -17,143 +21,164 @@ import { formatTimestamp, toPlainText, toSrt } from '../common/transcript.js';
 const USE_AUDIO_CAPTURE = false;
 
 const els = {
-  load: /** @type {HTMLButtonElement} */ (document.getElementById('load')),
-  track: /** @type {HTMLSelectElement} */ (document.getElementById('track')),
+  primary: /** @type {HTMLSelectElement} */ (document.getElementById('primary')),
+  secondary: /** @type {HTMLSelectElement} */ (document.getElementById('secondary')),
+  swap: /** @type {HTMLButtonElement} */ (document.getElementById('swap')),
   follow: /** @type {HTMLInputElement} */ (document.getElementById('follow')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
   transcript: /** @type {HTMLElement} */ (document.getElementById('transcript')),
   copy: /** @type {HTMLButtonElement} */ (document.getElementById('copy')),
-  clear: /** @type {HTMLButtonElement} */ (document.getElementById('clear')),
   format: /** @type {HTMLSelectElement} */ (document.getElementById('format')),
   save: /** @type {HTMLButtonElement} */ (document.getElementById('save')),
 };
 
-/** @typedef {{start: number, duration: number, text: string}} Segment */
-
-const state = {
-  /** @type {Segment[]} */ segments: [],
+/** Render bookkeeping only — the transcript itself lives in the service worker. */
+const view = {
+  /** @type {object[]} */ rows: [],
+  /** @type {HTMLElement[]} */ elements: [],
   activeIndex: -1,
-  title: '',
-  loading: false,
-  /** @type {number|null} */ activeTabId: null,
-  /** @type {HTMLElement[]} */ rows: [],
   autoScroll: true,
+  title: '',
+  /** Primary language the current rows were rendered from. */
+  renderedPrimary: null,
 };
 
-// --- Content-script channel -------------------------------------------------
+// --- Worker port ------------------------------------------------------------
+// A connected port keeps the service worker alive, which is what preserves its
+// cache while the panel is open.
 
-/** @returns {Promise<number|null>} Id of a tab showing YouTube, if any. */
-async function findYouTubeTab() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id && /^https:\/\/[^/]*youtube\.com\//.test(tab.url ?? '')) return tab.id;
+const port = chrome.runtime.connect({ name: 'panel' });
 
-  // The side panel is its own context, so the active tab is not necessarily
-  // the one playing video.
-  const candidates = await chrome.tabs.query({ url: 'https://*.youtube.com/*' });
-  return candidates[0]?.id ?? null;
-}
-
-/**
- * @param {object} message
- * @returns {Promise<any>}
- */
-async function askContent(message) {
-  const tabId = state.activeTabId ?? (await findYouTubeTab());
-  if (tabId === null) throw new Error('No YouTube tab found.');
-  state.activeTabId = tabId;
-
-  try {
-    return await chrome.tabs.sendMessage(tabId, { ...message, target: TARGET.CONTENT });
-  } catch {
-    // Usually means the content script is not there: not a watch page, or the
-    // extension was reloaded after the tab loaded. Retrying will not help.
-    throw new Error('Could not reach the page. Reload the YouTube tab and try again.');
-  }
-}
-
-// --- Loading ----------------------------------------------------------------
-
-/** @param {string} [languageCode] */
-async function load(languageCode) {
-  if (state.loading) return;
-  state.loading = true;
-  els.load.disabled = true;
-  setStatus('Loading captions…');
-
-  try {
-    const snapshot = await askContent({ type: MSG.GET_TRANSCRIPT, languageCode: languageCode ?? null });
-    state.segments = snapshot?.segments ?? [];
-    state.title = snapshot?.title ?? '';
-    state.activeIndex = -1;
-    renderTracks(snapshot?.tracks ?? [], snapshot?.languageCode ?? null);
-    render();
-
-    if (snapshot?.error) setStatus(snapshot.error, true);
-    else if (state.segments.length) setStatus(`${state.segments.length} lines · ${state.title}`);
-    else setStatus('No caption text came back for this video.', true);
-  } catch (error) {
-    setStatus(String(error.message ?? error), true);
-  } finally {
-    state.loading = false;
-    els.load.disabled = false;
-  }
-}
-
-/**
- * @param {object[]} tracks
- * @param {string|null} current
- */
-function renderTracks(tracks, current) {
-  els.track.replaceChildren();
-  if (!tracks.length) {
-    els.track.disabled = true;
+port.onMessage.addListener((message) => {
+  if (message.type === MSG.STATE) {
+    renderState(message.state);
     return;
   }
-  els.track.disabled = false;
-  for (const track of tracks) {
-    const option = document.createElement('option');
-    option.value = track.languageCode;
-    option.textContent = track.kind === 'asr' ? `${track.name} (auto)` : track.name;
-    option.selected = track.languageCode === current;
-    els.track.append(option);
+  if (message.type === MSG.POSITION) {
+    if (message.index < view.rows.length) setActive(message.index);
+    return;
   }
+  if (message.type === MSG.ERROR) {
+    setStatus(message.error, true);
+  }
+});
+
+/** @param {object} message */
+function send(message) {
+  port.postMessage({ ...message, target: TARGET.BACKGROUND });
+}
+
+// No initial REFRESH is sent: the worker resolves the current tab when the port
+// connects, so asking here would duplicate the content-script round trip.
+
+// --- State rendering --------------------------------------------------------
+
+/** @param {object} state */
+function renderState(state) {
+  renderPickers(state);
+  renderStatus(state);
+  renderRows(state);
+}
+
+/** @param {object} state */
+function renderPickers(state) {
+  const tracks = state.trackList ?? [];
+
+  fillSelect(els.primary, tracks, state.primary, 'Primary');
+  // "Off" first, so a second language is opt-in rather than a surprise.
+  fillSelect(els.secondary, tracks, state.secondary, 'Off', { includeNone: true });
+
+  els.swap.disabled = !state.secondary;
+  els.swap.title = state.secondary
+    ? `Swap ${state.primary} and ${state.secondary}`
+    : 'No second language selected';
+}
+
+/**
+ * @param {HTMLSelectElement} select
+ * @param {object[]} tracks
+ * @param {string|null} selected
+ * @param {string} placeholder
+ * @param {{includeNone?: boolean}} [options]
+ */
+function fillSelect(select, tracks, selected, placeholder, { includeNone = false } = {}) {
+  // Rebuilding a select resets focus mid-interaction, so only do it when the
+  // contents would actually differ.
+  const signature = tracks.map((t) => t.languageCode).join(',') + `|${selected}|${includeNone}`;
+  if (select.dataset.signature === signature) return;
+  select.dataset.signature = signature;
+
+  select.replaceChildren();
+
+  if (!tracks.length) {
+    select.append(new Option(placeholder, ''));
+    select.disabled = true;
+    return;
+  }
+
+  select.disabled = false;
+  if (includeNone) select.append(new Option('Off', ''));
+
+  for (const track of tracks) {
+    const label = track.kind === 'asr' ? `${track.name} (auto)` : track.name;
+    const option = new Option(label, track.languageCode);
+    option.selected = track.languageCode === selected;
+    select.append(option);
+  }
+}
+
+/** @param {object} state */
+function renderStatus(state) {
+  view.title = state.title ?? '';
+
+  if (state.error) {
+    setStatus(state.error, true);
+    return;
+  }
+  if (!state.rows?.length) {
+    setStatus('No transcript for this video.');
+    return;
+  }
+  const langs = state.secondary ? `${state.primary} + ${state.secondary}` : state.primary;
+  setStatus(`${state.rows.length} lines · ${langs} · ${state.title}`);
 }
 
 // --- Controls ---------------------------------------------------------------
 
-els.load.addEventListener('click', () => void load(els.track.value || undefined));
+els.primary.addEventListener('change', () => {
+  send({ type: MSG.SET_PRIMARY, languageCode: els.primary.value });
+});
 
-els.track.addEventListener('change', () => {
-  state.segments = [];
-  render();
-  void load(els.track.value);
+els.secondary.addEventListener('change', () => {
+  send({ type: MSG.SET_SECONDARY, languageCode: els.secondary.value || null });
+});
+
+els.swap.addEventListener('click', () => {
+  const primary = els.primary.value;
+  const secondary = els.secondary.value;
+  if (!secondary) return;
+  send({ type: MSG.SET_PRIMARY, languageCode: secondary });
+  send({ type: MSG.SET_SECONDARY, languageCode: primary || null });
 });
 
 els.follow.addEventListener('change', () => {
-  state.autoScroll = els.follow.checked;
-  if (state.autoScroll) scrollToActive();
+  view.autoScroll = els.follow.checked;
+  if (view.autoScroll) view.elements[view.activeIndex]?.scrollIntoView({ block: 'nearest' });
 });
 
 els.copy.addEventListener('click', () => {
-  const text = toPlainText(state.segments);
+  const text = toBilingualText(view.rows.some((row) => row.secondary));
   if (text) void navigator.clipboard.writeText(text);
 });
 
-els.clear.addEventListener('click', () => {
-  state.segments = [];
-  state.activeIndex = -1;
-  els.track.replaceChildren();
-  els.track.disabled = true;
-  render();
-  setStatus('Cleared.');
-});
-
 els.save.addEventListener('click', () => {
-  if (!state.segments.length) return;
+  if (!view.rows.length) return;
 
+  const bilingual = view.rows.some((row) => row.secondary);
   const format = els.format.value;
-  const body = format === 'srt' ? toSrt(state.segments) : toPlainText(state.segments);
-  const name = (state.title || 'transcript').replace(/[^\w.-]+/g, '_').slice(0, 60);
+  const body = format === 'srt' ? toBilingualSrt() : toBilingualText(bilingual);
+  const name = (view.title || 'transcript').replace(/[^\w.-]+/g, '_').slice(0, 60);
+
   const url = URL.createObjectURL(new Blob([body], { type: 'text/plain' }));
   const link = document.createElement('a');
   link.href = url;
@@ -162,13 +187,40 @@ els.save.addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
+/** Exports carry both languages when a second one is selected. @param {boolean} bilingual */
+function toBilingualText(bilingual) {
+  if (!bilingual) return toPlainText(view.rows);
+  return view.rows.map((row) => (row.secondary ? `${row.text}\n${row.secondary}` : row.text)).join('\n');
+}
+
+function toBilingualSrt() {
+  return view.rows
+    .map((row, index) => {
+      const start = formatSrtTime(row.start);
+      const end = formatSrtTime(row.start + (row.duration || 1));
+      const text = row.secondary ? `${row.text}\n${row.secondary}` : row.text;
+      return `${index + 1}\n${start} --> ${end}\n${text}\n`;
+    })
+    .join('\n');
+}
+
 // --- Rendering --------------------------------------------------------------
 
-function render() {
-  els.transcript.replaceChildren();
-  state.rows = [];
+/** @param {object} state */
+function renderRows(state) {
+  const rows = state.rows ?? [];
 
-  if (!state.segments.length) {
+  // Rebuild only when the data actually changed. A STATE push that only moved
+  // a dropdown must not tear down thousands of rows.
+  if (rows === view.rows && state.primary === view.renderedPrimary) return;
+
+  view.rows = rows;
+  view.renderedPrimary = state.primary;
+  view.elements = [];
+  view.activeIndex = -1;
+  els.transcript.replaceChildren();
+
+  if (!rows.length) {
     const empty = document.createElement('p');
     empty.className = 'empty';
     empty.textContent = 'No transcript loaded.';
@@ -177,60 +229,63 @@ function render() {
   }
 
   const fragment = document.createDocumentFragment();
-  for (const [index, segment] of state.segments.entries()) {
-    const row = document.createElement('button');
-    row.type = 'button';
-    row.className = 'row';
-    row.title = 'Jump to this line';
+  for (const [index, row] of rows.entries()) {
+    fragment.append(buildRow(row, index));
+  }
+  els.transcript.append(fragment);
+}
 
-    const time = document.createElement('span');
-    time.className = 'time';
-    time.textContent = formatTimestamp(segment.start);
-    row.append(time);
+/**
+ * @param {{start: number, text: string, secondary: string}} row
+ * @param {number} index
+ * @returns {HTMLElement}
+ */
+function buildRow(row, index) {
+  const element = document.createElement('button');
+  element.type = 'button';
+  element.className = 'row';
+  element.title = 'Jump to this line';
 
-    const text = document.createElement('span');
-    text.className = 'text';
-    text.textContent = segment.text;
-    row.append(text);
+  const time = document.createElement('span');
+  time.className = 'time';
+  time.textContent = formatTimestamp(row.start);
+  element.append(time);
 
-    row.addEventListener('click', () => void seekTo(segment.start, index));
-    fragment.append(row);
-    state.rows.push(row);
+  const lines = document.createElement('span');
+  lines.className = 'lines';
+
+  const primary = document.createElement('span');
+  primary.className = 'primary';
+  primary.textContent = row.text;
+  lines.append(primary);
+
+  if (row.secondary) {
+    const secondary = document.createElement('span');
+    secondary.className = 'secondary';
+    secondary.textContent = row.secondary;
+    lines.append(secondary);
   }
 
-  els.transcript.append(fragment);
+  element.append(lines);
+  // The index is not used: the worker already knows the offset and the content
+  // script owns the video element.
+  element.addEventListener('click', () => send({ type: MSG.SEEK, seconds: row.start }));
+  void index;
+  view.elements.push(element);
+  return element;
 }
 
 /** @param {number} index */
 function setActive(index) {
-  if (index === state.activeIndex) return;
-  state.rows[state.activeIndex]?.classList.remove('active');
-  state.activeIndex = index;
+  if (index === view.activeIndex) return;
+  view.elements[view.activeIndex]?.classList.remove('active');
+  view.activeIndex = index;
   if (index < 0) return;
 
-  const row = state.rows[index];
-  if (!row) return;
-  row.classList.add('active');
-  if (state.autoScroll) row.scrollIntoView({ block: 'nearest' });
-}
-
-function scrollToActive() {
-  state.rows[state.activeIndex]?.scrollIntoView({ block: 'nearest' });
-}
-
-/**
- * @param {number} seconds
- * @param {number} index
- */
-async function seekTo(seconds, index) {
-  try {
-    await askContent({ type: MSG.SEEK, seconds });
-    // Move the highlight immediately rather than waiting for the page to
-    // report its new position.
-    setActive(index);
-  } catch (error) {
-    setStatus(String(error.message ?? error), true);
-  }
+  const element = view.elements[index];
+  if (!element) return;
+  element.classList.add('active');
+  if (view.autoScroll) element.scrollIntoView({ block: 'nearest' });
 }
 
 /**
@@ -242,54 +297,30 @@ function setStatus(text, isError = false) {
   els.status.classList.toggle('error', isError);
 }
 
-// --- Messages from the content script ---------------------------------------
-
-chrome.runtime.onMessage.addListener((message) => {
-  if (message?.target !== TARGET.SIDEPANEL) return;
-
-  if (message.type === MSG.POSITION) {
-    // Guard against a stale index from a previous transcript.
-    if (message.index < state.segments.length) setActive(message.index);
-    return;
-  }
-
-  if (message.type === MSG.TRANSCRIPT_INVALIDATED) {
-    state.segments = [];
-    state.activeIndex = -1;
-    els.track.replaceChildren();
-    els.track.disabled = true;
-    render();
-    setStatus('Video changed — load the transcript again.');
-  }
-});
-
 // --- Parked audio path -------------------------------------------------------
-// Kept wired so the capture phase can be re-enabled by flipping
+// Kept reachable so the capture phase can be re-enabled by flipping
 // USE_AUDIO_CAPTURE. The offscreen document and stub engine are untouched.
 
 async function enableAudioCapture() {
   const { startAudioCapture, stopAudioCapture } = await import('./audio-capture.js');
-  els.load.textContent = 'Start';
-  els.track.hidden = true;
+  els.transcript.replaceChildren();
+  els.primary.hidden = true;
+  els.secondary.hidden = true;
   els.follow.hidden = true;
-  els.load.addEventListener('click', () => {
-    const running = els.load.getAttribute('aria-pressed') === 'true';
+  els.swap.textContent = 'Start';
+
+  els.swap.addEventListener('click', () => {
+    const running = els.swap.dataset.running === 'true';
     const action = running ? stopAudioCapture() : startAudioCapture();
     void action
-      .then(() => els.load.setAttribute('aria-pressed', String(!running)))
+      .then(() => {
+        els.swap.dataset.running = String(!running);
+        els.swap.textContent = running ? 'Start' : 'Stop';
+      })
       .catch((error) => setStatus(String(error.message ?? error), true));
   });
 }
 
 if (USE_AUDIO_CAPTURE) void enableAudioCapture();
 
-// --- Boot -------------------------------------------------------------------
-
-render();
-void (async () => {
-  const tabId = await findYouTubeTab();
-  if (tabId !== null) {
-    state.activeTabId = tabId;
-    await load();
-  }
-})();
+setStatus('Looking for a YouTube video…');

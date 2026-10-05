@@ -65,7 +65,7 @@ button.primary {
 }
 
 select {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   padding: 5px 6px;
   border: 1px solid #333844;
@@ -79,20 +79,18 @@ select:disabled {
   opacity: 0.45;
 }
 
-.track {
-  flex: 1 1 auto;
-  max-width: 140px;
-}
-
-.format {
+/* The swap control sits between the two language pickers. */
+#swap {
   flex: 0 0 auto;
+  padding: 5px 8px;
+  line-height: 1;
 }
 
 .follow {
-  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-right: auto;
   color: var(--muted);
   font-size: 12px;
   cursor: pointer;
@@ -126,7 +124,7 @@ select:disabled {
 .row {
   display: flex;
   gap: 8px;
-  align-items: baseline;
+  align-items: flex-start;
   width: 100%;
   margin: 0;
   padding: 3px 6px;
@@ -151,20 +149,43 @@ select:disabled {
 }
 
 .row.active .time,
-.row.active .text {
+.row.active .primary,
+.row.active .secondary {
   color: #fff;
 }
 
 .time {
   flex: 0 0 auto;
   min-width: 46px;
+  padding-top: 1px;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
 }
 
-.text {
+/* Primary and secondary stack vertically inside a row. */
+.lines {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.primary {
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* The second language, when one is selected. Muted so the eye stays on the
+   primary line. */
+.secondary {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.row.active .secondary {
+  color: #c2cbe0;
 }

@@ -1,7 +1,9 @@
 # Transcribe (Chrome extension)
 
 Personal-use Chrome extension that shows a **YouTube video's transcript in the
-side panel**, where clicking a line seeks the video to that moment.
+side panel**, where clicking a line seeks the video to that moment. Two caption
+tracks can be shown at once (bilingual), and every video you visit stays cached
+so switching back is instant.
 
 Status: **captions phase**. The panel reads YouTube's own caption tracks — no
 audio capture is involved. The tab-capture + speech-recognition path is built
@@ -11,23 +13,58 @@ but parked behind a flag (see [Parked: audio capture](#parked-audio-capture)).
 
 1. `chrome://extensions` → enable **Developer mode**.
 2. **Load unpacked** → select this folder.
-3. Open (or reload) a **YouTube watch page** — the content scripts only run on
-   pages loaded after the extension is installed.
-4. Click the extension icon to open the side panel.
+3. Click the extension icon to open the side panel.
 
-No build step: Chrome loads `src/**` as-is. Requires Chrome 116+ (side panel
-plus `world: MAIN` content scripts).
+No reloading of YouTube tabs is needed: the worker injects the content scripts
+on demand, so **tabs that were already open work too**. Requires Chrome 116+
+(side panel, `world: MAIN` content scripts).
 
 ### What to check
 
-- The panel loads the transcript **automatically** if a YouTube tab is open.
-- Status line reads `N lines · <video title>`.
-- Clicking any line jumps the video to that timestamp.
-- The line being spoken highlights as the video plays, and the list scrolls
-  with it. **Follow** toggles that scrolling.
-- The dropdown lists every caption track; picking one reloads from it.
-- Codecs show `(auto)` for machine-generated tracks.
+- The panel resolves whatever YouTube video is in the active tab, automatically.
+- Status line reads `N lines · <lang> · <video title>`.
+- Clicking a line jumps the video to that timestamp.
+- The spoken line highlights as it plays; the list scrolls with it. **Follow**
+  toggles that scrolling.
+- Pick a second language in the right-hand dropdown to get two subtitles at
+  once. The &#8646; button swaps the two.
+- Switching to another tab and back does **not** re-fetch — the transcript is
+  cached, and the panel swaps immediately.
+- The second-language choice is remembered across restarts.
 
+## Architecture
+
+The **service worker owns the transcript table**. The panel is a subscriber that
+renders whatever it is sent; content scripts are stateless fetch providers.
+
+That split is what makes tab switching seamless. A panel document is destroyed
+when it closes or its tab closes, taking a panel-side cache with it. The worker
+is not, and the panel's open port keeps it alive, so everything you visit stays
+cached:
+
+```mermaid
+graph TB
+    subgraph SW["Service worker — owns state"]
+        CACHE["videos: Map&lt;videoId, VideoEntry&gt;<br/>rows, tracks, selection"]
+        TRACK["tabs.onActivated → refresh()"]
+    end
+    P["Side panel<br/><i>renders, sends intents</i>"]
+    CS["Content script<br/><i>fetch + parse + seek</i>"]
+    PB["Page bridge (MAIN)<br/><i>reads the page</i>"]
+
+    P -- "port: state pushes" --> P
+    SW -- "port: STATE / POSITION" --> P
+    P -- "port: REFRESH / SET_* / SEEK" --> SW
+    SW -- "PROVIDE / FETCH_TRACK / SEEK" --> CS
+    CS -- "CONTENT_POSITION / VIDEO_CHANGED" --> SW
+    CS -- "postMessage" --> PB
+```
+
+Two channels, deliberately: the **panel** talks over a long-lived port (which
+also keeps the worker alive), while **content scripts** use
+`chrome.runtime.sendMessage`. They are separate channels, so a port message
+never reaches `onMessage` and vice versa — that is why panel intents are handled
+in `handlePanelMessage` and content reports in the `onMessage` switch.
 
 ## How captions are read
 
@@ -39,11 +76,13 @@ script bridges the gap.
 ```mermaid
 sequenceDiagram
     participant SP as Side panel
+    participant SW as Service worker
     participant CS as Content script (isolated)
     participant PB as Page bridge (MAIN world)
     participant YT as youtube.com
 
-    SP->>CS: GET_TRANSCRIPT
+    SP->>SW: (port connect)
+    SW->>CS: PROVIDE
     CS->>PB: postMessage get-player-response
     PB->>PB: read window.ytInitialPlayerResponse
     PB-->>CS: postMessage captionTracks
@@ -60,13 +99,28 @@ documents that, and works around it by re-asking the internal player API
 (INNERTUBE). We run inside the user's own tab, so a plain same-origin fetch is
 tried first; the INNERTUBE request is the fallback.
 
-### Capability probe
+### Where the coupling is
 
-The panel holds just four calls, so all page/bridge protocol details stay in
-one file. If captions fail to load, the status line reports which stage failed.
-Everything page-specific — the player response shape, the timedtext formats
+All page-specific knowledge — the player response shape, the timedtext formats
 (JSON3 and XML), track selection, seeking — is confined to
-`src/content/youtube-content.js`.
+`src/content/youtube-content.js`. Everything above it deals in
+`{ start, duration, text }`. If YouTube changes something, that is the one file
+to look at, and the status line names which stage failed.
+
+## Bilingual subtitles
+
+A second track can be shown under each line. The two tracks are separate
+downloads with independent cue boundaries and no ids linking them, so
+`alignSecondary` in `src/common/transcript.js` walks both lists once matching
+each primary cue to the nearest secondary cue by start time. A pair further
+apart than 1.5s is left unmatched rather than paired — without that threshold a
+few seconds of drift would put a plausible-looking wrong translation on every
+line.
+
+Alignment is approximate by design: it depends on the two tracks describing the
+same speech in roughly the same place. It is verified by unit-style checks run
+outside the browser (identical timings, differing granularity, drift inside and
+outside tolerance, empty tracks).
 
 ## Parked: audio capture
 
@@ -91,26 +145,25 @@ sequenceDiagram
     OD-->>SP: ENGINE_EVENT
 ```
 
-The three contexts never call each other directly — every message carries an
-explicit `target` and listeners ignore anything not addressed to them. The
-contract lives in one place: `src/common/messages.js`.
+Every message carries an explicit `target` and listeners ignore anything not
+addressed to them. The contract lives in one place: `src/common/messages.js`.
 
 ```
 manifest.json
 src/
   common/
     messages.js                # message names + routing targets
-    transcript.js              # timestamp/SRT formatting (ES module, pages only)
+    transcript.js              # formatting, active-segment lookup, dual-track alignment
   content/
     page-bridge.js             # MAIN world: reads window.ytInitialPlayerResponse
     youtube-content.js         # isolated: fetch + parse captions, seek, report position
-  background/service-worker.js # PARKED: stream id, offscreen lifecycle
+  background/service-worker.js # owns the transcript table + tab tracking
   offscreen/                   # PARKED: owns the MediaStream + engine
   engines/
     engine.js                  # adapter interface + registry  <-- change point
     stub-engine.js             # placeholder recogniser
   sidepanel/
-    sidepanel.html/js/css      # transcript list, click-to-seek, follow, export
+    sidepanel.html/js/css      # renders state, sends intents
     audio-capture.js           # PARKED: the panel's half of the capture path
 ```
 
@@ -118,12 +171,19 @@ Content scripts are injected as **classic** scripts and cannot use `import`, so
 `youtube-content.js` repeats the message names and the `findActiveIndex` helper
 that also live in `src/common/`. Both places carry a comment saying so.
 
+Both content scripts also carry a **re-entry guard** (`window.__transcribe*`
+flags). The worker injects them with `chrome.scripting` on every request, so
+without the guard each injection would add another set of listeners and answers
+would arrive twice.
+
 ## Permissions
 
 | Permission         | Why                                                        |
 | ------------------ | ---------------------------------------------------------- |
 | `sidePanel`        | Render the transcript UI.                                  |
-| `storage`          | Reserved for persisting settings/transcripts.              |
+| `storage`          | Remember the chosen second language.                       |
+| `scripting`        | Inject the content scripts on demand.                      |
+| `webNavigation`    | Find which frame holds the video.                          |
 | `host_permissions` | `https://*.youtube.com/*` — read captions from the page.   |
 | `tabCapture`       | PARKED — read the current tab's audio.                     |
 | `offscreen`        | PARKED — host the `MediaStream` + engine in a DOM context. |
@@ -135,7 +195,12 @@ that also live in `src/common/`. Both places carry a comment saying so.
 - **Videos without captions show an error**, not a fallback. Auto-generated
   tracks cover most videos, but not all.
 - **Live streams** have captions with unstable timing; seeking may not line up.
-- **The transcript is lost when the panel closes** — nothing is persisted yet.
+- **Bilingual alignment is approximate.** It matches cues by start time within
+  1.5s; a badly out-of-sync track will leave blanks rather than wrong pairings.
+- **Transcripts are not persisted.** They live in the worker, so they survive
+  tab switches and panel closes, but not a worker restart or browser restart.
+- **The cache holds the 6 most recent videos**, and the one on screen is never
+  evicted.
 - **The stub engine transcribes nothing.** It emits placeholders.
 - **PARKED path is unverified in a browser.** The tab-capture flow is compiled
   and reviewed but has never been run end to end; the stream-id call in
@@ -144,7 +209,8 @@ that also live in `src/common/`. Both places carry a comment saying so.
 ## Roadmap
 
 - [ ] Verify the parked capture path, find or write a real engine.
-- [ ] Persist transcripts via `chrome.storage`.
+- [ ] Persist transcripts across restarts via `chrome.storage`.
 - [ ] Export formats beyond `.txt` / `.srt` (VTT, JSON).
 - [ ] Search within the transcript.
+- [ ] Improve the UI (currently functional, not pretty).
 - [ ] Optional in-page subtitle overlay.
