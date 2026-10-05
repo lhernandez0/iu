@@ -19,6 +19,42 @@ No reloading of YouTube tabs is needed: the worker injects the content scripts
 on demand, so **tabs that were already open work too**. Requires Chrome 116+
 (side panel, `world: MAIN` content scripts).
 
+## Tests
+
+```bash
+npm test           # everything
+npm run test:unit  # pure logic, no stubs
+npm run test:sw    # service worker
+npm run test:panel # side panel
+```
+
+No dependencies — plain Node scripts, so `npm test` works with nothing installed.
+
+Each suite boots a real module against stubbed browser globals and drives it
+through its message surface, rather than testing extracted functions. That is
+deliberate: every bug found so far has been in the wiring, not the logic, and
+none were visible to a linter. A panel that called `chrome.runtime.connect` once
+and had no recovery path looked completely reasonable and hung forever.
+
+| Suite | Boots | Covers |
+| --- | --- | --- |
+| `unit.test.mjs` | nothing | formatting, active-cue lookup, alignment |
+| `service-worker.test.mjs` | worker + `chrome` stub | routing, caching, injections |
+| `sidepanel.test.mjs` | panel + DOM stub | rendering, reconnect, intents |
+| `page-bridge.test.mjs` | bridge + page stub | the MAIN-world protocol |
+| `content.test.mjs` | content script | JSON3/XML parsing, INNERTUBE fallback |
+
+Suites run in separate processes because they share globals (`chrome`,
+`document`) and the module cache; one process would let a suite's stubs leak into
+another's.
+
+### What the tests do not cover
+
+Nothing here runs a real browser. Whether `chrome.scripting` reaches a tab whose
+page loaded before the extension, whether YouTube serves the caption `baseUrl` to
+a same-origin fetch, and whether two real caption tracks align well are all still
+open — they need a browser, and the answers come from the status line.
+
 ### What to check
 
 - The panel resolves whatever YouTube video is in the active tab, automatically.
@@ -195,8 +231,9 @@ would arrive twice.
 - **Videos without captions show an error**, not a fallback. Auto-generated
   tracks cover most videos, but not all.
 - **Live streams** have captions with unstable timing; seeking may not line up.
-- **Bilingual alignment is approximate.** It matches cues by start time within
-  1.5s; a badly out-of-sync track will leave blanks rather than wrong pairings.
+- **Bilingual alignment is approximate.** It matches cues by start time, never
+  reusing a cue and leaving anything more than 1.5s apart blank. A track that
+  is genuinely offset will show blanks rather than wrong pairings.
 - **Transcripts are not persisted.** They live in the worker, so they survive
   tab switches and panel closes, but not a worker restart or browser restart.
 - **The cache holds the 6 most recent videos**, and the one on screen is never
