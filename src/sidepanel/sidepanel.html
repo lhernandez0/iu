@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Transcribe</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <button id="toggle" type="button" class="primary" aria-pressed="false">Start</button>
+      <label class="monitor">
+        <input type="checkbox" id="monitor" checked />
+        Hear tab
+      </label>
+    </header>
+
+    <p id="status" class="status" role="status">Idle</p>
+
+    <main id="transcript" class="transcript" aria-live="polite" aria-label="Transcript">
+      <p class="empty">Press Start to transcribe the current tab.</p>
+    </main>
+
+    <footer class="bar">
+      <button id="copy" type="button">Copy</button>
+      <button id="clear" type="button">Clear</button>
+      <button id="save" type="button">Save .txt</button>
+    </footer>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

@@ -1,0 +1,16 @@
+# Dependencies (only relevant once tooling is introduced)
+node_modules/
+
+# Build output — nothing is built yet, but keep it out of git when it lands
+dist/
+build/
+*.zip
+
+# Local config / secrets
+.env
+.env.*
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.log

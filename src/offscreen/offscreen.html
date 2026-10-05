@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Transcribe — audio worker</title>
+  </head>
+  <body>
+    <!--
+      Offscreen document. Invisible by design: it exists only to hold the
+      MediaStream that a service worker cannot, and to host the transcription
+      engine whose AudioWorklet needs a DOM context.
+    -->
+    <script type="module" src="offscreen.js"></script>
+  </body>
+</html>

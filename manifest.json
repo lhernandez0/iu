@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Transcribe",
+  "version": "0.1.0",
+  "description": "Personal-use live transcription of the current tab's audio.",
+  "minimum_chrome_version": "116",
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Transcribe"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "storage",
+    "sidePanel"
+  ]
+}
