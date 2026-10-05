@@ -250,21 +250,21 @@ select:disabled {
 
 /* Between spoken lines: nothing is being said, but the transcript must not go
    blank — a reader looking up mid-gap would lose their place entirely, which is
-   the opposite of what a reading aid is for. So the last line stays lit, dimmed
-   to show it is not being spoken right now.
+   the opposite of what a reading aid is for. So the last line stays lit, with
+   only its TEXT dimmed to show it is not being spoken right now.
 
-   Deliberately NOT dimming the marks. A coloured underline is the one thing that
-   says "this word is the one you are learning", and fading it would hide exactly
-   the information the panel exists to show. */
-.row.paused {
-  background: #1b1e25;
-  border-color: transparent;
-}
+   The background is deliberately left to `.row.active`. An earlier version set
+   its own darker background here, which — at equal specificity, later in the
+   file — simply overrode the active highlight and made the line look as though
+   nothing was highlighted at all. Only the text colour belongs here.
 
+   The marks are not dimmed either: a coloured underline is the one thing saying
+   "this word is the one you are learning", and fading it would hide exactly the
+   information the panel exists to show. */
 .row.paused .time,
 .row.paused .primary,
 .row.paused .secondary {
-  color: #c3c8d2;
+  color: #aab1c0;
 }
 
 /* .next is the preview of the line after the current one, used by the Current

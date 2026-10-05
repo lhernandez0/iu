@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 481 checks)
+## Tier 1 — hermetic (`npm test`, 492 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies — plain Node scripts,
@@ -38,10 +38,10 @@ so they run with nothing installed.
 | Suite | Boots | Checks |
 | --- | --- | --- |
 | `unit.test.mjs` | nothing | 48 |
-| `service-worker.test.mjs` | worker + `chrome` stub | 178 |
+| `service-worker.test.mjs` | worker + `chrome` stub | 183 |
 | `sidepanel.test.mjs` | panel + DOM stub | 99 |
 | `page-bridge.test.mjs` | bridge + page stub | 42 |
-| `content.test.mjs` | content script | 70 |
+| `content.test.mjs` | content script | 76 |
 | `learn.test.mjs` | segmenter + word list | 44 |
 
 Each file is spawned as its own process, because they all grab the same globals
@@ -68,7 +68,7 @@ The content stub models an **orphaned extension context**: `id` absent, and
 that quietly resolved would not exercise the path at all, and the bug being
 pinned is precisely that the throw escaped.
 
-## Tier 2 — browser, offline (`npm run test:browser`, 82 checks)
+## Tier 2 — browser, offline (`npm run test:browser`, 89 checks)
 
 The real extension in real Chromium. The only thing faked is the network, and it
 is intercepted at the transport layer with `context.route`, so the content script
@@ -94,6 +94,16 @@ Covers what the hermetic tier structurally cannot:
   `calc(13px * calc(var(--font-size) / 13))` multiplies two lengths, which CSS
   rejects, so every one of the nine derived sizes silently fell back to the
   browser default while every hermetic test stayed green.
+- **that a cascaded override does not erase a highlight**: `.row.paused` and
+  `.row.active` are equal specificity, so only a real cascade shows which one
+  wins. The reported "nothing is highlighted between two lines" was exactly that
+  — a later rule replacing the highlight background with the page colour.
+
+**A throttled background tab is not a failure.** The watch page is not the active
+ tab while the panel is open, so its 250ms position poll is throttled. An
+assertion that reads the panel immediately after opening it can therefore see a
+stale state and look like a code bug — which it did, costing several rounds.
+Wait for the CONDITION, never for "long enough".
 
 Notable details in `test/browser/harness.mjs`, all of which cost time to find:
 

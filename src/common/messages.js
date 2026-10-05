@@ -64,6 +64,16 @@ export const MSG = Object.freeze({
   PROVIDE: 'provide',
   /** background -> content. Payload: { languageCode } — fetch a specific track. */
   FETCH_TRACK: 'fetch-track',
+  /**
+   * background -> content. Payload: { segments }
+   *
+   * The transcript the worker already holds, handed over so the content script
+   * can report which cue is playing. Needed because position reporting is keyed
+   * off the segments it holds, and on a cache hit no fetch happens — so without
+   * this a freshly loaded page could never report a cue, and the panel had
+   * nothing to follow or scroll to until the next cue change.
+   */
+  SET_TRACK: 'set-track',
   /** background -> content. Payload: { seconds } */
   CONTENT_SEEK: 'content-seek',
 

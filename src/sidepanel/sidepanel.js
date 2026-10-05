@@ -84,11 +84,23 @@ const view = {
   focusMode: false,
   /** Whether the highlighted line is actually being spoken, or is a held gap. */
   speaking: true,
+  /** Whether that held line was speaking or a gap, for the rebuild restore. */
+  lastSpeaking: true,
   /** What each line was machine-translated into, if anything, for the row tags. */
   translatePrimary: null,
   translateSecondary: null,
   /** The last state received, so a row tag can name the target language. */
   state: null,
+  /**
+   * The last cue the worker reported, kept across a row rebuild.
+   *
+   * Rebuilding the rows resets the highlight, and the state push that caused the
+   * rebuild carries the cue anyway — but only when the cue CHANGED. On a refresh
+   * or a language switch it has not, so the highlight and the scroll position
+   * were both lost until the next cue boundary arrived, which on a paused video
+   * is never.
+   */
+  lastActive: -1,
 };
 
 // --- Worker port ------------------------------------------------------------
@@ -705,6 +717,14 @@ function renderRows(state) {
     fragment.append(buildRow(row, index));
   }
   els.transcript.append(fragment);
+
+  // Rebuilding cleared the highlight, so put it back from the last cue we were
+  // told about. Without this a refresh — which rebuilds the rows without the cue
+  // changing — left the transcript scrolled to the top and nothing highlighted,
+  // and on a paused video it stayed that way.
+  if (view.lastActive >= 0) {
+    setActive(view.lastActive, view.lastSpeaking);
+  }
 }
 
 /**
@@ -792,6 +812,11 @@ function buildRow(row, index) {
  */
 function setActive(index, speaking = true) {
   if (index === view.activeIndex && speaking === view.speaking) return;
+
+  // Remembered so a later row rebuild can restore it. Kept here rather than in
+  // the message handler so every path that moves the highlight updates it.
+  view.lastActive = index;
+  view.lastSpeaking = speaking;
 
   view.elements[view.activeIndex]?.classList.remove('active');
   // The previous successor is no longer the successor.

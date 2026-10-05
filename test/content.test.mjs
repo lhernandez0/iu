@@ -510,6 +510,43 @@ section('describe reports the translation languages for this video');
   check('and tracks carry translatability', result?.video?.trackList?.map((t) => t.isTranslatable), [true, false]);
 }
 
+section('a transcript handed over is what position reporting measures against');
+
+{
+  // The worker skips the fetch entirely for a cached video, so the content
+  // script never gets segments — and it reports position BY looking at them. A
+  // freshly loaded page therefore reported no cue at all, which is why the panel
+  // neither highlighted nor scrolled until the next cue change.
+  const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
+
+  // Nothing loaded yet: no position is reported, because there is nothing to
+  // measure against.
+  script.tick(0.5);
+  check('nothing reported before a transcript is handed over', script.posted.length, 0);
+
+  const handedOver = await script.ask({
+    type: 'set-track',
+    // The video id travels with the segments; without it the next sync() reads
+    // the hand-over as a new video and clears it.
+    videoId: 'dQw4w9WgXcQ',
+    segments: [
+      { start: 0, duration: 1, text: 'First' },
+      { start: 5, duration: 1, text: 'Second' },
+    ],
+  });
+  check('the hand-over is acknowledged', handedOver?.ok, true);
+
+  // The very next tick must report. Suppressing the first one — the usual dedupe
+  // shape — would leave a paused video silent forever.
+  script.tick(0.5);
+  check('a cue is reported straight away', script.posted.at(-1)?.index, 0);
+  check('and it is being spoken', script.posted.at(-1)?.paused, false);
+
+  script.tick(3.0);
+  check('the gap is reported as paused', script.posted.at(-1)?.paused, true);
+  check('still holding the finished line', script.posted.at(-1)?.index, 0);
+}
+
 // --- 6. Seek -----------------------------------------------------------------
 
 section('seek moves the page video');

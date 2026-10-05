@@ -563,6 +563,7 @@ async function refreshInner() {
   // holds segments; otherwise the next position tick supplies it.
   if (typeof described.video.activeIndex === 'number' && described.video.activeIndex >= 0) {
     activeIndex = described.video.activeIndex;
+    activePaused = Boolean(described.video.activePaused);
   }
 
   // Nothing to fetch and nothing to show: say so rather than leaving the panel
@@ -582,6 +583,11 @@ async function refreshInner() {
   // and what keeps a video's transcript alive while you look at others.
   if (isCached(entry)) {
     rebuildRows(entry);
+    // Hand the transcript over before saying anything. The content script keys
+    // its position reporting off the segments it holds, and nothing was fetched,
+    // so without this a freshly loaded page — or a panel opened after a reload —
+    // reports no cue at all and the panel never learns where playback is.
+    void primeContentPosition(entry);
     broadcastState();
     return;
   }
@@ -821,6 +827,38 @@ function recordTrack(entry, fetched) {
   });
   entry.error = null;
   return true;
+}
+
+/**
+ * Hand the content script a transcript it did not fetch.
+ *
+ * Position reporting is keyed off the segments the content script holds, and on
+ * a cache hit nothing is fetched — so a freshly loaded page would report no cue
+ * at all until the next cue boundary, which on a paused video never arrives. The
+ * panel would then sit at the top of the transcript with nothing highlighted.
+ *
+ * Not awaited by its callers: it is a notification, and a failure to deliver it
+ * is recoverable — the panel still has `activeIndex` in state, and the next
+ * report (whenever it comes) corrects everything.
+ *
+ * The video id travels with it because the content script's own sync() clears
+ * the segments whenever it sees a different video. Sending them without saying
+ * which video they belong to means the next tick wipes them.
+ *
+ * @param {VideoEntry} entry
+ * @returns {Promise<void>}
+ */
+async function primeContentPosition(entry) {
+  if (trackedTabId === null) return;
+  const segments = entry.tracks.get(entry.primaryLang ?? '')?.segments;
+  if (!segments?.length) return;
+
+  try {
+    await sendToContent(trackedTabId, { type: MSG.SET_TRACK, videoId: entry.videoId, segments });
+  } catch {
+    // The tab went away, or the page refused. Nothing to do: the panel still has
+    // the cue from state, and there is no second place to put it.
+  }
 }
 
 /**

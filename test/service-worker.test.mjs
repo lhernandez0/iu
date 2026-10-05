@@ -670,7 +670,35 @@ section('a translation needs its own track, and skips one that is already loaded
 
 // --- 3c. Settings -----------------------------------------------------------
 
-section('a stored setting is restored, and one out of range is corrected');
+section('a cached video still hands its transcript to the content script');
+
+{
+  // The regression this pins: on a cache hit nothing is fetched, so the content
+  // script was never given the segments it reports position FROM. A freshly
+  // loaded page therefore reported no cue at all, and the panel sat at the top of
+  // the transcript with nothing highlighted — no auto-scroll, no follow.
+  //
+  // Only visible from here: the content script's own suite calls set-track
+  // directly, so it cannot see whether anything ever calls it.
+  const stub = await boot(TRACK(GERMAN));
+  const sends = () => stub.calls.sendMessage.filter((c) => c?.message?.type === 'set-track');
+  check('nothing handed over before a cache hit', sends().length, 0);
+
+  // Second refresh: the video is cached, so no fetch happens — which is exactly
+  // when the hand-over has to occur.
+  stub.sendFromPanel({ type: 'refresh' });
+  await settle();
+
+  const handed = sends();
+  check('the transcript is handed over on the cached path', handed.length, 1);
+  check('with the segments themselves', handed[0]?.message?.segments?.length, 3);
+  // The id has to travel with them: the content script clears its segments when
+  // it sees a different video, so without this the next tick wipes them.
+  check('and the video they belong to', handed[0]?.message?.videoId, 'dQw4w9WgXcQ');
+  check('sent to the content script, not the panel', handed[0]?.tabId, 1);
+}
+
+section('a hand-over that fails does not break the refresh');
 
 {
   // A value that made sense when it was stored may not make sense now — a size

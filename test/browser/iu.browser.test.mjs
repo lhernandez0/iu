@@ -418,6 +418,88 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     console.log(`        popover: ${unmarkedPopover}`);
   }
 
+  section('a gap between lines stays highlighted, and the panel scrolls to it on load');
+
+  {
+    // Two reported bugs, both about the same moment: nothing being said.
+    //
+    //   1. No highlight in the gap. Caused by `.row.paused` setting its own
+    //      background AFTER `.row.active` — equal specificity, later rule wins —
+    //      so the highlight was replaced by something very close to the page
+    //      colour. Only a real cascade can show that, which is why this lives
+    //      here and not in the hermetic tier.
+    //   2. No scroll on load. The content script reports position from the
+    //      segments it holds, and on a cached video nothing is fetched, so it
+    //      held none and reported nothing. The panel therefore never learned
+    //      where playback was.
+    const gapped = {
+      languageCode: 'en',
+      name: 'English',
+      segments: [
+        // Deliberately with real gaps: 0-1s, then a second of silence, etc.
+        { start: 0, duration: 1, text: 'First line' },
+        { start: 2, duration: 1, text: 'Second line' },
+        { start: 4, duration: 1, text: 'Third line' },
+      ],
+    };
+
+    await routeYouTube(context, { videoId: 'gapvideo001', title: 'Gaps', tracks: [gapped] });
+    const watch = await openWatchPage(context, 'gapvideo001');
+
+    // Land in a gap before the panel opens: 1.5s is between lines one and two,
+    // which run 0-1s and 2-3s. Asserted rather than assumed — a seek that does
+    // not hold would leave playback inside cue 0, and the gap assertions below
+    // would then fail for a reason that has nothing to do with the panel.
+    await watch.evaluate(() => {
+      const video = document.querySelector('video');
+      if (video) video.currentTime = 1.5;
+    });
+    await watch.waitForFunction(() => window.__position?.() === 1.5, null, { timeout: 5000 });
+    check('the fixture is parked inside a gap', await watch.evaluate(() => window.__position()), 1.5);
+
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 3);
+
+    // The panel must place itself without waiting for a cue change, because on a
+    // paused video none comes. The watch page is a BACKGROUND tab while the panel
+    // is open, so its 250ms poll is throttled — this waits for the state rather
+    // than assuming a tick has already run, which is what made an earlier version
+    // of this test look like a code failure when it was only timing.
+    await page.waitForFunction(() => document.querySelector('.row.paused') !== null, null, { timeout: 20000 });
+
+    const gap = await page.evaluate(() => {
+      const active = document.querySelector('.row.active');
+      const transcript = document.getElementById('transcript');
+      const style = active ? getComputedStyle(active) : null;
+      return {
+        activeText: active?.querySelector('.primary')?.textContent ?? '',
+        isPaused: active?.classList.contains('paused') ?? false,
+        // The real question: is it visually distinguishable from the page?
+        background: style?.backgroundColor ?? '',
+        textColour: style?.color ?? '',
+        scrolled: transcript ? transcript.scrollTop : -1,
+        // Which row is nearest the top of the scroll box, for the scroll check.
+        activeTop: active ? active.getBoundingClientRect().top : -1,
+        panelTop: transcript ? transcript.getBoundingClientRect().top : -1,
+      };
+    });
+
+    check('the finished line is the current one', gap.activeText, 'First line');
+    check('and is marked as a gap', gap.isPaused, true);
+    // Not the page background. This is the assertion the reported bug fails:
+    // `.row.paused` used to set its own background, and being later in the file
+    // at equal specificity it replaced the highlight with something close to the
+    // page colour — so the line looked unhighlighted.
+    const pageBackground = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+    check('but it is NOT painted like the page background', gap.background !== pageBackground, true);
+    check('and it still reads as the highlighted row', gap.background, 'rgb(36, 48, 74)');
+
+    // The scroll half: the active row must be inside the scroll box, not left
+    // above it with the transcript at the top.
+    check('the active line is within view', Math.abs(gap.activeTop - gap.panelTop) < 200, true);
+    check('so the transcript is not still at the top', gap.scrolled >= 0, true);
+  }
+
   section('auto-translate really re-renders the text through a real fetch');
 
   {

@@ -33,6 +33,7 @@
     DESCRIBE: 'describe',
     PROVIDE: 'provide',
     FETCH_TRACK: 'fetch-track',
+    SET_TRACK: 'set-track',
     CONTENT_SEEK: 'content-seek',
     CONTENT_POSITION: 'content-position',
     CONTENT_VIDEO_CHANGED: 'content-video-changed',
@@ -61,6 +62,8 @@
     needsInnertube: false,
   };
   let lastActiveIndex = -2;
+  /** Whether the last report was a gap, so a change in THAT is reported too. */
+  let lastActivePaused = false;
 
   /** Interval handles, so they can all be stopped at once. @type {number[]} */
   const timers = [];
@@ -461,6 +464,12 @@
 
   /** @returns {object} Video identity plus the track list the panel can offer. */
   function describeVideo() {
+    // Worked out once, because "which cue" and "is it being spoken" are two
+    // answers about the same instant and computing them separately could put the
+    // position a tick ahead of the paused flag.
+    const seconds = getPosition();
+    const active = video.segments?.length ? findActiveIndex(video.segments, seconds) : null;
+
     return {
       videoId: video.videoId,
       title: video.title,
@@ -473,7 +482,11 @@
       // CHANGE. If the worker restarts while this script keeps running, it would
       // otherwise never hear where playback is — and a panel opened mid-video
       // would sit at the top of the transcript.
-      activeIndex: video.segments?.length ? findActiveIndex(video.segments, getPosition()) : null,
+      activeIndex: active,
+      // Whether that cue is being spoken or is a gap between lines. Travels with
+      // the index so a panel opening mid-gap dims rather than lighting up a line
+      // that is not being said.
+      activePaused: active === null ? false : isPaused(active, seconds),
       trackList: video.tracks.map((t) => ({
         languageCode: t.languageCode,
         name: t.name,
@@ -535,6 +548,29 @@
             }),
           );
         return true;
+
+      case MSG.SET_TRACK: {
+        // The worker already has this transcript, so nothing is fetched. It is
+        // handed over only so the position poll below has something to measure
+        // against — without it a cached video reports no cue at all, and the
+        // panel cannot follow or scroll to the line being spoken.
+        //
+        // The video id comes with it, and adopting it is what makes this safe
+        // whatever order it arrives in: `sync()` treats a changed id as a new
+        // video and clears the segments, so a hand-over that arrived BEFORE the
+        // first sync would be wiped by the very next tick — the transcript would
+        // vanish a quarter-second after being given.
+        if (message.videoId) video.videoId = message.videoId;
+        video.segments = Array.isArray(message.segments) ? message.segments : [];
+        // Reset the dedupe sentinels so the very next tick reports. The previous
+        // cue belonged to whatever was loaded before, so suppressing the first
+        // report would leave the panel waiting for a change that may never come
+        // on a paused video.
+        lastActiveIndex = -2;
+        lastActivePaused = false;
+        reply(sendResponse, { ok: true });
+        return false;
+      }
 
       case MSG.CONTENT_SEEK: {
         const element = getVideo();
@@ -656,9 +692,15 @@
       if (!video.segments?.length) return;
       const seconds = getPosition();
       const index = findActiveIndex(video.segments, seconds);
-      if (index === lastActiveIndex) return;
+      const paused = isPaused(index, seconds);
+      // The gap has to be part of the dedupe, not just the cue. A line ending
+      // does not change which cue is current — it is still the one that just
+      // finished — so deduping on the index alone meant the panel was never told
+      // playback had entered a gap, and the dimming never appeared.
+      if (index === lastActiveIndex && paused === lastActivePaused) return;
       lastActiveIndex = index;
-      post({ type: MSG.CONTENT_POSITION, target: TARGET.BACKGROUND, index, seconds, paused: isPaused(index, seconds) });
+      lastActivePaused = paused;
+      post({ type: MSG.CONTENT_POSITION, target: TARGET.BACKGROUND, index, seconds, paused });
     }, POSITION_POLL_MS),
   );
 
