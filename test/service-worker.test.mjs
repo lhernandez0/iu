@@ -1191,43 +1191,73 @@ section('switching to a Japanese list loads Japanese words and marks them');
   check('and it has an English gloss', typeof reply?.entry?.m === 'string' && reply.entry.m.length > 0, true);
 }
 
-section('a Chinese list on a Japanese video says so, rather than marking nothing silently');
+section('a Japanese video offers only the Japanese list');
 
 {
-  // The coverage gate is language-aware and was already correct; asserted here
-  // because the second language is the first thing that can actually trip it.
-  // Without this, a Chinese learner opening a Japanese video sees a plain
-  // transcript and no explanation — indistinguishable from a broken feature.
-  const JAPANESE_VIDEO = {
-    videoId: 'jaTestVideo2',
-    title: 'Japanese Test',
-    isLive: false,
-    trackList: [{ languageCode: 'ja', name: 'Japanese', kind: null, isTranslatable: true }],
-    translationLanguages: [{ languageCode: 'ja', name: 'Japanese' }],
-  };
+  // The list picker follows the video's language, so a choice that could only
+  // fail is never presented. This asserts the picker rather than the coverage
+  // message: with filtering there IS no "does not cover" state to reach, because
+  // a Chinese list is never offered alongside Japanese text.
+  //
+  // The three variants are called out because they are different TRACKS that mean
+  // the same thing — an auto-generated track has `kind: 'asr'`, and a machine
+  // translation is the same track with a target language — and the filter must
+  // treat all three as Japanese. It does so without naming any of them, because
+  // the choice is made on the language CODE, which is shared.
+  const variants = [
+    ['plain Japanese', { languageCode: 'ja', name: 'Japanese', kind: null, isTranslatable: true }],
+    ['auto-generated', { languageCode: 'ja', name: 'Japanese', kind: 'asr', isTranslatable: true }],
+    ['Japan-ish region tag', { languageCode: 'ja-JP', name: 'Japanese (Japan)', kind: null, isTranslatable: true }],
+  ];
 
-  const { received } = await boot({
-    describePayload: DESCRIBE(JAPANESE_VIDEO),
-    providePayload: {
-      ok: true,
-      video: JAPANESE_VIDEO,
-      requested: 'ja',
-      fetched: { languageCode: 'ja', segments: [{ start: 0, duration: 2, text: '日本語を勉強します' }] },
-    },
-    trackPayload: GERMAN,
-  });
+  for (const [label, track] of variants) {
+    const VIDEO_JA = {
+      videoId: `ja-${label}`,
+      title: 'Japanese Test',
+      isLive: false,
+      trackList: [track],
+      translationLanguages: [{ languageCode: 'ja', name: 'Japanese' }],
+    };
 
-  // Under the default Chinese list a Japanese video is uncovered, so a reason is
-  // given and nothing is marked. Then switching to JLPT is what makes it markable
-  // — asserted as a pair, because "uncovered before, marked after" is the whole
-  // behaviour and either half alone would pass for the wrong reason.
-  const before = await waitForState(
+    const { received } = await boot({
+      describePayload: DESCRIBE(VIDEO_JA),
+      providePayload: {
+        ok: true,
+        video: VIDEO_JA,
+        requested: track.languageCode,
+        fetched: { languageCode: track.languageCode, segments: [{ start: 0, duration: 2, text: '日本語を勉強します' }] },
+      },
+      trackPayload: GERMAN,
+    });
+
+    const state = await waitForState(
+      received,
+      (s) => s.rows?.length > 0 && (s.learning?.listOptions ?? []).length === 1,
+      `the list options to narrow for ${label}`,
+    );
+
+    check(`${label}: only the JLPT list is offered`, state.learning.listOptions.map((o) => o.value), ['jlpt']);
+    check(`${label}: it is selected without the learner choosing it`, state.learning.listId, 'jlpt');
+    check(`${label}: the Japanese default threshold applies`, state.learning.threshold, 3);
+  }
+}
+
+section('a Chinese video offers only the Chinese lists');
+
+{
+  // The other side of the same rule, and the one that proves the filter is not
+  // just "always offer everything but sort differently".
+  const { received } = await boot(TRACK(GERMAN));
+
+  const state = await waitForState(
     received,
-    (s) => typeof s.markedReason === 'string',
-    'the rows to be reported as uncovered',
+    (s) => s.rows?.length > 0 && (s.learning?.listOptions ?? []).length === 2,
+    'the list options to narrow for Chinese',
   );
-  check('a Chinese list does not cover Japanese', /HSK/.test(String(before.markedReason)), true);
-  check('and nothing is marked', (before.rows?.[0]?.tokens ?? []).every((t) => t.level === null), true);
+
+  check('the two HSK numberings are offered, and JLPT is not', state.learning.listOptions.map((o) => o.value), ['hsk2_0', 'hsk3_0']);
+  check('the stored default is unchanged', state.learning.listId, 'hsk3_0');
+  check('and its own threshold applies', state.learning.threshold, 4);
 }
 
 section('a word only the 3.0 list knows is still marked by default');

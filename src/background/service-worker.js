@@ -404,14 +404,15 @@ async function answerLookup(word) {
     // The dictionary for the active language, awaited because a hover can arrive
     // before anything has marked a row — and a lookup that returned nothing for
     // that reason would read as "this word has no definition".
-    const active = await ensureDictionaryFor(settings.listId);
+    const entry = currentEntry();
+    const active = await ensureDictionaryFor(effectiveListId(entry));
     if (!active) return;
     panelPort.postMessage({
       type: MSG.ENTRY,
       word,
       entry: lookup(active, word),
       levels: levelsFor(active, word),
-      listId: settings.listId,
+      listId: effectiveListId(entry),
     });
   } catch (error) {
     broadcastError(`Could not load the dictionary: ${error?.message ?? error}`);
@@ -1063,7 +1064,102 @@ async function loadTrack(entry, languageCode, translateTo = null) {
  */
 /** @param {VideoEntry|null} entry @returns {object|undefined} */
 function activeList(entry) {
-  return availableLists.find((list) => list.id === settings.listId) ?? availableLists[0];
+  const offered = listsFor(entry);
+  return offered.find((list) => list.id === settings.listId) ?? offered[0];
+}
+
+/**
+ * The id of the list actually in force for an entry.
+ *
+ * Distinct from `settings.listId`, which is the last list the learner CHOSE. The
+ * two differ when the stored choice cannot mark what is on screen — HSK 2.0 is
+ * stored, a Japanese video is open, so the effective list is JLPT. Every part of
+ * the marking path has to agree on which list is in force, or the dictionary
+ * loaded, the cache key and the levels applied come from different lists and the
+ * marks silently vanish.
+ *
+ * @param {VideoEntry|null} entry
+ * @returns {string|null}
+ */
+function effectiveListId(entry) {
+  return activeList(entry)?.id ?? null;
+}
+
+/**
+ * The threshold actually in force for an entry.
+ *
+ * A threshold is relative to its list — 4 is "upper intermediate" in a 6-level
+ * list and something else in a 5-level one — so it cannot be carried across a
+ * language switch. When the effective list is the one the learner chose, their
+ * stored threshold stands. When it is not (they were on a Chinese list and opened
+ * a Japanese video, so JLPT took over), the list's own default is used rather
+ * than a number that was never about this list.
+ *
+ * The stored choice is deliberately NOT overwritten: switching to a Japanese
+ * video and back must restore the HSK list and the level that was set for it.
+ *
+ * @param {VideoEntry|null} entry
+ * @returns {number}
+ */
+function effectiveThreshold(entry) {
+  // No entry means no language forcing a different list, so the learner's own
+  // number stands. Without this the "active differs from chosen" test below
+  // misfires: with no entry, `activeList` falls back to the first list in the
+  // index, whose id differs from a stored one, and the stored threshold would be
+  // replaced by a default the learner never chose.
+  if (!entry) return Number(settings.threshold) || 1;
+
+  const active = activeList(entry);
+  if (active && active.id !== settings.listId) return defaultThreshold(active);
+  return Number(settings.threshold) || 1;
+}
+
+/**
+ * The word lists that make sense for what is on screen.
+ *
+ * A list is only useful for the language its dictionary covers, so offering HSK
+ * on a Japanese video (or JLPT on a Chinese one) presents a choice that can only
+ * end in "this list does not cover this language". Filtering by language removes
+ * the dead option rather than explaining it after the fact.
+ *
+ * The language is the one the STUDY LINE IS DISPLAYING, not the track's. That is
+ * the same value `listCoversLanguage` is judged against, so the two cannot
+ * disagree: an English line translated into Chinese is offered the Chinese lists
+ * because Chinese is what the learner is reading.
+ *
+ * `null` when no video is open — the caller then offers everything, because the
+ * alternative is an empty dropdown before a video is chosen, and a learner who
+ * opens the panel first would see nothing to pick.
+ *
+ * Note this covers the variants for free. "Japanese", "Japanese (auto-generated)"
+ * and "Japanese Machine Translated" are different TRACKS but the same language
+ * code, so they resolve to the same set of lists without naming a single one.
+ *
+ * @param {VideoEntry|null} entry
+ * @returns {string|null}
+ */
+function markableLanguage(entry) {
+  if (!entry) return null;
+  return shownLanguage(entry, 'study');
+}
+
+/**
+ * The lists to offer for an entry, or all of them when there is no language to
+ * filter by.
+ *
+ * @param {VideoEntry|null} entry
+ * @returns {object[]}
+ */
+function listsFor(entry) {
+  const language = markableLanguage(entry);
+  if (!language) return availableLists;
+
+  const covering = availableLists.filter((list) => listCoversLanguage(list, language));
+  // A language no list covers — an English video, say — leaves the lists empty.
+  // Falling back to all of them keeps the control usable and lets `markedReason`
+  // explain why nothing is marked, which is more useful than a disabled control
+  // with no way to find out why.
+  return covering.length ? covering : availableLists;
 }
 
 /**
@@ -1128,8 +1224,11 @@ function rebuildRows(entry) {
   if (!entry) return;
 
   // Which settings the existing tokens were produced for. Anything built under
-  // different ones is dropped rather than reused.
-  const wanted = `${settings.listId}:${settings.threshold}`;
+  // different ones is dropped rather than reused. The EFFECTIVE list, not the
+  // stored one: crossing languages changes which list is in force without the
+  // learner having chosen anything, and a stored id would leave the old tokens
+  // looking reusable.
+  const wanted = `${effectiveListId(entry)}:${effectiveThreshold(entry)}`;
   const reusable = entry.markedWith === wanted;
 
   /** @type {Map<string, object[]>} */
@@ -1190,7 +1289,7 @@ async function applyMarks(entry) {
   // check is on the rows rather than on a remembered flag, because a flag can
   // claim marks that are no longer there — which is precisely how the transcript
   // came back unmarked after a language switch.
-  const wanted = `${settings.listId}:${settings.threshold}`;
+  const wanted = `${effectiveListId(entry)}:${effectiveThreshold(entry)}`;
   const allMarked = entry.rows.every((row) => Array.isArray(row.tokens));
   if (entry.markedWith === wanted && allMarked) return;
 
@@ -1198,7 +1297,7 @@ async function applyMarks(entry) {
   // Not a local variable: `ensureDictionaryFor` sets the module-level dictionary,
   // and the marking below reads it — a shadowing local stayed undefined and threw
   // on `.headwords`.
-  const words = await ensureDictionaryFor(settings.listId).catch((error) => {
+  const words = await ensureDictionaryFor(effectiveListId(entry)).catch((error) => {
     // A missing word list must not take the transcript down with it: the panel
     // still shows captions, just without marks.
     broadcastError(`Word list unavailable: ${error?.message ?? error}`);
@@ -1243,7 +1342,7 @@ async function applyMarks(entry) {
     dictionary.maxWordLength,
   );
 
-  const threshold = settings.threshold;
+  const threshold = effectiveThreshold(entry);
 
   entry.rows = entry.rows.map((row, index) => ({
     ...row,
@@ -1370,7 +1469,10 @@ function deriveState() {
       activeIndex,
       activePaused,
       error: pendingError ?? (trackedTabId === null ? `No ${providerNames()} tab is active.` : null),
-      learning: learningState(),
+      // No entry, so no language to filter by: every list is offered rather than
+      // none, because an empty dropdown before a video is chosen would leave
+      // nothing to pick and no way to find out why.
+      learning: learningState(null),
       lists: availableLists,
     };
   }
@@ -1420,7 +1522,9 @@ function deriveState() {
     // not the language you asked for" — which the learner needs to know even
     // though there is a perfectly good transcript on screen.
     error: pendingError ?? translationError ?? entry.error,
-    learning: learningState(),
+    // The entry decides which lists are offered, so the options and the marks
+    // agree about what is selectable for this video's language.
+    learning: learningState(entry),
     lists: availableLists,
   };
 }
@@ -1429,13 +1533,16 @@ function deriveState() {
  * Everything the panel needs to render its controls, in one object.
  *
  * The panel renders controls from the settings schema, so what it needs is the
- * current value *and* the options available right now — and the options for the
- * threshold depend on the chosen word list, which only the worker knows about.
+ * current value *and* the options available right now — and both the list options
+ * and the threshold options depend on what is on screen, which only the worker
+ * knows about.
  *
+ * @param {VideoEntry|null} [entry] The entry whose language decides the options.
  * @returns {object}
  */
-function learningState() {
-  const active = availableLists.find((list) => list.id === settings.listId) ?? availableLists[0];
+function learningState(entry = null) {
+  const offered = listsFor(entry);
+  const active = offered.find((list) => list.id === settings.listId) ?? offered[0];
   return {
     view: settings.view,
     // Sent so the panel can put its chrome back the way it was. Its absence was a
@@ -1445,20 +1552,22 @@ function learningState() {
     layout: settings.layout,
     fontSize: settings.fontSize,
     // The list actually in force, not the raw stored id. A stored value can name
-    // a list that no longer exists (data changed under it) or one that never did,
-    // and reporting the raw id tells the panel to select an option that is not in
-    // its dropdown — the control then renders blank while the marking uses the
-    // fallback list, so the panel and the marks disagree about what is selected.
+    // a list that no longer exists (data changed under it), one that never did, or
+    // one that does not cover this video's language — and reporting the raw id
+    // tells the panel to select an option that is not in its dropdown. The control
+    // then renders blank while the marking uses the fallback list, so the panel
+    // and the marks disagree about what is selected.
     listId: active?.id ?? null,
-    threshold: settings.threshold,
+    threshold: effectiveThreshold(entry),
     studyLanguage: settings.studyLanguage,
     glossLanguage: settings.glossLanguage,
     translateInto: settings.translateInto,
     studyTranslated: settings.studyTranslated,
     glossTranslated: settings.glossTranslated,
-    // Supplied here rather than in the schema, because the levels a list has is
-    // a property of the data, not of the setting.
-    listOptions: availableLists.map((list) => ({ value: list.id, label: list.label })),
+    // Only the lists that can mark what is on screen. Supplied here rather than in
+    // the schema, because which lists exist is a property of the data and which are
+    // useful is a property of the video.
+    listOptions: offered.map((list) => ({ value: list.id, label: list.label })),
     thresholdOptions: active
       ? Array.from({ length: active.levelCount }, (_, i) => ({ value: i + 1, label: `${i + 1}+` }))
       : [],
