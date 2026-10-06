@@ -47,10 +47,25 @@ console.warn = (...args) => warnings.push(args.join(' '));
 // --- Stubs -------------------------------------------------------------------
 
 /**
- * A DOMParser good enough for the shapes YouTube emits. Entity handling is
- * deliberately absent: the real parser decodes `&#39;`, this only needs to prove
- * the attributes and text are read correctly.
+ * A DOMParser good enough for the shapes YouTube emits.
+ *
+ * Entities ARE decoded here, matching the real parser. The real English track
+ * carries 161 `&amp;` sequences — an earlier version of this stub left them raw on
+ * the grounds that entity handling was not what was being tested, which was true
+ * right up until a real capture showed escaping is a routine part of the body. A
+ * stub that is laxer than the platform turns every escaping bug into a passing
+ * test.
  */
+const decodeEntities = (text) =>
+  text
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+
 class StubDomParser {
   /** @param {string} text @param {string} mime */
   parseFromString(text, mime) {
@@ -61,7 +76,9 @@ class StubDomParser {
       for (const attr of match[1].matchAll(/(\w+)="([^"]*)"/g)) attributes.set(attr[1], attr[2]);
       return {
         getAttribute: (name) => attributes.get(name) ?? null,
-        textContent: match[2],
+        // Nested markup is flattened, as `textContent` does — so a body carrying a
+        // child element yields its text and not its tags.
+        textContent: decodeEntities(match[2].replace(/<[^>]*>/g, '')),
       };
     });
 
@@ -395,6 +412,36 @@ section('the same cues parse identically from JSON3 and from XML');
   check('with the same timings', viaXml.segments[0].start, viaJson.segments[0].start);
   check('and the same text', viaXml.segments[0].text, viaJson.segments[0].text);
   check('and the same last cue', viaXml.segments.at(-1).text, viaJson.segments.at(-1).text);
+}
+
+section('escaping survives the XML body, because the real one carries 161 entities');
+
+{
+  // The real English XML track escapes genuine ampersands. If the two paths
+  // disagreed on the cue that contains one, the transcript would show `&amp;`
+  // whenever a track arrived as XML — a bug no hand-written fixture would ever
+  // have produced, because the fixtures did not contain an ampersand.
+  const track = SYNTHETIC.tracks.find((t) => t.languageCode === 'en') ?? SYNTHETIC.tracks[0];
+  const summary = summaryFrom(SYNTHETIC);
+
+  // A cue that must be escaped on the way out and decoded on the way in.
+  const escaped = { start: 1, duration: 1, text: 'Salt & pepper, and a 5 < 10 deal' };
+  const cues = [escaped, ...track.segments.slice(0, 3)];
+  const xml = xmlFrom(cues);
+
+  check('the body escapes the ampersand', xml.includes('&amp;'), true);
+  check('and escapes the less-than', xml.includes('&lt;'), true);
+
+  const viaJson = await bootContent({ summary, captionBody: json3From(cues) }).then((script) =>
+    script.ask({ type: 'fetch-track', languageCode: track.languageCode }),
+  );
+  const viaXml = await bootContent({ summary, captionBody: xml }).then((script) =>
+    script.ask({ type: 'fetch-track', languageCode: track.languageCode }),
+  );
+
+  check('the XML path decoded the entity', viaXml.segments[0].text, escaped.text);
+  check('and matches the JSON3 path exactly', viaXml.segments[0].text, viaJson.segments[0].text);
+  check('with no raw entity left behind', /&amp;|&lt;/.test(viaXml.segments[0].text), false);
 }
 
 section('describe reports the real track vocabulary, not an invented pair');

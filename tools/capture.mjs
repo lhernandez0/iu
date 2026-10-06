@@ -51,9 +51,10 @@
  *
  * Two of those are known to matter from the first capture: the direct URL answers
  * 200 with an EMPTY body on a real video, so only the fallback had content — and
- * our XML parser has never once seen a real XML body, because `fmt=json3` has
- * always been forced. Guessing at either from a hand-written fixture is how we
- * ended up with tests that describe YouTube as we imagine it.
+ * our XML parser had never once seen a real XML body, because `fmt=json3` had
+ * always been forced. The second capture resolved the second half: the ANDROID
+ * client's default format returns `text/xml`, so a real default-format body is now
+ * held and the parser has run against it.
  *
  * Fixtures are LOCAL and gitignored: a raw capture contains a signed caption URL
  * (`signature`, `ei`, `ip`, `expire`), which is a session artifact rather than
@@ -433,14 +434,16 @@ const REHEARSAL_EXPECTED = [
 ];
 
 /**
- * Rebuild a captured JSON3 body in the XML shape YouTube sends when nobody asks
- * for a format.
+ * Rebuild a JSON3 body in the XML shape YouTube sends when nobody asks for a
+ * format.
  *
  * REHEARSAL ONLY — this never runs against the network and never writes a fixture.
- * Its whole purpose is to let `--replay` exercise the XML branch of the parser,
- * which no capture we hold can exercise: every body we have was requested with
- * `fmt=json3`, so the default-format path has never executed at all. Discovered
- * on the live run means a wasted open, and the open is not repeatable.
+ * It was originally the only way `--replay` could exercise the XML branch, because
+ * no capture held a default-format body. One now does, so the rehearsal serves the
+ * real one and this is a FALLBACK for a capture that predates it (or for `--check`,
+ * which needs a sample and has no capture to read). Recognising when it is being
+ * used matters: a rehearsal that claimed to test the real body while actually
+ * testing this would be the exact self-deception this whole exercise is about.
  *
  * The cues are the real ones from the capture — real timings, real text — just in
  * the other serialisation. Two extra cues are appended that the real body does
@@ -673,20 +676,39 @@ async function installReplayRoutes(context, sourceDir) {
   const rawDir = join(sourceDir, 'raw');
   const files = existsSync(rawDir) ? await readdir(rawDir) : [];
 
-  // Prefer a JSON3 body, then any caption body at all. Being generous here is the
-  // point: a rehearsal that finds no bodies exercises only the empty path, and
-  // then the first real run is the first time the success path is tried — which
-  // is exactly the mistake this mode exists to prevent. It bit once already: the
-  // first version matched on a filename containing `json3`, and the captured
-  // files are named by client instead, so every request came back empty.
-  const captionBody = () => {
-    const candidates = files.filter((f) => f.endsWith('.txt') && /captions/i.test(f));
-    const preferred =
-      candidates.find((f) => /innertube/i.test(f) && /json3/i.test(f)) ??
-      candidates.find((f) => /innertube/i.test(f)) ??
-      candidates[0];
-    return preferred ? readFileSync(join(rawDir, preferred), 'utf8') : '';
-  };
+  // Which caption bodies the capture actually holds, by format.
+  //
+  // The rehearsal serves the REAL bodies. It used to synthesise the XML from a
+  // JSON3 body, because no capture had ever held a default-format body — and then
+  // one did, and the synthesiser silently produced nothing, because it was handed
+  // real XML and expected JSON. A rehearsal whose input is built from an assumption
+  // breaks the moment the assumption changes; serving reality cannot.
+  const bodyFiles = files.filter((f) => f.endsWith('.txt') && /^captions-/.test(f));
+  const readBody = (f) => (f ? readFileSync(join(rawDir, f), 'utf8') : '');
+  const firstWith = (needle) => bodyFiles.find((f) => f.includes(needle));
+
+  const realJson3 = readBody(firstWith('-json3.txt'));
+  const realDefault = readBody(firstWith('-default.txt'));
+  const realTranslated = readBody(firstWith('-tlang-'));
+
+  // Two rehearsal-only cues, spliced into an XML body so entity decoding and
+  // child-element flattening are exercised deterministically. They are appended to
+  // whatever XML we serve — real or synthesised — because the real body cannot be
+  // relied on to contain an entity or a nested element on any given day.
+  const withRehearsalCues = (xml) =>
+    xml.includes('</transcript>')
+      ? xml.replace(
+          '</transcript>',
+          `  <text start="0" dur="0.1">${REHEARSAL_ENTITY}</text>\n  <text start="0" dur="0.1">${REHEARSAL_MARKUP}</text>\n</transcript>`,
+        )
+      : xml;
+
+  // The default-format body — what YouTube sends with no `fmt`. The real one when
+  // the capture has it; otherwise SYNTHESISED from json3 so the XML branch still
+  // executes. A rehearsal that skips the branch it exists to rehearse is pointless,
+  // so on a fresh json3-only capture we build the stand-in rather than serve
+  // nothing. It is never written to a fixture and cannot be mistaken for captured.
+  const defaultBody = realDefault ? withRehearsalCues(realDefault) : withRehearsalCues(xmlFromJson3(realJson3));
 
   const watchHtml = existsSync(join(rawDir, '00-watch.html'))
     ? readFileSync(join(rawDir, '00-watch.html'), 'utf8')
@@ -720,22 +742,26 @@ async function installReplayRoutes(context, sourceDir) {
   );
 
   // The caption route answers according to what was ASKED FOR, because that is
-  // what the real site does and what the tool is trying to learn.
+  // what the real site does and what the tool is trying to learn — but it answers
+  // with the REAL bodies the capture holds, not with reconstructions of them.
   //
-  // A request with `fmt=json3` gets JSON3. A request with no `fmt` gets XML built
-  // from the same cues — the shape YouTube sends by default, which no capture we
-  // hold contains, because every previous call asked for json3. Answering both the
-  // same way would leave the XML branch unexecuted until the live run, which is
-  // the one place a surprise is expensive.
-  const json3 = captionBody();
-  const xml = xmlFromJson3(json3);
-
+  //   - `fmt=json3` → the captured JSON3 body
+  //   - no `fmt`     → the captured default-format (XML) body
+  //   - `tlang=…`    → the captured translated body
+  //
+  // Anything not captured is answered from the closest real body rather than with
+  // an empty one, so a branch that has never run still runs. Serving empty here
+  // would make the rehearsal quietly vacuous, which is worse than a stand-in
+  // because it looks like a pass.
   await context.route('**/api/timedtext**', (route) => {
-    const wantsJson3 = new URL(route.request().url()).searchParams.get('fmt') === 'json3';
+    const params = new URL(route.request().url()).searchParams;
+    const fmt = params.get('fmt');
+    const tlang = params.get('tlang');
+    const body = tlang && realTranslated ? realTranslated : fmt === 'json3' ? realJson3 : defaultBody;
     return route.fulfill({
       status: 200,
       contentType: 'text/plain; charset=utf-8',
-      body: wantsJson3 ? json3 : xml,
+      body,
     });
   });
 }

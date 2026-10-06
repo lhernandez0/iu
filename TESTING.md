@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 533 checks)
+## Tier 1 — hermetic (`npm test`, 538 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies — plain Node scripts,
@@ -41,7 +41,7 @@ so they run with nothing installed.
 | `service-worker.test.mjs` | worker + `chrome` stub | 190 |
 | `sidepanel.test.mjs` | panel + DOM stub | 99 |
 | `page-bridge.test.mjs` | bridge + page stub | 50 |
-| `content.test.mjs` | content script | 93 |
+| `content.test.mjs` | content script | 98 |
 | `learn.test.mjs` | segmenter + word list | 44 |
 
 Each file is spawned as its own process, because they all grab the same globals
@@ -180,24 +180,33 @@ The loader falls back to a tiny self-contained fixture when nothing has been
 derived, so a fresh clone can still run `npm test`. Do not assert on the fallback:
 it is a bootstrapping aid, not a second source of truth.
 
-## What we do not have yet
+## The real XML body, and what it settled
 
-Stated plainly, because the alternative is a suite that looks broader than it is.
+There was a gap here for a long time, and it is worth recording what closed it,
+because the shape of the answer was not what had been assumed.
 
-**No real XML caption body.** Every capture so far requested `fmt=json3`, so the
-`default format` row in the collection plan has never produced a body we hold. The
-XML branch of the parser is therefore only ever exercised against XML *we* built
-from JSON3 — including in `--replay`, whose stubbed route synthesises the XML. That
-tests the parser, but it does not prove what YouTube actually sends by default. The
-collection plan now asks for the default format first for exactly this reason.
+**The gap.** Every capture requested `fmt=json3`, so the default-format row never
+produced a body. The XML branch was only ever exercised against XML *we* built from
+JSON3 — a test of the parser, not of what YouTube sends.
 
-Consequences to keep in mind:
+**What the second capture found.** A request with no `fmt`, from the ANDROID client,
+returns `text/xml` — the older `<transcript><text start=… dur=…>` shape, not JSON3.
+So the default-format path was genuinely a different serialisation, and the parser
+had been right about its structure all along, from a fixture that was at least
+structurally honest. Two facts the real body settled that no fixture had:
 
-- A green rehearsal does **not** mean the default-format path is verified. It means
-  the code that will handle it is.
-- `derive-synthetic.mjs` must skip, with a visible message, when a source capture has
-  no XML body — never fall back to the JSON3-derived stand-in and let the result read
-  as if a real body had been seen.
+- The English track carries **161 `&amp;` entities** — escaping is routine, not
+  theoretical. The hermetic test stub used to leave entities raw, which made every
+  escaping bug a passing test; it now decodes them, with a cue containing a real
+  `&` and `<` to prove the round-trip.
+- The two tracks differ: `zh-Hans` has **0** entities, `en` has **161**. A single-
+track fixture would have hidden that escaping is per-track content, not a format
+  property.
+
+The measured shape is in `test/synthetic/*/shape-report.json` under `measured.xml`,
+read from the captured bytes rather than declared. When a capture has no XML body,
+`derive-synthetic.mjs` says so plainly instead of substituting the JSON3-derived
+stand-in, and the rehearsal falls back to synthesis with that fact visible.
 
 ## Where the browser comes from
 

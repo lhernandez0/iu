@@ -161,6 +161,12 @@ const ENGLISH_LINES = [
   'Could not resist buying one',
   'Crisp outside, soft inside',
   'Just right with an americano',
+  // The real English track carries 161 `&amp;` entities — genuine ampersands that
+  // YouTube escapes in XML and leaves bare in JSON3. A cue containing `&` (and the
+  // less-than that must survive as text) is what makes the entity-decoding path
+  // testable at all; without one, both serialisations agree trivially and prove
+  // nothing about escaping.
+  'Salt & pepper, and a 5 < 10 deal on the sign',
   'That is what a weekend morning is for',
   'What do you eat for breakfast where you live',
   'Tell me in the comments',
@@ -342,6 +348,54 @@ for (const videoId of complete) {
   // ever run against XML we built ourselves, and the report must say so.
   const sawRealXml = formatsSeen.has('xml');
 
+  // When a real XML body IS present, read its structure from the captured bytes
+  // rather than from an idea of what XML looks like. This is the whole point of
+  // capturing: the shape in the report has to trace to a response, not to a guess.
+  // The reader reconstructs the raw filename from the normalised entry's own
+  // fields (language, client, format), so nothing extra has to be captured.
+  //
+  // Per track, not just the first. The two tracks differ in a way that matters —
+  // one carries entities and the other does not — and reporting only the first
+  // would hide exactly the evidence that tells us what the parser must handle.
+  const xmlShape = sawRealXml
+    ? {
+        rootTag: null,
+        cueTag: null,
+        attributes: null,
+        tracks: {},
+      }
+    : null;
+  if (sawRealXml) {
+    for (const track of tracks) {
+      const suffix = track.kind === 'asr' ? '-asr' : '';
+      const storedJson = join(dir, `captions-${track.languageCode}${suffix}.json`);
+      if (!existsSync(storedJson)) continue;
+      const stored = JSON.parse(readFileSync(storedJson, 'utf8'));
+      if (stored.shape !== 'xml') continue;
+      const rawFile = join(FIXTURES, videoId, 'raw', `captions-${track.languageCode}-${stored.source}-${stored.format}.txt`);
+      if (!existsSync(rawFile)) continue;
+      const body = readFileSync(rawFile, 'utf8');
+      const tags = [...body.matchAll(/<([a-zA-Z][\w-]*)/g)].map((m) => m[1]);
+      const cueTag = tags.find((t) => t !== tags[0]) ?? null;
+      const firstCue = cueTag ? body.match(new RegExp(`<${cueTag}\\s+([^>]*)>`)) : null;
+      const attributes = firstCue ? [...firstCue[1].matchAll(/([\w-]+)="/g)].map((m) => m[1]) : [];
+      xmlShape.rootTag ??= tags[0] ?? null;
+      xmlShape.cueTag ??= cueTag;
+      xmlShape.attributes ??= attributes;
+      xmlShape.tracks[track.languageCode] = {
+        rootTag: tags[0] ?? null,
+        cueTag,
+        attributes,
+        cueCount: cueTag ? (body.match(new RegExp(`<${cueTag}[\\s>]`, 'g')) ?? []).length : 0,
+        entityCount: (body.match(/&[a-zA-Z]+;|&#\d+;/g) ?? []).length,
+        // Elements opening inside a cue's text, i.e. markup nested in the content.
+        nestedElementCount: cueTag
+          ? (body.match(new RegExp(`<${cueTag}\\b[^>]*>[^<]*<(?!/?${cueTag})`, 'g')) ?? []).length
+          : 0,
+      };
+    }
+  }
+
   // Chinese content for any track whose language is Chinese, English otherwise.
   const cuesFor = (languageCode) =>
     /^zh/i.test(languageCode)
@@ -436,6 +490,10 @@ for (const videoId of complete) {
           // from JSON3, which is a real limitation and is recorded as one.
           realXmlBodySeen: sawRealXml,
           formatsSeen: [...formatsSeen],
+          // Measured from the captured bytes when a real XML body exists, null
+          // otherwise. Never synthesised: a shape report that invents the shape it
+          // is meant to report on is worse than one that admits the gap.
+          xml: xmlShape,
         },
       },
       null,
@@ -452,6 +510,11 @@ for (const videoId of complete) {
   if (!sawRealXml) {
     console.log('    note: no real XML caption body in this capture.');
     console.log('          the XML parser has still only seen XML we built from JSON3.');
+  } else if (xmlShape) {
+    const perTrack = Object.entries(xmlShape.tracks)
+      .map(([lang, s]) => `${lang}: ${s.cueCount} cues, ${s.entityCount} entities`)
+      .join('; ');
+    console.log(`    real XML body: <${xmlShape.rootTag}>/<${xmlShape.cueTag}> attrs [${xmlShape.attributes.join(', ')}] — ${perTrack}`);
   }
   console.log(`    wrote test/synthetic/${name}/`);
 }

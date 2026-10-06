@@ -1,6 +1,6 @@
 {
   "derivedFrom": "iuSyntheticS2U",
-  "derivedAt": "2026-10-06T03:47:34.225Z",
+  "derivedAt": "2026-10-06T03:51:56.773Z",
   "note": "Dimensions measured from the real capture; text invented. Compare against test/fixtures/<id>/normalised/.",
   "synthetic": {
     "cueCount": 403,
@@ -27,7 +27,41 @@
       }
     ],
     "translationLanguageCount": 156,
-    "realXmlBodySeen": false,
-    "formatsSeen": []
+    "realXmlBodySeen": true,
+    "formatsSeen": [
+      "xml"
+    ],
+    "xml": {
+      "rootTag": "transcript",
+      "cueTag": "text",
+      "attributes": [
+        "start",
+        "dur"
+      ],
+      "tracks": {
+        "zh-Hans": {
+          "rootTag": "transcript",
+          "cueTag": "text",
+          "attributes": [
+            "start",
+            "dur"
+          ],
+          "cueCount": 393,
+          "entityCount": 0,
+          "nestedElementCount": 0
+        },
+        "en": {
+          "rootTag": "transcript",
+          "cueTag": "text",
+          "attributes": [
+            "start",
+            "dur"
+          ],
+          "cueCount": 392,
+          "entityCount": 161,
+          "nestedElementCount": 0
+        }
+      }
+    }
   }
 }
