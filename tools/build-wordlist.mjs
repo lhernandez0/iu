@@ -8,7 +8,10 @@
  *
  * Source: https://github.com/TeaPearce/chinese-english-dictionary
  *   data/parsed_hsk_enriched.json — 11,494 entries, CC BY-SA 4.0, derived from
- *   CC-CEDICT, with HSK levels overridden from Pleco's HSK 3.1 list.
+ *   CC-CEDICT, with HSK levels overridden from the official HSK 3.0 word list
+ *   (upstream file data/hsk31-words-pleco.txt). "Pleco" in that filename is the
+ *   OCR tool, not the author: the list is the MOE-published standard, extracted
+ *   from the official PDF and OCR'd with Pleco OCR.
  *
  * What it emits, and why in this shape:
  *
@@ -93,7 +96,7 @@ const payload = {
   meta: {
     source: 'CC-CEDICT via TeaPearce/chinese-english-dictionary',
     licence: 'CC BY-SA 4.0',
-    note: 'HSK levels overridden from Pleco HSK 3.1. Unlevelled words have a definition but no level.',
+    note: 'HSK levels from the official MOE HSK 3.0 word list (via TeaPearce data/hsk31-words-pleco.txt; "Pleco" there is the OCR tool). Unlevelled words have a definition but no level.',
     wordCount: Object.keys(words).length,
   },
   lists: LISTS.map(({ id, label, levelCount }) => ({

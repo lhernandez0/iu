@@ -47,6 +47,17 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURES = join(ROOT, 'test', 'fixtures');
 const SYNTHETIC = join(ROOT, 'test', 'synthetic');
 
+/**
+ * The title every synthetic fixture carries.
+ *
+ * One constant, because two files hold a title — `video.json` and
+ * `player-response.json` — and they disagreed: the response held the REAL video's
+ * title while `video.json` said this. A corpus whose files contradict each other
+ * about whether it is synthetic is worse than either answer on its own, and the
+ * real title is someone else's words in a committed file.
+ */
+const SYNTHETIC_TITLE = 'Synthetic fixture derived from a real capture';
+
 /** Measured from the real capture; see the header. */
 const SHAPE = {
   cueCount: 403,
@@ -238,6 +249,12 @@ function buildCues(lines, count, seed) {
  * fixture missing `defaultAudioTrackIndex` describes a payload YouTube does not
  * send, and nothing would notice.
  *
+ * The title is OURS, not the capture's. It used to be copied verbatim, which put a
+ * real video's title — someone else's words, naming a specific trip — into a
+ * committed file, while the sibling `video.json` said "Synthetic fixture derived
+ * from a real capture". The corpus is our invented text wearing a real shape; the
+ * title should follow the same rule as the cues.
+ *
  * @param {object} capture Parsed normalised video + captions.
  * @returns {object}
  */
@@ -247,7 +264,7 @@ function buildPlayerResponse(capture) {
   return {
     videoDetails: {
       videoId: capture.videoId,
-      title: capture.title,
+      title: SYNTHETIC_TITLE,
       isLiveContent: false,
     },
     captions: {
@@ -449,7 +466,7 @@ for (const videoId of complete) {
     `${JSON.stringify(
       {
         videoId: fixtureId,
-        title: 'Synthetic fixture derived from a real capture',
+        title: SYNTHETIC_TITLE,
         isLive: false,
         text: 'synthetic',
         derivedFrom: videoId,
