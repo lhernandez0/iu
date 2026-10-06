@@ -38,7 +38,7 @@ export const BASE_FONT_PX = 13;
 /** How much of the transcript is shown at once. */
 const VIEW_OPTIONS = [
   { value: 'all', label: 'Full' },
-  { value: 'focus', label: 'Current' },
+  { value: 'focus', label: 'Live' },
 ];
 
 /**

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="IU">
+  <!--
+    The source for every icon size. tools/make-icons.mjs rasterises this into
+    icons/icon-{16,32,48,128}.png.
+
+    Drawn in a 16x16 viewBox on purpose: 16px is the toolbar size, and it is the
+    only size where this can go wrong. Reason in toolbar pixels and every larger
+    size is a clean multiple of something that is known to be legible.
+
+    The letters are PATHS, not text. Rasterising <text> bakes in whatever font
+    the machine happens to have, so the icon would differ per developer and could
+    not be regenerated reproducibly. A path is the same everywhere.
+
+    Geometry (all measurements are outer edges, i.e. including the 2px stroke):
+      tile     0..16, radius 3.5
+      I        x 3.05..5.05
+      gap      1.7px between the I and the U
+      U        x 6.75..12.95
+      margins  3.05 left, 3.05 right — the lockup is optically centred
+      tops     3.4, bottoms 12.6
+
+    The I and U are the same weight and are kerned tight enough to read as one
+    mark rather than two letters, which is what lets two capitals survive at
+    16px instead of turning to mush.
+  -->
+  <rect x="0" y="0" width="16" height="16" rx="3.5" fill="#4f8cff" />
+
+  <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round">
+    <!-- I -->
+    <path d="M4.05 4.4 V11.6" />
+    <!-- U -->
+    <path d="M7.75 4.4 V9.5 A2.1 2.1 0 0 0 11.95 9.5 V4.4" />
+  </g>
+</svg>

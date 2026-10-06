@@ -99,13 +99,21 @@ body {
   font-size: calc(12px * var(--text-scale));
 }
 
-/* A numeric size, so the units are part of the control rather than implied. */
+/* A numeric size, so the units are part of the control rather than implied.
+
+   The number sits in its own inset field. It used to be borderless text on the
+   same surface as the control, which made it almost invisible: at the smallest
+   sizes the whole control scales down with --text-scale, so the digits were
+   small, dark-on-dark, and pushed against the unit. The digit you are editing is
+   the one thing in this control that must always be readable, so it gets its own
+   background, a lighter foreground, and tabular figures so the glyphs do not
+   shift as the value changes. */
 .size {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 2px;
-  padding: 0 6px;
+  gap: 3px;
+  padding: 0 5px 0 3px;
   border: 1px solid #333844;
   border-radius: 6px;
   background: var(--surface);
@@ -113,17 +121,36 @@ body {
 }
 
 .size input {
-  width: 3ch;
-  padding: 5px 0;
-  border: none;
-  background: none;
+  /* Wide enough for three digits plus the spinner, and centred so the value
+     reads as a value rather than as text trailing off to the right. */
+  width: 4.5ch;
+  min-height: 26px;
+  padding: 3px 2px;
+  border: 1px solid #2a2e37;
+  border-radius: 4px;
+  background: #0f1115;
   color: var(--fg);
   font: inherit;
-  text-align: right;
+  /* Deliberately NOT scaled by --text-scale, unlike most of this file.
+
+     This control sets the text size, so scaling it by that size is circular: at
+     the 10px minimum the field, the digits and the spinner all shrink together
+     until the number cannot be read — and the number is the one thing you need
+     to read to change it back. A control for a size must not depend on the size
+     it controls. */
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.size input:hover {
+  border-color: #3a4050;
 }
 
 .size input:focus {
   outline: none;
+  border-color: var(--accent);
 }
 
 .size-unit {

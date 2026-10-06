@@ -13,7 +13,7 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
-import { definition, BASE_FONT_PX } from '../common/settings.js';
+import { definition } from '../common/settings.js';
 import { attachHover, showEntry, hide as hidePopover, renderTokens } from './marks.js';
 
 /**
@@ -507,6 +507,30 @@ function fillSelectOptions(select, options, selected, placeholder, { leading = n
 }
 
 /**
+ * A text size as a number in range, from a control or from storage.
+ *
+ * Empty is not zero. `Number('')` is 0, which clamps to the 10px minimum — so
+ * clearing the field would shrink the text as a side effect, which is not what a
+ * person clearing a field means. An empty or unparseable value falls back to the
+ * default instead.
+ *
+ * Bounds come from the schema rather than being repeated as literals: the worker
+ * clamps against the same definition, and two copies of "10..32" eventually
+ * disagree.
+ *
+ * @param {string|number|null|undefined} raw
+ * @returns {number}
+ */
+function sizeFrom(raw) {
+  const { min, max, default: fallback } = definition('fontSize');
+  const text = typeof raw === 'string' ? raw.trim() : raw;
+  if (text === '' || text === null || text === undefined) return fallback;
+  const value = Number(text);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/**
  * Text size is a single pixel size on the root element.
  *
  * Every other size in the stylesheet is expressed as a multiple of it, because
@@ -520,9 +544,7 @@ function fillSelectOptions(select, options, selected, placeholder, { leading = n
  * @param {number} pixels
  */
 function applyFontSize(pixels) {
-  const value = Number(pixels);
-  const clamped = Number.isFinite(value) ? Math.min(32, Math.max(10, Math.round(value))) : BASE_FONT_PX;
-  document.documentElement.style.setProperty('--font-size', `${clamped}px`);
+  document.documentElement.style.setProperty('--font-size', `${sizeFrom(pixels)}px`);
 }
 
 /**
@@ -588,16 +610,30 @@ els.viewMode.addEventListener('change', () => {
   send({ type: MSG.SET_SETTING, id: 'view', value: els.viewMode.value });
 });
 
+// Only a complete, in-range value is applied live. Typing "18" passes through
+// "1", and applying that immediately clamped to 10 and re-rendered the whole
+// transcript mid-keystroke — the field fighting the person typing in it. An
+// empty field is the same case: it is a value being typed, not a value, and
+// treating it as one would snap the size on every backspace.
 els.fontSize.addEventListener('input', () => {
-  applyFontSize(els.fontSize.value);
+  const size = definition('fontSize');
+  const value = Number(els.fontSize.value);
+  if (!els.fontSize.value.trim() || !Number.isFinite(value)) return;
+  if (value < size.min || value > size.max) return;
+  applyFontSize(value);
 });
 
 // Committed on change rather than on every keystroke, so a half-typed "1" in
 // "18" is not stored as the size you asked for. The worker clamps too, so a
 // nonsense value cannot reach the stylesheet.
 els.fontSize.addEventListener('change', () => {
-  const value = Number(els.fontSize.value);
+  const value = sizeFrom(els.fontSize.value);
   applyFontSize(value);
+  // Written back explicitly, because the live handler above deliberately leaves
+  // an out-of-range or empty field alone and the browser does not rewrite it
+  // either — so "999" would otherwise sit on screen looking accepted while the
+  // panel showed 32.
+  els.fontSize.value = String(value);
   send({ type: MSG.SET_SETTING, id: 'fontSize', value });
 });
 
@@ -805,7 +841,7 @@ function buildRow(row, index) {
  * in progress: between two lines there is a gap, and during it the honest answer
  * is "the line that finished". Returning -1 for those gaps — which is what the
  * worker used to do — made the highlight blink off after every line and blank
- * the Current view entirely, since it filters to the active row.
+ * the Live view entirely, since it filters to the active row.
  *
  * @param {number} index
  * @param {boolean} [speaking] False in a gap between lines.
@@ -836,13 +872,13 @@ function setActive(index, speaking = true) {
   // reader looking up mid-gap keeps their place.
   if (!speaking) element.classList.add('paused');
 
-  // The next line is marked so the Current view can reveal it as a preview. The
+  // The next line is marked so the Live view can reveal it as a preview. The
   // class is applied in both views because it costs nothing and switching views
   // should not need a re-render to become correct.
   view.elements[index + 1]?.classList.add('next');
 
   if (!view.autoScroll) return;
-  // In Current view the line is centred, because the preview sits below it and
+  // In Live view the line is centred, because the preview sits below it and
   // scrolling to the edge would push it off screen.
   element.scrollIntoView({ block: view.focusMode ? 'center' : 'nearest' });
 }

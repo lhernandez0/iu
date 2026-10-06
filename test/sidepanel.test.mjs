@@ -398,6 +398,43 @@ section('a nonsense text size cannot reach the stylesheet');
   check('and its maximum', byId.get('font-size').max, '32');
 }
 
+section('a half-typed size does not fight the person typing it');
+
+{
+  const { lastPort, dom, byId } = await bootPanel();
+  const field = byId.get('font-size');
+  lastPort().emit({ type: 'state', state: stateWithSettings({ fontSize: 18 }) });
+
+  // Typing "18" passes through "1". Applying that mid-keystroke clamped the size
+  // to 10 and re-rendered the whole transcript while the key was still down.
+  field.value = '1';
+  field.dispatch('input');
+  check('a one-digit prefix is not applied', dom.document.documentElement.style.getPropertyValue('--font-size'), '18px');
+
+  field.value = '18';
+  field.dispatch('input');
+  check('the finished value is applied live', dom.document.documentElement.style.getPropertyValue('--font-size'), '18px');
+
+  field.value = '';
+  field.dispatch('input');
+  check('an empty field is not a size', dom.document.documentElement.style.getPropertyValue('--font-size'), '18px');
+
+  field.value = '999';
+  field.dispatch('input');
+  check('an out-of-range value is not applied live', dom.document.documentElement.style.getPropertyValue('--font-size'), '18px');
+
+  // Committing, however, must not leave a value on screen that was not accepted.
+  field.value = '999';
+  field.dispatch('change');
+  check('committing clamps the stylesheet', dom.document.documentElement.style.getPropertyValue('--font-size'), '32px');
+  check('and rewrites the field to match', field.value, '32');
+
+  field.value = '';
+  field.dispatch('change');
+  check('an empty field falls back on commit', dom.document.documentElement.style.getPropertyValue('--font-size'), '13px');
+  check('and the field shows the fallback', field.value, '13');
+}
+
 section('the view sends its change too, and applies at once');
 
 {
@@ -423,7 +460,7 @@ section('the controls are built from the schema, not hand-written here');
   const viewOptions = byId.get('view-mode').find((el) => el.tagName === 'OPTION');
 
   check('the view offers both modes', viewOptions.length, 2);
-  check('named as the schema names them', viewOptions.map((o) => o.text), ['Full', 'Current']);
+  check('named as the schema names them', viewOptions.map((o) => o.text), ['Full', 'Live']);
   check('with the schema values', viewOptions.map((o) => o.value), ['all', 'focus']);
 }
 

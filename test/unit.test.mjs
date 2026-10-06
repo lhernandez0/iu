@@ -92,7 +92,7 @@ check('inside the second cue', findActiveIndex(timeline, 10.5), 1);
 //
 // This used to return -1, and that was a real bug rather than a design choice:
 // cue times do not tile the timeline, so after every single line the highlight
-// blinked off, and the Current view — which shows only the active row — went
+// blinked off, and the Live view — which shows only the active row — went
 // completely blank between every pair of lines.
 check('in a gap after a cue, the finished line still holds', findActiveIndex(timeline, 5), 0);
 check('inside the last cue', findActiveIndex(timeline, 21), 2);

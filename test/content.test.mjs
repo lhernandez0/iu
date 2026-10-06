@@ -733,7 +733,7 @@ section('position is reported only when the active cue changes');
 section('a gap between cues holds the last line, and says it is not speaking');
 
 {
-  // The reported bug: nothing showed between lines in Current view, and nothing
+  // The reported bug: nothing showed between lines in Live view, and nothing
   // was highlighted in Full view. The index alone cannot express this, because
   // "the line that finished" and "the line being said" are the same index — so
   // the gap has to be reported separately.
