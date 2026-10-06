@@ -17,6 +17,7 @@
  */
 
 import { MSG, TARGET } from '../common/messages.js';
+import { errorText, codeError } from '../common/errors.js';
 import { alignSecondary } from '../common/transcript.js';
 import { defaults, normalise, toStorage, storageKey, definition } from '../common/settings.js';
 import { providerFor, providerNames } from '../common/providers.js';
@@ -415,7 +416,7 @@ async function answerLookup(word) {
       listId: effectiveListId(entry),
     });
   } catch (error) {
-    broadcastError(`Could not load the dictionary: ${error?.message ?? error}`);
+    broadcastError(errorText('DICT002', String(error?.message ?? error)));
   }
 }
 
@@ -576,7 +577,7 @@ const CONTENT_TIMEOUT_MS = 4000;
  */
 async function sendToContent(tabId, message) {
   const frameId = await ensureContentScript(tabId);
-  if (frameId === null) throw new Error('no readable frame');
+  if (frameId === null) throw new Error(errorText('CONN001'));
 
   let timer = 0;
   try {
@@ -584,7 +585,7 @@ async function sendToContent(tabId, message) {
       chrome.tabs.sendMessage(tabId, { ...message, target: TARGET.CONTENT }, { frameId }),
       new Promise((_, reject) => {
         timer = setTimeout(
-          () => reject(new Error(`the content script did not answer ${message.type} within ${CONTENT_TIMEOUT_MS}ms`)),
+          () => reject(new Error(errorText('CONN002', `${message.type} did not answer within ${CONTENT_TIMEOUT_MS}ms`))),
           CONTENT_TIMEOUT_MS,
         );
       }),
@@ -611,7 +612,7 @@ async function refresh() {
   try {
     await refreshInner();
   } catch (error) {
-    pendingError = `Could not read the video: ${error?.message ?? error}`;
+    pendingError = codeError('CONN004', error);
     broadcastState();
   }
 }
@@ -627,7 +628,7 @@ async function refreshInner() {
   if (trackedTabId === null) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !providerFor(tab.url)) {
-      pendingError = `No ${providerNames()} video in the active tab.`;
+      pendingError = errorText('CONN005', providerNames());
       broadcastState();
       return;
     }
@@ -645,13 +646,15 @@ async function refreshInner() {
   try {
     described = await sendToContent(trackedTabId, { type: MSG.DESCRIBE });
   } catch (error) {
-    pendingError = `Could not reach the page (${error?.message ?? error}).`;
+    // Pass-through: `sendToContent` already raised a CONN code and that one
+    // names the real fault (a timeout, say) better than this layer can.
+    pendingError = codeError('CONN003', error);
     broadcastState();
     return;
   }
 
   if (!described?.video) {
-    pendingError = described?.error ?? 'Could not read this video.';
+    pendingError = described?.error ?? errorText('CONN004');
     broadcastState();
     return;
   }
@@ -674,7 +677,7 @@ async function refreshInner() {
   // tracks. If the page was stale it simply could not tell us, and the captions
   // are still worth asking the player API for.
   if (!entry.trackList.length && !entry.stale) {
-    entry.error = 'This video has no captions.';
+    entry.error = errorText('VIDEO001');
     entry.rows = [];
     broadcastState();
     return;
@@ -710,13 +713,16 @@ async function refreshInner() {
       translateTo: effectiveTranslation(entry, 'study'),
     });
   } catch (error) {
-    pendingError = `Could not fetch captions (${error?.message ?? error}).`;
+    // Pass-through, so a CONN002 timeout from `sendToContent` survives as itself
+    // rather than being relabelled as a caption fault — which is what made this
+    // report ambiguous in the first place.
+    pendingError = codeError('TRACK003', error);
     broadcastState();
     return;
   }
 
   if (!provided?.ok && !provided?.fetched) {
-    entry.error = provided?.error ?? 'Could not load captions.';
+    entry.error = provided?.error ?? errorText('TRACK004');
     broadcastState();
     return;
   }
@@ -1029,12 +1035,12 @@ async function loadTrack(entry, languageCode, translateTo = null) {
   try {
     result = await sendToContent(trackedTabId, { type: MSG.FETCH_TRACK, languageCode, translateTo });
   } catch (error) {
-    entry.error = `Could not load ${languageCode}: ${error?.message ?? error}`;
+    entry.error = codeError('TRACK004', error);
     return null;
   }
 
   if (!recordTrack(entry, result)) {
-    return result ?? { languageCode, translateTo: null, segments: [], error: `No captions for ${languageCode}.` };
+    return result ?? { languageCode, translateTo: null, segments: [], error: errorText('VIDEO001', languageCode) };
   }
   return result;
 }
@@ -1300,7 +1306,7 @@ async function applyMarks(entry) {
   const words = await ensureDictionaryFor(effectiveListId(entry)).catch((error) => {
     // A missing word list must not take the transcript down with it: the panel
     // still shows captions, just without marks.
-    broadcastError(`Word list unavailable: ${error?.message ?? error}`);
+    broadcastError(codeError('DICT001', error));
     return null;
   });
   if (!words) return;
@@ -1440,7 +1446,7 @@ async function forwardSeek(seconds) {
   try {
     await sendToContent(trackedTabId, { type: MSG.CONTENT_SEEK, seconds });
   } catch (error) {
-    broadcastError(String(error?.message ?? error));
+    broadcastError(codeError('CONN003', error));
   }
 }
 
@@ -1654,7 +1660,7 @@ async function applySetting(id, value) {
       const refused =
         (settings.studyTranslated && entry?.studyLang && !effectiveTranslation(entry, 'study')) ||
         (settings.glossTranslated && entry?.glossLang && !effectiveTranslation(entry, 'gloss'));
-      translationError = wanted && refused ? 'This caption track cannot be auto-translated.' : null;
+      translationError = wanted && refused ? errorText('TRACK001') : null;
 
       // Re-render BOTH lines. Either may have changed rendering, and a line whose
       // rendering is already cached returns immediately — so this is cheap when
@@ -1816,7 +1822,7 @@ async function primeDictionary() {
 
     await ensureDictionaryFor(settings.listId);
   } catch (error) {
-    broadcastError(`Word list unavailable: ${error?.message ?? error}`);
+    broadcastError(codeError('DICT001', error));
   }
   broadcastState();
 

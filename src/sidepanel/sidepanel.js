@@ -954,6 +954,14 @@ function setActive(index, speaking = true) {
 function setStatus(text, isError = false) {
   els.status.textContent = text;
   els.status.classList.toggle('error', isError);
+
+  // Expose the code as its own attribute, so it can be read or copied without
+  // hunting through the sentence — and so `document.getElementById('status')
+  // .dataset.code` in the console answers "which error is this" directly. The
+  // text already leads with the code; this makes it addressable.
+  const code = /^([A-Z]{2,6}\d{3})\b/.exec(text ?? '');
+  if (code) els.status.dataset.code = code[1];
+  else delete els.status.dataset.code;
 }
 
 // --- Parked audio path -------------------------------------------------------

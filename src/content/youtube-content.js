@@ -40,6 +40,48 @@
   };
   const TARGET = { BACKGROUND: 'background', CONTENT: 'content' };
 
+  // --- Duplicated error codes ----------------------------------------------
+  //
+  // The canonical registry is `src/common/errors.js`. A content script is a
+  // CLASSIC script and cannot `import`, so this is a copy — the same arrangement
+  // MSG and TARGET above use. `test/errors.test.mjs` asserts the two agree, so a
+  // code that exists here and not there (or vice versa) fails the suite rather
+  // than shipping a report that resolves to nothing.
+  //
+  // Only the codes this script actually raises are listed. Add one here when it
+  // is raised here, and to the registry at the same time.
+  /** @type {Record<string, string>} */
+  const ERR = {
+    VIDEO001: 'This video has no captions.',
+    VIDEO002: 'This page has no video player.',
+    VIDEO003: 'Could not read this video’s captions.',
+    VIDEO004: 'Could not reach the player API.',
+    TRACK001: 'This caption track cannot be auto-translated.',
+    TRACK002: 'The caption track came back empty.',
+    TRACK003: 'Could not load captions.',
+    PAGE001: 'The page bridge did not understand a request.',
+  };
+
+  /**
+   * The full text for a code, mirroring `errorText` in `src/common/errors.js`.
+   *
+   * The code goes FIRST so it survives the panel clipping the status line to one
+   * row — a code at the end of a long sentence is the part that gets cut, which
+   * is the part worth keeping.
+   *
+   * @param {string} code
+   * @param {string} [detail]
+   * @returns {string}
+   */
+  function err(code, detail) {
+    const message = ERR[code];
+    if (!message) return detail ? `${code} Unknown error (${detail})` : `${code} Unknown error.`;
+    // Only the codes whose message does not already describe the fault take a
+    // detail; the others would be re-stating themselves after a bracket.
+    const takesDetail = code === 'VIDEO003' || code === 'TRACK003';
+    return takesDetail && detail ? `${code} ${message} (${detail})` : `${code} ${message}`;
+  }
+
   const POSITION_POLL_MS = 250;
   /** How often to ask the page whether the video changed. One second is often
    *  enough that a switch feels instant, and cheap enough to run continuously. */
@@ -274,7 +316,7 @@
         languageCode: track.languageCode,
         translateTo: null,
         segments: [],
-        error: 'This caption track cannot be auto-translated.',
+        error: err('TRACK001'),
       };
     }
 
@@ -284,10 +326,10 @@
         languageCode: track.languageCode,
         translateTo: translateTo ?? null,
         segments,
-        error: segments.length ? null : 'The caption track came back empty.',
+        error: segments.length ? null : err('TRACK002'),
       };
     } catch (error) {
-      return { languageCode, translateTo: null, segments: [], error: `Could not load captions: ${error?.message ?? error}` };
+      return { languageCode, translateTo: null, segments: [], error: err('TRACK003', String(error?.message ?? error)) };
     }
   }
 
@@ -312,7 +354,7 @@
     const key = summary?.innertubeApiKey ?? null;
 
     if (!key || !video.videoId) {
-      return { languageCode, translateTo: null, segments: [], error: 'Could not read this video captions.' };
+      return { languageCode, translateTo: null, segments: [], error: err('VIDEO003') };
     }
 
     const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${key}`, {
@@ -325,12 +367,12 @@
       }),
     }).catch(() => null);
 
-    if (!response?.ok) return { languageCode, translateTo: null, segments: [], error: 'Could not reach the player API.' };
+    if (!response?.ok) return { languageCode, translateTo: null, segments: [], error: err('VIDEO004') };
 
     const fresh = await response.json().catch(() => null);
     const tracks = fresh?.captions?.playerCaptionsTracklistRenderer?.captionTracks ?? [];
 
-    if (!tracks.length) return { languageCode, translateTo: null, segments: [], error: 'This video has no captions.' };
+    if (!tracks.length) return { languageCode, translateTo: null, segments: [], error: err('VIDEO001') };
 
     const track = tracks.find((t) => t.languageCode === languageCode) ?? tracks[0];
     if (translateTo && !track.isTranslatable) {
@@ -338,7 +380,7 @@
         languageCode: track.languageCode,
         translateTo: null,
         segments: [],
-        error: 'This caption track cannot be auto-translated.',
+        error: err('TRACK001'),
       };
     }
 
@@ -348,10 +390,10 @@
         languageCode: track.languageCode,
         translateTo: translateTo ?? null,
         segments,
-        error: segments.length ? null : 'The caption track came back empty.',
+        error: segments.length ? null : err('TRACK002'),
       };
     } catch (error) {
-      return { languageCode, translateTo: null, segments: [], error: `Could not load captions: ${error?.message ?? error}` };
+      return { languageCode, translateTo: null, segments: [], error: err('TRACK003', String(error?.message ?? error)) };
     }
   }
 
@@ -436,7 +478,7 @@
         needsInnertube: false,
       };
       lastActiveIndex = -2;
-      return { ok: false, changed, stale: false, error: 'This page has no video player.' };
+      return { ok: false, changed, stale: false, error: err('VIDEO002') };
     }
 
     const changed = video.videoId !== summary.videoId;

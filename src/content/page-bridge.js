@@ -219,7 +219,7 @@
         payload = { videoId: getUrlVideoId() };
       } else {
         ok = false;
-        payload = { error: `Unknown page-bridge request: ${data.type}` };
+        payload = { error: 'PAGE001 The page bridge did not understand a request.' };
       }
     } catch (error) {
       ok = false;

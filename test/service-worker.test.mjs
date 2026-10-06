@@ -320,7 +320,7 @@ const PROVIDER = (video, tracksByLanguage) => (request) => {
   const wanted = request?.languageCode;
   const languageCode = wanted && tracksByLanguage[wanted] ? wanted : video.trackList[0]?.languageCode;
   const segments = tracksByLanguage[languageCode];
-  if (!segments) return { ok: false, error: 'This video has no captions.' };
+  if (!segments) return { ok: false, error: 'VIDEO001 This video has no captions.' };
 
   const translateTo = request?.translateTo ?? null;
   if (translateTo) {
@@ -328,7 +328,7 @@ const PROVIDER = (video, tracksByLanguage) => (request) => {
     // A track that cannot be translated is refused rather than served
     // untranslated, which is what the real content script does.
     if (track && track.isTranslatable === false) {
-      return { ok: false, error: 'This caption track cannot be auto-translated.', fetched: { languageCode, translateTo: null, segments: [], error: 'This caption track cannot be auto-translated.' } };
+      return { ok: false, error: 'TRACK001 This caption track cannot be auto-translated.', fetched: { languageCode, translateTo: null, segments: [], error: 'TRACK001 This caption track cannot be auto-translated.' } };
     }
     // Marked so a test can tell translated text from the original at a glance.
     return {
@@ -974,11 +974,11 @@ section('a video with no captions still reports its title');
 
 {
   const { received } = await boot(
-    TRACK(GERMAN, { video: { ...VIDEO, trackList: [] }, provide: { ok: false, error: 'This video has no captions.' } }),
+    TRACK(GERMAN, { video: { ...VIDEO, trackList: [] }, provide: { ok: false, error: 'VIDEO001 This video has no captions.' } }),
   );
 
   const state = received.at(-1)?.state;
-  check('error surfaced', state?.error, 'This video has no captions.');
+  check('error surfaced', state?.error, 'VIDEO001 This video has no captions.');
   check('title still shown', state?.title, 'Test Video');
   check('no rows', state?.rows?.length, 0);
 }

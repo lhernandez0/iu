@@ -474,14 +474,14 @@ section('an empty or useless response is reported, not silently accepted');
   const script = await bootContent({ summary: SUMMARY, captionBody: '' });
   const result = await script.ask({ type: 'fetch-track', languageCode: 'en' });
   check('empty body yields no segments', result?.segments?.length, 0);
-  check('and says so', result?.error, 'The caption track came back empty.');
+  check('and says so', result?.error, 'TRACK002 The caption track came back empty.');
 }
 
 {
   const script = await bootContent({ summary: SUMMARY, captionBody: JSON.stringify({ events: [] }) });
   const result = await script.ask({ type: 'fetch-track', languageCode: 'en' });
   check('no events yields no segments', result?.segments?.length, 0);
-  check('and says so', result?.error, 'The caption track came back empty.');
+  check('and says so', result?.error, 'TRACK002 The caption track came back empty.');
 }
 
 {
@@ -540,7 +540,7 @@ section('if the internal player API also fails, the failure is reported');
 
   const result = await script.ask({ type: 'fetch-track', languageCode: 'en' });
   check('no segments', result?.segments?.length, 0);
-  check('and an explanation', result?.error, 'The caption track came back empty.');
+  check('and an explanation', result?.error, 'TRACK002 The caption track came back empty.');
 }
 
 // --- 6. Track selection ------------------------------------------------------
@@ -567,7 +567,7 @@ section('a video with no caption tracks says so plainly');
   const script = await bootContent({ summary: { ...SUMMARY, tracks: [] }, captionBody: JSON3 });
   const result = await script.ask({ type: 'fetch-track', languageCode: 'en' });
   check('no segments', result?.segments?.length, 0);
-  check('a clear message', result?.error, 'This video has no captions.');
+  check('a clear message', result?.error, 'VIDEO001 This video has no captions.');
 }
 
 // --- 5b. Auto-translate ------------------------------------------------------
@@ -631,7 +631,7 @@ section('translating a track that cannot be translated is refused, not faked');
   const result = await script.ask({ type: 'fetch-track', languageCode: 'de', translateTo: 'ja' });
 
   check('no segments are returned', result?.segments?.length, 0);
-  check('the error explains why', result?.error, 'This caption track cannot be auto-translated.');
+  check('the error explains why', result?.error, 'TRACK001 This caption track cannot be auto-translated.');
   check('and no tlang request was made', script.fetched.some((u) => u.includes('tlang')), false);
   check('the source language is still reported', result?.languageCode, 'de');
 }
