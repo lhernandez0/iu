@@ -281,11 +281,14 @@ would arrive twice.
 
 ## Known limitations
 
-- **Marking works on CJK and other no-space scripts.** The tokeniser splits by
-  CJK codepoint and passes non-CJK runs through whole, which is right for Chinese
-  and Japanese and cannot mark a space-separated language at all — an English
-  sentence is a single token. Adding one needs a different tokeniser, not a new
-  word list. See `docs/design-decisions/0002-language-extensibility.md`.
+- **Marking works on Chinese and Japanese *kanji*, not kana or spaced scripts.**
+  The tokeniser splits by CJK codepoint and passes non-CJK runs through whole.
+  Chinese works; Japanese kanji works because kanji is in that range. But **kana
+  is not** — a hiragana or katakana word passes through unmatched even when it is
+  in the word list, and a large share of Japanese vocabulary is kana-native
+  (とても, そして, です). Korean hangul and English/Spanish alike cannot be marked
+  at all — an English sentence is a single token. See
+  `docs/design-decisions/0002-language-extensibility.md`.
 - **Word lists are data, and adding one is a data change.** Levels are per list,
   each list carries its own count and starting level, and nothing in the code
   knows what HSK is — so HSK 4.0 or JLPT is a new list object and a dictionary
