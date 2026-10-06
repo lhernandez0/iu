@@ -1070,11 +1070,29 @@ section('the panel is told which word lists exist, and a default is chosen');
 
   const state = received.at(-1)?.state;
   const lists = state?.lists ?? [];
-  check('both HSK numberings are offered', lists.length, 2);
+  // Three lists now: two HSK numberings and JLPT. The count is asserted because a
+  // build that drops a language from the index would otherwise go unnoticed —
+  // the dropdown would simply offer fewer choices, with nothing reporting it.
+  check('every list from the index is offered', lists.length, 3);
   check('with the 2.0 list', lists[0]?.id, 'hsk2_0');
   check('and the 3.0 list', lists[1]?.id, 'hsk3_0');
+  check('and the JLPT list', lists[2]?.id, 'jlpt');
   check('each declares its level count', lists[0]?.levelCount, 6);
   check('and 3.0 declares nine', lists[1]?.levelCount, 9);
+  check('and JLPT declares five', lists[2]?.levelCount, 5);
+
+  // The default must be the list that can mark the most, not whichever is first
+  // in the data. HSK 2.0 places 4,993 of 11,470 words; the other 6,477 exist
+  // only in 3.0, so defaulting to 2.0 makes most of the dictionary silently
+  // invisible — which looks exactly like the highlighting being broken.
+  //
+  // And "most" is within the PRIMARY language. JLPT places more words than HSK
+  // 3.0 (11,158 vs 10,969), so widest-overall made Japanese the default for a
+  // fresh install — and on a Chinese video that list covers nothing, which is
+  // the very symptom the widest-list rule exists to prevent.
+  check('the widest list is chosen by default', state?.learning?.listId, 'hsk3_0');
+  // The learner studies HSK 4, so marking starts there until told otherwise.
+  check('threshold defaults to 4', state?.learning?.threshold, 4);
 
   // The default must be the list that can mark the most, not whichever is first
   // in the data. HSK 2.0 places 4,993 of 11,470 words; the other 6,477 exist
@@ -1092,10 +1110,124 @@ section('the default list is the one that can mark the most words');
 
   const lists = received.at(-1)?.state?.lists ?? [];
   const chosen = lists.find((l) => l.id === received.at(-1)?.state?.learning?.listId);
-  const widest = [...lists].sort((a, b) => (b.levelled ?? 0) - (a.levelled ?? 0))[0];
+  // Widest WITHIN the default language, not widest overall — JLPT places more
+  // words than any HSK list, and choosing it would leave a Chinese video unmarked.
+  const primary = lists.filter((l) => l.language === lists[0]?.language);
+  const widest = [...primary].sort((a, b) => (b.levelled ?? 0) - (a.levelled ?? 0))[0];
 
   check('the chosen list is the widest', chosen?.id, widest?.id);
   check('which places real words', chosen?.levelled > 9000, true);
+}
+
+section('switching to a Japanese list loads Japanese words and marks them');
+
+{
+  // The whole point of the second language, end to end through the worker. A
+  // failure here is the one that would ship as "the JLPT option does nothing".
+  const JAPANESE_VIDEO = {
+    videoId: 'jaTestVideo',
+    title: 'Japanese Test',
+    isLive: false,
+    trackList: [{ languageCode: 'ja', name: 'Japanese', kind: null, isTranslatable: true }],
+    translationLanguages: [{ languageCode: 'ja', name: 'Japanese' }, { languageCode: 'en', name: 'English' }],
+  };
+
+  const { received, sendFromPanel } = await boot({
+    describePayload: DESCRIBE(JAPANESE_VIDEO),
+    providePayload: {
+      ok: true,
+      video: JAPANESE_VIDEO,
+      requested: 'ja',
+      fetched: { languageCode: 'ja', segments: [{ start: 0, duration: 2, text: '日本語を勉強します' }] },
+    },
+    trackPayload: GERMAN,
+  });
+  // Wait for the initial state before switching. `sendFromPanel` throws if the
+  // worker has not subscribed to the port yet, and a switch sent before the
+  // startup marking has settled is dropped — which looked like a marking bug
+  // rather than a test that asked too early.
+  await waitForState(received, (s) => Array.isArray(s.lists) && s.lists.length > 0, 'startup');
+  await waitForState(received, (s) => s.learning?.listId !== null, 'a default list to be chosen');
+
+  sendFromPanel({ type: 'set-list', listId: 'jlpt' });
+
+  // Wait for the switch to take effect AND the rows to be tokenised, rather than
+  // for a mark or a duration. Waiting for a mark would never resolve here: the
+  // test sentence is 日本語を勉強します, whose words are all JLPT N5 (level 1), and
+  // the JLPT default threshold is 3 — so nothing is above it and nothing SHOULD
+  // be marked. Tokenising is the observable proof that Japanese words were
+  // loaded; the threshold check below proves the level data came with them.
+  const state = await waitForState(
+    received,
+    (s) => s.learning?.listId === 'jlpt' && Array.isArray(s.rows?.[0]?.tokens),
+    'the Japanese list to tokenise a row',
+  );
+
+  check('the list is now JLPT', state.learning.listId, 'jlpt');
+  check('the Japanese threshold is its own, not carried over', state.learning.threshold, 3);
+  // `markedReason` lives on the STATE, not on a row — it explains the whole
+  // transcript, not one line. Null means the list covers the language on screen.
+  check('the list covers Japanese, so no reason is given', state.markedReason, null);
+
+  const row = state.rows?.[0];
+  const texts = (row?.tokens ?? []).map((t) => t.text);
+  // 勉強 is a single JLPT word. If the Japanese dictionary had not loaded, the
+  // text would segment into bare characters instead — this is the assertion that
+  // distinguishes "words loaded" from "the row merely exists".
+  check('the row segments into Japanese words, not bare characters', texts.includes('勉強'), true);
+
+  // Every word here is N5, so at threshold 3 none of them is marked. That is the
+  // correct behaviour and worth asserting: it proves the threshold is being read
+  // from the JLPT list (3) rather than carried over from the Chinese default (4),
+  // and that the levels travelled with the words.
+  const marked = (row?.tokens ?? []).filter((t) => t.level !== null);
+  check('N5 words sit below the N3 default, so none are marked', marked.length, 0);
+  check('the N5 word is still recognised, just not marked', row?.tokens?.find((t) => t.text === '勉強')?.defined, true);
+
+  // The definition travels with the mark, so hover can explain it.
+  sendFromPanel({ type: 'lookup', word: '日本語' });
+  const reply = await waitForMessage(received, (m) => m.type === 'entry' && m.word === '日本語', 'the Japanese definition');
+  check('its reading is kana, not pinyin', reply?.entry?.p, 'にほんご');
+  check('and it has an English gloss', typeof reply?.entry?.m === 'string' && reply.entry.m.length > 0, true);
+}
+
+section('a Chinese list on a Japanese video says so, rather than marking nothing silently');
+
+{
+  // The coverage gate is language-aware and was already correct; asserted here
+  // because the second language is the first thing that can actually trip it.
+  // Without this, a Chinese learner opening a Japanese video sees a plain
+  // transcript and no explanation — indistinguishable from a broken feature.
+  const JAPANESE_VIDEO = {
+    videoId: 'jaTestVideo2',
+    title: 'Japanese Test',
+    isLive: false,
+    trackList: [{ languageCode: 'ja', name: 'Japanese', kind: null, isTranslatable: true }],
+    translationLanguages: [{ languageCode: 'ja', name: 'Japanese' }],
+  };
+
+  const { received } = await boot({
+    describePayload: DESCRIBE(JAPANESE_VIDEO),
+    providePayload: {
+      ok: true,
+      video: JAPANESE_VIDEO,
+      requested: 'ja',
+      fetched: { languageCode: 'ja', segments: [{ start: 0, duration: 2, text: '日本語を勉強します' }] },
+    },
+    trackPayload: GERMAN,
+  });
+
+  // Under the default Chinese list a Japanese video is uncovered, so a reason is
+  // given and nothing is marked. Then switching to JLPT is what makes it markable
+  // — asserted as a pair, because "uncovered before, marked after" is the whole
+  // behaviour and either half alone would pass for the wrong reason.
+  const before = await waitForState(
+    received,
+    (s) => typeof s.markedReason === 'string',
+    'the rows to be reported as uncovered',
+  );
+  check('a Chinese list does not cover Japanese', /HSK/.test(String(before.markedReason)), true);
+  check('and nothing is marked', (before.rows?.[0]?.tokens ?? []).every((t) => t.level === null), true);
 }
 
 section('a word only the 3.0 list knows is still marked by default');

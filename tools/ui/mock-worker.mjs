@@ -24,7 +24,7 @@
 import { MSG, TARGET } from '../../src/common/messages.js';
 import { alignSecondary } from '../../src/common/transcript.js';
 import { normalise } from '../../src/common/settings.js';
-import { loadDictionary, lookup, levelOf, DATA_PATH } from '../../src/learn/wordlist.js';
+import { loadDictionary, loadIndex, dictionaryPathFor, lookup, levelOf, INDEX_PATH } from '../../src/learn/wordlist.js';
 import { segmentSegments } from '../../src/learn/segment.js';
 
 /**
@@ -121,13 +121,21 @@ export function createMockWorker(scenario) {
   // by which point the mock is in place.
   let dictionary = null;
   let list = null;
+  let index = null;
   const ready = () =>
     // The URL is resolved here, as the worker does: `learn/` is a data module and
     // does not know it is running in a browser.
-    loadDictionary(chrome.runtime.getURL(DATA_PATH))
-      .then((loaded) => {
-        dictionary = loaded;
+    //
+    // Mirrors the real worker's two-step load: the ~1 KB index eagerly, then only
+    // the active list's dictionary. The preview is where a mistake here is most
+    // visible, so it should exercise the same path the extension does.
+    loadIndex(chrome.runtime.getURL(INDEX_PATH))
+      .then(async (loaded) => {
+        index = loaded;
         list = loaded.lists.find((l) => l.id === settings.listId) ?? loaded.lists[0];
+        if (list) settings.listId = list.id;
+        const path = dictionaryPathFor(loaded, list?.id);
+        dictionary = await loadDictionary(chrome.runtime.getURL(path));
       })
       .catch((error) => {
         // Loud, because a preview with no marks looks like a marking bug rather

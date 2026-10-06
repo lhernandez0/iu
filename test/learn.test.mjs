@@ -46,6 +46,70 @@ const bundle = JSON.parse(await readFile(resolve(here, '../src/learn/data/chines
 const HEADWORDS = new Set(Object.keys(bundle.words));
 const MAX_LEN = Math.max(...[...HEADWORDS].map((w) => w.length));
 
+// The second language, so the shared code is exercised against more than one
+// dictionary rather than only the one it was written for.
+const japanese = JSON.parse(await readFile(resolve(here, '../src/learn/data/japanese.json'), 'utf8'));
+const JA_HEADWORDS = new Set(Object.keys(japanese.words));
+const JA_MAX_LEN = Math.max(...[...JA_HEADWORDS].map((w) => w.length));
+
+// --- Japanese: what the segmenter can and cannot mark ------------------------
+
+section('the segmenter marks kanji-initial Japanese, and nothing else yet');
+
+{
+  // This is the measured boundary the Japanese plan is built on, asserted so the
+  // documentation cannot drift away from the behaviour. A token matches only if
+  // its FIRST character is CJK — `segment()` skips the longest-match loop for a
+  // non-CJK run, so a run starting with kana passes through whole and is never
+  // looked up.
+  //
+  // If this ever starts passing for kana, Phase 2 has landed and the README's
+  // "Known limitations" is out of date.
+  const known = (text) => segment(text, JA_HEADWORDS, JA_MAX_LEN).some((t) => t.known);
+
+  check('a kanji-initial verb is matched', known('会う'), true);
+  check('a kanji compound is matched', known('日本語'), true);
+  check('kanji with okurigana is matched', known('食べる'), true);
+
+  // The gaps, asserted rather than merely described.
+  check('a kana-initial word is NOT matched, even though it is in the list', JA_HEADWORDS.has('とても'), true);
+  check('and yet it does not mark', known('とても'), false);
+
+  // Inflection is the second gap, and it is worse than "does not match". The
+  // matcher is exact against headwords, so `食べました` does not equal `食べる`
+  // — but `食` IS a headword on its own, so longest match takes the bare
+  // character and marks it. The result is a colour on 食 carrying the meaning of
+  // 食 while the line says 食べました: a confident wrong mark, not a missing one.
+  //
+  // Asserted precisely, because "inflected forms are not marked" would be wrong
+  // in the direction that matters — it would suggest nothing happens.
+  check('the dictionary form is present', JA_HEADWORDS.has('食べる'), true);
+  check('an inflected form marks only its bare first character', segment('食べました', JA_HEADWORDS, JA_MAX_LEN).map((t) => t.text).join('/'), '食/べました');
+  check('and that character is the one marked, not the whole word', segment('食べました', JA_HEADWORDS, JA_MAX_LEN).some((t) => t.known && t.text === '食'), true);
+}
+
+section('the Japanese dictionary is internally consistent');
+
+{
+  const words = Object.keys(japanese.words);
+  check('it has words', words.length > 20000, true);
+
+  // Every levelled word must be a word the dictionary can define, or the panel
+  // would colour a token it cannot explain on hover.
+  const orphaned = Object.keys(japanese.levels.jlpt ?? {}).filter((w) => !(w in japanese.words));
+  check('every levelled word has a definition', orphaned.slice(0, 5), []);
+
+  // A reading is what the popover shows, so an entry without one renders a word
+  // with no pronunciation and no error.
+  const noReading = words.filter((w) => !japanese.words[w].p).slice(0, 5);
+  check('every word carries a reading', noReading, []);
+
+  // The kana-only entries are the ones the transform keys on kana. They are
+  // present and correct in the data even though the segmenter cannot match them
+  // yet — so when kana support lands they work with no rebuild.
+  check('a kana-only entry is present and keyed by its kana', japanese.words['とても']?.p, 'とても');
+}
+
 // --- Segmentation: invariants ------------------------------------------------
 
 section('segmentation never changes the text');

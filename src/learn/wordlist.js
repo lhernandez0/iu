@@ -36,13 +36,13 @@
  * @property {Record<string, string>} variants  Traditional form -> the key in `words`.
  */
 
-/** @type {Dictionary|null} */
-let loaded = null;
-/** @type {Promise<Dictionary>|null} */
-let loading = null;
+/** @type {Map<string, Dictionary>} */
+const loaded = new Map();
+/** @type {Map<string, Promise<Dictionary>>} */
+const loading = new Map();
 
 /**
- * Drop the cached dictionary.
+ * Drop the cached dictionaries.
  *
  * The cache is per-worker-lifetime, which is right in production: a worker starts
  * on every wake and re-parsing 1.4MB each time would be felt. In a test harness
@@ -53,14 +53,14 @@ let loading = null;
  * Only the tests call this. Nothing in the extension does.
  */
 export function resetDictionary() {
-  // Wait for any in-flight load before clearing, or a previous worker instance's
+  // Wait for any in-flight loads before clearing, or a previous worker instance's
   // pending `loadDictionary()` resolves AFTER the reset and repopulates the cache
   // with the old data — which is how a later test saw a dictionary that did not
   // exist yet and reported an empty word list far from the cause.
-  const pending = loading;
-  loaded = null;
-  loading = null;
-  return pending?.catch(() => {});
+  const pending = [...loading.values()];
+  loaded.clear();
+  loading.clear();
+  return Promise.allSettled(pending);
 }
 
 /**
@@ -137,30 +137,85 @@ export function indexDictionary(raw) {
  * @returns {Promise<Dictionary>}
  */
 export async function loadDictionary(url) {
-  if (loaded) return loaded;
-  if (loading) return loading;
+  // Keyed by URL, not a single slot. The single slot was correct while there was
+  // one dictionary and silently wrong the moment there were two: the second
+  // request returned the first language's words, so every Japanese lookup missed
+  // and every Japanese mark used Chinese headwords — with nothing throwing.
+  const cached = loaded.get(url);
+  if (cached) return cached;
 
-  loading = (async () => {
+  const inFlight = loading.get(url);
+  if (inFlight) return inFlight;
+
+  const pending = (async () => {
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Could not load the word list (${response.status}).`);
-    loaded = indexDictionary(await response.json());
-    return loaded;
+    const dictionary = indexDictionary(await response.json());
+    loaded.set(url, dictionary);
+    return dictionary;
   })();
 
+  loading.set(url, pending);
   try {
-    return await loading;
+    return await pending;
   } finally {
-    loading = null;
+    loading.delete(url);
   }
 }
 
 /**
- * Where the bundled data lives, relative to the extension root.
+ * Where the bundled list manifest lives, relative to the extension root.
  *
  * Kept here as a fact about the data rather than a call to `chrome` — the caller
  * resolves it, because only the caller knows whether it is a browser.
  */
-export const DATA_PATH = 'src/learn/data/chinese.json';
+export const INDEX_PATH = 'src/learn/data/index.json';
+
+/**
+ * Read the list manifest.
+ *
+ * Small on purpose (~1 KB): the worker loads it eagerly so the language and list
+ * pickers can be filled without parsing any word data. With one language the
+ * lists travelled inside the dictionary; with two, doing that would mean parsing
+ * every language's words on every worker wake just to fill a dropdown.
+ *
+ * Pure with respect to the browser: the URL comes from the caller, exactly as
+ * `loadDictionary` takes it, so this module still does not know whether it is
+ * running in an extension.
+ *
+ * @param {string} url
+ * @returns {Promise<{dictionaries: Record<string, string>, lists: object[]}>}
+ */
+export async function loadIndex(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Could not load the list index (${response.status}).`);
+  const index = await response.json();
+
+  // Fail loudly rather than returning something the caller will treat as "no
+  // lists": an index that names a dictionary it does not describe, or the
+  // reverse, is a build error and should not surface as an empty dropdown.
+  const dictionaries = index.dictionaries ?? {};
+  for (const list of index.lists ?? []) {
+    if (!dictionaries[list.dictionary]) {
+      throw new Error(`List "${list.id}" names dictionary "${list.dictionary}", which the index does not define.`);
+    }
+  }
+
+  return { dictionaries, lists: index.lists ?? [] };
+}
+
+/**
+ * The path of the dictionary holding a given list's words, or null.
+ *
+ * @param {{dictionaries: Record<string, string>, lists: object[]}} index
+ * @param {string} listId
+ * @returns {string|null}
+ */
+export function dictionaryPathFor(index, listId) {
+  const list = index?.lists?.find((entry) => entry.id === listId);
+  if (!list) return null;
+  return index.dictionaries?.[list.dictionary] ?? null;
+}
 
 /**
  * The key a surface form is stored under.

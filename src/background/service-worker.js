@@ -20,11 +20,11 @@ import { MSG, TARGET } from '../common/messages.js';
 import { alignSecondary } from '../common/transcript.js';
 import { defaults, normalise, toStorage, storageKey, definition } from '../common/settings.js';
 import { providerFor, providerNames } from '../common/providers.js';
-import { loadDictionary, levelOf, lookup, DATA_PATH } from '../learn/wordlist.js';
+import { loadDictionary, loadIndex, dictionaryPathFor, levelOf, lookup, INDEX_PATH } from '../learn/wordlist.js';
 import { segmentSegments } from '../learn/segment.js';
 
 /**
- * The bundled word list URL, as the extension serves it.
+ * The list manifest URL, and the dictionary URL for its active list.
  *
  * Resolved here, not inside `learn/wordlist.js`. That module is about data and
  * does not know whether it is running in a browser; taking the URL as an argument
@@ -33,8 +33,8 @@ import { segmentSegments } from '../learn/segment.js';
  *
  * @returns {string}
  */
-function dictionaryUrl() {
-  return chrome.runtime.getURL(DATA_PATH);
+function indexUrl() {
+  return chrome.runtime.getURL(INDEX_PATH);
 }
 
 /** How many videos to keep transcripts for before evicting the oldest. */
@@ -153,8 +153,16 @@ function handlePanelMessage(message) {
       persistSettings();
       // Rows are rebuilt because switching lists can change which levels exist,
       // so the existing marks are no longer valid.
-      rebuildRows(currentEntry());
-      broadcastState();
+      //
+      // The dictionary for the new list's language is awaited FIRST, because a
+      // switch can cross languages (HSK → JLPT) and `rebuildRows` reads the
+      // dictionary synchronously. Broadcasting before the words arrive would
+      // paint an unmarked transcript and leave it that way until something else
+      // happened to rebuild.
+      void ensureDictionaryFor(message.listId).then(() => {
+        rebuildRows(currentEntry());
+        broadcastState();
+      });
       return;
 
     case MSG.SET_THRESHOLD:
@@ -255,12 +263,55 @@ let pendingError = null;
 let translationError = null;
 
 /**
- * The word lists offered to the panel. Empty until the dictionary loads, which
- * is why the panel has to tolerate an empty list rather than assume one.
+ * The word lists offered to the panel. Empty until the index loads, which is why
+ * the panel has to tolerate an empty list rather than assume one.
  *
  * @type {object[]}
  */
 let availableLists = [];
+
+/**
+ * The list manifest, loaded once at startup. Names every list and which
+ * dictionary holds its words.
+ *
+ * @type {{dictionaries: Record<string, string>, lists: object[]}|null}
+ */
+let listIndex = null;
+
+/**
+ * The dictionary for the ACTIVE language. Loaded lazily — see
+ * `ensureDictionaryFor` — and null until then.
+ *
+ * @type {object|null}
+ */
+let dictionary = null;
+
+/** Which language `dictionary` holds, so a list switch knows when to reload. */
+let dictionaryLanguage = null;
+
+/**
+ * Make `dictionary` hold the given list's language.
+ *
+ * A no-op when it already does, so this is safe to call on every rebuild. Called
+ * from three places — startup, a list change, and a hover lookup — because any of
+ * them can be the first to need words and a missed one shows as a lookup that
+ * silently returns nothing.
+ *
+ * @param {string|null|undefined} listId
+ * @returns {Promise<object|null>}
+ */
+async function ensureDictionaryFor(listId) {
+  const list = listById(listId);
+  const language = list?.language ?? 'zh';
+  if (dictionary && dictionaryLanguage === language) return dictionary;
+
+  const path = listIndex?.dictionaries?.[language] ?? listIndex?.dictionaries?.zh;
+  if (!path) return dictionary;
+
+  dictionary = await loadDictionary(chrome.runtime.getURL(path));
+  dictionaryLanguage = language;
+  return dictionary;
+}
 
 /** @type {{tabId: number, streamId: string, tabTitle: string}|null} */
 let session = null;
@@ -350,12 +401,16 @@ function broadcastState() {
 async function answerLookup(word) {
   if (!panelPort || !word) return;
   try {
-    const dictionary = await loadDictionary(dictionaryUrl());
+    // The dictionary for the active language, awaited because a hover can arrive
+    // before anything has marked a row — and a lookup that returned nothing for
+    // that reason would read as "this word has no definition".
+    const active = await ensureDictionaryFor(settings.listId);
+    if (!active) return;
     panelPort.postMessage({
       type: MSG.ENTRY,
       word,
-      entry: lookup(dictionary, word),
-      levels: levelsFor(dictionary, word),
+      entry: lookup(active, word),
+      levels: levelsFor(active, word),
       listId: settings.listId,
     });
   } catch (error) {
@@ -1139,15 +1194,17 @@ async function applyMarks(entry) {
   const allMarked = entry.rows.every((row) => Array.isArray(row.tokens));
   if (entry.markedWith === wanted && allMarked) return;
 
-  let dictionary;
-  try {
-    dictionary = await loadDictionary(dictionaryUrl());
-  } catch (error) {
+  // Which dictionary holds this list's words, ensuring it is the loaded one.
+  // Not a local variable: `ensureDictionaryFor` sets the module-level dictionary,
+  // and the marking below reads it — a shadowing local stayed undefined and threw
+  // on `.headwords`.
+  const words = await ensureDictionaryFor(settings.listId).catch((error) => {
     // A missing word list must not take the transcript down with it: the panel
     // still shows captions, just without marks.
     broadcastError(`Word list unavailable: ${error?.message ?? error}`);
-    return;
-  }
+    return null;
+  });
+  if (!words) return;
 
   // The entry may have been rebuilt, or the panel may have moved to another
   // video, while the dictionary was loading. Re-check rather than marking
@@ -1387,7 +1444,12 @@ function learningState() {
     // was stored, broadcast, and then immediately overwritten.
     layout: settings.layout,
     fontSize: settings.fontSize,
-    listId: settings.listId,
+    // The list actually in force, not the raw stored id. A stored value can name
+    // a list that no longer exists (data changed under it) or one that never did,
+    // and reporting the raw id tells the panel to select an option that is not in
+    // its dropdown — the control then renders blank while the marking uses the
+    // fallback list, so the panel and the marks disagree about what is selected.
+    listId: active?.id ?? null,
     threshold: settings.threshold,
     studyLanguage: settings.studyLanguage,
     glossLanguage: settings.glossLanguage,
@@ -1594,15 +1656,22 @@ settingsReady = restoreSettings();
 void settingsReady.then(primeDictionary);
 
 /**
- * Load the dictionary once at startup so the panel knows what it can offer, and
- * settle on a default list if the learner has not chosen one.
+ * Load the list index once at startup so the panel knows what it can offer, then
+ * load the dictionary for the active list's language.
+ *
+ * Two loads rather than one, deliberately. The index is ~1 KB and names every
+ * list; a dictionary is ~1.4-3 MB of words. Loading only the index eagerly means
+ * the language and list pickers work immediately and a second language costs
+ * nothing until one of its lists is actually selected — with one language this
+ * was all inside one file, and with two that would mean parsing every language's
+ * words on every worker wake just to fill a dropdown.
  *
  * @returns {Promise<void>}
  */
 async function primeDictionary() {
   try {
-    const dictionary = await loadDictionary(dictionaryUrl());
-    availableLists = dictionary.lists;
+    listIndex = await loadIndex(indexUrl());
+    availableLists = listIndex.lists;
 
     // Fall back to the list that can actually mark the most words, rather than
     // to whichever happens to be first in the data.
@@ -1612,14 +1681,31 @@ async function primeDictionary() {
     // opening the panel with no stored preference saw 早安 unmarked and
     // reasonably concluded the highlighting was broken. Defaulting to the
     // widest list shows marks immediately; a narrower list remains a choice.
-    if (!settings.listId || !dictionary.lists.some((list) => list.id === settings.listId)) {
-      const widest = [...dictionary.lists].sort((a, b) => (b.levelled ?? 0) - (a.levelled ?? 0))[0];
-      settings.listId = widest?.id ?? null;
+    //
+    // "Widest" means widest in the PRIMARY language — the first the index
+    // declares — not widest overall. With one language those were the same
+    // thing; with two they are not. JLPT places 11,158 words and HSK 3.0 places
+    // 10,969, so widest-overall silently made Japanese the default for every new
+    // user — and on a Chinese video that list covers nothing, which is the exact
+    // unmarked-transcript symptom the widest-list rule was added to remove.
+    const primaryLanguage = availableLists[0]?.language;
+    const primary = availableLists.filter((list) => list.language === primaryLanguage);
+    const widest = [...primary].sort((a, b) => (b.levelled ?? 0) - (a.levelled ?? 0))[0];
 
-      // The learner's own level, as the chosen list declares it. `defaultThreshold`
-      // clamps to the list's own range, so the extra clamp here is gone.
+    if (!settings.listId || !availableLists.some((list) => list.id === settings.listId)) {
+      settings.listId = widest?.id ?? null;
+      // The learner's own level, as the chosen list declares it.
       settings.threshold = defaultThreshold(widest);
     }
+
+    // Broadcast NOW, before loading any words. The picks can be populated and the
+    // panel is told what exists; making that wait on a 1.4-3 MB parse would leave
+    // the dropdown empty for however long that takes. The words follow below and
+    // broadcast again when the rows can actually be marked.
+    broadcastState();
+    rebuildRows(currentEntry());
+
+    await ensureDictionaryFor(settings.listId);
   } catch (error) {
     broadcastError(`Word list unavailable: ${error?.message ?? error}`);
   }

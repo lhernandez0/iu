@@ -332,7 +332,10 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('words are marked', marks.count > 0, true);
     check('the mark has a coloured underline', marks.borderColour !== 'rgba(0, 0, 0, 0)', true);
     check('and no native tooltip competing with the popover', marks.hasNativeTooltip, false);
-    check('both HSK lists are offered', marks.listOptions, ['hsk2_0', 'hsk3_0']);
+    // Every list the index declares, in order. The default is HSK 3.0, but the
+    // control must offer all of them — a build that dropped a language from the
+    // index would otherwise just show a shorter dropdown, with nothing failing.
+    check('every list from the index is offered', marks.listOptions, ['hsk2_0', 'hsk3_0', 'jlpt']);
     // 2.0 has six levels, 3.0 has nine, so the count has to match the list in
     // use. Asserting the relationship keeps this true whichever is default.
     const expectedLevels = marks.chosenLabel.includes('3.0') ? 9 : 6;

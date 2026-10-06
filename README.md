@@ -289,10 +289,19 @@ would arrive twice.
   (とても, そして, です). Korean hangul and English/Spanish alike cannot be marked
   at all — an English sentence is a single token. See
   `docs/design-decisions/0002-language-extensibility.md`.
-- **Word lists are data, and adding one is a data change.** Levels are per list,
-  each list carries its own count and starting level, and nothing in the code
-  knows what HSK is — so HSK 4.0 or JLPT is a new list object and a dictionary
-  document, not a code change.
+- **Japanese inflected forms mark their first kanji, not the word.** The matcher
+  compares against dictionary headwords, so `食べました` does not equal `食べる` —
+  but `食` is itself a headword, so it gets marked carrying the wrong scope. This
+  is the least bad outcome available without lemmatisation, but it means Japanese
+  marks are occasionally narrower than the word on screen.
+- **A few Japanese words with the same spelling share one entry.** JMdict splits
+  genuine homographs (`私` is わたし and あたし; `一時` is いちじ and
+ ひととき), and the build keeps the first. 156 spellings are affected, so a
+  hover there shows one reading rather than both.
+- **Word lists and dictionaries are data.** Levels are per list, each list carries
+  its own count, starting level and language, and nothing in the code knows what
+  HSK or JLPT is. Adding a list is a data change; adding a *language* is a
+  dictionary plus a row in the generated index.
 - **YouTube is the only provider, but it is now a *provider*.** Captions come
   from `ytInitialPlayerResponse` through a content script, and which site that is
   and which scripts to inject are decided in `src/common/providers.js`. Adding
@@ -328,9 +337,13 @@ would arrive twice.
 Our own code — everything in `src/`, the icons, the tests — is **MIT** (see
 [`LICENSE`](LICENSE)). The extension ships no third-party code, fonts or images.
 
-The bundled dictionary, [`src/learn/data/chinese.json`](src/learn/data/chinese.json),
-is **not** ours and is **not** covered by the MIT licence: it is a derived work of
-[CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict) (CC BY-SA 4.0),
-with HSK levels from the official MOE HSK 3.0 word list. It **must remain CC BY-SA
-4.0** and cannot be relicensed. Full attribution and the exact source chain are in
+The bundled dictionaries are **not** ours and are **not** covered by the MIT
+licence. Both are **CC BY-SA 4.0** derived works and **must remain** so:
+
+- [`src/learn/data/chinese.json`](src/learn/data/chinese.json) — CC-CEDICT
+  (CC BY-SA 4.0) with HSK levels from the official MOE HSK 3.0 word list;
+- [`src/learn/data/japanese.json`](src/learn/data/japanese.json) — JMdict by
+  EDRDG (CC BY-SA 4.0) with JLPT levels from an MIT-licensed list.
+
+Full attribution, the exact source revisions and their content hashes are in
 [`THIRD-PARTY.md`](THIRD-PARTY.md).

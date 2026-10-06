@@ -4,7 +4,18 @@ What this project uses from elsewhere, under what licence, and what that obliges
 us to do. Kept in the repository root and committed, because attribution that
 exists only inside a data file is attribution nobody finds.
 
-## `src/learn/data/chinese.json` — the bundled dictionary
+Two bundled dictionaries, both **CC BY-SA 4.0** derivative works. The licence on
+this project's own code (MIT) does **not** cover them, and neither may be
+relicensed.
+
+| File | Words | Sources |
+| --- | --- | --- |
+| `src/learn/data/chinese.json` | 11,470 | CC-CEDICT + the official MOE HSK 3.0 word list |
+| `src/learn/data/japanese.json` | 28,690 | JMdict (EDRDG) + the JLPT lists |
+
+---
+
+## `src/learn/data/chinese.json` — the Chinese dictionary
 
 **Licence: CC BY-SA 4.0**
 
@@ -87,6 +98,74 @@ ever disagree, trust the hash.
 The choice not to vendor the 5 MB input is deliberate: duplicating someone else's
 data to make a build self-contained is worse than naming the exact revision it came
 from, and the vendored copy would carry the same CC BY-SA obligation anyway.
+
+---
+
+## `src/learn/data/japanese.json` — the Japanese dictionary
+
+**Licence: CC BY-SA 4.0**
+
+Also a **derived** work, and also **must remain CC BY-SA 4.0**. Two sources, the
+same shape as the Chinese one: a CC BY-SA dictionary for the words, and an MIT
+list for the exam levels.
+
+| Source | What came from it | Licence |
+| --- | --- | --- |
+| [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) (EDRDG, project begun by Jim Breen, 1991) | Definitions, kana readings, part of speech | CC BY-SA 4.0 |
+| [scriptin/jmdict-simplified](https://github.com/scriptin/jmdict-simplified) | The JSON conversion we consume | CC BY-SA 4.0 (inherited from EDRDG) |
+| [jamsinclair/open-anki-jlpt-decks](https://github.com/jamsinclair/open-anki-jlpt-decks) | JLPT level per word (N1–N5) | **MIT** |
+
+**Attribution.** The dictionary data is the work of the **Electronic Dictionary
+Research and Development Group (EDRDG)**, a project begun by Jim Breen. `jmdict-
+simplified` is a derived distribution and carries the same licence: we credit EDRDG
+as the origin, not the converter. The JLPT levels are from a separately-licensed
+(MIT) list, whose original deck data the project's README credits to
+`chyyran/jlpt-anki-decks` and tanos.co.uk.
+
+**Share-alike.** The changes made here are:
+
+- one entry per written form, so `足` and `脚` each resolve to the same reading;
+- kana readings taken from the **common** form rather than the first listed, and
+  rare-kanji-tagged forms (`rK`) dropped;
+- reshaped into the same keyed-object form as the Chinese dictionary (`p` is the
+  reading, `t` is unused and empty);
+- homograph collisions resolved first-wins (156 expression keys appear in more than
+  one JMdict entry).
+
+Those changes are in the committed file, so the derived work is available.
+
+**Known gaps, recorded because they are limitations of the build, not bugs:**
+
+- **Kana-initial words cannot be marked by the current segmenter.** They are present
+  in the data (so a lookup finds them) but the tokeniser never looks them up.
+- **Words absent from JMdict `common`** have no definition and therefore no level.
+  Measured at about 6% of JLPT rows; consuming the full 11.5 MB `jmdict-eng` variant
+  instead would close it at eight times the size.
+
+### Rebuilding the Japanese dictionary
+
+`node tools/build-wordlist.mjs --ja <jmdict.json> --jlpt <dir>`
+
+Pinned to an exact revision, like the Chinese source:
+
+| | |
+| --- | --- |
+| Repository | `scriptin/jmdict-simplified` |
+| Release | `3.6.2+20261005200550` |
+| Asset | `jmdict-eng-common-3.6.2+20261005200550.json.zip` |
+| SHA-256 | `956cb65b95d12d2b81fa550716d53163dbd3c70ca171a9c7dce97d7238c9d87a` |
+| Inner file | `jmdict-eng-common-3.6.2.json` (22,644 entries) |
+| Levels | `jamsinclair/open-anki-jlpt-decks` @ `1ad66734417aca9dbcca6b2d5ee440cb13ab3ba0`, `src/n1.csv … n5.csv` |
+
+**Verified 2026-10-06** by downloading that asset, confirming its size and SHA-256,
+and building from it. The asset hash is recorded rather than copied from
+documentation — a first draft of the build notes quoted the **full** `jmdict-eng`
+asset's hash while naming the `common` file, which the download check caught.
+
+The JLPT CSVs need care that the pin does not cover: the `expression` column uses
+`;` for multi-form words (`足; 脚`) and `～` for counters (`～円`). Treating a cell
+as one literal key silently loses about 10% of levels, so the build splits on `;`
+and strips `～`, whitespace and parentheticals.
 
 ## Development dependencies
 

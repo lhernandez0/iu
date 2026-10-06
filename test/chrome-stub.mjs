@@ -58,13 +58,22 @@ export function installChromeStub(options = {}) {
   const addListener = (bucket) => (fn) => listeners[bucket].push(fn);
 
   // The worker loads its word list through `fetch` on an extension URL, so the
-  // data has to be reachable here. Only that one URL is served; anything else
-  // throws, so an unexpected network call in a test that is supposed to be
-  // hermetic is loud rather than silently returning nothing.
+  // data has to be reachable here.
+  //
+  // RESOLVED BY FILENAME, not by a `learn/data/` prefix. The prefix version
+  // served chinese.json for every data URL, which was correct while there was one
+  // dictionary and silently wrong the moment there were two: a test that switched
+  // to a JLPT list would have been handed Chinese words and passed — or failed
+  // for a reason that had nothing to do with the code under test. Anything not on
+  // the allowlist throws, so an unexpected network call in a hermetic test is
+  // loud rather than silently returning nothing.
+  const SERVED = /learn\/data\/(chinese|japanese|index)\.(json)$/;
+
   globalThis.fetch = async (url) => {
     const href = String(url);
-    if (href.includes('learn/data/')) {
-      const body = await readFile(resolve(here, '../src/learn/data/chinese.json'), 'utf8');
+    const match = SERVED.exec(href);
+    if (match) {
+      const body = await readFile(resolve(here, '../src/learn/data', `${match[1]}.json`), 'utf8');
       return { ok: true, status: 200, json: async () => JSON.parse(body), text: async () => body };
     }
     throw new Error(`unexpected fetch in a hermetic test: ${href}`);
