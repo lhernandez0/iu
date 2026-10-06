@@ -136,6 +136,43 @@ function define(name, value) {
 }
 
 // --- Fixtures ----------------------------------------------------------------
+//
+// Two players, for two jobs.
+//
+// The derived one (`SYNTHETIC`) is a real capture's player response — real language
+// codes, real names, all 156 translation languages, real renderer keys. Use it when
+// the question is "does the bridge read what YouTube actually sends", which is the
+// question this suite exists to answer.
+//
+// The crafted one below is small and deliberately awkward: a `runs` name beside a
+// `simpleText` one, an `asr` track, a region-tagged translation language. It exists
+// to pin the VARIETY in the payload, which one capture may not happen to contain.
+// Its values are arbitrary and it is not a claim about YouTube's shape.
+
+import { fixture, summaryFrom } from './synthetic/load.mjs';
+
+const SYNTHETIC = fixture();
+
+const playerResponseFrom = (synthetic) =>
+  synthetic.playerResponse ?? {
+    videoDetails: { videoId: 'fallback', title: synthetic.video.title, isLiveContent: false },
+    captions: {
+      playerCaptionsTracklistRenderer: {
+        captionTracks: summaryFrom(synthetic).tracks.map((track) => ({
+          baseUrl: track.baseUrl,
+          languageCode: track.languageCode,
+          name: { simpleText: track.name },
+          kind: track.kind ?? undefined,
+          isTranslatable: track.isTranslatable,
+          vssId: track.vssId,
+        })),
+        translationLanguages: (synthetic.video.translationLanguages ?? []).map((language) => ({
+          languageCode: language.languageCode,
+          languageName: { runs: [{ text: language.name }] },
+        })),
+      },
+    },
+  };
 
 const PLAYER_RESPONSE = {
   videoDetails: { videoId: 'dQw4w9WgXcQ', title: 'Test Video', isLiveContent: false },
@@ -196,6 +233,48 @@ section('bridge evaluates');
 }
 
 // --- 2. The happy path -------------------------------------------------------
+
+section('reports a REAL player response, not a hand-written idea of one');
+
+{
+  // Built from a real capture: real renderer keys (`audioTracks`,
+  // `defaultAudioTrackIndex` included), real language codes, real names, and all
+  // 156 translation languages. The crafted fixture above pins variety; this pins
+  // fidelity, which is the thing that was missing.
+  const bridge = await bootBridge({
+    playerResponse: playerResponseFrom(SYNTHETIC),
+    // The URL has to carry the same id as the payload. The bridge takes the video
+    // id from the URL on purpose — that is the only signal that survives an in-tab
+    // navigation — so a test that leaves the default id here is testing a mismatch
+    // rather than the fixture.
+    urlVideoId: SYNTHETIC.video.videoId,
+    ytcfg: { get: (key) => (key === 'INNERTUBE_API_KEY' ? 'KEY123' : null) },
+  });
+
+  const payload = (await bridge.ask('get-player-response'))?.payload;
+
+  check('the video is identified', payload?.videoId, SYNTHETIC.video.videoId);
+  check('every real track is reported', payload?.tracks?.length, SYNTHETIC.tracks.length);
+  check('with the real codes', payload?.tracks?.map((t) => t.languageCode), SYNTHETIC.tracks.map((t) => t.languageCode));
+  check('and the real names', payload?.tracks?.map((t) => t.name), SYNTHETIC.tracks.map((t) => t.name));
+  // Both tracks on the real video report `kind: null` even though their URLs carry
+  // `caps=asr`. A fixture that "helpfully" called them asr would be inventing.
+  check('the real kinds, null included', payload?.tracks?.map((t) => t.kind ?? null), SYNTHETIC.tracks.map((t) => t.kind ?? null));
+  // The whole list, not a sample. This is what the picker is populated from.
+  check(
+    'the full translation-language list',
+    payload?.translationLanguages?.length,
+    SYNTHETIC.video.translationLanguages.length,
+  );
+  check('with region-tagged codes intact', payload.translationLanguages.some((l) => l.languageCode.includes('-')), true);
+  // A payload missing this is a payload YouTube does not send. The bridge does not
+  // read it, but its absence would mean the fixture had drifted from the capture.
+  check(
+    'the renderer still carries defaultAudioTrackIndex',
+    SYNTHETIC.playerResponse.captions.playerCaptionsTracklistRenderer.defaultAudioTrackIndex !== undefined,
+    true,
+  );
+}
 
 section('reports the video and its caption tracks');
 

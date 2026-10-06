@@ -239,6 +239,25 @@ function define(name, value) {
 }
 
 // --- Fixtures ----------------------------------------------------------------
+//
+// Two kinds, and the distinction matters.
+//
+// SUMMARY / JSON3 / XML below are small inputs crafted to exercise PARSER LOGIC —
+// whitespace-only cues being dropped, multi-part `segs` being joined, milliseconds
+// becoming seconds. They are not a claim about YouTube's shape, and their values
+// are arbitrary on purpose.
+//
+// The committed corpus in `test/synthetic/` is the other half: our own invented
+// text wearing shapes measured from a real capture. That is where a claim about
+// YouTube's shape is allowed to live, because it traces to something real.
+//
+// Everything in this file used to be the first kind while pretending to be the
+// second, which is why thirteen bugs were reported from use and none were found
+// here.
+
+import { fixture, json3From, xmlFrom, summaryFrom } from './synthetic/load.mjs';
+
+const SYNTHETIC = fixture();
 
 const SUMMARY = {
   videoId: 'dQw4w9WgXcQ',
@@ -314,6 +333,90 @@ section('parses the XML response, which is what arrives when JSON3 is unsupporte
   check('start read', result?.segments?.[0]?.start, 0);
   check('duration read', result?.segments?.[0]?.duration, 1.54);
   check('second cue', result?.segments?.[1]?.text, 'Some additional text');
+}
+
+// --- 3b. The real-shaped corpus ----------------------------------------------
+//
+// Everything above uses small crafted inputs to check PARSER LOGIC. These use the
+// committed corpus — invented text in shapes measured from a real capture — to
+// check the pipeline survives a REALISTIC one.
+//
+// This is the gap that mattered. Every fixture was tiny and started at zero, so
+// nothing here had ever parsed a track that starts at 37.9s, contains a 31-second
+// silence, or runs to 403 cues. A session's worth of bugs lived in exactly that
+// distance between the fixtures and the real thing.
+
+section('parses a realistically-shaped track (403 cues, real timings)');
+
+{
+  const track = SYNTHETIC.tracks[0];
+  const script = await bootContent({ summary: summaryFrom(SYNTHETIC), captionBody: json3From(track.segments) });
+  const result = await script.ask({ type: 'fetch-track', languageCode: track.languageCode });
+
+  check('every cue parsed', result?.segments?.length, track.segments.length);
+  check('more than a handful, so scale is exercised', result.segments.length > 100, true);
+  // The real track does not start at zero, and code that assumes it does is wrong.
+  check('the offset is preserved, not normalised to zero', result?.segments?.[0]?.start, track.segments[0].start);
+  check('and it is not zero', result.segments[0].start > 0, true);
+  // Real timings carry milliseconds; rounding them away would drift a long track.
+  check('sub-second precision survives', result?.segments?.[0]?.duration, track.segments[0].duration);
+  check('text came through intact', result?.segments?.[0]?.text, track.segments[0].text);
+
+  // Multi-part `segs` are joined. The corpus splits them on some cues because the
+  // real body does, and a parser reading only `segs[0]` would lose half a line.
+  const splitIndex = track.segments.findIndex((_, i) => i % 3 === 1 && track.segments[i].text.length > 1);
+  check('a split cue is rejoined', result.segments[splitIndex]?.text, track.segments[splitIndex].text);
+
+  // The gap is the reason `paused` exists at all. It has to be present in the
+  // fixture or the hold-the-last-line path is never reached.
+  const gaps = result.segments
+    .slice(1)
+    .map((s, i) => s.start - (result.segments[i].start + result.segments[i].duration));
+  check('the long silence is present', Math.max(...gaps) > 20, true);
+}
+
+section('the same cues parse identically from JSON3 and from XML');
+
+{
+  const track = SYNTHETIC.tracks[0];
+  const summary = summaryFrom(SYNTHETIC);
+
+  const viaJson = await bootContent({ summary, captionBody: json3From(track.segments) }).then((script) =>
+    script.ask({ type: 'fetch-track', languageCode: track.languageCode }),
+  );
+  const viaXml = await bootContent({ summary, captionBody: xmlFrom(track.segments) }).then((script) =>
+    script.ask({ type: 'fetch-track', languageCode: track.languageCode }),
+  );
+
+  // Two serialisations of one track must produce one transcript. This is the check
+  // the XML branch never had against a realistic body — it had only ever seen two
+  // hand-written cues in a fixture written to match my own parser.
+  check('the same number of cues', viaXml.segments.length, viaJson.segments.length);
+  check('with the same timings', viaXml.segments[0].start, viaJson.segments[0].start);
+  check('and the same text', viaXml.segments[0].text, viaJson.segments[0].text);
+  check('and the same last cue', viaXml.segments.at(-1).text, viaJson.segments.at(-1).text);
+}
+
+section('describe reports the real track vocabulary, not an invented pair');
+
+{
+  const script = await bootContent({ summary: summaryFrom(SYNTHETIC), captionBody: '{}' });
+  const video = (await script.ask({ type: 'describe' }))?.video;
+
+  // The codes and names come from the capture. `zh-Hans` rather than `zh` is the
+  // kind of detail a hand-written fixture gets wrong without anyone noticing.
+  check('the real language codes', video?.trackList?.map((t) => t.languageCode), SYNTHETIC.tracks.map((t) => t.languageCode));
+  check('and the real names', video?.trackList?.map((t) => t.name), SYNTHETIC.tracks.map((t) => t.name));
+  // 156 in the capture. Asserting the count would break on a different video, so
+  // this asserts the relationship: a real list is large, and has region-tagged
+  // codes in it.
+  check('a full translation-language list, not two entries', video?.translationLanguages?.length > 50, true);
+  check('including a region-tagged code', video.translationLanguages.some((l) => l.languageCode.includes('-')), true);
+  check(
+    'and every code has a name',
+    video.translationLanguages.every((l) => typeof l.name === 'string' && l.name.length > 0),
+    true,
+  );
 }
 
 // --- 4. Empty and malformed --------------------------------------------------

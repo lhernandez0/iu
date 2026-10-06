@@ -13,6 +13,7 @@
  */
 
 import { installChromeStub, createPanelPort } from './chrome-stub.mjs';
+import { fixture } from './synthetic/load.mjs';
 
 let failures = 0;
 let checks = 0;
@@ -1084,12 +1085,17 @@ section('lowering the threshold marks more');
   const high = received.at(-1).state.rows[0].tokens.filter((t) => t.level !== null).length;
 
   sendFromPanel({ type: 'set-threshold', threshold: 1 });
-  // A threshold change re-marks, and the tokens carried over from the previous
-  // marking mean "every row has tokens" is already true — so this has to wait
-  // for the number of marks to actually move, not for tokens to exist.
+  // A threshold change re-marks. Since `rebuildRows` now DISCARDS tokens built
+  // under different settings, there is a real interval where the rows have no
+  // tokens at all — so a predicate that only compares mark counts matches that
+  // empty state and hands back rows with `tokens: undefined`. It has to require
+  // tokens to be present AND to differ, which is what "re-marked" actually means.
   const lowState = await waitForState(
     received,
-    (s) => (s.rows?.[0]?.tokens ?? []).filter((t) => t.level !== null).length !== high,
+    (s) => {
+      const tokens = s.rows?.[0]?.tokens;
+      return Array.isArray(tokens) && tokens.filter((t) => t.level !== null).length !== high;
+    },
     'the lower threshold to re-mark',
   );
 
@@ -1097,6 +1103,82 @@ section('lowering the threshold marks more');
   check('a lower threshold marks at least as many', low >= high, true);
   check('and strictly more in this case', low > high, true);
   check('the threshold was reported back', received.at(-1).state.learning.threshold, 1);
+}
+
+// --- 3e. A realistically-shaped transcript -----------------------------------
+//
+// Every fixture above is three cues starting at zero. The real track is 403 cues
+// starting at 37.9s with a 31-second silence in it, and the distance between those
+// two things is where a session's worth of bugs lived.
+
+section('a realistically-shaped transcript survives the round trip');
+
+{
+  const synthetic = fixture();
+  const track = synthetic.tracks[0];
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: track.languageCode,
+      fetched: { languageCode: track.languageCode, segments: track.segments },
+    },
+    trackPayload: { languageCode: track.languageCode, translateTo: null, segments: track.segments },
+  });
+
+  const state = await waitForState(stub.received, (s) => s.rows?.length > 1, 'the rows to arrive');
+
+  check('every cue became a row', state.rows.length, track.segments.length);
+  check('the first cue keeps its real offset', state.rows[0]?.start, track.segments[0].start);
+  check('and it is not zero', state.rows[0].start > 0, true);
+  check('the last row is the last cue', state.rows.at(-1)?.start, track.segments.at(-1).start);
+
+  // A cue index is only meaningful against the transcript it was measured on, and
+  // a long transcript is where an off-by-one or a stale index would actually show.
+  const reported = stub.received.at(-1).state.activeIndex;
+  check('the reported index is inside the transcript', reported === -1 || reported < state.rows.length, true);
+}
+
+section('the reported cue does not drift when the video is paused');
+
+{
+  // The Phase 4 finding. A previous browser run reported 403 cue times that were
+  // ALL identical to the second with a 5s settle, and it was dismissed as flake.
+  // It is not flake: a source-less video holds `currentTime` without advancing it,
+  // so every poll legitimately reports the same cue.
+  //
+  // What matters is CONTAINMENT, not a frozen value. The exact second is not the
+  // contract — the panel must not accumulate drift, which is what a rounding or
+  // interpolation bug would look like over 403 cues.
+  const synthetic = fixture();
+  const track = synthetic.tracks[0];
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: {
+      ok: true,
+      video: VIDEO,
+      requested: track.languageCode,
+      fetched: { languageCode: track.languageCode, segments: track.segments },
+    },
+    trackPayload: { languageCode: track.languageCode, translateTo: null, segments: track.segments },
+  });
+  await waitForState(stub.received, (s) => s.rows?.length > 1, 'the rows to arrive');
+
+  // Report a spread of positions across the track, the way playback would.
+  const positions = [0, 0.25, 0.5, 0.75, 1].map((fraction) => fraction * (track.segments.at(-1).start - track.segments[0].start));
+  const reported = [];
+  for (const seconds of positions) {
+    stub.listeners.message[0]({ target: 'background', type: 'content-position', index: 100, seconds }, { tab: { id: 1 } });
+    await settle();
+    reported.push(stub.received.at(-1)?.seconds);
+  }
+
+  // Every position came back as sent. A rounding bug over a 403-cue track shows up
+  // here as a reported second that differs from the one asked for.
+  const drift = reported.map((value, i) => Math.abs(value - positions[i]));
+  check('the reported position is contained, not drifting', Math.max(...drift) < 0.05, true);
+  check('and it is a spread, not one repeated value', new Set(reported).size, positions.length);
 }
 
 section('a word the list cannot place is still hoverable, just unmarked');
@@ -1150,10 +1232,13 @@ section('a word the list cannot place is still hoverable, just unmarked');
   // unmarked in both lists — a reminder that "no level" and "below threshold"
   // both render as unmarked and only the `defined` flag distinguishes them.)
   sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
+  // Both conditions: the setting adopted AND the rows re-marked. A settings
+  // change clears tokens before the new marking lands, so waiting on `listId`
+  // alone returns the emptied rows and every assertion reads `undefined`.
   const back = await waitForState(
     received,
-    (s) => s.learning?.listId === 'hsk3_0',
-    'the HSK 3.0 list to be re-adopted',
+    (s) => s.learning?.listId === 'hsk3_0' && Array.isArray(s.rows?.[0]?.tokens),
+    'the HSK 3.0 list to be re-adopted and re-marked',
   );
 
   const row3 = back.rows?.[0];
@@ -1403,8 +1488,8 @@ section('switching word list re-marks rather than reusing the old levels');
   sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
   const state = await waitForState(
     received,
-    (s) => s.learning?.listId === 'hsk3_0',
-    'the HSK 3.0 list to be adopted',
+    (s) => s.learning?.listId === 'hsk3_0' && Array.isArray(s.rows?.[0]?.tokens),
+    'the HSK 3.0 list to be adopted and re-marked',
   );
 
   check('the list changed', state.learning.listId, 'hsk3_0');

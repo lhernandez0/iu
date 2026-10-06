@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 492 checks)
+## Tier 1 — hermetic (`npm test`, 533 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies — plain Node scripts,
@@ -38,10 +38,10 @@ so they run with nothing installed.
 | Suite | Boots | Checks |
 | --- | --- | --- |
 | `unit.test.mjs` | nothing | 48 |
-| `service-worker.test.mjs` | worker + `chrome` stub | 183 |
+| `service-worker.test.mjs` | worker + `chrome` stub | 190 |
 | `sidepanel.test.mjs` | panel + DOM stub | 99 |
-| `page-bridge.test.mjs` | bridge + page stub | 42 |
-| `content.test.mjs` | content script | 76 |
+| `page-bridge.test.mjs` | bridge + page stub | 50 |
+| `content.test.mjs` | content script | 93 |
 | `learn.test.mjs` | segmenter + word list | 44 |
 
 Each file is spawned as its own process, because they all grab the same globals
@@ -68,7 +68,7 @@ The content stub models an **orphaned extension context**: `id` absent, and
 that quietly resolved would not exercise the path at all, and the bug being
 pinned is precisely that the throw escaped.
 
-## Tier 2 — browser, offline (`npm run test:browser`, 89 checks)
+## Tier 2 — browser, offline (`npm run test:browser`, 107 checks)
 
 The real extension in real Chromium. The only thing faked is the network, and it
 is intercepted at the transport layer with `context.route`, so the content script
@@ -120,23 +120,39 @@ Notable details in `test/browser/harness.mjs`, all of which cost time to find:
   wrapper for a DOM node, so an accessor installed by the page is not what an
   isolated-world content script's assignment reaches.
 
-## Tier 3 — browser, live (`npm run test:browser:live`)
+## There is no live tier
 
-Hits the real youtube.com. Requires the flag; there is no command that reaches it
-by accident.
+There used to be. It was gated behind `--live`, and it was still a second thing
+that opened youtube.com — a flag is not a structural constraint. It is deleted, not
+disabled.
 
-This is the only test that can notice YouTube changing the page out from under
-us — the player response moving, the caption track list being reshaped, or the
-same-origin caption fetch being refused so the INNERTUBE fallback takes over.
-Everything else tests our understanding of the page against fixtures we wrote,
-which cannot disagree with itself.
+Noticing YouTube changing shape is now the capture tool's job: re-run
+`npm run capture`, and the derived corpus stops matching. One deliberate open per
+video, taken when you decide to take it, rather than a suite that reaches the
+network whenever someone remembers the flag exists.
 
-Expect it to be unreliable, and read its output rather than its exit code. A
-headless browser on a datacenter IP is often served a consent wall instead of a
-video, and the suite prints what it actually saw so a failure is diagnosable. A
-failure here is a prompt to look, not a broken build.
+## Where the fixtures come from
 
-Override the video with `IU_LIVE_VIDEO=<id>`.
+Two kinds, and mixing them up is the mistake this repository made for a long time.
+
+**`test/synthetic/` is committed** and is what tests read. It is our own invented
+text wearing shapes measured from a real capture — real cue counts, real timings
+including the offsets and the silences, real language codes, real renderer keys.
+Shape from reality, text from us, which is what makes it both faithful and
+committable.
+
+**`test/fixtures/` is local and gitignored** and is where that shape comes from.
+`npm run capture` opens the real site once per video — the only thing in the project
+that ever does — and `npm run derive-synthetic` turns the result into the corpus.
+
+Why it is arranged this way: every fixture used to be hand-written from an idea of
+what YouTube sends, so the tests could only confirm the idea. Thirteen bugs were
+reported from use and not one was found by the suite. A fixture is only worth
+something if its shape traces to something real.
+
+The loader falls back to a tiny self-contained fixture when nothing has been
+derived, so a fresh clone can still run `npm test`. Do not assert on the fallback:
+it is a bootstrapping aid, not a second source of truth.
 
 ## Where the browser comes from
 

@@ -6,6 +6,7 @@
   "description": "Personal-use Chrome extension: YouTube transcripts in the side panel.",
   "scripts": {
     "capture": "node tools/capture.mjs",
+    "derive-synthetic": "node tools/derive-synthetic.mjs",
     "test": "node test/run.mjs",
     "test:all": "npm test && npm run test:browser",
     "test:browser": "node test/browser/run-browser.mjs",

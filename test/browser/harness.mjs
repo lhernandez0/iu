@@ -109,16 +109,26 @@ export async function launchExtension() {
  * @param {'json3'|'xml'} [options.captionFormat]
  * @param {boolean} [options.breakBaseUrl] Refuse the direct track URL, to force
  *   the INERTUBE fallback for this video.
- * @returns {Promise<{captionRequests: string[], playerRequests: string[]}>}
+ * @returns {Promise<{captionRequests: string[], playerRequests: string[], blockedRequests: string[]}>}
  */
-export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = 'Fixture Video', tracks, captionFormat = 'json3', breakBaseUrl = false, capture = null }) {
+export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = 'Fixture Video', tracks, captionFormat = 'json3', breakBaseUrl = false, capture = null, trustedTypes = false }) {
   /** Shared across every call for this browser, so one set of routes serves all. */
   const registry = (context.__iuFixture ??= {
     videos: new Map(),
     captionRequests: [],
     playerRequests: [],
+    // Every request that matched no handler and was refused. Read by a test to
+    // assert the tier really is offline, rather than assuming it from the route
+    // list — which is what let an unrouted path have gone to the network before.
+    blockedRequests: [],
+    // Whether the watch page carries YouTube's real Trusted Types policy.
+    trustedTypes: false,
     installed: false,
   });
+
+  // Sticky once set: the routes are installed once and read this per request, so
+  // a later call without the flag must not silently drop the policy.
+  if (trustedTypes) registry.trustedTypes = true;
 
   // A capture carries the real track list, the real segments and — importantly —
   // the real `translationLanguages`, none of which a hand-written fixture can be
@@ -136,7 +146,11 @@ export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = '
       registry.installed = true;
       await installRoutes(context, registry);
     }
-    return { captionRequests: registry.captionRequests, playerRequests: registry.playerRequests };
+    return {
+      captionRequests: registry.captionRequests,
+      playerRequests: registry.playerRequests,
+      blockedRequests: registry.blockedRequests,
+    };
   }
 
   registry.videos.set(videoId, { title, tracks, captionFormat, breakBaseUrl });
@@ -146,8 +160,26 @@ export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = '
     await installRoutes(context, registry);
   }
 
-  return { captionRequests: registry.captionRequests, playerRequests: registry.playerRequests };
+  return {
+    captionRequests: registry.captionRequests,
+    playerRequests: registry.playerRequests,
+    blockedRequests: registry.blockedRequests,
+  };
 }
+
+/**
+ * The Content Security Policy YouTube actually serves on a watch page.
+ *
+ * Verified the hard way: a capture died on `DOMParser.parseFromString` with
+ * "This document requires 'TrustedHTML' assignment", which is that policy and
+ * nothing else. Reproduced locally in `tools/probe-trusted-types.mjs` — a page
+ * serving this header throws the identical error, and a blank page does not.
+ *
+ * It matters here because the tier is supposed to replay the real CONDITIONS, not
+ * only the real bytes. Serving the captured page without its policy would exercise
+ * a page that differs from YouTube's in exactly the way that cost a capture.
+ */
+export const TRUSTED_TYPES_CSP = "require-trusted-types-for 'script'";
 
 /**
  * Install the route handlers once.
@@ -158,6 +190,27 @@ export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = '
 async function installRoutes(context, registry) {
   /** The video a URL refers to. @param {string} url */
   const videoFor = (url) => registry.videos.get(new URL(url).searchParams.get('v'));
+
+  // FAIL CLOSED, and do it FIRST.
+  //
+  // Playwright tries the most recently registered route first, so this is only
+  // consulted when none of the specific handlers below matched. Without it, any
+  // request we did not anticipate — a consent redirect, a subdomain, an analytics
+  // call, a path we simply did not know about — goes to the REAL internet. The
+  // suite would still look hermetic, because the tests would pass either way, and
+  // "offline" would be a property of my memory rather than of the browser.
+  //
+  // SCOPED to http(s), which is not a detail: a bare `'**'` pattern also matches
+  // `chrome-extension://`, so it aborted the extension's own script and document
+  // loads and every test failed to render anything. The guard is meant to stop
+  // network traffic, not to cut off the extension under test.
+  await context.route(
+    (url) => url.protocol === 'http:' || url.protocol === 'https:',
+    (route) => {
+      registry.blockedRequests.push(route.request().url());
+      return route.abort();
+    },
+  );
 
   await context.route(YOUTUBE_WATCH, async (route) => {
     const url = route.request().url();
@@ -172,7 +225,10 @@ async function installRoutes(context, registry) {
     const videoId = new URL(url).searchParams.get('v');
     await route.fulfill({
       status: 200,
-      contentType: 'text/html',
+      contentType: 'text/html; charset=utf-8',
+      // The policy only when a test asked for it, so ordinary cases stay simple
+      // and the ones that care are explicit about it.
+      headers: registry.trustedTypes ? { 'Content-Security-Policy': TRUSTED_TYPES_CSP } : undefined,
       body: watchPage({
         videoId,
         title: fixture.title,

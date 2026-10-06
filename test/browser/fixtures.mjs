@@ -113,6 +113,21 @@ export function watchPage({ videoId, title, tracks, serveAsrNames = false, trans
     // native property is both simpler and actually observes the seek.
     window.__position = () => document.getElementById('player').currentTime;
 
+    /**
+     * Move playback to a position, the way watching the video would.
+     *
+     * Exists because the alternative — assigning currentTime from the test —
+     * reaches different wrappers in different worlds, and because a source-less
+     * media element never ADVANCES on its own. Setting it from inside the page is
+     * the only way a test can put the extension at a position further down a long
+     * transcript, which is what makes the follow-and-scroll path reachable at all.
+     */
+    window.__setPosition = (seconds) => {
+      const player = document.getElementById('player');
+      if (player) player.currentTime = seconds;
+      return player ? player.currentTime : null;
+    };
+
     // Record navigation events so a test can tell an SPA transition happened.
     window.__navigations = 0;
     document.addEventListener('yt-navigate-finish', () => { window.__navigations++; });

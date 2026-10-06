@@ -1,0 +1,2027 @@
+{
+  "languageCode": "en",
+  "kind": null,
+  "text": "synthetic",
+  "derivedFrom": "iuSyntheticS2U",
+  "shape": {
+    "cueCount": 403,
+    "note": "durations, gaps and offsets measured from the real capture"
+  },
+  "segments": [
+    {
+      "start": 37.933,
+      "duration": 0.27,
+      "text": "Good morning everyone"
+    },
+    {
+      "start": 38.213,
+      "duration": 4.13,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    },
+    {
+      "start": 42.827,
+      "duration": 3.717,
+      "text": "this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size"
+    },
+    {
+      "start": 47.064,
+      "duration": 2.668,
+      "text": "x"
+    },
+    {
+      "start": 49.956,
+      "duration": 4.72,
+      "text": "Opening the shop at six every morning"
+    },
+    {
+      "start": 55.299,
+      "duration": 4.522,
+      "text": "We ordered rice rolls first"
+    },
+    {
+      "start": 60.296,
+      "duration": 0.962,
+      "text": "It tasted really good"
+    },
+    {
+      "start": 61.843,
+      "duration": 1.561,
+      "text": "Cheap too, twelve yuan"
+    },
+    {
+      "start": 63.743,
+      "duration": 0.27,
+      "text": "Then we went next door"
+    },
+    {
+      "start": 64.106,
+      "duration": 3.106,
+      "text": "The queue was long"
+    },
+    {
+      "start": 67.47,
+      "duration": 3.575,
+      "text": "Waited about twenty minutes"
+    },
+    {
+      "start": 71.165,
+      "duration": 4.63,
+      "text": "My friend recommended the signature dish"
+    },
+    {
+      "start": 75.86,
+      "duration": 4.72,
+      "text": "It looked appetising"
+    },
+    {
+      "start": 80.84,
+      "duration": 1.187,
+      "text": "The first bite was a surprise"
+    },
+    {
+      "start": 82.675,
+      "duration": 0.46,
+      "text": "Lots of layers to the flavour"
+    },
+    {
+      "start": 83.752,
+      "duration": 3.991,
+      "text": "We also got two iced lemon teas"
+    },
+    {
+      "start": 87.98,
+      "duration": 0.27,
+      "text": "Eight yuan each, normal for here"
+    },
+    {
+      "start": 88.873,
+      "duration": 4.687,
+      "text": "Walked in the park in the afternoon"
+    },
+    {
+      "start": 94.141,
+      "duration": 2.838,
+      "text": "Nice weather, soft light"
+    },
+    {
+      "start": 97.717,
+      "duration": 1.937,
+      "text": "Plenty of people running and walking dogs"
+    },
+    {
+      "start": 100.081,
+      "duration": 4.72,
+      "text": "We found a bench and sat down"
+    },
+    {
+      "start": 105.576,
+      "duration": 2.365,
+      "text": "Talked about work for a while"
+    },
+    {
+      "start": 108.596,
+      "duration": 3.238,
+      "text": "He is changing jobs next month"
+    },
+    {
+      "start": 112.548,
+      "duration": 3.354,
+      "text": "I wished him luck"
+    },
+    {
+      "start": 115.999,
+      "duration": 0.27,
+      "text": "Still thinking about the food on the way home"
+    },
+    {
+      "start": 116.976,
+      "duration": 0.565,
+      "text": "Bring the family next time"
+    },
+    {
+      "start": 117.664,
+      "duration": 1.961,
+      "text": "Thanks for watching"
+    },
+    {
+      "start": 120.319,
+      "duration": 3.874,
+      "text": "Remember to like and subscribe"
+    },
+    {
+      "start": 124.691,
+      "duration": 4.72,
+      "text": "See you next time"
+    },
+    {
+      "start": 129.731,
+      "duration": 0.997,
+      "text": "That's all for today"
+    },
+    {
+      "start": 131.153,
+      "duration": 4.188,
+      "text": "There are more small shops worth a look"
+    },
+    {
+      "start": 135.571,
+      "duration": 0.755,
+      "text": "Not enough time, next trip"
+    },
+    {
+      "start": 136.908,
+      "duration": 0.27,
+      "text": "Passed a fruit stall on the road"
+    },
+    {
+      "start": 137.731,
+      "duration": 3.305,
+      "text": "The mangoes looked fresh"
+    },
+    {
+      "start": 141.568,
+      "duration": 0.617,
+      "text": "Bought two jin, fifteen yuan"
+    },
+    {
+      "start": 142.552,
+      "duration": 1.847,
+      "text": "The owner threw in an orange"
+    },
+    {
+      "start": 144.616,
+      "duration": 4.72,
+      "text": "You do not see that much in a big city"
+    },
+    {
+      "start": 149.695,
+      "duration": 1.71,
+      "text": "A new bakery opened by the station"
+    },
+    {
+      "start": 151.476,
+      "duration": 0.856,
+      "text": "The croissants were golden in the window"
+    },
+    {
+      "start": 153.057,
+      "duration": 3.495,
+      "text": "Could not resist buying one"
+    },
+    {
+      "start": 156.614,
+      "duration": 0.27,
+      "text": "Crisp outside, soft inside"
+    },
+    {
+      "start": 157.33,
+      "duration": 0.469,
+      "text": "Just right with an americano"
+    },
+    {
+      "start": 158.352,
+      "duration": 1.509,
+      "text": "That is what a weekend morning is for"
+    },
+    {
+      "start": 160.073,
+      "duration": 1.273,
+      "text": "What do you eat for breakfast where you live"
+    },
+    {
+      "start": 161.642,
+      "duration": 4.72,
+      "text": "Tell me in the comments"
+    },
+    {
+      "start": 166.701,
+      "duration": 3.713,
+      "text": "I will reply to a few"
+    },
+    {
+      "start": 170.847,
+      "duration": 2.813,
+      "text": "I used to come here as a kid"
+    },
+    {
+      "start": 174.178,
+      "duration": 1.531,
+      "text": "The owner still remembers my name"
+    },
+    {
+      "start": 176.185,
+      "duration": 0.27,
+      "text": "Time really does fly"
+    },
+    {
+      "start": 176.722,
+      "duration": 4.428,
+      "text": "Hard to believe it has been that many years"
+    },
+    {
+      "start": 181.693,
+      "duration": 2.103,
+      "text": "Good morning everyone"
+    },
+    {
+      "start": 184.416,
+      "duration": 3.978,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    },
+    {
+      "start": 188.836,
+      "duration": 4.72,
+      "text": "this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size"
+    },
+    {
+      "start": 193.613,
+      "duration": 3.649,
+      "text": "x"
+    },
+    {
+      "start": 197.378,
+      "duration": 1.993,
+      "text": "Opening the shop at six every morning"
+    },
+    {
+      "start": 200.077,
+      "duration": 0.834,
+      "text": "We ordered rice rolls first"
+    },
+    {
+      "start": 201.345,
+      "duration": 0.27,
+      "text": "It tasted really good"
+    },
+    {
+      "start": 201.836,
+      "duration": 1.05,
+      "text": "Cheap too, twelve yuan"
+    },
+    {
+      "start": 203.296,
+      "duration": 1.651,
+      "text": "Then we went next door"
+    },
+    {
+      "start": 205.623,
+      "duration": 0.503,
+      "text": "The queue was long"
+    },
+    {
+      "start": 206.142,
+      "duration": 4.72,
+      "text": "Waited about twenty minutes"
+    },
+    {
+      "start": 211.407,
+      "duration": 1.348,
+      "text": "My friend recommended the signature dish"
+    },
+    {
+      "start": 213.284,
+      "duration": 1.425,
+      "text": "It looked appetising"
+    },
+    {
+      "start": 215.065,
+      "duration": 1.863,
+      "text": "The first bite was a surprise"
+    },
+    {
+      "start": 217.589,
+      "duration": 0.27,
+      "text": "Lots of layers to the flavour"
+    },
+    {
+      "start": 218.278,
+      "duration": 3.854,
+      "text": "We also got two iced lemon teas"
+    },
+    {
+      "start": 222.647,
+      "duration": 0.767,
+      "text": "Eight yuan each, normal for here"
+    },
+    {
+      "start": 223.502,
+      "duration": 3.287,
+      "text": "Walked in the park in the afternoon"
+    },
+    {
+      "start": 226.943,
+      "duration": 4.72,
+      "text": "Nice weather, soft light"
+    },
+    {
+      "start": 232.187,
+      "duration": 0.533,
+      "text": "Plenty of people running and walking dogs"
+    },
+    {
+      "start": 233.424,
+      "duration": 4.51,
+      "text": "We found a bench and sat down"
+    },
+    {
+      "start": 238.2,
+      "duration": 3.935,
+      "text": "Talked about work for a while"
+    },
+    {
+      "start": 242.872,
+      "duration": 0.27,
+      "text": "He is changing jobs next month"
+    },
+    {
+      "start": 243.326,
+      "duration": 0.707,
+      "text": "I wished him luck"
+    },
+    {
+      "start": 244.54,
+      "duration": 1.821,
+      "text": "Still thinking about the food on the way home"
+    },
+    {
+      "start": 247.049,
+      "duration": 2.804,
+      "text": "Bring the family next time"
+    },
+    {
+      "start": 250.313,
+      "duration": 4.72,
+      "text": "Thanks for watching"
+    },
+    {
+      "start": 255.707,
+      "duration": 3.339,
+      "text": "Remember to like and subscribe"
+    },
+    {
+      "start": 259.196,
+      "duration": 3.131,
+      "text": "See you next time"
+    },
+    {
+      "start": 262.745,
+      "duration": 1.494,
+      "text": "That's all for today"
+    },
+    {
+      "start": 264.663,
+      "duration": 0.27,
+      "text": "There are more small shops worth a look"
+    },
+    {
+      "start": 265.164,
+      "duration": 0.998,
+      "text": "Not enough time, next trip"
+    },
+    {
+      "start": 266.89,
+      "duration": 2.986,
+      "text": "Passed a fruit stall on the road"
+    },
+    {
+      "start": 270.058,
+      "duration": 1.498,
+      "text": "The mangoes looked fresh"
+    },
+    {
+      "start": 271.873,
+      "duration": 4.72,
+      "text": "Bought two jin, fifteen yuan"
+    },
+    {
+      "start": 276.774,
+      "duration": 2.598,
+      "text": "The owner threw in an orange"
+    },
+    {
+      "start": 279.577,
+      "duration": 1.134,
+      "text": "You do not see that much in a big city"
+    },
+    {
+      "start": 281.276,
+      "duration": 1.17,
+      "text": "A new bakery opened by the station"
+    },
+    {
+      "start": 282.489,
+      "duration": 0.27,
+      "text": "The croissants were golden in the window"
+    },
+    {
+      "start": 283.424,
+      "duration": 3.021,
+      "text": "Could not resist buying one"
+    },
+    {
+      "start": 287.194,
+      "duration": 0.555,
+      "text": "Crisp outside, soft inside"
+    },
+    {
+      "start": 288.327,
+      "duration": 1.471,
+      "text": "Just right with an americano"
+    },
+    {
+      "start": 290.228,
+      "duration": 4.72,
+      "text": "That is what a weekend morning is for"
+    },
+    {
+      "start": 295.106,
+      "duration": 3.788,
+      "text": "What do you eat for breakfast where you live"
+    },
+    {
+      "start": 298.961,
+      "duration": 1.585,
+      "text": "Tell me in the comments"
+    },
+    {
+      "start": 300.808,
+      "duration": 2.577,
+      "text": "I will reply to a few"
+    },
+    {
+      "start": 303.523,
+      "duration": 0.27,
+      "text": "I used to come here as a kid"
+    },
+    {
+      "start": 304.123,
+      "duration": 2.835,
+      "text": "The owner still remembers my name"
+    },
+    {
+      "start": 307.228,
+      "duration": 3.346,
+      "text": "Time really does fly"
+    },
+    {
+      "start": 310.622,
+      "duration": 0.838,
+      "text": "Hard to believe it has been that many years"
+    },
+    {
+      "start": 311.847,
+      "duration": 4.72,
+      "text": "Good morning everyone"
+    },
+    {
+      "start": 317.203,
+      "duration": 3.923,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    },
+    {
+      "start": 321.557,
+      "duration": 3.41,
+      "text": "this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size"
+    },
+    {
+      "start": 325.195,
+      "duration": 2.603,
+      "text": "x"
+    },
+    {
+      "start": 328.387,
+      "duration": 0.27,
+      "text": "Opening the shop at six every morning"
+    },
+    {
+      "start": 329.051,
+      "duration": 1.45,
+      "text": "We ordered rice rolls first"
+    },
+    {
+      "start": 331.103,
+      "duration": 1.016,
+      "text": "It tasted really good"
+    },
+    {
+      "start": 332.655,
+      "duration": 1.999,
+      "text": "Cheap too, twelve yuan"
+    },
+    {
+      "start": 335.072,
+      "duration": 4.72,
+      "text": "Then we went next door"
+    },
+    {
+      "start": 340.421,
+      "duration": 2.725,
+      "text": "The queue was long"
+    },
+    {
+      "start": 343.565,
+      "duration": 4.369,
+      "text": "Waited about twenty minutes"
+    },
+    {
+      "start": 348.619,
+      "duration": 4.689,
+      "text": "My friend recommended the signature dish"
+    },
+    {
+      "start": 354.043,
+      "duration": 0.27,
+      "text": "It looked appetising"
+    },
+    {
+      "start": 354.869,
+      "duration": 3.591,
+      "text": "The first bite was a surprise"
+    },
+    {
+      "start": 358.478,
+      "duration": 1.104,
+      "text": "Lots of layers to the flavour"
+    },
+    {
+      "start": 359.639,
+      "duration": 1.122,
+      "text": "We also got two iced lemon teas"
+    },
+    {
+      "start": 361.498,
+      "duration": 4.72,
+      "text": "Eight yuan each, normal for here"
+    },
+    {
+      "start": 366.783,
+      "duration": 1.695,
+      "text": "Walked in the park in the afternoon"
+    },
+    {
+      "start": 369.048,
+      "duration": 4.273,
+      "text": "Nice weather, soft light"
+    },
+    {
+      "start": 373.506,
+      "duration": 3.971,
+      "text": "Plenty of people running and walking dogs"
+    },
+    {
+      "start": 377.597,
+      "duration": 0.27,
+      "text": "We found a bench and sat down"
+    },
+    {
+      "start": 378.471,
+      "duration": 4.001,
+      "text": "Talked about work for a while"
+    },
+    {
+      "start": 383.037,
+      "duration": 2.56,
+      "text": "He is changing jobs next month"
+    },
+    {
+      "start": 385.725,
+      "duration": 2.433,
+      "text": "I wished him luck"
+    },
+    {
+      "start": 388.276,
+      "duration": 4.72,
+      "text": "Still thinking about the food on the way home"
+    },
+    {
+      "start": 393.484,
+      "duration": 2.354,
+      "text": "Bring the family next time"
+    },
+    {
+      "start": 396.484,
+      "duration": 0.924,
+      "text": "Thanks for watching"
+    },
+    {
+      "start": 397.511,
+      "duration": 1.03,
+      "text": "Remember to like and subscribe"
+    },
+    {
+      "start": 399.293,
+      "duration": 0.27,
+      "text": "See you next time"
+    },
+    {
+      "start": 399.769,
+      "duration": 1.039,
+      "text": "That's all for today"
+    },
+    {
+      "start": 401.133,
+      "duration": 2.379,
+      "text": "There are more small shops worth a look"
+    },
+    {
+      "start": 403.862,
+      "duration": 2.084,
+      "text": "Not enough time, next trip"
+    },
+    {
+      "start": 406.073,
+      "duration": 4.72,
+      "text": "Passed a fruit stall on the road"
+    },
+    {
+      "start": 411.482,
+      "duration": 1.395,
+      "text": "The mangoes looked fresh"
+    },
+    {
+      "start": 413.114,
+      "duration": 0.411,
+      "text": "Bought two jin, fifteen yuan"
+    },
+    {
+      "start": 414.197,
+      "duration": 4.519,
+      "text": "The owner threw in an orange"
+    },
+    {
+      "start": 418.814,
+      "duration": 0.27,
+      "text": "You do not see that much in a big city"
+    },
+    {
+      "start": 419.68,
+      "duration": 3.511,
+      "text": "A new bakery opened by the station"
+    },
+    {
+      "start": 423.334,
+      "duration": 3.589,
+      "text": "The croissants were golden in the window"
+    },
+    {
+      "start": 427.515,
+      "duration": 3.122,
+      "text": "Could not resist buying one"
+    },
+    {
+      "start": 430.88,
+      "duration": 4.72,
+      "text": "Crisp outside, soft inside"
+    },
+    {
+      "start": 435.85,
+      "duration": 2.668,
+      "text": "Just right with an americano"
+    },
+    {
+      "start": 439.299,
+      "duration": 3.457,
+      "text": "That is what a weekend morning is for"
+    },
+    {
+      "start": 443.035,
+      "duration": 3.56,
+      "text": "What do you eat for breakfast where you live"
+    },
+    {
+      "start": 447.189,
+      "duration": 0.27,
+      "text": "Tell me in the comments"
+    },
+    {
+      "start": 447.872,
+      "duration": 4.53,
+      "text": "I will reply to a few"
+    },
+    {
+      "start": 453.041,
+      "duration": 2.72,
+      "text": "I used to come here as a kid"
+    },
+    {
+      "start": 456.091,
+      "duration": 0.583,
+      "text": "The owner still remembers my name"
+    },
+    {
+      "start": 457.463,
+      "duration": 4.72,
+      "text": "Time really does fly"
+    },
+    {
+      "start": 462.468,
+      "duration": 3.945,
+      "text": "Hard to believe it has been that many years"
+    },
+    {
+      "start": 467.172,
+      "duration": 0.938,
+      "text": "Good morning everyone"
+    },
+    {
+      "start": 468.331,
+      "duration": 2.419,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    },
+    {
+      "start": 471.069,
+      "duration": 0.27,
+      "text": "this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size"
+    },
+    {
+      "start": 471.491,
+      "duration": 0.545,
+      "text": "x"
+    },
+    {
+      "start": 472.828,
+      "duration": 1.996,
+      "text": "Opening the shop at six every morning"
+    },
+    {
+      "start": 475.12,
+      "duration": 0.464,
+      "text": "We ordered rice rolls first"
+    },
+    {
+      "start": 475.722,
+      "duration": 4.72,
+      "text": "It tasted really good"
+    },
+    {
+      "start": 480.474,
+      "duration": 4.166,
+      "text": "Cheap too, twelve yuan"
+    },
+    {
+      "start": 485.159,
+      "duration": 1.112,
+      "text": "Then we went next door"
+    },
+    {
+      "start": 486.417,
+      "duration": 1.31,
+      "text": "The queue was long"
+    },
+    {
+      "start": 488.364,
+      "duration": 0.27,
+      "text": "Waited about twenty minutes"
+    },
+    {
+      "start": 489.178,
+      "duration": 4.402,
+      "text": "My friend recommended the signature dish"
+    },
+    {
+      "start": 493.99,
+      "duration": 3.665,
+      "text": "It looked appetising"
+    },
+    {
+      "start": 498.038,
+      "duration": 4.581,
+      "text": "The first bite was a surprise"
+    },
+    {
+      "start": 502.955,
+      "duration": 4.72,
+      "text": "Lots of layers to the flavour"
+    },
+    {
+      "start": 507.949,
+      "duration": 3.116,
+      "text": "We also got two iced lemon teas"
+    },
+    {
+      "start": 511.506,
+      "duration": 3.398,
+      "text": "Eight yuan each, normal for here"
+    },
+    {
+      "start": 515.202,
+      "duration": 3.856,
+      "text": "Walked in the park in the afternoon"
+    },
+    {
+      "start": 519.327,
+      "duration": 0.27,
+      "text": "Nice weather, soft light"
+    },
+    {
+      "start": 519.985,
+      "duration": 4.596,
+      "text": "Plenty of people running and walking dogs"
+    },
+    {
+      "start": 524.722,
+      "duration": 2.857,
+      "text": "We found a bench and sat down"
+    },
+    {
+      "start": 527.925,
+      "duration": 0.46,
+      "text": "Talked about work for a while"
+    },
+    {
+      "start": 528.86,
+      "duration": 4.72,
+      "text": "He is changing jobs next month"
+    },
+    {
+      "start": 533.876,
+      "duration": 4.247,
+      "text": "I wished him luck"
+    },
+    {
+      "start": 538.835,
+      "duration": 2.556,
+      "text": "Still thinking about the food on the way home"
+    },
+    {
+      "start": 542.049,
+      "duration": 2.001,
+      "text": "Bring the family next time"
+    },
+    {
+      "start": 544.067,
+      "duration": 0.27,
+      "text": "Thanks for watching"
+    },
+    {
+      "start": 545.04,
+      "duration": 2.512,
+      "text": "Remember to like and subscribe"
+    },
+    {
+      "start": 547.645,
+      "duration": 2.309,
+      "text": "See you next time"
+    },
+    {
+      "start": 550.072,
+      "duration": 2.378,
+      "text": "That's all for today"
+    },
+    {
+      "start": 552.717,
+      "duration": 4.72,
+      "text": "There are more small shops worth a look"
+    },
+    {
+      "start": 557.55,
+      "duration": 0.355,
+      "text": "Not enough time, next trip"
+    },
+    {
+      "start": 558.455,
+      "duration": 3.762,
+      "text": "Passed a fruit stall on the road"
+    },
+    {
+      "start": 562.42,
+      "duration": 2.874,
+      "text": "The mangoes looked fresh"
+    },
+    {
+      "start": 565.852,
+      "duration": 0.27,
+      "text": "Bought two jin, fifteen yuan"
+    },
+    {
+      "start": 566.557,
+      "duration": 2.655,
+      "text": "The owner threw in an orange"
+    },
+    {
+      "start": 569.982,
+      "duration": 4.108,
+      "text": "You do not see that much in a big city"
+    },
+    {
+      "start": 574.824,
+      "duration": 4.438,
+      "text": "A new bakery opened by the station"
+    },
+    {
+      "start": 579.773,
+      "duration": 4.72,
+      "text": "The croissants were golden in the window"
+    },
+    {
+      "start": 584.899,
+      "duration": 1.67,
+      "text": "Could not resist buying one"
+    },
+    {
+      "start": 586.695,
+      "duration": 0.592,
+      "text": "Crisp outside, soft inside"
+    },
+    {
+      "start": 587.892,
+      "duration": 1.149,
+      "text": "Just right with an americano"
+    },
+    {
+      "start": 589.788,
+      "duration": 0.27,
+      "text": "That is what a weekend morning is for"
+    },
+    {
+      "start": 590.292,
+      "duration": 4.564,
+      "text": "What do you eat for breakfast where you live"
+    },
+    {
+      "start": 595.276,
+      "duration": 0.812,
+      "text": "Tell me in the comments"
+    },
+    {
+      "start": 596.509,
+      "duration": 4.65,
+      "text": "I will reply to a few"
+    },
+    {
+      "start": 601.417,
+      "duration": 4.72,
+      "text": "I used to come here as a kid"
+    },
+    {
+      "start": 606.881,
+      "duration": 0.814,
+      "text": "The owner still remembers my name"
+    },
+    {
+      "start": 608.244,
+      "duration": 1.434,
+      "text": "Time really does fly"
+    },
+    {
+      "start": 610.362,
+      "duration": 1.458,
+      "text": "Hard to believe it has been that many years"
+    },
+    {
+      "start": 612.192,
+      "duration": 0.27,
+      "text": "Good morning everyone"
+    },
+    {
+      "start": 612.789,
+      "duration": 1.059,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    },
+    {
+      "start": 645.558,
+      "duration": 1.539,
+      "text": "this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size"
+    },
+    {
+      "start": 647.631,
+      "duration": 2.535,
+      "text": "x"
+    },
+    {
+      "start": 650.214,
+      "duration": 4.72,
+      "text": "Opening the shop at six every morning"
+    },
+    {
+      "start": 655.35,
+      "duration": 0.935,
+      "text": "We ordered rice rolls first"
+    },
+    {
+      "start": 656.659,
+      "duration": 2.999,
+      "text": "It tasted really good"
+    },
+    {
+      "start": 659.711,
+      "duration": 2.137,
+      "text": "Cheap too, twelve yuan"
+    },
+    {
+      "start": 662.57,
+      "duration": 0.27,
+      "text": "Then we went next door"
+    },
+    {
+      "start": 663.227,
+      "duration": 4.165,
+      "text": "The queue was long"
+    },
+    {
+      "start": 667.443,
+      "duration": 4.412,
+      "text": "Waited about twenty minutes"
+    },
+    {
+      "start": 672.489,
+      "duration": 4.674,
+      "text": "My friend recommended the signature dish"
+    },
+    {
+      "start": 677.495,
+      "duration": 4.72,
+      "text": "It looked appetising"
+    },
+    {
+      "start": 682.65,
+      "duration": 2.568,
+      "text": "The first bite was a surprise"
+    },
+    {
+      "start": 685.962,
+      "duration": 3.204,
+      "text": "Lots of layers to the flavour"
+    },
+    {
+      "start": 689.37,
+      "duration": 3.072,
+      "text": "We also got two iced lemon teas"
+    },
+    {
+      "start": 692.837,
+      "duration": 0.27,
+      "text": "Eight yuan each, normal for here"
+    },
+    {
+      "start": 693.783,
+      "duration": 4.161,
+      "text": "Walked in the park in the afternoon"
+    },
+    {
+      "start": 698.411,
+      "duration": 2.454,
+      "text": "Nice weather, soft light"
+    },
+    {
+      "start": 701.25,
+      "duration": 2.822,
+      "text": "Plenty of people running and walking dogs"
+    },
+    {
+      "start": 704.839,
+      "duration": 4.72,
+      "text": "We found a bench and sat down"
+    },
+    {
+      "start": 709.693,
+      "duration": 3.371,
+      "text": "Talked about work for a while"
+    },
+    {
+      "start": 713.559,
+      "duration": 1.877,
+      "text": "He is changing jobs next month"
+    },
+    {
+      "start": 715.713,
+      "duration": 0.925,
+      "text": "I wished him luck"
+    },
+    {
+      "start": 716.973,
+      "duration": 0.27,
+      "text": "Still thinking about the food on the way home"
+    },
+    {
+      "start": 717.962,
+      "duration": 2.701,
+      "text": "Bring the family next time"
+    },
+    {
+      "start": 720.771,
+      "duration": 3.75,
+      "text": "Thanks for watching"
+    },
+    {
+      "start": 725.163,
+      "duration": 2.901,
+      "text": "Remember to like and subscribe"
+    },
+    {
+      "start": 728.573,
+      "duration": 4.72,
+      "text": "See you next time"
+    },
+    {
+      "start": 733.699,
+      "duration": 0.443,
+      "text": "That's all for today"
+    },
+    {
+      "start": 734.525,
+      "duration": 1.147,
+      "text": "There are more small shops worth a look"
+    },
+    {
+      "start": 736.248,
+      "duration": 4.605,
+      "text": "Not enough time, next trip"
+    },
+    {
+      "start": 741.272,
+      "duration": 0.27,
+      "text": "Passed a fruit stall on the road"
+    },
+    {
+      "start": 742.256,
+      "duration": 2.863,
+      "text": "The mangoes looked fresh"
+    },
+    {
+      "start": 745.464,
+      "duration": 0.472,
+      "text": "Bought two jin, fifteen yuan"
+    },
+    {
+      "start": 746.583,
+      "duration": 1.442,
+      "text": "The owner threw in an orange"
+    },
+    {
+      "start": 748.591,
+      "duration": 4.72,
+      "text": "You do not see that much in a big city"
+    },
+    {
+      "start": 753.391,
+      "duration": 3.59,
+      "text": "A new bakery opened by the station"
+    },
+    {
+      "start": 757.241,
+      "duration": 2.029,
+      "text": "The croissants were golden in the window"
+    },
+    {
+      "start": 759.308,
+      "duration": 0.724,
+      "text": "Could not resist buying one"
+    },
+    {
+      "start": 760.755,
+      "duration": 0.27,
+      "text": "Crisp outside, soft inside"
+    },
+    {
+      "start": 761.074,
+      "duration": 4.485,
+      "text": "Just right with an americano"
+    },
+    {
+      "start": 765.666,
+      "duration": 1.713,
+      "text": "That is what a weekend morning is for"
+    },
+    {
+      "start": 767.492,
+      "duration": 0.52,
+      "text": "What do you eat for breakfast where you live"
+    },
+    {
+      "start": 768.052,
+      "duration": 4.72,
+      "text": "Tell me in the comments"
+    },
+    {
+      "start": 772.813,
+      "duration": 2.929,
+      "text": "I will reply to a few"
+    },
+    {
+      "start": 776.502,
+      "duration": 3.143,
+      "text": "I used to come here as a kid"
+    },
+    {
+      "start": 779.731,
+      "duration": 1.151,
+      "text": "The owner still remembers my name"
+    },
+    {
+      "start": 780.899,
+      "duration": 0.27,
+      "text": "Time really does fly"
+    },
+    {
+      "start": 781.502,
+      "duration": 1.812,
+      "text": "Hard to believe it has been that many years"
+    },
+    {
+      "start": 783.688,
+      "duration": 1.996,
+      "text": "Good morning everyone"
+    },
+    {
+      "start": 785.986,
+      "duration": 1.332,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    },
+    {
+      "start": 787.845,
+      "duration": 4.72,
+      "text": "this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size"
+    },
+    {
+      "start": 792.925,
+      "duration": 0.333,
+      "text": "x"
+    },
+    {
+      "start": 793.287,
+      "duration": 1.668,
+      "text": "Opening the shop at six every morning"
+    },
+    {
+      "start": 795.47,
+      "duration": 0.692,
+      "text": "We ordered rice rolls first"
+    },
+    {
+      "start": 796.544,
+      "duration": 0.27,
+      "text": "It tasted really good"
+    },
+    {
+      "start": 797.006,
+      "duration": 0.873,
+      "text": "Cheap too, twelve yuan"
+    },
+    {
+      "start": 798.1,
+      "duration": 2.118,
+      "text": "Then we went next door"
+    },
+    {
+      "start": 801.006,
+      "duration": 2.367,
+      "text": "The queue was long"
+    },
+    {
+      "start": 803.945,
+      "duration": 4.72,
+      "text": "Waited about twenty minutes"
+    },
+    {
+      "start": 809.465,
+      "duration": 0.91,
+      "text": "My friend recommended the signature dish"
+    },
+    {
+      "start": 810.747,
+      "duration": 0.902,
+      "text": "It looked appetising"
+    },
+    {
+      "start": 811.911,
+      "duration": 0.521,
+      "text": "The first bite was a surprise"
+    },
+    {
+      "start": 813.089,
+      "duration": 0.27,
+      "text": "Lots of layers to the flavour"
+    },
+    {
+      "start": 813.434,
+      "duration": 3.276,
+      "text": "We also got two iced lemon teas"
+    },
+    {
+      "start": 817.308,
+      "duration": 1.484,
+      "text": "Eight yuan each, normal for here"
+    },
+    {
+      "start": 818.997,
+      "duration": 3.51,
+      "text": "Walked in the park in the afternoon"
+    },
+    {
+      "start": 822.644,
+      "duration": 4.72,
+      "text": "Nice weather, soft light"
+    },
+    {
+      "start": 827.554,
+      "duration": 0.859,
+      "text": "Plenty of people running and walking dogs"
+    },
+    {
+      "start": 828.751,
+      "duration": 0.687,
+      "text": "We found a bench and sat down"
+    },
+    {
+      "start": 829.654,
+      "duration": 2.382,
+      "text": "Talked about work for a while"
+    },
+    {
+      "start": 832.289,
+      "duration": 0.27,
+      "text": "He is changing jobs next month"
+    },
+    {
+      "start": 832.712,
+      "duration": 3.893,
+      "text": "I wished him luck"
+    },
+    {
+      "start": 836.759,
+      "duration": 2.98,
+      "text": "Still thinking about the food on the way home"
+    },
+    {
+      "start": 839.896,
+      "duration": 0.401,
+      "text": "Bring the family next time"
+    },
+    {
+      "start": 840.849,
+      "duration": 4.72,
+      "text": "Thanks for watching"
+    },
+    {
+      "start": 845.742,
+      "duration": 0.974,
+      "text": "Remember to like and subscribe"
+    },
+    {
+      "start": 847.281,
+      "duration": 3.94,
+      "text": "See you next time"
+    },
+    {
+      "start": 851.642,
+      "duration": 0.99,
+      "text": "That's all for today"
+    },
+    {
+      "start": 853.056,
+      "duration": 0.27,
+      "text": "There are more small shops worth a look"
+    },
+    {
+      "start": 854.097,
+      "duration": 3.559,
+      "text": "Not enough time, next trip"
+    },
+    {
+      "start": 857.711,
+      "duration": 1.232,
+      "text": "Passed a fruit stall on the road"
+    },
+    {
+      "start": 859.59,
+      "duration": 4.38,
+      "text": "The mangoes looked fresh"
+    },
+    {
+      "start": 864.066,
+      "duration": 4.72,
+      "text": "Bought two jin, fifteen yuan"
+    },
+    {
+      "start": 869.006,
+      "duration": 4.61,
+      "text": "The owner threw in an orange"
+    },
+    {
+      "start": 873.766,
+      "duration": 2.339,
+      "text": "You do not see that much in a big city"
+    },
+    {
+      "start": 876.452,
+      "duration": 2.524,
+      "text": "A new bakery opened by the station"
+    },
+    {
+      "start": 879.455,
+      "duration": 0.27,
+      "text": "The croissants were golden in the window"
+    },
+    {
+      "start": 880.498,
+      "duration": 4.552,
+      "text": "Could not resist buying one"
+    },
+    {
+      "start": 885.676,
+      "duration": 3.568,
+      "text": "Crisp outside, soft inside"
+    },
+    {
+      "start": 889.909,
+      "duration": 2.233,
+      "text": "Just right with an americano"
+    },
+    {
+      "start": 892.568,
+      "duration": 4.72,
+      "text": "That is what a weekend morning is for"
+    },
+    {
+      "start": 897.338,
+      "duration": 4.378,
+      "text": "What do you eat for breakfast where you live"
+    },
+    {
+      "start": 902.291,
+      "duration": 4.242,
+      "text": "Tell me in the comments"
+    },
+    {
+      "start": 906.844,
+      "duration": 3.88,
+      "text": "I will reply to a few"
+    },
+    {
+      "start": 910.789,
+      "duration": 0.27,
+      "text": "I used to come here as a kid"
+    },
+    {
+      "start": 911.64,
+      "duration": 1.4,
+      "text": "The owner still remembers my name"
+    },
+    {
+      "start": 913.763,
+      "duration": 4.287,
+      "text": "Time really does fly"
+    },
+    {
+      "start": 918.566,
+      "duration": 4.43,
+      "text": "Hard to believe it has been that many years"
+    },
+    {
+      "start": 923.179,
+      "duration": 4.72,
+      "text": "Good morning everyone"
+    },
+    {
+      "start": 928.128,
+      "duration": 2.258,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    },
+    {
+      "start": 930.648,
+      "duration": 3.375,
+      "text": "this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size"
+    },
+    {
+      "start": 934.395,
+      "duration": 4.332,
+      "text": "x"
+    },
+    {
+      "start": 938.778,
+      "duration": 0.27,
+      "text": "Opening the shop at six every morning"
+    },
+    {
+      "start": 939.792,
+      "duration": 4.603,
+      "text": "We ordered rice rolls first"
+    },
+    {
+      "start": 944.536,
+      "duration": 2.489,
+      "text": "It tasted really good"
+    },
+    {
+      "start": 947.795,
+      "duration": 4.138,
+      "text": "Cheap too, twelve yuan"
+    },
+    {
+      "start": 952.021,
+      "duration": 4.72,
+      "text": "Then we went next door"
+    },
+    {
+      "start": 957.114,
+      "duration": 2.18,
+      "text": "The queue was long"
+    },
+    {
+      "start": 959.691,
+      "duration": 2.204,
+      "text": "Waited about twenty minutes"
+    },
+    {
+      "start": 962.653,
+      "duration": 0.407,
+      "text": "My friend recommended the signature dish"
+    },
+    {
+      "start": 963.526,
+      "duration": 0.27,
+      "text": "It looked appetising"
+    },
+    {
+      "start": 964.206,
+      "duration": 0.387,
+      "text": "The first bite was a surprise"
+    },
+    {
+      "start": 964.895,
+      "duration": 3.229,
+      "text": "Lots of layers to the flavour"
+    },
+    {
+      "start": 968.131,
+      "duration": 3.804,
+      "text": "We also got two iced lemon teas"
+    },
+    {
+      "start": 972.36,
+      "duration": 4.72,
+      "text": "Eight yuan each, normal for here"
+    },
+    {
+      "start": 977.178,
+      "duration": 4.263,
+      "text": "Walked in the park in the afternoon"
+    },
+    {
+      "start": 981.502,
+      "duration": 3.974,
+      "text": "Nice weather, soft light"
+    },
+    {
+      "start": 985.735,
+      "duration": 2.468,
+      "text": "Plenty of people running and walking dogs"
+    },
+    {
+      "start": 988.308,
+      "duration": 0.27,
+      "text": "We found a bench and sat down"
+    },
+    {
+      "start": 989.234,
+      "duration": 3.232,
+      "text": "Talked about work for a while"
+    },
+    {
+      "start": 992.854,
+      "duration": 3.432,
+      "text": "He is changing jobs next month"
+    },
+    {
+      "start": 996.566,
+      "duration": 2.486,
+      "text": "I wished him luck"
+    },
+    {
+      "start": 999.169,
+      "duration": 4.72,
+      "text": "Still thinking about the food on the way home"
+    },
+    {
+      "start": 1003.983,
+      "duration": 1.247,
+      "text": "Bring the family next time"
+    },
+    {
+      "start": 1005.412,
+      "duration": 1.173,
+      "text": "Thanks for watching"
+    },
+    {
+      "start": 1006.715,
+      "duration": 4.197,
+      "text": "Remember to like and subscribe"
+    },
+    {
+      "start": 1010.987,
+      "duration": 0.27,
+      "text": "See you next time"
+    },
+    {
+      "start": 1011.296,
+      "duration": 0.89,
+      "text": "That's all for today"
+    },
+    {
+      "start": 1012.253,
+      "duration": 2.019,
+      "text": "There are more small shops worth a look"
+    },
+    {
+      "start": 1014.476,
+      "duration": 1.346,
+      "text": "Not enough time, next trip"
+    },
+    {
+      "start": 1016.216,
+      "duration": 4.72,
+      "text": "Passed a fruit stall on the road"
+    },
+    {
+      "start": 1021.071,
+      "duration": 2.905,
+      "text": "The mangoes looked fresh"
+    },
+    {
+      "start": 1023.997,
+      "duration": 3.209,
+      "text": "Bought two jin, fifteen yuan"
+    },
+    {
+      "start": 1027.701,
+      "duration": 0.304,
+      "text": "The owner threw in an orange"
+    },
+    {
+      "start": 1028.678,
+      "duration": 0.27,
+      "text": "You do not see that much in a big city"
+    },
+    {
+      "start": 1029.651,
+      "duration": 3.66,
+      "text": "A new bakery opened by the station"
+    },
+    {
+      "start": 1033.521,
+      "duration": 1.788,
+      "text": "The croissants were golden in the window"
+    },
+    {
+      "start": 1035.93,
+      "duration": 0.69,
+      "text": "Could not resist buying one"
+    },
+    {
+      "start": 1036.77,
+      "duration": 4.72,
+      "text": "Crisp outside, soft inside"
+    },
+    {
+      "start": 1041.887,
+      "duration": 3.447,
+      "text": "Just right with an americano"
+    },
+    {
+      "start": 1045.563,
+      "duration": 3.599,
+      "text": "That is what a weekend morning is for"
+    },
+    {
+      "start": 1049.737,
+      "duration": 1.739,
+      "text": "What do you eat for breakfast where you live"
+    },
+    {
+      "start": 1051.606,
+      "duration": 0.27,
+      "text": "Tell me in the comments"
+    },
+    {
+      "start": 1052.188,
+      "duration": 0.329,
+      "text": "I will reply to a few"
+    },
+    {
+      "start": 1053.151,
+      "duration": 2.424,
+      "text": "I used to come here as a kid"
+    },
+    {
+      "start": 1055.856,
+      "duration": 1.512,
+      "text": "The owner still remembers my name"
+    },
+    {
+      "start": 1057.847,
+      "duration": 4.72,
+      "text": "Time really does fly"
+    },
+    {
+      "start": 1062.815,
+      "duration": 4.292,
+      "text": "Hard to believe it has been that many years"
+    },
+    {
+      "start": 1067.237,
+      "duration": 4.707,
+      "text": "Good morning everyone"
+    },
+    {
+      "start": 1072.697,
+      "duration": 3.485,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    },
+    {
+      "start": 1076.259,
+      "duration": 0.27,
+      "text": "this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size"
+    },
+    {
+      "start": 1076.815,
+      "duration": 3.454,
+      "text": "x"
+    },
+    {
+      "start": 1080.942,
+      "duration": 2.153,
+      "text": "Opening the shop at six every morning"
+    },
+    {
+      "start": 1083.153,
+      "duration": 1.04,
+      "text": "We ordered rice rolls first"
+    },
+    {
+      "start": 1084.909,
+      "duration": 4.72,
+      "text": "It tasted really good"
+    },
+    {
+      "start": 1090.214,
+      "duration": 3.88,
+      "text": "Cheap too, twelve yuan"
+    },
+    {
+      "start": 1094.38,
+      "duration": 2.906,
+      "text": "Then we went next door"
+    },
+    {
+      "start": 1097.93,
+      "duration": 1.218,
+      "text": "The queue was long"
+    },
+    {
+      "start": 1099.357,
+      "duration": 0.27,
+      "text": "Waited about twenty minutes"
+    },
+    {
+      "start": 1100.142,
+      "duration": 3.955,
+      "text": "My friend recommended the signature dish"
+    },
+    {
+      "start": 1104.367,
+      "duration": 3.348,
+      "text": "It looked appetising"
+    },
+    {
+      "start": 1108.176,
+      "duration": 3.482,
+      "text": "The first bite was a surprise"
+    },
+    {
+      "start": 1112.029,
+      "duration": 4.72,
+      "text": "Lots of layers to the flavour"
+    },
+    {
+      "start": 1116.799,
+      "duration": 0.933,
+      "text": "We also got two iced lemon teas"
+    },
+    {
+      "start": 1118.35,
+      "duration": 0.477,
+      "text": "Eight yuan each, normal for here"
+    },
+    {
+      "start": 1119.537,
+      "duration": 1.699,
+      "text": "Walked in the park in the afternoon"
+    },
+    {
+      "start": 1121.98,
+      "duration": 0.27,
+      "text": "Nice weather, soft light"
+    },
+    {
+      "start": 1122.996,
+      "duration": 4.615,
+      "text": "Plenty of people running and walking dogs"
+    },
+    {
+      "start": 1128.391,
+      "duration": 2.107,
+      "text": "We found a bench and sat down"
+    },
+    {
+      "start": 1130.614,
+      "duration": 3.042,
+      "text": "Talked about work for a while"
+    },
+    {
+      "start": 1134.331,
+      "duration": 4.72,
+      "text": "He is changing jobs next month"
+    },
+    {
+      "start": 1139.476,
+      "duration": 3.908,
+      "text": "I wished him luck"
+    },
+    {
+      "start": 1143.601,
+      "duration": 1.87,
+      "text": "Still thinking about the food on the way home"
+    },
+    {
+      "start": 1146.143,
+      "duration": 0.811,
+      "text": "Bring the family next time"
+    },
+    {
+      "start": 1147.315,
+      "duration": 0.27,
+      "text": "Thanks for watching"
+    },
+    {
+      "start": 1147.866,
+      "duration": 0.445,
+      "text": "Remember to like and subscribe"
+    },
+    {
+      "start": 1148.504,
+      "duration": 4.644,
+      "text": "See you next time"
+    },
+    {
+      "start": 1153.805,
+      "duration": 1.336,
+      "text": "That's all for today"
+    },
+    {
+      "start": 1155.734,
+      "duration": 4.72,
+      "text": "There are more small shops worth a look"
+    },
+    {
+      "start": 1161.031,
+      "duration": 1.356,
+      "text": "Not enough time, next trip"
+    },
+    {
+      "start": 1162.791,
+      "duration": 4.291,
+      "text": "Passed a fruit stall on the road"
+    },
+    {
+      "start": 1167.373,
+      "duration": 0.599,
+      "text": "The mangoes looked fresh"
+    },
+    {
+      "start": 1168.606,
+      "duration": 0.27,
+      "text": "Bought two jin, fifteen yuan"
+    },
+    {
+      "start": 1169.556,
+      "duration": 0.559,
+      "text": "The owner threw in an orange"
+    },
+    {
+      "start": 1170.472,
+      "duration": 3.398,
+      "text": "You do not see that much in a big city"
+    },
+    {
+      "start": 1174.307,
+      "duration": 4.294,
+      "text": "A new bakery opened by the station"
+    },
+    {
+      "start": 1178.802,
+      "duration": 4.72,
+      "text": "The croissants were golden in the window"
+    },
+    {
+      "start": 1184.044,
+      "duration": 4.701,
+      "text": "Could not resist buying one"
+    },
+    {
+      "start": 1189.1,
+      "duration": 0.431,
+      "text": "Crisp outside, soft inside"
+    },
+    {
+      "start": 1189.843,
+      "duration": 1.265,
+      "text": "Just right with an americano"
+    },
+    {
+      "start": 1191.838,
+      "duration": 0.27,
+      "text": "That is what a weekend morning is for"
+    },
+    {
+      "start": 1192.471,
+      "duration": 4.605,
+      "text": "What do you eat for breakfast where you live"
+    },
+    {
+      "start": 1197.762,
+      "duration": 3.676,
+      "text": "Tell me in the comments"
+    },
+    {
+      "start": 1201.592,
+      "duration": 3.003,
+      "text": "I will reply to a few"
+    },
+    {
+      "start": 1204.911,
+      "duration": 4.72,
+      "text": "I used to come here as a kid"
+    },
+    {
+      "start": 1210.154,
+      "duration": 2.935,
+      "text": "The owner still remembers my name"
+    },
+    {
+      "start": 1213.098,
+      "duration": 2.454,
+      "text": "Time really does fly"
+    },
+    {
+      "start": 1215.593,
+      "duration": 2.293,
+      "text": "Hard to believe it has been that many years"
+    },
+    {
+      "start": 1217.961,
+      "duration": 0.27,
+      "text": "Good morning everyone"
+    },
+    {
+      "start": 1218.889,
+      "duration": 0.544,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    },
+    {
+      "start": 1219.903,
+      "duration": 1.5,
+      "text": "this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size"
+    }
+  ]
+}

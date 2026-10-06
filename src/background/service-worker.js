@@ -906,17 +906,37 @@ async function loadTrack(entry, languageCode, translateTo = null) {
  * track changes, which discards them — and without this, switching language
  * silently unmarked the whole transcript until a control was touched by hand.
  *
+ * The carry-over is conditional on the settings that produced the tokens still
+ * being the settings in force. Carrying them over unconditionally was wrong in a
+ * way that stayed hidden: a row's tokens encode a (list, threshold) pair, so
+ * reusing tokens after the list changed hands back levels from the wrong list.
+ * Worse, `applyMarks` treats "every row already has tokens" as "marking is
+ * done" — so a stale carry-over made that check pass while the marks on screen
+ * were wrong, and anything waiting for marking to finish saw it as finished
+ * immediately.
+ *
  * @param {VideoEntry|null} entry
  */
 function rebuildRows(entry) {
   if (!entry) return;
 
-  // Keep the marks for any line whose text is unchanged. Tokens are a pure
-  // function of the text, so if the text is the same the tokens still hold.
+  // Which settings the existing tokens were produced for. Anything built under
+  // different ones is dropped rather than reused.
+  const wanted = `${settings.listId}:${settings.threshold}`;
+  const reusable = entry.markedWith === wanted;
+
   /** @type {Map<string, object[]>} */
   const previous = new Map();
-  for (const row of entry.rows) {
-    if (row.tokens) previous.set(row.text, row.tokens);
+  if (reusable) {
+    // Keep the marks for any line whose text is unchanged. Tokens are a pure
+    // function of the text AND the settings, so both have to match.
+    for (const row of entry.rows) {
+      if (row.tokens) previous.set(row.text, row.tokens);
+    }
+  } else {
+    // Nothing on screen is valid for the current settings, so marking has to run
+    // again. Clearing here is what makes that observable.
+    entry.markedWith = null;
   }
 
   const primary = entry.tracks.get(entry.primaryLang ?? '')?.segments ?? [];

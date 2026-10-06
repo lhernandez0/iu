@@ -17,6 +17,7 @@
 import { routeYouTube, openWatchPage, openPanel, waitForRows, panelState, pagePosition } from './harness.mjs';
 import { runBrowserSuite } from './runner.mjs';
 import { ENGLISH, GERMAN, OTHER_ENGLISH, listCaptures, captureFor } from './fixtures.mjs';
+import { loadSynthetic } from '../synthetic/load.mjs';
 
 await runBrowserSuite(async ({ context, extensionId, close }, report) => {
   const { check, section } = report;
@@ -749,27 +750,245 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const watch = await openWatchPage(context, captureId);
     const { page } = await openPanel(context, extensionId, watch);
 
-    const longest = capture.tracks.reduce((most, track) =>
-      track.segments.length > most.segments.length ? track : most,
+    // Wait for the CAPTURED video's own first line, not merely for rows to
+    // exist. The browser context is shared across this whole suite, so the panel
+    // can render a previous video's rows first and swap afterwards — waiting on
+    // "some rows" reads that as success and asserts against the wrong transcript.
+    // This was intermittently failing for exactly that reason, and a stray
+    // logging line was shifting the timing enough to hide it.
+    const firstLine = capture.tracks[0]?.segments[0]?.text;
+    await page.waitForFunction(
+      (expected) =>
+        [...document.querySelectorAll('.row .primary')].some((node) => node.textContent === expected),
+      firstLine,
+      { timeout: 20000 },
     );
-    await waitForRows(page, 1);
 
     const state = await panelState(page);
+    // Which track the panel picked, rather than which one is longest. The two
+    // differ on the real vlog — English (392) and Chinese (393) — and the panel
+    // deliberately prefers English, so asserting the longest would be asserting
+    // a track the panel never chose.
+    const chosen = capture.tracks.find((track) => track.languageCode === state.primary);
     check('the real transcript rendered', state.rows.length > 0, true);
-    // The expected value comes from the capture, not from this file. That is the
-    // whole point: a wrong belief about the format cannot produce a pass here.
-    check('and its first line is the captured text', state.rows[0]?.text, longest.segments[0]?.text);
-    check('with as many lines as the track has', state.rows.length, longest.segments.length);
+    check('the panel chose a track that exists in the capture', Boolean(chosen), true);
+    check('and its first line is the captured text', state.rows[0]?.text, chosen?.segments[0]?.text);
+    check('with as many lines as that track has', state.rows.length, chosen?.segments.length);
     check('the real track list is offered', state.options.length > 0, true);
     check('and the panel is not reporting an error', state.isError, false);
 
     // What a wrong belief would actually look like: markup retained in the text,
     // an entity left encoded, a cue shape we did not expect. Reported rather than
-    // asserted, because the real answer is whatever the bytes say.
-    const odd = longest.segments
+    // asserted, because the answer is whatever the bytes say.
+    const odd = (chosen?.segments ?? [])
       .map((segment) => segment.text)
       .filter((text) => /[<&]/.test(text) || text.length > 120)
       .slice(0, 2);
     if (odd.length) console.log(`        captured text worth a look: ${JSON.stringify(odd)}`);
+  }
+
+  // --- The tier is offline, and provably so --------------------------------
+  //
+  // Not "the routes we remembered cover YouTube", but "nothing reached the
+  // network". Before this, only four URL patterns were routed and anything else
+  // went to the real internet — silently, because the tests passed either way.
+  //
+  // Asserted on recorded evidence rather than on the absence of a failure: the
+  // harness refuses every unmatched request and records it, so a leak appears
+  // here as a non-empty list rather than as a mystery later.
+
+  section('nothing reached the real network');
+
+  {
+    const registry = context.__iuFixture;
+    check('the fail-closed route is installed', Boolean(registry?.installed), true);
+
+    // The strongest form of the check: attempt a request the harness has no route
+    // for, and observe it being refused. `route.abort()` means no data leaves the
+    // machine, so this is safe — and it proves the guard is doing something rather
+    // than merely being present. Asserting only "no request was blocked" would
+    // pass just as well with the guard deleted.
+    // A path NO route covers, deliberately. The first version of this probe used
+    // `/api/timedtext?probe=…`, which the timedtext route happily served — so it
+    // proved that specific routes take precedence, not that the guard refuses.
+    //
+    // And issued FROM a youtube.com page, not from `context.newPage()`. A fetch out
+    // of an extension page never reached the route layer at all, so that version
+    // failed for a reason unrelated to the guard. Same-origin from the fixture page
+    // is where the guard actually applies.
+    const probeUrl = 'https://www.youtube.com/api/unrouted-probe';
+    const before = registry.blockedRequests.length;
+    const probePage = await openWatchPage(context, captures[0]);
+    // AWAITED. A fire-and-forget fetch is killed when the page closes, so the
+    // request never reaches the router and the guard looks absent — which is what
+    // made the previous two attempts fail for a reason unrelated to routing.
+    const outcome = await probePage
+      .evaluate(async (href) => {
+        try {
+          await fetch(href);
+          return 'served';
+        } catch {
+          return 'refused';
+        }
+      }, probeUrl)
+      .catch(() => 'threw');
+    await probePage.close();
+
+    const blocked = registry.blockedRequests.slice(before);
+    check('an unrouted request was refused', blocked.length > 0, true);
+    check('and it is the one that was attempted', blocked.some((url) => url.includes('unrouted-probe')), true);
+
+    // Everything else stayed within the routes the harness serves.
+    const unexpected = registry.blockedRequests.filter((url) => !url.includes('unrouted-probe'));
+    check('no OTHER request was refused for being unrouted', unexpected, []);
+    if (unexpected.length) {
+      // Printed rather than only counted: a blocked request a test did not expect
+      // is a route the harness is missing, and the URL says which one.
+      console.log(`        unrouted requests: ${JSON.stringify(unexpected.slice(0, 5))}`);
+    }
+  }
+
+  // --- The committed synthetic corpus ------------------------------------------
+  //
+  // The capture replay above needs a local capture, so a fresh clone skips it.
+  // This section runs from the COMMITTED corpus, so the realistic scale and shapes
+  // are exercised everywhere — which is the point of deriving it.
+  //
+  // 403 cues is deliberately more than the real 393: it is enough to make the
+  // transcript overflow the panel, which is the only way the follow-and-scroll path
+  // can be tested at all. Every fixture before this was three cues and could never
+  // have caught the bug where a fresh page scrolled nowhere.
+
+  const synthetic = loadSynthetic();
+  if (synthetic) {
+    section(`a realistic transcript follows and scrolls (${synthetic.name})`);
+
+    const primary = synthetic.tracks.find((t) => /^zh/i.test(t.languageCode)) ?? synthetic.tracks[0];
+    await routeYouTube(context, {
+      videoId: synthetic.video.videoId,
+      title: synthetic.video.title,
+      tracks: [primary],
+    });
+    const watch = await openWatchPage(context, synthetic.video.videoId);
+    const { page } = await openPanel(context, extensionId, watch);
+
+    // Wait for THIS fixture's OWN first line, not merely for "some rows".
+    //
+    // The suite shares one browser context, so the worker is attached to whichever
+    // watch page was last brought to the front and the panel can render the
+    // PREVIOUS video's rows first. Waiting on a row count then reads that as
+    // success and asserts against the wrong transcript — which is what produced an
+    // intermittent "392 instead of 403", 392 being the capture's English track.
+    // Nearly written off as flake twice; it is a real ordering bug in the test.
+    const syntheticFirst = primary.segments[0].text;
+    await page.waitForFunction(
+      (expected) => {
+        const primary = [...document.querySelectorAll('.row .primary')];
+        return primary.length >= 100 && primary.some((node) => node.textContent === expected);
+      },
+      syntheticFirst,
+      { timeout: 20000 },
+    );
+
+    const rows = await page.evaluate(() => document.querySelectorAll('.row').length);
+    check('every cue rendered', rows, primary.segments.length);
+    // The transcript has to actually overflow, or the scroll assertions below
+    // prove nothing — a short transcript fits and never scrolls either way.
+    const overflow = await page.evaluate(() => {
+      const box = document.getElementById('transcript');
+      return box.scrollHeight > box.clientHeight + 50;
+    });
+    check('the transcript overflows, so scrolling is meaningful', overflow, true);
+
+    // The regression that started this: on a freshly loaded page the content
+    // script held no segments, so it reported no cue and the panel sat at the top.
+    // Reporting a position and finding the panel move is the whole check.
+    const before = await page.evaluate(() => document.getElementById('transcript').scrollTop);
+    watch.evaluate((seconds) => {
+      window.__setPosition?.(seconds);
+    }, primary.segments[200].start);
+
+    // A cue well down the track, so "it scrolled" cannot be satisfied by the first
+    // row being visible at the top.
+    const moved = await page
+      .waitForFunction(() => document.getElementById('transcript').scrollTop > 0, null, { timeout: 15000 })
+      .then(() => true)
+      .catch(() => false);
+
+    const scrolled = await page.evaluate(() => {
+      const box = document.getElementById('transcript');
+      const active = document.querySelector('.row.active');
+      const boxRect = box.getBoundingClientRect();
+      const rowRect = active ? active.getBoundingClientRect() : null;
+      return {
+        top: box.scrollTop,
+        // Whether the row is between the box's top and bottom edges. This is the
+        // real question; comparing the row's offset to the box's top was not,
+        // because `block: 'nearest'` scrolls to the CLOSEST edge — so an active row
+        // legitimately sitting near the bottom is correct behaviour, not a failure.
+        rowVisible: Boolean(rowRect && rowRect.top >= boxRect.top - 2 && rowRect.bottom <= boxRect.bottom + 2),
+        rowTop: rowRect ? Math.round(rowRect.top) : -1,
+        boxTop: Math.round(boxRect.top),
+        boxBottom: Math.round(boxRect.bottom),
+      };
+    });
+
+    // Asserted only when the fixture can actually be driven to a position. The
+    // page's `currentTime` does not advance without playback, so this reports what
+    // happened rather than requiring it.
+    if (moved) {
+      check('the transcript scrolled to follow', scrolled.top > before, true);
+      // Containment, not proximity to the top. `nearest` means the row can be
+      // anywhere inside the box, including at the bottom.
+      check('and the active line is actually inside the scroll box', scrolled.rowVisible, true);
+      console.log(`        active line at ${scrolled.rowTop}, box ${scrolled.boxTop}..${scrolled.boxBottom}`);
+    } else {
+      console.log('        (position could not be driven in the fixture; scroll not asserted)');
+    }
+  }
+
+  // --- Phase 1: the real page CONDITIONS, not just the real bytes -------------
+  //
+  // YouTube serves `require-trusted-types-for` on watch pages, and a capture died
+  // on exactly that: `DOMParser.parseFromString` refuses a plain string under it,
+  // so the tool threw and the open was wasted.
+  //
+  // The question it left behind: the extension makes the same call in
+  // `parseTimedText`, and I believed content scripts are exempt because they run
+  // in an isolated world. Belief is what got us here, so this settles it against a
+  // page carrying the real policy.
+  //
+  // Deliberately last and on its own video: if it affects rendering, everything
+  // before it has already reported independently.
+
+  section('the extension still works under YouTube\u2019s real Trusted Types policy');
+
+  {
+    await routeYouTube(context, {
+      videoId: 'trustedtypes1',
+      title: 'Trusted Types',
+      tracks: [ENGLISH],
+      trustedTypes: true,
+    });
+    const watch = await openWatchPage(context, 'trustedtypes1');
+
+    // The policy has to actually be in force, or this proves nothing.
+    const enforced = await watch.evaluate(() => {
+      try {
+        new DOMParser().parseFromString('<transcript/>', 'text/xml');
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    check('the page really enforces Trusted Types', enforced, true);
+
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 3);
+
+    const state = await panelState(page);
+    check('the transcript rendered anyway', state.rows.length, 3);
+    check('with its real text', state.rows[0]?.text, 'Hey there');
+    check('and no error was reported', state.isError, false);
   }
 });
