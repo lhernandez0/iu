@@ -571,6 +571,38 @@ async function ensureContentScript(tabId) {
 const CONTENT_TIMEOUT_MS = 4000;
 
 /**
+ * The budget for a request whose answer costs a network round trip.
+ *
+ * The content script answers DESCRIBE, SET_TRACK and CONTENT_SEEK out of
+ * memory, so four seconds there only ever means it is wedged. PROVIDE and
+ * FETCH_TRACK are different in kind: they download a caption track from
+ * YouTube, and PROVIDE may then translate it — one or two real round trips
+ * whose duration this extension does not control.
+ *
+ * Timing those out on the same clock as a local question is a false failure:
+ * the fetch was working, and the worker throws away a transcript it was about
+ * to receive. That is what a "provide did not answer within 4000ms" report
+ * with no further context is — not a broken content script, a slow download.
+ *
+ * So the slow path gets a budget in the same order as the requests it waits on,
+ * and a chart of the two is the reason they are separate constants rather than
+ * one.
+ */
+const CONTENT_FETCH_TIMEOUT_MS = 20000;
+
+/**
+ * How long the content script may take to answer this message.
+ *
+ * @param {object} message
+ * @returns {number}
+ */
+function contentTimeoutFor(message) {
+  return message.type === MSG.PROVIDE || message.type === MSG.FETCH_TRACK
+    ? CONTENT_FETCH_TIMEOUT_MS
+    : CONTENT_TIMEOUT_MS;
+}
+
+/**
  * @param {number} tabId
  * @param {object} message
  * @returns {Promise<any>}
@@ -579,14 +611,15 @@ async function sendToContent(tabId, message) {
   const frameId = await ensureContentScript(tabId);
   if (frameId === null) throw new Error(errorText('CONN001'));
 
+  const timeoutMs = contentTimeoutFor(message);
   let timer = 0;
   try {
     return await Promise.race([
       chrome.tabs.sendMessage(tabId, { ...message, target: TARGET.CONTENT }, { frameId }),
       new Promise((_, reject) => {
         timer = setTimeout(
-          () => reject(new Error(errorText('CONN002', `${message.type} did not answer within ${CONTENT_TIMEOUT_MS}ms`))),
-          CONTENT_TIMEOUT_MS,
+          () => reject(new Error(errorText('CONN002', `${message.type} did not answer within ${timeoutMs}ms`))),
+          timeoutMs,
         );
       }),
     ]);

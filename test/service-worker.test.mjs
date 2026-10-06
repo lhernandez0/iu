@@ -14,6 +14,7 @@
 
 import { installChromeStub, createPanelPort } from './chrome-stub.mjs';
 import { fixture } from './synthetic/load.mjs';
+import { readFileSync } from 'node:fs';
 
 let failures = 0;
 let checks = 0;
@@ -1838,6 +1839,38 @@ section('a word with no level still gets a definition');
   check('an entry was sent', reply?.type, 'entry');
   check('it has no levels', reply?.levels?.length, 0);
   check('and no dictionary entry either, so entry is null', reply?.entry, null);
+}
+
+section('a slow caption download is not timed out like a local question');
+
+{
+  // The bug this pins: every worker->content request shared one flat 4000ms
+  // budget, so a PROVIDE that was downloading (and possibly translating) a
+  // caption track was killed mid-flight on a slow video and reported as
+  // "provide did not answer within 4000ms" — a false failure that reads
+  // exactly like a wedged content script.
+  //
+  // The worker exports nothing, so the budget is checked at the source, the
+  // same way the licence and history guards work. What matters is the
+  // RELATIONSHIP, not the numbers: the fetching path must outlast the local one.
+  const source = readFileSync(new URL('../src/background/service-worker.js', import.meta.url), 'utf8');
+
+  const local = Number(/const CONTENT_TIMEOUT_MS = (\d+)/.exec(source)?.[1]);
+  const fetchMs = Number(/const CONTENT_FETCH_TIMEOUT_MS = (\d+)/.exec(source)?.[1]);
+
+  check('a local question budget is defined', Number.isFinite(local), true);
+  check('a fetching budget is defined', Number.isFinite(fetchMs), true);
+  check('the fetching budget is the longer one', fetchMs > local, true);
+
+  // The mapping has to name both fetching messages, or one of them silently
+  // falls back to the short clock and the bug returns for just that path.
+  const mapping = /function contentTimeoutFor\(message\) \{[\s\S]*?\n\}/.exec(source)?.[0] ?? '';
+  check('PROVIDE takes the fetching budget', mapping.includes('MSG.PROVIDE'), true);
+  check('FETCH_TRACK takes the fetching budget', mapping.includes('MSG.FETCH_TRACK'), true);
+
+  // And the message the user actually sees now reports which clock ran out, so
+  // a future report says "20000ms" and names the fetching path.
+  check('the timeout names its own budget', source.includes('did not answer within ${timeoutMs}ms'), true);
 }
 
 // --- Result -----------------------------------------------------------------
