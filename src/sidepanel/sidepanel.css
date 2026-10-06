@@ -120,12 +120,27 @@ body {
 }
 
 /* Collapsed layout: the reading controls and the status line yield to the
-   transcript. The language row stays, because changing language is the one thing
-   you reach for while reading, and hiding it would mean leaving the mode to get
-   back to it. */
+   transcript.
+
+   The toggle is NOT in either hidden region. It lives in the language row, and it
+   was originally in the reading bar — which this rule hides — so collapsing
+   removed the only control that could undo it and the panel was stuck. A control
+   must not live inside the region it controls. */
 body.collapsed .bar.learning,
 body.collapsed .status {
   display: none;
+}
+
+.layout-toggle {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.layout-toggle[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* A numeric size, so the units are part of the control rather than implied.

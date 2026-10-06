@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-const suites = ['iu.browser.test.mjs', 'ui-preview.test.mjs', 'ui-hmr.test.mjs'];
+const suites = ['iu.browser.test.mjs', 'ui-preview.test.mjs', 'ui-hmr.test.mjs', 'ui-layout.test.mjs'];
 
 console.log('Browser tests: offline, against captured fixtures\n');
 

@@ -1291,12 +1291,18 @@ function learningState() {
   const active = availableLists.find((list) => list.id === settings.listId) ?? availableLists[0];
   return {
     view: settings.view,
+    // Sent so the panel can put its chrome back the way it was. Its absence was a
+    // real bug: every state push re-applied `undefined`, which meant the panel
+    // started full every time and the control appeared to do nothing — the setting
+    // was stored, broadcast, and then immediately overwritten.
+    layout: settings.layout,
     fontSize: settings.fontSize,
     listId: settings.listId,
     threshold: settings.threshold,
     studyLanguage: settings.studyLanguage,
     glossLanguage: settings.glossLanguage,
     translateInto: settings.translateInto,
+    studyTranslated: settings.studyTranslated,
     glossTranslated: settings.glossTranslated,
     // Supplied here rather than in the schema, because the levels a list has is
     // a property of the data, not of the setting.

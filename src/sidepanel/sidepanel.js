@@ -56,7 +56,7 @@ const els = {
   list: /** @type {HTMLSelectElement} */ (document.getElementById('list')),
   threshold: /** @type {HTMLSelectElement} */ (document.getElementById('threshold')),
   viewMode: /** @type {HTMLSelectElement} */ (document.getElementById('view-mode')),
-  layout: /** @type {HTMLSelectElement} */ (document.getElementById('layout')),
+  layout: /** @type {HTMLButtonElement} */ (document.getElementById('layout')),
   fontSize: /** @type {HTMLInputElement} */ (document.getElementById('font-size')),
   follow: /** @type {HTMLInputElement} */ (document.getElementById('follow')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
@@ -471,7 +471,13 @@ function renderLearning(state) {
   fillSelectOptions(els.viewMode, VIEW_OPTIONS, learning.view, 'Full');
 
   if (els.layout) {
-    fillSelectOptions(els.layout, optionsFor('layout'), learning.layout, 'Full');
+    // The button reports its own state and says what pressing it will do, so the
+    // control is never ambiguous. A `select` was the wrong affordance: that is for
+    // choosing among values, and this is one action with two states.
+    const collapsed = learning.layout === 'collapsed';
+    els.layout.setAttribute('aria-pressed', String(collapsed));
+    els.layout.textContent = collapsed ? '\u25bc' : '\u25b2';
+    els.layout.title = collapsed ? 'Show the reading controls' : 'Hide the reading controls';
     applyLayout(learning.layout);
   }
 
@@ -615,11 +621,19 @@ function applyView(mode) {
  * @param {string} mode
  */
 function applyLayout(mode) {
+  const collapsed = mode === 'collapsed';
   // `body` is not guaranteed: the audio path and the DOM stubs used by the tests
   // both construct a document without one. Guarded rather than assumed, because an
   // unguarded dereference here threw during the FIRST state render and took the
   // whole panel down — no rows, no status, just the panel's error placeholder.
-  document.body?.classList.toggle('collapsed', mode === 'collapsed');
+  document.body?.classList.toggle('collapsed', collapsed);
+  // The button reflects the state immediately, rather than waiting for the worker
+  // to echo it back. A round trip would make the arrow lag the click.
+  if (els.layout) {
+    els.layout.setAttribute('aria-pressed', String(collapsed));
+    els.layout.textContent = collapsed ? '\u25bc' : '\u25b2';
+    els.layout.title = collapsed ? 'Show the reading controls' : 'Hide the reading controls';
+  }
 }
 
 /**
@@ -658,9 +672,13 @@ els.translateInto.addEventListener('change', () => {
   send({ type: MSG.SET_SETTING, id: 'translateInto', value: els.translateInto.value || null });
 });
 
-els.layout.addEventListener('change', () => {
-  applyLayout(els.layout.value);
-  send({ type: MSG.SET_SETTING, id: 'layout', value: els.layout.value });
+els.layout.addEventListener('click', () => {
+  // Read from the DOM rather than from a local variable, so the button is the
+  // single source of truth about which way it is showing. A second copy of that
+  // state is a second thing that can disagree with the button.
+  const next = els.layout.getAttribute('aria-pressed') === 'true' ? 'full' : 'collapsed';
+  applyLayout(next);
+  send({ type: MSG.SET_SETTING, id: 'layout', value: next });
 });
 
 els.list.addEventListener('change', () => {

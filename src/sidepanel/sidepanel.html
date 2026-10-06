@@ -6,6 +6,20 @@
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
+    <!--
+      The chrome toggle sits in the LANGUAGE row, not the reading row.
+
+      A control must not live inside the region it controls. This was put in the
+      reading bar and that bar is exactly what collapsing hides, so collapsing
+      removed the only way back — the panel was stuck with no visible control at
+      all. Both rows survive collapse, so either would work; this one is chosen
+      because the reading bar is the one being hidden, and keeping the toggle out
+      of it makes that self-evident.
+
+      A button rather than a select: a select is for choosing among values, and
+      this is one action with two states. The label says what you will GET, not
+      what you have, so the button is never ambiguous about what pressing it does.
+    -->
     <header class="bar">
       <div class="lang">
         <select id="study" aria-label="Language to learn"></select>
@@ -22,6 +36,7 @@
           MT
         </label>
       </div>
+      <button id="layout" type="button" class="layout-toggle" aria-pressed="false" title="Hide the reading controls">&#9650;</button>
     </header>
 
     <!--
@@ -37,7 +52,6 @@
 
     <header class="bar learning">
       <select id="view-mode" aria-label="How much of the transcript to show"></select>
-      <select id="layout" aria-label="How much of the chrome to show"></select>
       <label class="size" title="Text size in pixels">
         <input id="font-size" type="number" min="10" max="32" step="1" aria-label="Text size in pixels" />
         <span class="size-unit">px</span>

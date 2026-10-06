@@ -639,25 +639,46 @@ section('the study line is never reported as translated');
 
 // --- 13. The Collapsed layout ------------------------------------------------
 
-section('the Collapsed layout hides the reading controls, not the languages');
+section('the Collapsed toggle is reachable from wherever it is set');
 
 {
   const { lastPort, byId } = await bootPanel();
+  const button = byId.get('layout');
 
-  // The panel is roughly 600px tall and had three bars plus a status line above
-  // the transcript. Collapsed gives the height back to the text — but keeps the
-  // language row, because changing language is the one control you reach for while
-  // reading, and folding it away would mean leaving the mode to get at it.
+  // The bug this pins: the toggle was a select inside the reading bar, and the
+  // reading bar is exactly what collapsed hides. Collapsing removed the only
+  // control that could undo it, so the panel was stuck with no way back — which is
+  // the single most important property of a toggle, and it was absent.
+  //
+  // The DOM cannot prove where the button sits, so what is asserted here is that
+  // the button is not inside the region the stylesheet hides. The class name is
+  // the contract; the browser suite checks the layout for real.
+  check('the toggle is not in the reading bar', button.classList.contains('learning'), false);
+
+  // A button in the real markup, asserted in the browser suite: the DOM stub here
+  // creates every element as a generic div, so `tagName` cannot distinguish them.
+  // What matters hermetically is the behaviour, which is below.
+
   lastPort().emit({ type: 'state', state: stateWithSettings({ layout: 'collapsed' }) });
-  check('the body carries the layout class', byId.get('layout').value, 'collapsed');
+  check('collapsed is reflected on the button', button.getAttribute('aria-pressed'), 'true');
+  check('and it says what pressing it will do', button.title, 'Show the reading controls');
 
   lastPort().emit({ type: 'state', state: stateWithSettings({ layout: 'full' }) });
-  check('and switching back clears it', byId.get('layout').value, 'full');
+  check('full is reflected on the button', button.getAttribute('aria-pressed'), 'false');
+  check('with the opposite label', button.title, 'Hide the reading controls');
 
+  // Clicking flips it, and the state does not have to come back from the worker
+  // for the button to look right.
   const port = lastPort();
-  byId.get('layout').value = 'collapsed';
-  byId.get('layout').dispatch('change');
-  check('changing it sends the setting', port.sent.at(-1)?.id, 'layout');
+  button.setAttribute('aria-pressed', 'false');
+  button.dispatch('click');
+  check('clicking collapses', button.getAttribute('aria-pressed'), 'true');
+  check('and sends the setting', port.sent.at(-1)?.id, 'layout');
+  check('with the new value', port.sent.at(-1)?.value, 'collapsed');
+
+  button.dispatch('click');
+  check('clicking again expands', button.getAttribute('aria-pressed'), 'false');
+  check('and sends that too', port.sent.at(-1)?.value, 'full');
 }
 
 section('the paused line holds its place in both views');
