@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU preview</title>
+    <link rel="icon" href="/icons/icon-32.png" />
+    <!--
+      The panel's OWN stylesheet, by its real path. Everything the preview renders
+      is styled by the file that ships, so a change here is a change to the real
+      panel — which is the whole point of a preview.
+    -->
+    <link rel="stylesheet" href="/src/sidepanel/sidepanel.css" />
+    <link rel="stylesheet" href="/tools/ui/preview.css" />
+  </head>
+  <body>
+    <header class="preview-bar">
+      <span class="preview-title">Preview</span>
+      <nav id="preview-scenarios" class="preview-scenarios"></nav>
+    </header>
+
+    <p id="preview-note" class="preview-note"></p>
+
+    <!--
+      The panel's markup, copied from src/sidepanel/sidepanel.html.
+
+      Duplicated rather than fetched, because that file ships to users and must
+      not reference a development tool. The cost is real: a control added there
+      must be added here, and forgetting shows up as "Cannot read properties of
+      null" rather than as a missing control. `test/browser/ui-preview.test.mjs`
+      exists to catch exactly that.
+    -->
+    <header class="bar">
+      <div class="lang">
+        <select id="study" aria-label="Language to learn"></select>
+      </div>
+      <button id="swap" type="button" title="Swap the two lines" aria-label="Swap the two lines">&#8646;</button>
+      <div class="lang">
+        <select id="gloss" aria-label="Second line, explaining the first"></select>
+      </div>
+    </header>
+
+    <div id="gloss-options" class="gloss-options" hidden>
+      <label class="translate-toggle">
+        <input type="checkbox" id="gloss-translated" />
+        Translate the second line into
+      </label>
+      <select id="translate-into" aria-label="Language to translate the second line into"></select>
+    </div>
+
+    <header class="bar learning">
+      <select id="view-mode" aria-label="How much of the transcript to show"></select>
+      <label class="size" title="Text size in pixels">
+        <input id="font-size" type="number" min="10" max="32" step="1" aria-label="Text size in pixels" />
+        <span class="size-unit">px</span>
+      </label>
+      <select id="list" aria-label="Word list"></select>
+      <select id="threshold" aria-label="Highlight from level"></select>
+    </header>
+
+    <p id="status" class="status" role="status">Looking for a YouTube video…</p>
+
+    <main id="transcript" class="transcript" aria-label="Transcript">
+      <p class="empty">No transcript loaded.</p>
+    </main>
+
+    <footer class="bar">
+      <label class="follow">
+        <input type="checkbox" id="follow" checked />
+        Follow
+      </label>
+      <button id="copy" type="button">Copy</button>
+      <select id="format" class="format" aria-label="Export format">
+        <option value="txt">.txt</option>
+        <option value="srt">.srt</option>
+      </select>
+      <button id="save" type="button">Save</button>
+    </footer>
+
+    <script type="module" src="/tools/ui/boot.mjs"></script>
+  </body>
+</html>

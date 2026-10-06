@@ -1,10 +1,10 @@
 /*
- * Styles for the preview shell ONLY.
+ * Styles for the preview SHELL only.
  *
- * The panel's own stylesheet is loaded unchanged, so what is previewed is the
- * panel. Everything here decorates the shell around it — the scenario switcher
- * and the note — and must not leak into the panel's rules. Class names are
- * prefixed `preview-` so a future panel class cannot collide with one of these.
+ * The panel's own stylesheet is loaded unchanged, by its real path, so what is
+ * previewed is the panel. Everything here decorates the shell around it — the
+ * scenario switcher and the note — and must not leak into the panel's rules.
+ * Class names are prefixed `preview-` so a future panel class cannot collide.
  */
 
 .preview-bar {
@@ -15,6 +15,12 @@
   padding: 6px 8px;
   border-bottom: 1px solid #2a2e37;
   background: #101216;
+}
+
+.preview-scenarios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .preview-title {

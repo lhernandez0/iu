@@ -7,7 +7,7 @@
  * of the markup shows up as a blank page, and nobody notices until they next want
  * to use it.
  *
- * So this boots the real server, loads the real panel in a real browser, and
+ * So this boots the real dev server, loads the real panel in a real browser, and
  * asserts what would otherwise fail silently:
  *
  *   1. Every module the panel imports is served — a 404 is a blank page.
@@ -57,24 +57,32 @@ if (!executablePath) {
 }
 
 /**
- * Start the server and wait for it to answer.
+ * Start Vite and wait for it to answer.
  *
- * Polled rather than slept, so a slow machine does not produce a spurious
- * failure and a fast one does not waste a second.
+ * Polled rather than slept, so a slow machine does not produce a spurious failure
+ * and a fast one does not waste a second. Vite is ready when its HTML answers.
  *
  * @returns {Promise<{stop: Function}>}
  */
 async function startServer() {
-  const child = spawn(process.execPath, [join(ROOT, 'tools/ui/serve.mjs')], {
-    cwd: ROOT,
-    env: { ...process.env, IU_UI_PORT: String(PORT) },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const child = spawn(
+    'npx',
+    ['vite', '--config', 'tools/ui/vite.config.mjs', '--port', String(PORT)],
+    {
+      cwd: ROOT,
+      env: { ...process.env, IU_UI_PORT: String(PORT) },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
 
-  const ready = Date.now() + 15_000;
+  let log = '';
+  child.stdout.on('data', (chunk) => (log += chunk));
+  child.stderr.on('data', (chunk) => (log += chunk));
+
+  const ready = Date.now() + 30_000;
   while (Date.now() < ready) {
     try {
-      const response = await fetch(`http://127.0.0.1:${PORT}/?scenario=bilingual`);
+      const response = await fetch(`http://127.0.0.1:${PORT}/tools/ui/`);
       if (response.ok) {
         await response.text();
         return { stop: () => child.kill('SIGKILL') };
@@ -82,11 +90,11 @@ async function startServer() {
     } catch {
       // Not listening yet.
     }
-    await new Promise((done) => setTimeout(done, 100));
+    await new Promise((done) => setTimeout(done, 150));
   }
 
   child.kill('SIGKILL');
-  throw new Error('the preview server did not start');
+  throw new Error(`the preview server did not start:\n${log}`);
 }
 
 const server = await startServer();
@@ -116,7 +124,7 @@ try {
       if (response.status() >= 400) failed.push(`${response.status()} ${new URL(response.url()).pathname}`);
     });
 
-    await page.goto(`http://127.0.0.1:${PORT}/?scenario=${scenario.id}`, { waitUntil: 'load' });
+    await page.goto(`http://127.0.0.1:${PORT}/tools/ui/?scenario=${scenario.id}`, { waitUntil: 'load' });
 
     // The panel renders from the first STATE push, which the mock sends on start.
     //

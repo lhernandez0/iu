@@ -8,7 +8,7 @@
     "capture": "node tools/capture.mjs",
     "derive-synthetic": "node tools/derive-synthetic.mjs",
     "icons": "node tools/make-icons.mjs",
-    "ui": "node tools/ui/serve.mjs",
+    "ui": "vite --config tools/ui/vite.config.mjs",
     "test": "node test/run.mjs",
     "test:all": "npm test && npm run test:browser",
     "test:browser": "node test/browser/run-browser.mjs",
@@ -17,6 +17,7 @@
     "test:unit": "node test/unit.test.mjs"
   },
   "devDependencies": {
-    "playwright": "^1.63.0"
+    "playwright": "^1.63.0",
+    "vite": "^8.3.3"
   }
 }

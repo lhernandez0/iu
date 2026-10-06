@@ -69,12 +69,12 @@ The content stub models an **orphaned extension context**: `id` absent, and
 that quietly resolved would not exercise the path at all, and the bug being
 pinned is precisely that the throw escaped.
 
-## Tier 2 — browser, offline (`npm run test:browser`, 175 checks)
+## Tier 2 — browser, offline (`npm run test:browser`, 179 checks)
 
-Two suites. `iu.browser.test.mjs` (108) loads the real extension; `ui-preview.test.mjs`
-(67) smokes the design preview server, which is a development tool rather than a
-test of the extension — see [Designing the panel](#designing-the-panel) for why it
-is checked in.
+Three suites. `iu.browser.test.mjs` (108) loads the real extension; `ui-preview.test.mjs`
+(67) and `ui-hmr.test.mjs` (4) check the design preview server, which is a
+development tool rather than a test of the extension — see
+[Designing the panel](#designing-the-panel) for why it is checked in at all.
 
 The real extension in real Chromium. The only thing faked is the network, and it
 is intercepted at the transport layer with `context.route`, so the content script
@@ -165,8 +165,8 @@ with both manifests written, so a spent open still yields evidence to derive fro
 
 ## Designing the panel
 
-`npm run ui` serves the side panel at `http://127.0.0.1:8099` against a mock
-worker, for iterating on layout without loading the extension.
+`npm run ui` serves the side panel at `http://127.0.0.1:8099` with **Vite**, for
+iterating on layout without loading the extension.
 
 It exists because the alternative was loading the extension, opening a YouTube
 video, and reading a live transcript for every change to a colour or a control —
@@ -175,37 +175,51 @@ long silence, an error) are the hardest to reach on demand. Reading a real
 transcript while working on layout is also a licence problem, which is why
 `test/fixtures/` is local and gitignored.
 
-It turned out to need almost nothing. The panel's **entire** contact with the
-extension is `chrome.runtime.connect` returning a Port; every module it imports is
-chrome-free. So it runs as a plain page with a fake Port — real panel, real
-stylesheet, real rendering, real controls — and no extension loading, no browser
-flags, no headless browser.
+**Why Vite and not Storybook.** This is one 57-line panel, not a component
+library; Storybook's isolated-component model has nothing to model here. What was
+wanted was a dev server with hot module replacement. Storybook would have replaced
+roughly the same amount of code while adding a much larger dependency and a build
+the project does not otherwise have.
 
-- `tools/ui/serve.mjs` — the server, and the page. The panel's markup is
-  **duplicated** here rather than read from `sidepanel.html`, because that file
-  ships to users and must not reference a development tool. Adding a control there
-  means adding it here too.
-- `tools/ui/scenarios.mjs` — **Node-only.** It reads the committed synthetic
-  corpus. The server serialises a scenario and sends it as data; if the browser
-  ever imported this, it would try to fetch `node:fs` and CORS would block it,
-  leaving the panel on its placeholder with the reason buried in the console.
-- `tools/ui/mock-worker.mjs` — the browser half. Imports the **real** protocol
-  constants, settings schema, and alignment function, so it cannot drift from what
-  the panel expects.
-- `tools/ui/scenarios.mjs` → `SCENARIOS` switches with `?scenario=`, and
-  `?view=`, `?fontSize=`, `?threshold=` override settings so a layout can be
-  linked to and reloaded rather than rebuilt by clicking.
+**Why it works at all.** The panel's **entire** contact with the extension is
+`chrome.runtime.connect` returning a Port, and every module it imports is
+chrome-free. So the real panel runs as a plain page with a fake Port — real
+rendering, real stylesheet, real controls — with no extension loading.
+
+- `tools/ui/vite.config.mjs` — root is the repository, so the page imports the
+  panel by the same paths the extension uses. One plugin serves the scenarios as
+  JSON, because they read the corpus from disk and the browser cannot import a
+  Node module.
+- `tools/ui/index.html` — the panel's markup, **duplicated** from
+  `sidepanel.html` (that file ships to users and must not reference a dev tool).
+  The cost is real: a control added there must be added here, and forgetting shows
+  up as `Cannot read properties of null` rather than as a missing control.
+- `tools/ui/boot.mjs` — installs the mock, fetches the scenario, then imports the
+  panel. The import must be last and dynamic, because the panel calls `connect` at
+  module scope.
+- `tools/ui/mock-worker.mjs` — imports the **real** protocol constants, settings
+  schema and alignment function, so it cannot drift from what the panel expects.
+- `tools/ui/scenarios.mjs` — **Node-only**; the server serialises a scenario and
+  sends it as data.
+- `?scenario=` switches; `?view=`, `?fontSize=`, `?threshold=` override settings so
+  a state can be linked to rather than rebuilt by clicking.
+
+**HMR is the point, and it is tested.** `test/browser/ui-hmr.test.mjs` edits the
+real stylesheet, waits for the change to arrive, and asserts the page did **not**
+reload — a dev server that reloads on every CSS save would lose the entire
+benefit, and would pass a smoke test. An earlier hand-rolled server had no HMR at
+all, which is why it was replaced.
 
 **What it does not do.** It does not run the extension, the content scripts, the
 real caption fetch, or the real marking. A layout proved here is a layout; a fetch
-proved here is nothing. That is what `test/browser/iu.browser.test.mjs` is for.
+proved here is nothing. That is `test/browser/iu.browser.test.mjs`'s job.
 
 **Why it is tested at all.** Tools like this rot: a control renamed in
 `sidepanel.html` and not here shows up as a blank page, and nobody notices until
-they next want to use it. `test/browser/ui-preview.test.mjs` therefore asserts
-that every scenario renders, that each one's distinctive feature is on screen (a
-translated gloss, no marks, no second line), and that no console or page error was
-raised. It asserts nothing about appearance — that is the point of the preview.
+they next want to use it. `test/browser/ui-preview.test.mjs` therefore asserts that
+every scenario renders, that each one's distinctive feature is on screen, and that
+no console error was raised. It asserts nothing about appearance — that is what the
+preview is for.
 
 ## Where the fixtures come from
 

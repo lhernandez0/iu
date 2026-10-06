@@ -38,13 +38,17 @@ No dependencies — plain Node scripts, so `npm test` works with nothing install
 ### Designing the panel
 
 ```bash
-npm run ui   # http://127.0.0.1:8099
+npm i          # once — the preview needs Vite
+npm run ui     # http://127.0.0.1:8099
 ```
 
-Serves the side panel against a mock worker, for working on layout without
-loading the extension or opening a YouTube video. Pick a scenario from the bar —
-two languages, one subtitle, a long silence, an error — or override with
-`?view=focus&fontSize=22`.
+Serves the side panel with [Vite](https://vite.dev) against a mock worker, for
+working on layout without loading the extension or opening a YouTube video. Edit
+`sidepanel.css` and the change lands in the browser **without a reload** — that is
+the point of using a dev server rather than a static one.
+
+Pick a scenario from the bar — two languages, one subtitle, a long silence, an
+error — or override with `?view=focus&fontSize=22`.
 
 It runs the **real panel**: the only thing faked is the Port the panel connects
 to, because that is its entire contact with the extension. It does not exercise
