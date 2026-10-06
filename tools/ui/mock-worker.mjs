@@ -44,7 +44,7 @@ import { segmentSegments } from '../../src/learn/segment.js';
  * @returns {object[]}
  */
 function markLine(text, dictionary, list, threshold) {
-  const [tokens] = segmentSegments([{ start: 0, text }], dictionary.words, dictionary.maxWordLength);
+  const [tokens] = segmentSegments([{ start: 0, text }], dictionary.headwords, dictionary.maxWordLength);
   return tokens.map((token) => {
     const defined = token.known && Boolean(lookup(dictionary, token.text));
     if (!defined || !list) return { text: token.text, defined, level: null };
