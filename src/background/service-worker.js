@@ -34,8 +34,8 @@ const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
  * @property {boolean} isLive
  * @property {object[]} trackList            Available tracks, as offered to the panel.
  * @property {boolean} stale                 The page could not report its tracks.
- * @property {string|null} primaryLang
- * @property {string|null} secondaryLang
+ * @property {string|null} studyLang
+ * @property {string|null} glossLang
  * @property {Map<string, object[]>} tracks  languageCode -> segments.
  * @property {object[]} rows                 Primary segments, with tokens where marked.
  * @property {string|null} error
@@ -119,11 +119,11 @@ function handlePanelMessage(message) {
     case MSG.REFRESH:
       void refresh();
       return;
-    case MSG.SET_PRIMARY:
-      void chooseTrack('primary', message.languageCode);
+    case MSG.SET_STUDY:
+      void chooseTrack('study', message.languageCode);
       return;
-    case MSG.SET_SECONDARY:
-      void chooseTrack('secondary', message.languageCode);
+    case MSG.SET_GLOSS:
+      void chooseTrack('gloss', message.languageCode);
       return;
     case MSG.SEEK:
       void forwardSeek(message.seconds);
@@ -598,12 +598,15 @@ async function refreshInner() {
   // The translation target travels with the request rather than being applied
   // afterwards, because the provider has to choose a source track that actually
   // supports translation — and it cannot know that from a second round trip.
+  //
+  // `null` for the study line, always: the line being learned is never machine
+  // translated, so the provider is asked for the plain track.
   let provided;
   try {
     provided = await sendToContent(trackedTabId, {
       type: MSG.PROVIDE,
-      languageCode: entry.primaryLang,
-      translateTo: effectiveTranslation(entry, 'primary'),
+      languageCode: entry.studyLang,
+      translateTo: effectiveTranslation(entry, 'study'),
     });
   } catch (error) {
     pendingError = `Could not fetch captions (${error?.message ?? error}).`;
@@ -618,7 +621,7 @@ async function refreshInner() {
   }
 
   if (recordTrack(entry, provided.fetched)) {
-    entry.primaryLang = provided.fetched.languageCode;
+    entry.studyLang = provided.fetched.languageCode;
   } else if (provided.fetched?.error) {
     // A failed translation must not empty a transcript that loaded fine. The
     // text is already on screen; the error belongs to the line that could not
@@ -630,24 +633,22 @@ async function refreshInner() {
 
   rebuildRows(entry);
 
-  // Show the primary immediately, then fill in the second language.
+  // Show the study line immediately, then fill in the gloss.
   //
-  // The check is for the SECOND SLOT'S RENDERING, not for its language code.
-  // Choosing the same language twice is legitimate — it is how you ask for one
-  // language and its translation side by side — and a language-code test would
-  // see the primary's entry and decide the second slot was already loaded,
-  // leaving it showing the primary's text instead of its own translation.
-  const wantsSecondary =
-    entry.secondaryLang &&
-    !entry.tracks.has(trackKey(entry.secondaryLang, effectiveTranslation(entry, 'secondary'))) &&
-    trackKey(entry.secondaryLang, effectiveTranslation(entry, 'secondary')) !==
-      trackKey(entry.primaryLang ?? '', effectiveTranslation(entry, 'primary'));
-  if (wantsSecondary) broadcastState();
+  // The check is for the GLOSS'S RENDERING, not for its language code. The gloss
+  // may be the same language as the study line — that is how you ask for one
+  // language with its translation underneath — and a language-code test would
+  // see the study line's entry, decide the gloss was already loaded, and leave it
+  // showing the study line's text instead of its own rendering.
+  const glossKey = entry.glossLang ? trackKey(entry.glossLang, effectiveTranslation(entry, 'gloss')) : null;
+  const studyKey = trackKey(entry.studyLang ?? '', effectiveTranslation(entry, 'study'));
+  const wantsGloss = Boolean(glossKey) && !entry.tracks.has(glossKey) && glossKey !== studyKey;
+  if (wantsGloss) broadcastState();
 
-  if (wantsSecondary) {
-    const result = await loadTrack(entry, entry.secondaryLang, effectiveTranslation(entry, 'secondary'));
-    // Same rule as the primary: a translation that could not be produced is
-    // reported without discarding a secondary line that did.
+  if (wantsGloss) {
+    const result = await loadTrack(entry, entry.glossLang, effectiveTranslation(entry, 'gloss'));
+    // Same rule as the study line: a translation that could not be produced is
+    // reported without discarding a gloss line that did.
     if (result?.error) {
       if (result.translateTo === null && suppliedTranslation(result)) translationError = result.error;
       else entry.error = result.error;
@@ -701,15 +702,15 @@ function adoptVideo(video) {
       translationLanguages: video.translationLanguages ?? [],
       stale: Boolean(video.stale),
       // Both language choices are seeded from the saved preferences, which is
-      // what makes them sticky. Primary was previously left null here, so every
-      // new video fell back to the content script's own default and a Chinese
-      // subtitle choice was silently lost on the next video.
+      // what makes them sticky. The study language was previously left null
+      // here, so every new video fell back to the content script's own default
+      // and a Chinese subtitle choice was silently lost on the next video.
       //
       // A preference that this video cannot satisfy is cleared from the entry
       // below, but never from the settings — so returning to a video that has
       // the language brings it back.
-      primaryLang: settings.primaryLanguage,
-      secondaryLang: settings.secondaryLanguage,
+      studyLang: settings.studyLanguage,
+      glossLang: settings.glossLanguage,
       tracks: new Map(),
       rows: [],
       error: null,
@@ -729,8 +730,8 @@ function adoptVideo(video) {
   }
 
   // Drop any selection whose track no longer exists on this video.
-  if (entry.primaryLang && !hasTrack(entry, entry.primaryLang)) entry.primaryLang = null;
-  if (entry.secondaryLang && !hasTrack(entry, entry.secondaryLang)) entry.secondaryLang = null;
+  if (entry.studyLang && !hasTrack(entry, entry.studyLang)) entry.studyLang = null;
+  if (entry.glossLang && !hasTrack(entry, entry.glossLang)) entry.glossLang = null;
 
   return entry;
 }
@@ -751,9 +752,9 @@ function hasTrack(entry, languageCode) {
  */
 function isCached(entry) {
   if (entry.error) return false;
-  if (!entry.primaryLang || !entry.rows.length) return false;
+  if (!entry.studyLang || !entry.rows.length) return false;
 
-  const cached = entry.tracks.get(trackKey(entry.primaryLang, effectiveTranslation(entry, 'primary')));
+  const cached = entry.tracks.get(trackKey(entry.studyLang, effectiveTranslation(entry, 'study')));
   if (!cached) return false;
 
   // The cached text has to be the rendering now being asked for.
@@ -764,34 +765,49 @@ function isCached(entry) {
   // most plausibly a video whose track list stops reporting `isTranslatable`
   // between refreshes, which would otherwise leave translated text on screen
   // while the extension believed the setting no longer applied.
-  return cached.translateTo === (effectiveTranslation(entry, 'primary') ?? null);
+  return cached.translateTo === (effectiveTranslation(entry, 'study') ?? null);
 }
 
 /**
- * The translation actually worth asking for.
+ * The translation actually worth asking for, for one ROLE.
  *
- * The preference is global and sticky, but a video may not support it: only
- * tracks YouTube flags `isTranslatable` can be translated, in practice the
- * auto-generated ones. Returning null instead of the preference is what stops
- * a refresh re-requesting a translation this video will never produce, which
- * would otherwise retry on every single refresh.
+ * The study line is never translated. That is a rule, not a preference: the line
+ * being learned is the text you are reading in its own language, and the marks,
+ * the hover definitions and the HSK levels all describe that text. Machine
+ * translation paraphrases rather than glosses and hides word boundaries — which
+ * is exactly what those marks exist to supply — so translating it would put a
+ * coloured, studiable overlay on a text the learner cannot see. The old model
+ * allowed it, because a translation was a property of a slot and the first slot
+ * was always the study line.
  *
- * The preference itself is never cleared, so moving to a video that DOES
- * support it brings the translation back on its own — the same stickiness the
- * language choices already have.
+ * The gloss is translated when the target is set and its source track supports
+ * it. `glossTranslated` is the per-line bit: with the target global, that is all
+ * that varies per line.
+ *
+ * When the gloss is NOT translated it is an ordinary second track — which is the
+ * common case, and why the same picker serves both.
  *
  * @param {VideoEntry} entry
- * @param {'primary'|'secondary'} which
+ * @param {'study'|'gloss'} role
  * @returns {string|null}
  */
-function effectiveTranslation(entry, which) {
-  const wanted = which === 'primary' ? settings.translatePrimary : settings.translateSecondary;
+function effectiveTranslation(entry, role) {
+  if (role === 'study') return null;
+  if (!settings.glossTranslated) return null;
+
+  const wanted = settings.translateInto;
   if (!wanted) return null;
 
-  const languageCode = which === 'primary' ? entry.primaryLang : entry.secondaryLang;
-  // No track chosen yet: the provider picks the default, and it is asked for the
-  // translation so that its choice can be made with that in mind.
-  if (!languageCode) return wanted;
+  const languageCode = entry.glossLang;
+  // No gloss track chosen. Nothing to translate — and, unlike before, no asking
+  // the provider to pick a track "with translation in mind", because there is no
+  // line for the result to appear on.
+  if (!languageCode) return null;
+
+  // Its own language is not a translation target: asking YouTube to turn Chinese
+  // into Chinese returns the original text, which would be presented as though a
+  // translation had happened.
+  if (languageCode === wanted) return null;
 
   const track = entry.trackList.find((t) => t.languageCode === languageCode);
   return track?.isTranslatable ? wanted : null;
@@ -878,7 +894,7 @@ function recordTrack(entry, fetched) {
  */
 async function primeContentPosition(entry) {
   if (trackedTabId === null) return;
-  const segments = entry.tracks.get(trackKey(entry.primaryLang ?? '', effectiveTranslation(entry, 'primary')))?.segments;
+  const segments = entry.tracks.get(trackKey(entry.studyLang ?? '', effectiveTranslation(entry, 'study')))?.segments;
   if (!segments?.length) return;
 
   try {
@@ -967,9 +983,9 @@ function rebuildRows(entry) {
     entry.markedWith = null;
   }
 
-  const primary = entry.tracks.get(trackKey(entry.primaryLang ?? '', effectiveTranslation(entry, 'primary')))?.segments ?? [];
-  const secondary = entry.secondaryLang
-    ? entry.tracks.get(trackKey(entry.secondaryLang, effectiveTranslation(entry, 'secondary')))?.segments ?? []
+  const primary = entry.tracks.get(trackKey(entry.studyLang ?? '', effectiveTranslation(entry, 'study')))?.segments ?? [];
+  const secondary = entry.glossLang
+    ? entry.tracks.get(trackKey(entry.glossLang, effectiveTranslation(entry, 'gloss')))?.segments ?? []
     : [];
   const aligned = secondary.length && primary.length ? alignSecondary(primary, secondary) : null;
 
@@ -1086,12 +1102,12 @@ function markLine(tokens, dictionary, list, threshold) {
  * re-rendering an existing choice must not overwrite the preference with
  * whatever happens to be on screen.
  *
- * @param {'primary'|'secondary'} which
+ * @param {'study'|'gloss'} which
  * @param {string|null} languageCode
  */
 async function chooseTrack(which, languageCode) {
-  if (which === 'primary') settings.primaryLanguage = languageCode || null;
-  else settings.secondaryLanguage = languageCode || null;
+  if (which === 'study') settings.studyLanguage = languageCode || null;
+  else settings.glossLanguage = languageCode || null;
   persistSettings();
   await selectTrack(which, languageCode);
 }
@@ -1106,7 +1122,7 @@ async function chooseTrack(which, languageCode) {
  * without writing it back. Re-applying the preference on a re-render therefore
  * cleared the track that was already loaded, and the transcript went blank.
  *
- * @param {'primary'|'secondary'} which
+ * @param {'study'|'gloss'} which
  * @param {string|null} languageCode
  */
 async function selectTrack(which, languageCode) {
@@ -1116,10 +1132,10 @@ async function selectTrack(which, languageCode) {
     return;
   }
 
-  // An empty string from the panel means "none" for the second subtitle; for
-  // the primary it means "fall back to whatever the video offers".
-  if (which === 'primary') entry.primaryLang = languageCode || null;
-  else entry.secondaryLang = languageCode || null;
+  // An empty string from the panel means "none" for the gloss; for the study
+  // line it means "fall back to whatever the video offers".
+  if (which === 'study') entry.studyLang = languageCode || null;
+  else entry.glossLang = languageCode || null;
 
   await loadTrack(entry, languageCode, effectiveTranslation(entry, which));
   rebuildRows(entry);
@@ -1150,10 +1166,11 @@ function deriveState() {
       trackList: [],
       translationLanguages: [],
       translationAvailable: {},
-      translatePrimary: null,
-      translateSecondary: null,
-      primary: null,
-      secondary: null,
+      glossTranslation: null,
+      translateInto: settings.translateInto,
+      glossTranslated: Boolean(settings.glossTranslated),
+      study: null,
+      gloss: null,
       rows: [],
       activeIndex,
       activePaused,
@@ -1179,12 +1196,15 @@ function deriveState() {
     translationAvailable: Object.fromEntries(
       (entry.trackList ?? []).map((track) => [track.languageCode, Boolean(track.isTranslatable)]),
     ),
-    // What is actually on screen, which is not always what was asked for: a
-    // video whose tracks cannot be translated falls back to the original text.
-    translatePrimary: effectiveTranslation(entry, 'primary'),
-    translateSecondary: effectiveTranslation(entry, 'secondary'),
-    primary: entry.primaryLang,
-    secondary: entry.secondaryLang,
+    // What is actually on screen for the gloss, which is not always what was
+    // asked for: a video whose tracks cannot be translated falls back to the
+    // original text. The study line has no equivalent because it is never
+    // translated — `null` here would be indistinguishable from "not available".
+    glossTranslation: effectiveTranslation(entry, 'gloss'),
+    translateInto: settings.translateInto,
+    glossTranslated: Boolean(settings.glossTranslated),
+    study: entry.studyLang,
+    gloss: entry.glossLang,
     rows: entry.rows,
     // Carried in state rather than only as an event, so a panel that opens
     // mid-video starts where playback is instead of at the top.
@@ -1219,10 +1239,10 @@ function learningState() {
     fontSize: settings.fontSize,
     listId: settings.listId,
     threshold: settings.threshold,
-    primaryLanguage: settings.primaryLanguage,
-    secondaryLanguage: settings.secondaryLanguage,
-    translatePrimary: settings.translatePrimary,
-    translateSecondary: settings.translateSecondary,
+    studyLanguage: settings.studyLanguage,
+    glossLanguage: settings.glossLanguage,
+    translateInto: settings.translateInto,
+    glossTranslated: settings.glossTranslated,
     // Supplied here rather than in the schema, because the levels a list has is
     // a property of the data, not of the setting.
     listOptions: availableLists.map((list) => ({ value: list.id, label: list.label })),
@@ -1280,39 +1300,44 @@ async function applySetting(id, value) {
       rebuildRows(currentEntry());
       break;
 
-    case 'primaryLanguage':
+    case 'studyLanguage':
       // The learner picked a different language, so the fetched track is no
       // longer what is wanted. Re-choosing is what re-fetches it.
-      void chooseTrack('primary', settings.primaryLanguage);
+      void chooseTrack('study', settings.studyLanguage);
       break;
-    case 'secondaryLanguage':
-      void chooseTrack('secondary', settings.secondaryLanguage);
+    case 'glossLanguage':
+      void chooseTrack('gloss', settings.glossLanguage);
+      // Changing the gloss track changes what there is to translate, so the
+      // error from the previous track is no longer about anything on screen.
+      translationError = null;
       break;
 
-    case 'translatePrimary':
-    case 'translateSecondary': {
+    case 'translateInto':
+    case 'glossTranslated': {
       // Only the RENDERING changes, not the chosen language, so this re-renders
-      // rather than re-choosing. The language is taken from what is on screen,
-      // which on a video the learner has not chosen for is the provider's
-      // default and not anything in settings.
+      // rather than re-choosing. Both settings decide the same one thing — what
+      // the gloss shows — so they share a branch.
+      //
       // No cache surgery: loadTrack compares the cached rendering against the
       // one wanted, so a different target refetches and an unreachable target
       // leaves the existing text alone.
-      const which = id === 'translatePrimary' ? 'primary' : 'secondary';
       const entry = currentEntry();
-      const languageCode = (which === 'primary' ? entry?.primaryLang : entry?.secondaryLang) ?? null;
+      const languageCode = entry?.glossLang ?? null;
 
-      // The track cannot be translated, so there is nothing to fetch and the
-      // rendering is already the original. Say WHY rather than silently doing
-      // nothing — the learner asked for Japanese and is looking at English, and
-      // without this the feature simply appears broken.
-      const wanted = which === 'primary' ? settings.translatePrimary : settings.translateSecondary;
+      // There is a target and a track, but the track cannot be translated, so
+      // there is nothing to fetch and the rendering is already the original. Say
+      // WHY rather than silently doing nothing — the learner asked for English
+      // and is looking at Chinese, and without this the feature appears broken.
+      const wanted = Boolean(settings.glossTranslated && settings.translateInto);
       translationError =
-        wanted && languageCode && !effectiveTranslation(entry, which)
+        wanted && languageCode && !effectiveTranslation(entry, 'gloss')
           ? 'This caption track cannot be auto-translated.'
           : null;
 
-      void selectTrack(which, languageCode);
+      // No language to load when there is no gloss chosen; broadcast the reason
+      // instead of re-selecting a track that does not exist.
+      if (languageCode) void selectTrack('gloss', languageCode);
+      else broadcastState();
       break;
     }
 

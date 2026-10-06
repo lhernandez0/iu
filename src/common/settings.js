@@ -96,7 +96,7 @@ export const SETTINGS = [
     },
   },
   {
-    id: 'primaryLanguage',
+    id: 'studyLanguage',
     label: 'Subtitle',
     group: 'language',
     type: 'select',
@@ -105,7 +105,14 @@ export const SETTINGS = [
     coerce: (value) => (typeof value === 'string' && value ? value : null),
   },
   {
-    id: 'secondaryLanguage',
+    // The gloss: the line that explains the study line. Optional.
+    //
+    // It may be the SAME language as the study line, and that is not a mistake —
+    // it is the only way to ask for "English" with its translation underneath,
+    // because a translation needs a source track to convert and "Off" has none.
+    // The old model expressed that by putting one language in two slots, which
+    // was indistinguishable from having chosen it twice by accident.
+    id: 'glossLanguage',
     label: 'Second subtitle',
     group: 'language',
     type: 'select',
@@ -117,8 +124,12 @@ export const SETTINGS = [
     // YouTube's "auto-translate". Not a separate track: the same track's URL with
     // `&tlang=` added, so cue timings are identical and only the text changes.
     // That is why it composes with alignment and seeking for free.
-    id: 'translatePrimary',
-    label: 'Translate',
+    //
+    // A GLOBAL target rather than one per line. It is a preference — a learner
+    // reading Chinese wants English every time — so the choice is made once
+    // instead of being a 156-item list attached to each line.
+    id: 'translateInto',
+    label: 'Translate into',
     group: 'language',
     type: 'select',
     default: null,
@@ -126,13 +137,21 @@ export const SETTINGS = [
     coerce: (value) => (typeof value === 'string' && value ? value : null),
   },
   {
-    id: 'translateSecondary',
+    // Whether the gloss shows the translation instead of the original. One bit
+    // per line, which is all that actually varies once the target is global.
+    //
+    // There is no equivalent for the study line and that is deliberate: the line
+    // being learned is the thing you are reading *in its own language*, and
+    // translating it would mean the marks, the hover definitions and the HSK
+    // levels describe a text the learner cannot see. Machine translation also
+    // paraphrases rather than glosses and hides word boundaries, which is exactly
+    // what those marks exist to supply.
+    id: 'glossTranslated',
     label: 'Translate second',
     group: 'language',
-    type: 'select',
-    default: null,
-    dynamic: true,
-    coerce: (value) => (typeof value === 'string' && value ? value : null),
+    type: 'toggle',
+    default: false,
+    coerce: (value) => Boolean(value),
   },
 ];
 
@@ -148,6 +167,12 @@ export function defaults() {
   return out;
 }
 
+/** Renamed settings, so a stored choice is not silently lost. */
+const RENAMES = {
+  primaryLanguage: 'studyLanguage',
+  secondaryLanguage: 'glossLanguage',
+};
+
 /**
  * Merge stored values over the defaults, coercing each and dropping unknown keys.
  *
@@ -162,7 +187,27 @@ export function normalise(stored) {
   const out = defaults();
   if (!stored || typeof stored !== 'object') return out;
 
-  for (const [id, value] of Object.entries(stored)) {
+  // Carry a renamed choice across before reading it, so a learner who had picked
+  // a subtitle keeps it. Reading the object rather than writing over storage
+  // keeps this pure and re-runnable.
+  const source = { ...stored };
+  for (const [from, to] of Object.entries(RENAMES)) {
+    if (source[to] === undefined && source[from] !== undefined) source[to] = source[from];
+  }
+
+  // The two per-line translation targets collapse into one preference plus one
+  // bit. If either slot was being translated, the target becomes the gloss's —
+  // which is where a translation can live now — and the gloss is switched on so
+  // the choice is not lost.
+  if (source.translateInto === undefined) {
+    const target = source.translateSecondary ?? source.translatePrimary;
+    if (target) source.translateInto = target;
+    if (source.glossTranslated === undefined && source.translateSecondary) {
+      source.glossTranslated = true;
+    }
+  }
+
+  for (const [id, value] of Object.entries(source)) {
     const setting = BY_ID.get(id);
     if (!setting) continue; // no longer a setting
     out[id] = setting.coerce ? setting.coerce(value) : value;

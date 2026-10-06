@@ -67,11 +67,21 @@ open — they need a browser, and the answers come from the status line.
 - Clicking a line jumps the video to that timestamp.
 - The spoken line highlights as it plays; the list scrolls with it. **Follow**
   toggles that scrolling.
-- Pick a second language in the right-hand dropdown to get two subtitles at
-  once. The &#8646; button swaps the two.
+- The first dropdown is the **study line**: the language you are learning.
+  It is never machine translated, because the word marks and definitions
+  describe that text.
+- The second dropdown adds a **gloss** under each line. It may be a different
+  track, or the *same* language as the study line.
+- With a gloss chosen, **Translate the second line into** replaces it with a
+  machine translation. The target is a single global setting — set once, applied
+  to whatever the second line is.
+  - Choosing the same language twice is the way to get "English with its
+    translation underneath": a translation needs a source track to convert, and
+    "Off" has none.
+- The &#8646; button swaps the two lines.
 - Switching to another tab and back does **not** re-fetch — the transcript is
   cached, and the panel swaps immediately.
-- The second-language choice is remembered across restarts.
+- The language choices and the translation target are remembered across restarts.
 
 ## Architecture
 
@@ -150,13 +160,33 @@ to look at, and the status line names which stage failed.
 
 ## Bilingual subtitles
 
-A second track can be shown under each line. The two tracks are separate
-downloads with independent cue boundaries and no ids linking them, so
-`alignSecondary` in `src/common/transcript.js` walks both lists once matching
-each primary cue to the nearest secondary cue by start time. A pair further
-apart than 1.5s is left unmatched rather than paired — without that threshold a
-few seconds of drift would put a plausible-looking wrong translation on every
-line.
+Two lines, with different jobs. The **study line** is the language being
+learned: it carries the word marks, hover definitions and level colours. The
+**gloss** explains it, and is deliberately plain text — a gloss is for reading,
+not for studying.
+
+A gloss may be:
+
+| Setup | study | gloss |
+| --- | --- | --- |
+| Native subtitles | `zh` | `en` (a real track) |
+| Machine translation | `zh` | `zh → en` |
+| Same language twice | `en` | `en → zh` |
+| Subtitle practice | `en` | *(none)* |
+
+The study line is never machine translated, and that is a rule rather than a
+preference: machine translation paraphrases rather than glosses and hides word
+boundaries, which is exactly what the marks exist to supply. Translating it would
+put a coloured, studiable overlay on a text the learner cannot see. Because the
+target is a single global setting, the arrangement above is expressible without a
+second translation menu.
+
+The two tracks are separate downloads with independent cue boundaries and no ids
+linking them, so `alignSecondary` in `src/common/transcript.js` walks both lists
+once matching each primary cue to the nearest secondary cue by start time. A pair
+further apart than 1.5s is left unmatched rather than paired — without that
+threshold a few seconds of drift would put a plausible-looking wrong translation
+on every line.
 
 Alignment is approximate by design: it depends on the two tracks describing the
 same speech in roughly the same place. It is verified by unit-style checks run

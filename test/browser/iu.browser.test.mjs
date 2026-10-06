@@ -100,9 +100,9 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     let state = await panelState(page);
     check('before selecting, one language only', state.rows[0]?.secondary, '');
-    check('and both tracks are offered', state.secondaryOptions.includes('de'), true);
+    check('and both tracks are offered', state.glossOptions.includes('de'), true);
 
-    await page.selectOption('#secondary', 'de');
+    await page.selectOption('#gloss', 'de');
     await page.waitForFunction(
       () => document.querySelector('.row .secondary')?.textContent?.length > 0,
       null,
@@ -526,52 +526,61 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('the original text is shown first', untranslated, 'こんにちは');
     check('with no machine tag', await page.evaluate(() => document.querySelectorAll('.machine').length), 0);
 
-    // The translate menu is behind an icon, so it has to be opened first — the
-    // same thing a user does. Asserted rather than assumed, because a menu that
-    // failed to open would otherwise look like the fetch failing.
-    check('the menu starts hidden', await page.evaluate(() => document.getElementById('translate-menu').hidden), true);
-    await page.click('#translate-toggle-primary');
-    check('the icon reveals it', await page.evaluate(() => document.getElementById('translate-menu').hidden), false);
+    // The translation controls belong to the GLOSS, because a translation needs a
+    // line to translate. This video has one subtitle, so the second line is set
+    // to that same language — which is the reported scenario, and the only way to
+    // get "Japanese with its translation underneath".
+    //
+    // For the same reason the STUDY line cannot be translated at all: putting
+    // machine output there would leave the learning marks describing a text the
+    // learner cannot see.
+    check('the translation controls are hidden with no second line', await page.evaluate(() => document.getElementById('gloss-options').hidden), true);
+    await page.selectOption('#gloss', 'ja');
+    await page.waitForFunction(() => !document.getElementById('gloss-options').hidden, null, { timeout: 10000 });
+    check('and appear once a second line exists', await page.evaluate(() => document.getElementById('gloss-options').hidden), false);
 
-    // Pick a translation through the real control.
-    await page.selectOption('#translate-primary', 'en');
+    // Tick the box and choose a target, as a user does.
+    await page.check('#gloss-translated');
+    await page.selectOption('#translate-into', 'en');
     // The text has to actually change, so waiting on the value alone would pass
     // before the refetch landed.
     await page.waitForFunction(
-      () => (document.querySelector('.row .primary')?.textContent ?? '').includes('[en]'),
+      () => (document.querySelector('.row .secondary')?.textContent ?? '').includes('[en]'),
       null,
       { timeout: 20000 },
     );
 
-    const translated = await page.textContent('.row .primary');
+    const translated = await page.textContent('.row .secondary');
     // The MT tag is part of the line's text because it is inside the same span.
-    check('the translated text replaced it', translated, '[en] こんにちはMT');
-    // And it is tagged as machine output, so a translated line is not mistaken
-    // for a real subtitle track.
-    const tag = await page.evaluate(() => document.querySelector('.row .primary .machine')?.textContent ?? '');
+    check('the translated text is on the second line', translated, '[en] こんにちはMT');
+    // And the study line is untouched, so the marks still describe what was said.
+    check('and the first line is the real transcript', await page.textContent('.row .primary'), 'こんにちは');
+    // Tagged as machine output, so a translated line is not mistaken for a real
+    // subtitle track.
+    const tag = await page.evaluate(() => document.querySelector('.row .secondary .machine')?.textContent ?? '');
     check('the line is marked as machine output', tag, 'MT');
 
     // The source track is unchanged in the picker: a translation is a rendering
     // of the same track, not a switch to a different one.
-    const primary = await page.inputValue('#primary');
-    check('the source language is still selected', primary, 'ja');
+    const study = await page.inputValue('#study');
+    check('the source language is still selected', study, 'ja');
 
     // And the options exclude the source, since translating ja into ja is a
     // no-op that would look like a working menu entry.
     const options = await page.evaluate(() =>
-      [...document.querySelectorAll('#translate-primary option')].map((o) => o.value),
+      [...document.querySelectorAll('#translate-into option')].map((o) => o.value),
     );
     check('the source is not offered as a target', options.includes('ja'), false);
     check('but other languages are', options.includes('en'), true);
 
-    // Switching back to the original must refetch, not keep the translation.
-    await page.selectOption('#translate-primary', '');
+    // Unticking must refetch, not keep the translation.
+    await page.uncheck('#gloss-translated');
     await page.waitForFunction(
-      () => (document.querySelector('.row .primary')?.textContent ?? '') === 'こんにちは',
+      () => (document.querySelector('.row .secondary')?.textContent ?? '') === 'こんにちは',
       null,
       { timeout: 20000 },
     );
-    check('and the original comes back', await page.textContent('.row .primary'), 'こんにちは');
+    check('and the original comes back', await page.textContent('.row .secondary'), 'こんにちは');
   }
 
   section('the focus view really hides the other lines, and text size really scales');
@@ -769,7 +778,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // differ on the real vlog — English (392) and Chinese (393) — and the panel
     // deliberately prefers English, so asserting the longest would be asserting
     // a track the panel never chose.
-    const chosen = capture.tracks.find((track) => track.languageCode === state.primary);
+    const chosen = capture.tracks.find((track) => track.languageCode === state.study);
     check('the real transcript rendered', state.rows.length > 0, true);
     check('the panel chose a track that exists in the capture', Boolean(chosen), true);
     check('and its first line is the captured text', state.rows[0]?.text, chosen?.segments[0]?.text);

@@ -60,42 +60,47 @@ body {
   align-items: center;
 }
 
-/* Reveal-the-translate-menu control. Small and secondary to the picker, because
-   translating is the occasional act and choosing the subtitle is the constant
-   one. */
-.tr-toggle {
-  flex: 0 0 auto;
-  padding: 5px 7px;
-  line-height: 1;
-  font-size: calc(12px * var(--text-scale));
-  /* Dim until it is doing something, so a translated line is visible at a
-     glance without the control competing with the language picker. */
-  color: var(--muted);
-}
-
-.tr-toggle.on {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.tr-toggle:disabled {
-  opacity: 0.3;
-}
-
-/* The translate menus, shown only when their icon is toggled open. */
-.translate-menu {
+/* The second line's options: whether to translate it, and into what.
+   Shown only when a second line is chosen, because a translation needs a line to
+   translate. Replaces the old per-slot globe icons and shared menu, which made
+   two of the four controls dead whenever the video had one subtitle. */
+.gloss-options {
   display: flex;
   gap: 8px;
+  align-items: center;
   padding: 6px 8px;
   border-bottom: 1px solid #2a2e37;
   background: #1a1d24;
 }
 
-.translate-menu[hidden] {
+.gloss-options[hidden] {
   display: none;
 }
 
-.translate-menu select {
+/* The tick and its label read as one sentence: "Translate the second line into
+   [language]". */
+.translate-toggle {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: calc(12px * var(--text-scale));
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.translate-toggle:has(input:disabled) {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.translate-toggle input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.gloss-options select {
   font-size: calc(12px * var(--text-scale));
 }
 

@@ -43,13 +43,11 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /** The ids sidepanel.html actually declares. */
 const PANEL_IDS = [
-  'primary',
-  'secondary',
-  'translate-primary',
-  'translate-secondary',
-  'translate-menu',
-  'translate-toggle-primary',
-  'translate-toggle-secondary',
+  'study',
+  'gloss',
+  'gloss-options',
+  'gloss-translated',
+  'translate-into',
   'swap',
   'view-mode',
   'font-size',
@@ -64,7 +62,7 @@ const PANEL_IDS = [
 ];
 
 /** Ids the real sidepanel.html starts hidden. */
-const HIDDEN_IDS = ['translate-menu'];
+const HIDDEN_IDS = ['gloss-options'];
 
 /**
  * Evaluate a fresh copy of the panel against fresh stubs.
@@ -102,8 +100,8 @@ const stateWithSettings = (learning, top) => ({
     { languageCode: 'en', name: 'English', kind: null, isTranslatable: true },
     { languageCode: 'de', name: 'Deutsch', kind: null, isTranslatable: false },
   ],
-  primary: 'en',
-  secondary: null,
+  study: 'en',
+  gloss: null,
   // The translate menu is per video, and `translationAvailable` says which
   // tracks can actually take one. `de` is deliberately not translatable, which
   // is the common real case for a human-authored track.
@@ -113,8 +111,9 @@ const stateWithSettings = (learning, top) => ({
     { languageCode: 'ko', name: 'Korean' },
   ],
   translationAvailable: { en: true, de: false },
-  translatePrimary: null,
-  translateSecondary: null,
+  glossTranslation: null,
+  translateInto: null,
+  glossTranslated: false,
   rows: [
     { start: 0, duration: 2, text: 'Hey there', secondary: '' },
     { start: 2, duration: 2, text: 'how are you', secondary: '' },
@@ -129,6 +128,8 @@ const stateWithSettings = (learning, top) => ({
     threshold: 3,
     primaryLanguage: 'en',
     secondaryLanguage: null,
+    translateInto: null,
+    glossTranslated: false,
     listOptions: [{ value: 'hsk2_0', label: 'HSK 2.0' }, { value: 'hsk3_0', label: 'HSK 3.0' }],
     thresholdOptions: [{ value: 1, label: '1+' }, { value: 2, label: '2+' }, { value: 3, label: '3+' }],
     ...(learning ?? {}),
@@ -210,6 +211,9 @@ section('STATE renders rows, and the spoken line highlights');
       ],
       primary: 'en',
       secondary: null,
+      study: 'en',
+      gloss: null,
+      glossTranslation: null,
       rows: [
         { start: 0, duration: 2, text: 'Hey there', secondary: '' },
         { start: 2, duration: 2, text: 'how are you', secondary: '' },
@@ -258,14 +262,14 @@ section('user actions become intents on the port');
   const { lastPort, byId } = await bootPanel();
   const port = lastPort();
 
-  byId.get('primary').value = 'de';
-  byId.get('primary').dispatch('change');
-  check('selecting a primary language sends SET_PRIMARY', port.sent.at(-1)?.type, 'set-primary');
+  byId.get('study').value = 'de';
+  byId.get('study').dispatch('change');
+  check('selecting a study language sends SET_STUDY', port.sent.at(-1)?.type, 'set-study');
   check('with the chosen language', port.sent.at(-1)?.languageCode, 'de');
 
-  byId.get('secondary').value = 'en';
-  byId.get('secondary').dispatch('change');
-  check('selecting a second sends SET_SECONDARY', port.sent.at(-1)?.type, 'set-secondary');
+  byId.get('gloss').value = 'en';
+  byId.get('gloss').dispatch('change');
+  check('selecting a second line sends SET_GLOSS', port.sent.at(-1)?.type, 'set-gloss');
 
   byId.get('follow').checked = false;
   byId.get('follow').dispatch('change');
@@ -274,21 +278,26 @@ section('user actions become intents on the port');
 
 // --- 8. Swap -----------------------------------------------------------------
 
-section('swap exchanges the two languages');
+section('swap exchanges the two lines, and does NOT carry the translation');
 
 {
   const { lastPort, byId } = await bootPanel();
   const port = lastPort();
 
-  byId.get('primary').value = 'en';
-  byId.get('secondary').value = 'de';
+  byId.get('study').value = 'en';
+  byId.get('gloss').value = 'de';
   byId.get('swap').dispatch('click');
 
   const types = port.sent.map((m) => m.type);
-  check('adjusts the primary', types.includes('set-primary'), true);
-  check('adjusts the secondary', types.includes('set-secondary'), true);
-  check('primary becomes the old secondary', port.sent.find((m) => m.type === 'set-primary')?.languageCode, 'de');
-  check('secondary becomes the old primary', port.sent.find((m) => m.type === 'set-secondary')?.languageCode, 'en');
+  check('adjusts the study line', types.includes('set-study'), true);
+  check('adjusts the gloss line', types.includes('set-gloss'), true);
+  check('the study line becomes the old gloss', port.sent.find((m) => m.type === 'set-study')?.languageCode, 'de');
+  check('the gloss line becomes the old study', port.sent.find((m) => m.type === 'set-gloss')?.languageCode, 'en');
+
+  // The translation is a property of the GLOSS, and the study line is never
+  // translated. Carrying it across a swap would put machine output on the line
+  // whose marks and definitions describe different text.
+  check('no translation setting is moved', types.includes('set-setting'), false);
 }
 
 // --- 9. Bad state ------------------------------------------------------------
@@ -466,98 +475,104 @@ section('the controls are built from the schema, not hand-written here');
 
 // --- 12. Auto-translate ------------------------------------------------------
 
-section('the translate picker offers the video languages, minus the source');
+section('the translation controls stay hidden until there is a second line');
 
 {
   const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings() });
 
-  const options = byId.get('translate-primary').find((el) => el.tagName === 'OPTION');
-  // The first entry is "Original", which is what makes a translation reversible.
-  // The source language is excluded from the rest: translating English into
-  // English does nothing, and offering it would be a menu entry with no effect.
-  check('the first option undoes the translation', options.map((o) => o.value), ['', 'ja', 'ko']);
-  check('with readable names', options.map((o) => o.text), ['Original', 'Japanese', 'Korean']);
-  check('the source language is not among them', options.map((o) => o.value).includes('en'), false);
-  check('the picker is enabled', byId.get('translate-primary').disabled, false);
+  // The reported confusion: to translate English, the second line had to hold a
+  // language even though the point was only to translate the FIRST line. Now the
+  // translation controls belong to the gloss, so with no gloss there is nothing
+  // to translate and nothing to show.
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: null }) });
+  check('hidden with no second line', byId.get('gloss-options').hidden, true);
+
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'de' }) });
+  check('shown once one is chosen', byId.get('gloss-options').hidden, false);
 }
 
-section('a track that cannot be translated disables its picker, with a reason');
+section('the target list excludes the gloss language, and needs the box ticked');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  // `en` is translatable, so the list is offered — minus `en` itself, since
+  // translating a language into itself is a no-op that looks like a working menu.
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en', glossTranslated: true }) });
+
+  const options = byId.get('translate-into').find((el) => el.tagName === 'OPTION');
+  check('the source language is not offered', options.map((o) => o.value), ['ja', 'ko']);
+  check('with readable names', options.map((o) => o.text), ['Japanese', 'Korean']);
+  check('and the picker is enabled', byId.get('translate-into').disabled, false);
+
+  // Untick it and the target is not a choice yet, so it is disabled rather than
+  // silently inert.
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en', glossTranslated: false }) });
+  check('the picker is disabled until the box is ticked', byId.get('translate-into').disabled, true);
+  check('and says what to do', byId.get('translate-into').title, 'Tick the box to translate the second line');
+}
+
+section('a track that cannot be translated disables the controls, with a reason');
 
 {
   const { lastPort, byId } = await bootPanel();
   // YouTube offers a translate menu for a human-authored track too, but applying
   // it returns the ORIGINAL text. Offering it would look like it worked.
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { secondary: 'de' }) });
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'de', glossTranslated: true, translationAvailable: { en: true, de: false } }) });
 
-  const options = byId.get('translate-secondary').find((el) => el.tagName === 'OPTION');
-  check('nothing is offered for it', options.map((o) => o.text), ['Original']);
-  check('and the picker is disabled', byId.get('translate-secondary').disabled, true);
-  check('the title explains why', byId.get('translate-secondary').title, 'This track cannot be auto-translated');
+  check('nothing is offered for it', byId.get('translate-into').disabled, true);
+  check('the picker explains why', byId.get('translate-into').title, 'This caption track cannot be auto-translated');
+  check('and the box cannot be ticked either', byId.get('gloss-translated').disabled, true);
 }
 
-section('a translatable second track is offered normally');
+section('the checkbox reflects and changes the per-line bit');
 
 {
   const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { secondary: 'de', translationAvailable: { en: true, de: true } }) });
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en', glossTranslated: true }) });
 
-  const options = byId.get('translate-secondary').find((el) => el.tagName === 'OPTION');
-  check('the languages are offered', options.map((o) => o.value), ['', 'en', 'ja', 'ko']);
-  check('and it is enabled', byId.get('translate-secondary').disabled, false);
+  check('it starts ticked when translated', byId.get('gloss-translated').checked, true);
+
+  const port = lastPort();
+  byId.get('gloss-translated').checked = false;
+  byId.get('gloss-translated').dispatch('change');
+  check('unticking sends the setting', port.sent.at(-1)?.type, 'set-setting');
+  check('for the per-line bit', port.sent.at(-1)?.id, 'glossTranslated');
+  check('as a boolean, not a string', port.sent.at(-1)?.value, false);
 }
 
-section('no second subtitle means no translate picker for it');
+section('choosing a target sends it as the global preference');
 
 {
   const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { secondary: null }) });
-
-  check('it is disabled', byId.get('translate-secondary').disabled, true);
-  check('with an explanation', byId.get('translate-secondary').title, 'No subtitle selected');
-}
-
-section('choosing a translation asks the worker for it');
-
-{
-  const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings() });
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en', glossTranslated: true }) });
   const port = lastPort();
 
-  byId.get('translate-primary').value = 'ja';
-  byId.get('translate-primary').dispatch('change');
+  byId.get('translate-into').value = 'ja';
+  byId.get('translate-into').dispatch('change');
 
   check('SET_SETTING was sent', port.sent.at(-1)?.type, 'set-setting');
-  check('for the primary translation', port.sent.at(-1)?.id, 'translatePrimary');
+  // One setting, not one per line: the target is a preference, and which line it
+  // applies to is the gloss's business.
+  check('for the global target', port.sent.at(-1)?.id, 'translateInto');
   check('with the target language', port.sent.at(-1)?.value, 'ja');
 }
 
-section('choosing the original sends an explicit null, not an empty string');
+section('a translated gloss is tagged as machine output');
 
 {
   const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { translatePrimary: 'ja' }) });
-  const port = lastPort();
-
-  // "Original" has to be ACHIEVABLE. An earlier version used it only as the
-  // placeholder shown when the list was empty, which meant a translation could
-  // be chosen and then never undone.
-  check('translated to start', byId.get('translate-primary').value, 'ja');
-
-  byId.get('translate-primary').value = '';
-  byId.get('translate-primary').dispatch('change');
-
-  // null means "the original text", which is different from "no preference" —
-  // the setting has to be explicitly cleared or the worker would keep asking.
-  check('null is sent', port.sent.at(-1)?.value, null);
-  check('for the right setting', port.sent.at(-1)?.id, 'translatePrimary');
-}
-
-section('a translated line is tagged as machine output');
-
-{
-  const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { translatePrimary: 'ja' }) });
+  // The rows need second-line text, or there is no gloss element to tag.
+  lastPort().emit({
+    type: 'state',
+    state: stateWithSettings(null, {
+      gloss: 'en',
+      glossTranslation: 'ja',
+      rows: [
+        { start: 0, duration: 2, text: 'Hey there', secondary: 'こんにちは' },
+        { start: 2, duration: 2, text: 'how are you', secondary: 'お元気ですか' },
+      ],
+    }),
+  });
 
   const tags = byId.get('transcript').find((el) => el.classList.contains('machine'));
   // Machine translation of Chinese paraphrases rather than glosses, so a
@@ -567,40 +582,27 @@ section('a translated line is tagged as machine output');
   check('and the target is named on hover', String(tags[0]?.title ?? '').includes('Japanese'), true);
 }
 
-section('an untranslated line carries no tag');
+section('an untranslated gloss carries no tag');
 
 {
   const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings() });
+  // A second line that is an ordinary track is not machine output, so it must not
+  // be labelled as though it were.
+  const rows = [
+    { start: 0, duration: 2, text: 'Hey there', secondary: 'Hallo' },
+    { start: 2, duration: 2, text: 'how are you', secondary: 'wie geht es dir' },
+  ];
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'de', glossTranslation: null, rows }) });
 
   const tags = byId.get('transcript').find((el) => el.classList.contains('machine'));
   check('nothing is tagged', tags.length, 0);
-}
-
-section('swapping languages carries each translation with its slot');
-
-{
-  const { lastPort, byId } = await bootPanel();
-  lastPort().emit({
-    type: 'state',
-    state: stateWithSettings(null, { secondary: 'de', translatePrimary: 'ja', translateSecondary: 'ko', translationAvailable: { en: true, de: true } }),
-  });
-  const port = lastPort();
-
-  byId.get('swap').dispatch('click');
-
-  const set = (id) => port.sent.find((m) => m.type === 'set-setting' && m.id === id)?.value;
-  // Leaving them behind would apply the primary's target to whatever language
-  // ended up in that slot — the wrong translation, with nothing to show it.
-  check('the primary slot takes the old secondary translation', set('translatePrimary'), 'ko');
-  check('and the secondary slot the old primary one', set('translateSecondary'), 'ja');
 }
 
 section('the status line distinguishes a translation from a real track');
 
 {
   const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { translatePrimary: 'ja' }) });
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en', glossTranslation: 'ja' }) });
 
   const status = textOf(byId.get('status'));
   // An arrow, because "English" on its own would claim a Japanese track exists
@@ -608,28 +610,39 @@ section('the status line distinguishes a translation from a real track');
   check('the translation is shown', status.includes('English→Japanese'), true);
 }
 
-// --- 13. The translate menu behind an icon -----------------------------------
-
-section('the translate menus stay out of the way until asked for');
+section('the study line is never reported as translated');
 
 {
   const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings() });
+  // Even with a translation in effect for the gloss, the study line is the text
+  // being learned and is shown as-is. A translation on it would mean the marks
+  // and definitions describe a text the learner cannot see.
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { study: 'en', gloss: 'en', glossTranslation: 'ko' }) });
 
-  // Four stacked pickers made the bar taller and put a dead control on screen
-  // whenever the video had no second subtitle. One icon reveals both menus.
-  check('the menu starts hidden', byId.get('translate-menu').hidden, true);
+  const status = textOf(byId.get('status'));
+  check('the study line is plain', status.includes('English +'), true);
+  check('and only the gloss carries an arrow', status.includes('English→Korean'), true);
+  check('the study line is not itself translated', status.includes('→English'), false);
+}
 
-  byId.get('translate-toggle-primary').dispatch('click');
-  check('clicking the icon reveals it', byId.get('translate-menu').hidden, false);
-  check('and the icon reports it is expanded', byId.get('translate-toggle-primary').getAttribute('aria-expanded'), 'true');
-  check('and is marked active', byId.get('translate-toggle-primary').classList.contains('on'), true);
+// --- 13. The gloss options are inline, not behind an icon ---------------------
 
-  // The second icon opens the same menu: they are different settings but the
-  // same act, so one state to understand rather than two.
-  byId.get('translate-toggle-secondary').dispatch('click');
-  check('either icon closes it again', byId.get('translate-menu').hidden, true);
-  check('and clears the active mark', byId.get('translate-toggle-primary').classList.contains('on'), false);
+section('the second line controls are visible, not hidden behind a toggle');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en' }) });
+
+  // The old design put two translation pickers behind a globe icon, which meant
+  // the learner had to know the icon existed to discover translation at all, and
+  // two of the four language controls were dead whenever the video had one
+  // subtitle. These are now inline, shown only when there is a line to translate.
+  check('the options are on screen', byId.get('gloss-options').hidden, false);
+  check('with no toggle to find', byId.get('gloss-options') !== null, true);
+
+  // Nothing is asked of the learner until there is something to ask about.
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: null }) });
+  check('and gone when there is no second line', byId.get('gloss-options').hidden, true);
 }
 
 section('the paused line holds its place in both views');

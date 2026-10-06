@@ -403,10 +403,10 @@ export async function panelState(page) {
       secondary: row.querySelector('.secondary')?.textContent ?? '',
       active: row.classList.contains('active'),
     })),
-    options: [...(document.getElementById('primary')?.options ?? [])].map((option) => option.value),
-    secondaryOptions: [...(document.getElementById('secondary')?.options ?? [])].map((option) => option.value),
-    primary: document.getElementById('primary')?.value ?? '',
-    secondary: document.getElementById('secondary')?.value ?? '',
+    options: [...(document.getElementById('study')?.options ?? [])].map((option) => option.value),
+    glossOptions: [...(document.getElementById('gloss')?.options ?? [])].map((option) => option.value),
+    study: document.getElementById('study')?.value ?? '',
+    gloss: document.getElementById('gloss')?.value ?? '',
   }));
 }
 

@@ -256,8 +256,8 @@ section('panel connects and receives state');
   check('carries the video id', state?.videoId, 'dQw4w9WgXcQ');
   check('carries the title', state?.title, 'Test Video');
   check('carries the track list', state?.trackList?.length, 2);
-  check('primary defaulted to the fetched track', state?.primary, 'en');
-  check('secondary is opt-in, so null', state?.secondary, null);
+  check('primary defaulted to the fetched track', state?.study, 'en');
+  check('secondary is opt-in, so null', state?.gloss, null);
   check('no error reported', state?.error, null);
   check('rows were built', state?.rows?.length, 3);
   check('a row has text', state?.rows?.[0]?.text, 'Hey there');
@@ -281,16 +281,16 @@ section('a second language produces aligned rows');
 {
   const { received, storage, sendFromPanel } = await boot(TRACK(GERMAN));
 
-  sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
+  sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   await settle();
 
   const state = received.at(-1)?.state;
-  check('secondary recorded', state?.secondary, 'de');
+  check('secondary recorded', state?.gloss, 'de');
   check('still one row per primary cue', state?.rows?.length, 3);
   check('first pair', state?.rows?.[0]?.secondary, 'Hallo');
   check('second pair', state?.rows?.[1]?.secondary, 'wie geht es dir');
   check('third pair', state?.rows?.[2]?.secondary, 'willkommen zurueck');
-  check('choice was persisted', storage.settings?.secondaryLanguage, 'de');
+  check('choice was persisted', storage.settings?.glossLanguage, 'de');
 }
 
 // --- 3b. Sticky language choices --------------------------------------------
@@ -386,9 +386,9 @@ section('a language choice survives moving to another video');
     trackPayload: GERMAN,
   });
 
-  stub.sendFromPanel({ type: 'set-primary', languageCode: 'de' });
+  stub.sendFromPanel({ type: 'set-study', languageCode: 'de' });
   await settle();
-  check('primary chosen', stub.received.at(-1)?.state?.primary, 'de');
+  check('primary chosen', stub.received.at(-1)?.state?.study, 'de');
   check('and the German lines are on screen', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hallo');
 
   // Same tab, different video, same two tracks available.
@@ -398,7 +398,7 @@ section('a language choice survives moving to another video');
   await settle();
 
   check('the new video is on screen', stub.received.at(-1)?.state?.videoId, 'zzzzzzzzzzz');
-  check('and it kept the chosen language', stub.received.at(-1)?.state?.primary, 'de');
+  check('and it kept the chosen language', stub.received.at(-1)?.state?.study, 'de');
   check('so the German lines are still shown', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hallo');
 }
 
@@ -420,7 +420,7 @@ section('a language choice is kept for the video that has it, and restored later
     trackPayload: GERMAN,
   });
 
-  stub.sendFromPanel({ type: 'set-primary', languageCode: 'de' });
+  stub.sendFromPanel({ type: 'set-study', languageCode: 'de' });
   await settle();
 
   stub.setAnswer('describePayload', DESCRIBE(portugueseOnly));
@@ -428,9 +428,9 @@ section('a language choice is kept for the video that has it, and restored later
   stub.sendFromPanel({ type: 'refresh' });
   await settle();
 
-  check('the video without the language falls back', stub.received.at(-1)?.state?.primary, 'pt');
+  check('the video without the language falls back', stub.received.at(-1)?.state?.study, 'pt');
   check('and shows what it does have', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Ola');
-  check('but the preference is remembered', stub.storage.settings?.primaryLanguage, 'de');
+  check('but the preference is remembered', stub.storage.settings?.studyLanguage, 'de');
 
   // Back to a video that has German: the choice comes back on its own.
   stub.setAnswer('describePayload', DESCRIBE(VIDEO));
@@ -438,7 +438,7 @@ section('a language choice is kept for the video that has it, and restored later
   stub.sendFromPanel({ type: 'refresh' });
   await settle();
 
-  check('returning to a video with the language restores it', stub.received.at(-1)?.state?.primary, 'de');
+  check('returning to a video with the language restores it', stub.received.at(-1)?.state?.study, 'de');
   check('and its lines are shown again', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hallo');
 }
 
@@ -454,7 +454,7 @@ section('both languages stay chosen together');
     trackPayload: GERMAN,
   });
 
-  stub.sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   await settle();
 
   stub.setAnswer('describePayload', DESCRIBE(secondVideo));
@@ -463,14 +463,29 @@ section('both languages stay chosen together');
   await settle();
 
   const state = stub.received.at(-1)?.state;
-  check('primary stayed', state?.primary, 'en');
-  check('secondary stayed', state?.secondary, 'de');
+  check('primary stayed', state?.study, 'en');
+  check('secondary stayed', state?.gloss, 'de');
   check('and paired rows are still produced', state?.rows?.[0]?.secondary, 'Hallo');
 }
 
 // --- 3d. Auto-translate ------------------------------------------------------
 
-section('choosing a translation re-fetches the track and shows translated text');
+/**
+ * Turn on translation for the gloss line.
+ *
+ * Two settings, deliberately: the TARGET is global because it is a preference
+ * you set once, and the per-line bit is what varies. Sent as one call because
+ * either alone does nothing.
+ *
+ * @param {object} stub
+ * @param {string} target
+ */
+const translateGloss = (stub, target) => {
+  stub.sendFromPanel({ type: 'set-setting', id: 'glossTranslated', value: true });
+  stub.sendFromPanel({ type: 'set-setting', id: 'translateInto', value: target });
+};
+
+section('translating the second line shows machine text there, and only there');
 
 {
   const stub = await boot({
@@ -479,18 +494,50 @@ section('choosing a translation re-fetches the track and shows translated text')
     trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
   });
 
-  check('the untranslated text is on screen first', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
+  await settle();
+  check('the untranslated gloss is on screen first', stub.received.at(-1)?.state?.rows?.[0]?.secondary, 'Hallo');
 
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  translateGloss(stub, 'ja');
   await settle();
 
   const state = stub.received.at(-1)?.state;
-  check('the translated text is shown', state?.rows?.[0]?.text, '[ja] Hey there');
+  check('the gloss is translated', state?.rows?.[0]?.secondary, '[ja] Hallo');
+  // The study line is never machine translated: it is the text being learned, and
+  // the marks and definitions describe it. Translating it would put a studiable
+  // overlay on a text the learner cannot see.
+  check('and the study line is untouched', state?.rows?.[0]?.text, 'Hey there');
   // The cache is keyed on the SOURCE track, so this must not have become a `ja`
   // track — that would collide with a real Japanese track on the same video.
-  check('the primary language is still the source', state?.primary, 'en');
-  check('and the target is reported apart from it', state?.translatePrimary, 'ja');
+  check('the gloss language is still the source', state?.gloss, 'de');
+  check('and the target is reported apart from it', state?.glossTranslation, 'ja');
   check('no error', state?.error, null);
+}
+
+section('the study line is not translated even when the gloss is');
+
+{
+  // A rule rather than a preference. The old model allowed it, because a
+  // translation was a property of a slot and the first slot was always the study
+  // line — which is how a machine translation ended up wearing HSK marks.
+  //
+  // The gloss is deliberately the SAME language as the study line, so a
+  // translation IS happening and the only question is which line it lands on.
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
+  });
+
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'en' });
+  await settle();
+  translateGloss(stub, 'ja');
+  await settle();
+
+  const state = stub.received.at(-1)?.state;
+  check('the gloss is translated', state?.rows?.[0]?.secondary, '[ja] Hey there');
+  check('and the study line is not', state?.rows?.[0]?.text, 'Hey there');
+  check('nothing reports the study line as translated', state?.studyTranslation, undefined);
 }
 
 section('the translate menu comes from the video, and excludes the source language');
@@ -505,12 +552,12 @@ section('the translate menu comes from the video, and excludes the source langua
   const state = stub.received.at(-1)?.state;
   check('the languages are offered', state?.translationLanguages?.length, 3);
   check('with their codes', state?.translationLanguages?.map((l) => l.languageCode), ['en', 'ja', 'ko']);
-  // Translating a track into itself does nothing, so it must not be offered as
-  // an option that appears to have no effect.
-  check('the panel can filter the source out', state?.translationLanguages?.some((l) => l.languageCode === state.primary), true);
+  // Translating a track into itself does nothing, so the panel must be able to
+  // filter it out rather than offering an entry with no effect.
+  check('the panel filters the source out', state?.translationLanguages?.some((l) => l.languageCode === state.study), true);
 }
 
-section('going back to the original refetches rather than keeping the translation');
+section('unticking the box refetches rather than keeping the translation');
 
 {
   const stub = await boot({
@@ -519,22 +566,27 @@ section('going back to the original refetches rather than keeping the translatio
     trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
   });
 
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   await settle();
-  check('translated', stub.received.at(-1)?.state?.rows?.[0]?.text, '[ja] Hey there');
+  translateGloss(stub, 'ja');
+  await settle();
+  check('translated', stub.received.at(-1)?.state?.rows?.[0]?.secondary, '[ja] Hallo');
 
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: null });
+  stub.sendFromPanel({ type: 'set-setting', id: 'glossTranslated', value: false });
   await settle();
 
   const state = stub.received.at(-1)?.state;
-  check('back to the original text', state?.rows?.[0]?.text, 'Hey there');
-  check('and the target is cleared', state?.translatePrimary, null);
+  check('back to the original text', state?.rows?.[0]?.secondary, 'Hallo');
+  check('and nothing is reported as translated', state?.glossTranslation, null);
+  // The target is a preference and survives: unticking is "not now", not "forget
+  // which language I read in".
+  check('the target is remembered', state?.translateInto, 'ja');
 }
 
 section('a translation survives moving to another video');
 
 {
-  // Same stickiness as the language choices: the preference is global, and the
+  // Same stickiness as the language choices: the preferences are global, and the
   // rendering is per video.
   const secondVideo = { ...VIDEO, videoId: 'zzzzzzzzzzz', title: 'Second Video' };
   const stub = await boot({
@@ -543,20 +595,26 @@ section('a translation survives moving to another video');
     trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
   });
 
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   await settle();
+  translateGloss(stub, 'ja');
+  await settle();
+  check('translated to start', stub.received.at(-1)?.state?.rows?.[0]?.secondary, '[ja] Hallo');
 
   stub.setAnswer('describePayload', DESCRIBE(secondVideo));
   stub.setAnswer('providePayload', PROVIDER(secondVideo, SEGMENTS));
+  // The second video is seeded from the same preferences, so the gloss choice has
+  // to be re-seeded or the translation would have nothing to apply to.
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   stub.sendFromPanel({ type: 'refresh' });
   await settle();
 
   const state = stub.received.at(-1)?.state;
   check('the new video is on screen', state?.videoId, 'zzzzzzzzzzz');
-  check('and it is translated too', state?.rows?.[0]?.text, '[ja] Hey there');
+  check('and its gloss is translated too', state?.rows?.[0]?.secondary, '[ja] Hallo');
 }
 
-section('a video whose track cannot be translated falls back to the original');
+section('a gloss that cannot be translated falls back to the original');
 
 {
   // The important one. A translation is a nice-to-have; the transcript is not.
@@ -564,7 +622,10 @@ section('a video whose track cannot be translated falls back to the original');
   // wipe the transcript from the cache.
   const untranslatable = {
     ...VIDEO,
-    trackList: [{ languageCode: 'en', name: 'English', kind: 'asr', isTranslatable: false }],
+    trackList: [
+      { languageCode: 'en', name: 'English', kind: 'asr', isTranslatable: true },
+      { languageCode: 'de', name: 'Deutsch', kind: null, isTranslatable: false },
+    ],
   };
   const stub = await boot({
     describePayload: DESCRIBE(untranslatable),
@@ -572,22 +633,24 @@ section('a video whose track cannot be translated falls back to the original');
     trackPayload: TRACK_FETCHER(untranslatable, SEGMENTS),
   });
 
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
+  await settle();
+  translateGloss(stub, 'ja');
   await settle();
 
   const state = stub.received.at(-1)?.state;
-  check('the original text is still on screen', state?.rows?.[0]?.text, 'Hey there');
-  check('with no translation applied', state?.translatePrimary, null);
+  check('the original gloss text is still on screen', state?.rows?.[0]?.secondary, 'Hallo');
+  check('with no translation applied', state?.glossTranslation, null);
   check('and the reason is reported', String(state?.error ?? '').includes('translat'), true);
 
-  // And it recovers: clearing the translation clears the message.
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: null });
+  // And it recovers: unticking clears the message.
+  stub.sendFromPanel({ type: 'set-setting', id: 'glossTranslated', value: false });
   await settle();
   check('clearing it clears the error', stub.received.at(-1)?.state?.error, null);
   check('and the transcript is intact', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
 }
 
-section('a cached track still refetches when the translation changed');
+section('a cached track still refetches when the translation target changed');
 {
   // A translation is a different RENDERING of the same track, so "the track is
   // in the cache" and "the right text is on screen" are different questions. The
@@ -599,32 +662,37 @@ section('a cached track still refetches when the translation changed');
     trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
   });
 
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   await settle();
-  check('translated to Japanese', stub.received.at(-1)?.state?.rows?.[0]?.text, '[ja] Hey there');
+  translateGloss(stub, 'ja');
+  await settle();
+  check('translated to Japanese', stub.received.at(-1)?.state?.rows?.[0]?.secondary, '[ja] Hallo');
 
   // Switch target. The track is cached; the rendering is not.
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ko' });
+  stub.sendFromPanel({ type: 'set-setting', id: 'translateInto', value: 'ko' });
   await settle();
-  check('the new target is rendered', stub.received.at(-1)?.state?.rows?.[0]?.text, '[ko] Hey there');
-  check('and reported', stub.received.at(-1)?.state?.translatePrimary, 'ko');
+  check('the new target is rendered', stub.received.at(-1)?.state?.rows?.[0]?.secondary, '[ko] Hallo');
+  check('and reported', stub.received.at(-1)?.state?.glossTranslation, 'ko');
 
   // And the reverse: re-selecting the SAME target must not refetch.
   const before = stub.calls.sendMessage.filter((c) => c?.message?.type === 'fetch-track').length;
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ko' });
+  stub.sendFromPanel({ type: 'set-setting', id: 'translateInto', value: 'ko' });
   await settle();
   const after = stub.calls.sendMessage.filter((c) => c.message?.type === 'fetch-track').length;
   check('re-selecting the same target does not refetch', after, before);
 }
 
-section('an untranslatable video is not asked again on every refresh');
+section('an untranslatable gloss is not asked again on every refresh');
 {
   // The preference stays set, so without the translatability check every refresh
   // would re-request a translation that cannot exist — a wasted round trip and a
   // permanent error on screen.
   const untranslatable = {
     ...VIDEO,
-    trackList: [{ languageCode: 'en', name: 'English', kind: 'asr', isTranslatable: false }],
+    trackList: [
+      { languageCode: 'en', name: 'English', kind: 'asr', isTranslatable: true },
+      { languageCode: 'de', name: 'Deutsch', kind: null, isTranslatable: false },
+    ],
   };
   const stub = await boot({
     describePayload: DESCRIBE(untranslatable),
@@ -632,7 +700,9 @@ section('an untranslatable video is not asked again on every refresh');
     trackPayload: TRACK_FETCHER(untranslatable, SEGMENTS),
   });
 
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ja' });
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
+  await settle();
+  translateGloss(stub, 'ja');
   await settle();
 
   const before = stub.calls.sendMessage.filter((c) => c?.message?.type === 'provide').length;
@@ -644,82 +714,52 @@ section('an untranslatable video is not asked again on every refresh');
   check('the transcript is still shown', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
 }
 
-section('a translation needs its own track, and skips one that is already loaded');
-
-{
-  // A second subtitle is a track like any other. Translating a track that is not
-  // loaded must fetch it rather than silently showing nothing.
-  const stub = await boot({
-    describePayload: DESCRIBE(VIDEO),
-    providePayload: PROVIDER(VIDEO, SEGMENTS),
-    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
-  });
-
-  stub.sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
-  await settle();
-  check('second track loaded', stub.received.at(-1)?.state?.secondary, 'de');
-  check('untranslated to start', stub.received.at(-1)?.state?.rows?.[0]?.secondary, 'Hallo');
-
-  stub.sendFromPanel({ type: 'set-setting', id: 'translateSecondary', value: 'ja' });
-  await settle();
-
-  const state = stub.received.at(-1)?.state;
-  check('the second line is translated', state?.rows?.[0]?.secondary, '[ja] Hallo');
-  check('the first line is untouched', state?.rows?.[0]?.text, 'Hey there');
-  check('and the second language is still the source', state?.secondary, 'de');
-}
-
-section('one language occupies both slots: itself, and its translation');
+section('one language on both lines: itself, and its translation');
 
 {
   // The reported case. A video whose only subtitle is English, and the wish to
-  // read English with its translation underneath. "Off" cannot be translated —
-  // a translation needs a source track to convert — so the second slot has to
-  // hold English a second time for the translation to have anything to work on.
+  // read English with a translation underneath it. "Off" cannot be translated —
+  // a translation needs a source track to convert — so the gloss has to hold
+  // English as well, and that is a legitimate state rather than a mistake.
   //
   // The cache was keyed by language code alone, so the translated fetch
-  // OVERWROTE the untranslated one. Both slots then read back the same entry and
-  // the panel showed the translation on BOTH lines: the original English was
-  // gone, which is what "both converted to Chinese" was.
+  // OVERWROTE the untranslated one and both lines rendered the translation: the
+  // original English was gone, which is what "both converted to Chinese" was.
+  const englishOnly = {
+    ...VIDEO,
+    trackList: [{ languageCode: 'en', name: 'English', kind: null, isTranslatable: true }],
+  };
   const stub = await boot({
-    describePayload: DESCRIBE(VIDEO),
-    providePayload: PROVIDER(VIDEO, SEGMENTS),
-    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
+    describePayload: DESCRIBE(englishOnly),
+    providePayload: PROVIDER(englishOnly, SEGMENTS),
+    trackPayload: TRACK_FETCHER(englishOnly, SEGMENTS),
   });
 
-  stub.sendFromPanel({ type: 'set-secondary', languageCode: 'en' });
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'en' });
   await settle();
 
-  check('English can be the second language as well as the first', stub.received.at(-1)?.state?.secondary, 'en');
+  check('English can be the second line as well as the first', stub.received.at(-1)?.state?.gloss, 'en');
   check('with both lines showing the untranslated text', stub.received.at(-1)?.state?.rows?.[0]?.secondary, 'Hey there');
 
-  stub.sendFromPanel({ type: 'set-setting', id: 'translateSecondary', value: 'ko' });
+  translateGloss(stub, 'ko');
   await settle();
 
   const state = stub.received.at(-1)?.state;
   // The point of the whole arrangement: one line original, one line translated.
-  check('the FIRST line stays the original', state?.rows?.[0]?.text, 'Hey there');
-  check('and only the second line is translated', state?.rows?.[0]?.secondary, '[ko] Hey there');
+  check('the study line stays the original', state?.rows?.[0]?.text, 'Hey there');
+  check('and only the gloss is translated', state?.rows?.[0]?.secondary, '[ko] Hey there');
   // Every row, not just the first — a collision would affect all of them.
   check('the last row keeps its original too', state?.rows?.[2]?.text, 'welcome back');
   check('and its translation', state?.rows?.[2]?.secondary, '[ko] welcome back');
 
-  // Swapping must not reintroduce the collision: the two renderings still
-  // differ, so the cache has to keep holding both at once.
-  //
-  // The secondary translation is cleared first, on purpose. Translation
-  // preferences are per SLOT, not per language, so a swap alone would leave both
-  // slots asking for Korean — and "both lines are translated" would then be the
-  // settings being obeyed rather than a bug. Clearing one makes the two slots
-  // ask for different renderings, which is what has to keep working.
-  stub.sendFromPanel({ type: 'set-setting', id: 'translateSecondary', value: null });
-  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ko' });
+  // Untick, and the two renderings still differ, so the cache has to keep
+  // holding both at once.
+  stub.sendFromPanel({ type: 'set-setting', id: 'glossTranslated', value: false });
   await settle();
 
-  const swapped = stub.received.at(-1)?.state;
-  check('the first line is translated', swapped?.rows?.[0]?.text, '[ko] Hey there');
-  check('and the second line is the original', swapped?.rows?.[0]?.secondary, 'Hey there');
-  check('with the last row agreeing', swapped?.rows?.[2]?.secondary, 'welcome back');
+  const untranslated = stub.received.at(-1)?.state;
+  check('unticking restores the original gloss', untranslated?.rows?.[0]?.secondary, 'Hey there');
+  check('with the study line unchanged throughout', untranslated?.rows?.[0]?.text, 'Hey there');
 }
 
 // --- 3c. Settings -----------------------------------------------------------
@@ -766,7 +806,7 @@ section('a hand-over that fails does not break the refresh');
     providePayload: PROVIDER(VIDEO, SEGMENTS),
     trackPayload: GERMAN,
     storage: {
-      settings: { view: 'focus', fontSize: 400, listId: 'nonsense', threshold: 2, primaryLanguage: 'de' },
+      settings: { view: 'focus', fontSize: 400, listId: 'nonsense', threshold: 2, studyLanguage: 'de' },
     },
     // Storage is slow enough that a panel connecting immediately, as it does in
     // reality, would otherwise be served before the restore finished.
@@ -781,7 +821,7 @@ section('a hand-over that fails does not break the refresh');
   check('a valid setting is restored', learning?.view, 'focus');
   check('an absurd text size is clamped to the maximum', learning?.fontSize, 32);
   check('an unknown word list falls back', learning?.listId !== 'nonsense', true);
-  check('and the restored language was applied', stub.received.at(-1)?.state?.primary, 'de');
+  check('and the restored language was applied', stub.received.at(-1)?.state?.study, 'de');
   check('and its lines were fetched, not the default ones', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hallo');
 }
 
@@ -822,7 +862,7 @@ section('the choices a learner makes are all reported back in the learning block
 
   // The panel renders its controls from this block, so a missing key is a
   // control that silently never updates.
-  for (const key of ['view', 'fontSize', 'listId', 'threshold', 'primaryLanguage', 'secondaryLanguage']) {
+  for (const key of ['view', 'fontSize', 'listId', 'threshold', 'studyLanguage', 'glossLanguage']) {
     check(`${key} is present`, key in (learning ?? {}), true);
   }
   check('the word lists are offered', Array.isArray(learning?.listOptions), true);
@@ -837,7 +877,7 @@ section('a badly out-of-sync second track is left unpaired, never mismatched');
   const distant = { languageCode: 'fr', segments: [{ start: 30, duration: 2, text: 'tres loin' }] };
   const { received, sendFromPanel } = await boot(TRACK(distant));
 
-  sendFromPanel({ type: 'set-secondary', languageCode: 'fr' });
+  sendFromPanel({ type: 'set-gloss', languageCode: 'fr' });
   await settle();
 
   const rows = received.at(-1)?.state?.rows ?? [];
@@ -853,11 +893,11 @@ section('a cached track is not fetched twice');
   const { calls, sendFromPanel } = await boot(TRACK(GERMAN));
   const count = () => calls.sendMessage.filter((c) => c?.message?.type === 'fetch-track').length;
 
-  sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
+  sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   await settle();
   const afterFirst = count();
 
-  sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
+  sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   await settle();
 
   check('the first selection fetched', afterFirst, 1);
@@ -1510,7 +1550,7 @@ section('switching language keeps the marks');
   // Choose a second subtitle language, which rebuilds every row. The marks have
   // to survive that — the bug was that the rebuild discarded the tokens while
   // the "already marked" flag stayed set, so nothing re-attached them.
-  sendFromPanel({ type: 'set-secondary', languageCode: 'de' });
+  sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   const after = await waitForState(
     received,
     (s) => Boolean(s.rows?.[0]?.secondary?.length),

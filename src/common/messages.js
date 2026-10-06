@@ -30,15 +30,19 @@ export const MSG = Object.freeze({
    *
    * Remembered as a preference, not just applied to the current video, so the
    * choice survives moving to another one when that language is available there.
+   *
+   * The STUDY line: the one being learned. Named for its role rather than its
+   * position, so it stays meaningful if the layout ever changes.
    */
-  SET_PRIMARY: 'set-primary',
+  SET_STUDY: 'set-study',
   /**
    * panel -> background. Payload: { languageCode | null }
    *
-   * Also remembered. `null` means "no second subtitle", which is a preference in
-   * its own right rather than the absence of one.
+   * The GLOSS line: the one that explains it. Also remembered. `null` means "no
+   * second subtitle", which is a preference in its own right rather than the
+   * absence of one.
    */
-  SET_SECONDARY: 'set-secondary',
+  SET_GLOSS: 'set-gloss',
   /** panel -> background. Payload: { seconds } */
   SEEK: 'seek',
 
