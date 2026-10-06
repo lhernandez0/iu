@@ -20,3 +20,10 @@ Thumbs.db
 # under it belongs in the repository. (docs/PLAN.md and the private notes were
 # both committed by mistake and had to be purged from history.)
 docs/
+
+# Real YouTube captures — deliberately never committed.
+# tools/capture.mjs is the only thing that writes these, and the only thing in
+# the project that opens youtube.com. A raw capture contains signed caption URLs
+# (signature, ei, ip, expire), which are session artifacts rather than fixtures.
+# Capture is a local setup step: `npm run capture -- <videoId>`.
+test/fixtures/

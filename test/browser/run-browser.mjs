@@ -1,13 +1,17 @@
 /**
- * Runs the browser test tiers.
+ * Runs the browser test tier.
  *
- *   node test/browser/run-browser.mjs          # offline only
- *   node test/browser/run-browser.mjs --live   # offline, then live (real network)
+ *   node test/browser/run-browser.mjs
  *
- * The live tier refuses to run without the flag rather than merely defaulting
- * off, so there is no command that reaches the network by accident. Each suite
- * gets its own browser in its own process, for the same reason the hermetic
- * suites do: they share globals, and a leaked stub is worse than a slow run.
+ * There is no live tier. It used to exist and was gated behind a flag, but it was
+ * still a second thing that opened youtube.com — and the rule is that exactly one
+ * command ever does that: `npm run capture`. A capture is taken once per video
+ * and the resulting fixtures are replayed here, so this tier is offline, always,
+ * and cannot reach the network even by accident.
+ *
+ * Each suite gets its own browser in its own process, for the same reason the
+ * hermetic suites do: they share globals, and a leaked stub is worse than a slow
+ * run.
  */
 
 import { spawn } from 'node:child_process';
@@ -15,12 +19,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const live = process.argv.includes('--live');
 
 const suites = ['iu.browser.test.mjs'];
-if (live) suites.push('iu.live.test.mjs');
 
-console.log(live ? 'Browser tests: offline, then LIVE (real network)\n' : 'Browser tests: offline only\n');
+console.log('Browser tests: offline, against captured fixtures\n');
 
 /**
  * @param {string} file

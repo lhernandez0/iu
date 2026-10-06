@@ -5,6 +5,10 @@
  * are readable in one place and can themselves be reasoned about.
  */
 
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 /** @typedef {{start: number, duration: number, text: string}} Segment */
 
 /** @typedef {{languageCode: string, name: string, kind?: string|null, segments: Segment[]}} FixtureTrack */
@@ -54,9 +58,10 @@ export function xmlBody(segments) {
  * @param {string} options.title
  * @param {FixtureTrack[]} options.tracks
  * @param {boolean} [options.serveAsrNames] Whether to omit names, as some do.
+ * @param {object[]} [options.translationLanguages] Real ones, from a capture.
  * @returns {string}
  */
-export function watchPage({ videoId, title, tracks, serveAsrNames = false }) {
+export function watchPage({ videoId, title, tracks, serveAsrNames = false, translationLanguages = null }) {
   const playerResponse = {
     videoDetails: { videoId, title, isLiveContent: false },
     captions: {
@@ -68,14 +73,21 @@ export function watchPage({ videoId, title, tracks, serveAsrNames = false }) {
           languageCode: track.languageCode,
           name: serveAsrNames ? { runs: [{ text: track.name }] } : { simpleText: track.name },
           kind: track.kind ?? undefined,
-          isTranslatable: true,
+          // A capture knows which tracks really are translatable — YouTube will
+          // not machine-translate a human-authored one, and assuming otherwise
+          // would make the picker offer a menu that changes nothing.
+          isTranslatable: track.isTranslatable ?? true,
         })),
-        // The translate menu, per video. Only two entries: the picker only needs
-        // to prove the list came from the fixture rather than from a constant.
-        translationLanguages: [
-          { languageCode: 'en', languageName: { runs: [{ text: 'English' }] } },
-          { languageCode: 'ja', languageName: { runs: [{ text: 'Japanese' }] } },
-        ],
+        // From the capture when there is one, so the list is YouTube's rather
+        // than two entries invented here. The fallback is deliberately small:
+        // it only needs to prove the list is data-driven, not to be realistic.
+        translationLanguages: (translationLanguages ?? [
+          { languageCode: 'en', name: 'English' },
+          { languageCode: 'ja', name: 'Japanese' },
+        ]).map((language) => ({
+          languageCode: language.languageCode,
+          languageName: { runs: [{ text: language.name ?? language.languageCode }] },
+        })),
       },
     },
   };
@@ -168,3 +180,82 @@ export const OTHER_ENGLISH = {
     { start: 3, duration: 3, text: 'different content' },
   ],
 };
+
+// --- Real captures -----------------------------------------------------------
+//
+// The fixtures above are written by hand, which means they encode what we BELIEVE
+// YouTube sends. A capture recorded by tools/capture.mjs is what it actually
+// sent — so a test that runs against one can falsify a wrong belief rather than
+// confirm it.
+//
+// Fixtures are local (gitignored), so every reader here tolerates their absence:
+// the tier reports what is missing and skips rather than failing, because a
+// machine that has not run the capture tool is a setup state, not a broken build.
+
+const CAPTURE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures');
+
+/**
+ * Every video id that has been captured on this machine.
+ *
+ * @returns {string[]}
+ */
+export function listCaptures() {
+  if (!existsSync(CAPTURE_ROOT)) return [];
+  return readdirSync(CAPTURE_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => existsSync(join(CAPTURE_ROOT, name, 'normalised', 'video.json')))
+    .sort();
+}
+
+/**
+ * A captured video, in the shape the harness serves.
+ *
+ * Segment text and timings come from the capture, so what the panel renders is
+ * the real transcript rather than something invented — which is the entire point.
+ *
+ * @param {string} videoId
+ * @returns {{videoId: string, title: string, translationLanguages: object[], tracks: object[], capturedAt: string}|null}
+ */
+export function captureFor(videoId) {
+  const dir = join(CAPTURE_ROOT, videoId, 'normalised');
+  const videoFile = join(dir, 'video.json');
+  if (!existsSync(videoFile)) return null;
+
+  const video = JSON.parse(readFileSync(videoFile, 'utf8'));
+
+  const tracks = (video.trackList ?? []).map((track) => {
+    const suffix = track.kind === 'asr' ? '-asr' : '';
+    const file = join(dir, `captions-${track.languageCode}${suffix}.json`);
+    const segments = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).segments ?? [] : [];
+    return { ...track, segments };
+  });
+
+  return {
+    videoId,
+    title: video.title ?? videoId,
+    translationLanguages: video.translationLanguages ?? [],
+    tracks,
+    capturedAt: video.capturedAt ?? null,
+  };
+}
+
+/**
+ * A raw captured body, exactly as YouTube sent it.
+ *
+ * For the cases where the interesting question is what the REAL bytes contain —
+ * markup inside caption text, say — rather than what our parser made of them.
+ *
+ * @param {string} videoId
+ * @param {string} kind Substring to match, e.g. 'timedtext' or 'watch'.
+ * @returns {string|null}
+ */
+export function rawCapture(videoId, kind) {
+  const raw = join(CAPTURE_ROOT, videoId, 'raw');
+  if (!existsSync(raw)) return null;
+  const match = readdirSync(raw)
+    .filter((name) => name.includes(kind))
+    .sort()
+    .pop();
+  return match ? readFileSync(join(raw, match), 'utf8') : null;
+}

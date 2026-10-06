@@ -5,13 +5,13 @@
   "type": "module",
   "description": "Personal-use Chrome extension: YouTube transcripts in the side panel.",
   "scripts": {
+    "capture": "node tools/capture.mjs",
     "test": "node test/run.mjs",
-    "test:unit": "node test/unit.test.mjs",
-    "test:sw": "node test/service-worker.test.mjs",
-    "test:panel": "node test/sidepanel.test.mjs",
+    "test:all": "npm test && npm run test:browser",
     "test:browser": "node test/browser/run-browser.mjs",
-    "test:browser:live": "node test/browser/run-browser.mjs --live",
-    "test:all": "npm test && npm run test:browser"
+    "test:panel": "node test/sidepanel.test.mjs",
+    "test:sw": "node test/service-worker.test.mjs",
+    "test:unit": "node test/unit.test.mjs"
   },
   "devDependencies": {
     "playwright": "^1.63.0"

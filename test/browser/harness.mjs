@@ -24,8 +24,11 @@ import { chromium } from 'playwright';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { existsSync } from 'node:fs';
 import { json3Body, xmlBody, watchPage } from './fixtures.mjs';
+// Shared with tools/capture.mjs rather than copied, so the capture tool and the
+// tests cannot end up using different browsers as the path list ages.
+export { findChrome } from '../../tools/lib/chrome.mjs';
+import { findChrome } from '../../tools/lib/chrome.mjs';
 
 export const EXTENSION_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -46,27 +49,6 @@ export function extensionIdForPath(path) {
     id += String.fromCharCode(97 + (hash[i] & 0x0f));
   }
   return id;
-}
-
-/**
- * Find a Chromium that can load extensions.
- *
- * The bundled headless shell cannot, so a full browser is needed. Several paths
- * are tried because this may run in WSL, where the browser was installed by the
- * editor's tooling rather than by `playwright install`.
- *
- * @returns {string|null}
- */
-export function findChrome() {
-  const candidates = [
-    process.env.CHROME_PATH,
-    `${process.env.HOME}/.cache/ms-playwright/chromium-1224/chrome-linux64/chrome`,
-    `${process.env.HOME}/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome`,
-    `${process.env.HOME}/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome`,
-    '/usr/bin/google-chrome',
-    '/usr/bin/chromium',
-  ];
-  return candidates.find((path) => path && existsSync(path)) ?? null;
 }
 
 /** Thrown when no usable browser is present, so a caller can skip rather than fail. */
@@ -129,7 +111,7 @@ export async function launchExtension() {
  *   the INERTUBE fallback for this video.
  * @returns {Promise<{captionRequests: string[], playerRequests: string[]}>}
  */
-export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = 'Fixture Video', tracks, captionFormat = 'json3', breakBaseUrl = false }) {
+export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = 'Fixture Video', tracks, captionFormat = 'json3', breakBaseUrl = false, capture = null }) {
   /** Shared across every call for this browser, so one set of routes serves all. */
   const registry = (context.__iuFixture ??= {
     videos: new Map(),
@@ -137,6 +119,25 @@ export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = '
     playerRequests: [],
     installed: false,
   });
+
+  // A capture carries the real track list, the real segments and — importantly —
+  // the real `translationLanguages`, none of which a hand-written fixture can be
+  // trusted about. Hand-written tracks remain for the cases that need a specific
+  // shape, and both go down the same route handlers.
+  if (capture) {
+    registry.videos.set(capture.videoId, {
+      title: capture.title,
+      tracks: capture.tracks,
+      translationLanguages: capture.translationLanguages,
+      captionFormat,
+      breakBaseUrl,
+    });
+    if (!registry.installed) {
+      registry.installed = true;
+      await installRoutes(context, registry);
+    }
+    return { captionRequests: registry.captionRequests, playerRequests: registry.playerRequests };
+  }
 
   registry.videos.set(videoId, { title, tracks, captionFormat, breakBaseUrl });
 
@@ -172,7 +173,12 @@ async function installRoutes(context, registry) {
     await route.fulfill({
       status: 200,
       contentType: 'text/html',
-      body: watchPage({ videoId, title: fixture.title, tracks: fixture.tracks }),
+      body: watchPage({
+        videoId,
+        title: fixture.title,
+        tracks: fixture.tracks,
+        translationLanguages: fixture.translationLanguages,
+      }),
     });
   });
 

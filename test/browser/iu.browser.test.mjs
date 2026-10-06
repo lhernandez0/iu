@@ -16,7 +16,7 @@
 
 import { routeYouTube, openWatchPage, openPanel, waitForRows, panelState, pagePosition } from './harness.mjs';
 import { runBrowserSuite } from './runner.mjs';
-import { ENGLISH, GERMAN, OTHER_ENGLISH } from './fixtures.mjs';
+import { ENGLISH, GERMAN, OTHER_ENGLISH, listCaptures, captureFor } from './fixtures.mjs';
 
 await runBrowserSuite(async ({ context, extensionId, close }, report) => {
   const { check, section } = report;
@@ -719,5 +719,57 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const state = await panelState(page);
     check('the panel followed to the new video', state.rows[0]?.text, 'Second video');
     check('with its own line count', state.rows.length, 2);
+  }
+
+  // --- Real captures -------------------------------------------------------
+  //
+  // Everything above runs against fixtures written by hand, which means it can
+  // only confirm the extension is consistent with what we BELIEVE YouTube sends.
+  // This section runs against bytes YouTube actually sent, so it can falsify
+  // that belief instead.
+  //
+  // Skipped when nothing has been captured: fixtures are local and gitignored, so
+  // a machine that has not run `npm run capture` is a setup state, not a broken
+  // build.
+
+  const captures = listCaptures();
+  if (!captures.length) {
+    console.log('\n  (no captures on this machine — run `npm run capture -- <videoId>` to add one)');
+  }
+
+  for (const captureId of captures) {
+    const capture = captureFor(captureId);
+    if (!capture?.tracks.length) continue;
+
+    section(`a real captured video renders (${captureId})`);
+
+    // The capture carries the real track list, real segments and real
+    // translationLanguage entries, so nothing about the page is authored here.
+    await routeYouTube(context, { capture });
+    const watch = await openWatchPage(context, captureId);
+    const { page } = await openPanel(context, extensionId, watch);
+
+    const longest = capture.tracks.reduce((most, track) =>
+      track.segments.length > most.segments.length ? track : most,
+    );
+    await waitForRows(page, 1);
+
+    const state = await panelState(page);
+    check('the real transcript rendered', state.rows.length > 0, true);
+    // The expected value comes from the capture, not from this file. That is the
+    // whole point: a wrong belief about the format cannot produce a pass here.
+    check('and its first line is the captured text', state.rows[0]?.text, longest.segments[0]?.text);
+    check('with as many lines as the track has', state.rows.length, longest.segments.length);
+    check('the real track list is offered', state.options.length > 0, true);
+    check('and the panel is not reporting an error', state.isError, false);
+
+    // What a wrong belief would actually look like: markup retained in the text,
+    // an entity left encoded, a cue shape we did not expect. Reported rather than
+    // asserted, because the real answer is whatever the bytes say.
+    const odd = longest.segments
+      .map((segment) => segment.text)
+      .filter((text) => /[<&]/.test(text) || text.length > 120)
+      .slice(0, 2);
+    if (odd.length) console.log(`        captured text worth a look: ${JSON.stringify(odd)}`);
   }
 });
