@@ -268,6 +268,30 @@ section('the colour ramp maps level to a position, and cannot wrap');
   check('all six HSK levels are visually distinct', distinct, 6);
 }
 
+// --- The learning layer is a leaf -------------------------------------------
+
+section('the learning layer does not depend on the browser');
+
+{
+  // `learn/` is the part that would be reused for another language, and the whole
+  // point of the layering is that it is pure data and logic. It used to call
+  // `chrome.runtime.getURL` itself, which made it unusable outside an extension
+  // and untestable without a `chrome` stub — so this guards the property rather
+  // than trusting it, because reaching for a convenience is easy and invisible.
+  //
+  // Read as text rather than imported: an import would only prove that THIS
+  // process could evaluate it, and Node has no `chrome` either way. The rule is
+  // about the source.
+  for (const file of ['segment.js', 'wordlist.js']) {
+    const source = await readFile(resolve(here, '../src/learn', file), 'utf8');
+    // Comments are stripped first, or the many comments explaining WHY chrome is
+    // absent would fail the check for saying the word.
+    const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    check(`${file} does not reach for chrome`, /chrome\s*\./.test(code), false);
+    check(`${file} imports nothing`, /^\s*import\s/m.test(code), false);
+  }
+}
+
 // --- Result ------------------------------------------------------------------
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

@@ -281,6 +281,15 @@ would arrive twice.
 
 ## Known limitations
 
+- **Marking works on CJK and other no-space scripts.** The tokeniser splits by
+  CJK codepoint and passes non-CJK runs through whole, which is right for Chinese
+  and Japanese and cannot mark a space-separated language at all — an English
+  sentence is a single token. Adding one needs a different tokeniser, not a new
+  word list. See `docs/design-decisions/0002-language-extensibility.md`.
+- **Word lists are data, and adding one is a data change.** Levels are per list,
+  each list carries its own count and starting level, and nothing in the code
+  knows what HSK is — so HSK 4.0 or JLPT is a new list object and a dictionary
+  document, not a code change.
 - **YouTube only.** Captions come from `ytInitialPlayerResponse`, which only
   that site provides. This is deliberate for now.
 - **Videos without captions show an error**, not a fallback. Auto-generated

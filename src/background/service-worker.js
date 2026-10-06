@@ -19,8 +19,22 @@
 import { MSG, TARGET } from '../common/messages.js';
 import { alignSecondary } from '../common/transcript.js';
 import { defaults, normalise, toStorage, storageKey, definition } from '../common/settings.js';
-import { loadDictionary, levelOf, lookup } from '../learn/wordlist.js';
+import { loadDictionary, levelOf, lookup, DATA_PATH } from '../learn/wordlist.js';
 import { segmentSegments } from '../learn/segment.js';
+
+/**
+ * The bundled word list URL, as the extension serves it.
+ *
+ * Resolved here, not inside `learn/wordlist.js`. That module is about data and
+ * does not know whether it is running in a browser; taking the URL as an argument
+ * is what makes it testable without a `chrome` stub, and reusable outside an
+ * extension at all.
+ *
+ * @returns {string}
+ */
+function dictionaryUrl() {
+  return chrome.runtime.getURL(DATA_PATH);
+}
 
 /** How many videos to keep transcripts for before evicting the oldest. */
 const MAX_CACHED_VIDEOS = 6;
@@ -135,7 +149,7 @@ function handlePanelMessage(message) {
       // Take the new list's own default rather than carrying a threshold from a
       // list with a different number of levels, where it would mean something
       // else entirely.
-      settings.threshold = defaultThreshold(message.listId);
+      settings.threshold = defaultThreshold(listById(message.listId));
       persistSettings();
       // Rows are rebuilt because switching lists can change which levels exist,
       // so the existing marks are no longer valid.
@@ -167,12 +181,37 @@ function handlePanelMessage(message) {
 /**
  * The level a list should mark from, if the learner has not chosen one.
  *
- * HSK 4 is where the user is studying, so marking starts there. Clamped by the
- * caller to the list's own range, because a threshold only means something
- * relative to the list it applies to.
+ * Read from the LIST, not inferred from its id.
+ *
+ * This used to be `listId.startsWith('hsk') ? 4 : 1`, which hardcoded both a
+ * language and a standard into the worker: a JLPT or HSK 4.0 list would silently
+ * start at 1 and look broken. The starting level is a property of the list — only
+ * the data knows where a learner with that list is likely to be — so it travels
+ * with the list like `levelCount` does.
+ *
+ * Clamped by the caller to the list's own range, because a threshold only means
+ * something relative to the list it applies to.
+ *
+ * @param {object|undefined} list
+ * @returns {number}
  */
-function defaultThreshold(listId) {
-  return listId?.startsWith('hsk') ? 4 : 1;
+function defaultThreshold(list) {
+  const level = Number(list?.defaultThreshold);
+  return Number.isFinite(level) && level >= 1 ? Math.min(level, list.levelCount ?? level) : 1;
+}
+
+/**
+ * A word list by id, or the first available.
+ *
+ * Resolved from `availableLists` rather than passed around, because the two
+ * settings that need it — which list, and what threshold within it — are changed
+ * from different places and each has to look the list up from the id it stored.
+ *
+ * @param {string|null|undefined} listId
+ * @returns {object|undefined}
+ */
+function listById(listId) {
+  return availableLists.find((list) => list.id === listId) ?? availableLists[0];
 }
 
 /**
@@ -311,7 +350,7 @@ function broadcastState() {
 async function answerLookup(word) {
   if (!panelPort || !word) return;
   try {
-    const dictionary = await loadDictionary();
+    const dictionary = await loadDictionary(dictionaryUrl());
     panelPort.postMessage({
       type: MSG.ENTRY,
       word,
@@ -1096,7 +1135,7 @@ async function applyMarks(entry) {
 
   let dictionary;
   try {
-    dictionary = await loadDictionary();
+    dictionary = await loadDictionary(dictionaryUrl());
   } catch (error) {
     // A missing word list must not take the transcript down with it: the panel
     // still shows captions, just without marks.
@@ -1398,7 +1437,7 @@ async function applySetting(id, value) {
       // A threshold is relative to its list, so moving list takes that list's
       // own starting point rather than carrying a number that has changed
       // meaning.
-      settings.threshold = defaultThreshold(settings.listId);
+      settings.threshold = defaultThreshold(listById(settings.listId));
       rebuildRows(currentEntry());
       break;
 
@@ -1556,7 +1595,7 @@ void settingsReady.then(primeDictionary);
  */
 async function primeDictionary() {
   try {
-    const dictionary = await loadDictionary();
+    const dictionary = await loadDictionary(dictionaryUrl());
     availableLists = dictionary.lists;
 
     // Fall back to the list that can actually mark the most words, rather than
@@ -1571,8 +1610,9 @@ async function primeDictionary() {
       const widest = [...dictionary.lists].sort((a, b) => (b.levelled ?? 0) - (a.levelled ?? 0))[0];
       settings.listId = widest?.id ?? null;
 
-      // The learner's own level, clamped to what the list actually has.
-      settings.threshold = Math.min(defaultThreshold(settings.listId), widest?.levelCount ?? 1);
+      // The learner's own level, as the chosen list declares it. `defaultThreshold`
+      // clamps to the list's own range, so the extra clamp here is gone.
+      settings.threshold = defaultThreshold(widest);
     }
   } catch (error) {
     broadcastError(`Word list unavailable: ${error?.message ?? error}`);

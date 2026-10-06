@@ -64,11 +64,12 @@ export function resetDictionary() {
 }
 
 /**
- * Load and index the bundled data.
+ * Build the lookup index from parsed data.
  *
- * Fetched rather than imported so the JSON is not parsed at module load: the
- * service worker starts on every wake, and 1.4MB of JSON.parse on each one would
- * be felt. The result is cached for the worker's lifetime.
+ * Pure: takes the parsed JSON, returns a Dictionary. Nothing here knows where the
+ * data came from, which is what lets it be called from a test with a literal, from
+ * a browser with a fetched document, or from Node with a file — and is why this
+ * module no longer reaches for `chrome`.
  *
  * The index built here is what makes TRADITIONAL text work. The data is keyed by
  * simplified form, so a traditional character is not a key, is not a headword, and
@@ -77,56 +78,72 @@ export function resetDictionary() {
  * it belongs to, and `headwords` includes both forms so the segmenter can find a
  * word in either script.
  *
+ * @param {object} raw  The parsed data document.
+ * @returns {Dictionary}
+ */
+export function indexDictionary(raw) {
+  const simplified = new Set(Object.keys(raw.words));
+  /** @type {Record<string, string>} */
+  const variants = {};
+  const headwords = new Set(simplified);
+
+  // The longest headword bounds the segmentation window. Computed over BOTH
+  // scripts, so a traditional form longer than any simplified one cannot fall
+  // outside the window and go unmatched.
+  let maxWordLength = 0;
+  for (const key of simplified) {
+    if (key.length > maxWordLength) maxWordLength = key.length;
+  }
+
+  for (const [key, entry] of Object.entries(raw.words)) {
+    const traditional = entry.t;
+    if (!traditional || traditional === key) continue;
+
+    // A traditional form that is ITSELF a simplified headword is a genuine
+    // ambiguity, and the simplified meaning wins: the text is being read as
+    // simplified, so remapping it elsewhere would be wrong. None of the 6,675
+    // variants in the current data collide, but this does not depend on that
+    // staying true as the data changes.
+    if (simplified.has(traditional) || traditional in variants) continue;
+
+    variants[traditional] = key;
+    headwords.add(traditional);
+    if (traditional.length > maxWordLength) maxWordLength = traditional.length;
+  }
+
+  return {
+    words: raw.words,
+    levels: raw.levels,
+    lists: raw.lists,
+    maxWordLength,
+    headwords,
+    variants,
+  };
+}
+
+/**
+ * Load and index the bundled data.
+ *
+ * Fetched rather than imported so the JSON is not parsed at module load: the
+ * service worker starts on every wake, and 1.4MB of JSON.parse on each one would
+ * be felt. The result is cached for the worker's lifetime.
+ *
+ * The URL comes from the caller. Reading `chrome.runtime.getURL` here would make
+ * this module unusable outside an extension — untestable in isolation, and unable
+ * to be reused by anything that is not a Chrome extension. It is a data module;
+ * where the data lives is not its business.
+ *
+ * @param {string} url
  * @returns {Promise<Dictionary>}
  */
-export async function loadDictionary() {
+export async function loadDictionary(url) {
   if (loaded) return loaded;
   if (loading) return loading;
 
   loading = (async () => {
-    const url = chrome.runtime.getURL(DATA_PATH);
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Could not load the word list (${response.status}).`);
-
-    const raw = await response.json();
-
-    const simplified = new Set(Object.keys(raw.words));
-    /** @type {Record<string, string>} */
-    const variants = {};
-    const headwords = new Set(simplified);
-
-    // The longest headword bounds the segmentation window. Computed over BOTH
-    // scripts, so a traditional form longer than any simplified one cannot fall
-    // outside the window and go unmatched.
-    let maxWordLength = 0;
-    for (const key of simplified) {
-      if (key.length > maxWordLength) maxWordLength = key.length;
-    }
-
-    for (const [key, entry] of Object.entries(raw.words)) {
-      const traditional = entry.t;
-      if (!traditional || traditional === key) continue;
-
-      // A traditional form that is ITSELF a simplified headword is a genuine
-      // ambiguity, and the simplified meaning wins: the text is being read as
-      // simplified, so remapping it elsewhere would be wrong. None of the 6,675
-      // variants in the current data collide, but this does not depend on that
-      // staying true as the data changes.
-      if (simplified.has(traditional) || traditional in variants) continue;
-
-      variants[traditional] = key;
-      headwords.add(traditional);
-      if (traditional.length > maxWordLength) maxWordLength = traditional.length;
-    }
-
-    loaded = {
-      words: raw.words,
-      levels: raw.levels,
-      lists: raw.lists,
-      maxWordLength,
-      headwords,
-      variants,
-    };
+    loaded = indexDictionary(await response.json());
     return loaded;
   })();
 
@@ -137,6 +154,12 @@ export async function loadDictionary() {
   }
 }
 
+/**
+ * Where the bundled data lives, relative to the extension root.
+ *
+ * Kept here as a fact about the data rather than a call to `chrome` — the caller
+ * resolves it, because only the caller knows whether it is a browser.
+ */
 export const DATA_PATH = 'src/learn/data/chinese.json';
 
 /**
