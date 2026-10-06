@@ -290,8 +290,12 @@ would arrive twice.
   each list carries its own count and starting level, and nothing in the code
   knows what HSK is — so HSK 4.0 or JLPT is a new list object and a dictionary
   document, not a code change.
-- **YouTube only.** Captions come from `ytInitialPlayerResponse`, which only
-  that site provides. This is deliberate for now.
+- **YouTube is the only provider, but it is now a *provider*.** Captions come
+  from `ytInitialPlayerResponse` through a content script, and which site that is
+  and which scripts to inject are decided in `src/common/providers.js`. Adding
+  another site is a registry entry plus a content script — the worker, the panel,
+  the cache and the learning layer have no site knowledge in them. See
+  `docs/design-decisions/0003-video-providers.md`.
 - **Videos without captions show an error**, not a fallback. Auto-generated
   tracks cover most videos, but not all.
 - **Live streams** have captions with unstable timing; seeking may not line up.

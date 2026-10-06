@@ -363,7 +363,7 @@ export async function waitForStatus(page, timeout = 20000) {
   await page.waitForFunction(
     () => {
       const text = document.getElementById('status')?.textContent ?? '';
-      return text.length > 0 && !text.includes('Looking for a YouTube video');
+      return text.length > 0 && !text.includes('Looking for');
     },
     { timeout },
   );

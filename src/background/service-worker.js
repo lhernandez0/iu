@@ -19,6 +19,7 @@
 import { MSG, TARGET } from '../common/messages.js';
 import { alignSecondary } from '../common/transcript.js';
 import { defaults, normalise, toStorage, storageKey, definition } from '../common/settings.js';
+import { providerFor, providerNames } from '../common/providers.js';
 import { loadDictionary, levelOf, lookup, DATA_PATH } from '../learn/wordlist.js';
 import { segmentSegments } from '../learn/segment.js';
 
@@ -38,7 +39,6 @@ function dictionaryUrl() {
 
 /** How many videos to keep transcripts for before evicting the oldest. */
 const MAX_CACHED_VIDEOS = 6;
-const YOUTUBE_URL = /^https:\/\/[^/]*youtube\.com\//;
 const OFFSCREEN_PATH = 'src/offscreen/offscreen.html';
 
 /**
@@ -399,14 +399,14 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 /**
- * Keep up with the user. Non-YouTube tabs are ignored rather than clearing the
+ * Keep up with the user. Tabs we cannot read are ignored rather than clearing the
  * panel, so glancing at another tab and coming back does not lose your place.
  *
  * @param {number} tabId
  */
 async function onTabActivated(tabId) {
   const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (!tab || !YOUTUBE_URL.test(tab.url ?? '')) return;
+  if (!tab || !providerFor(tab.url)) return;
   trackedTabId = tabId;
   await refresh();
 }
@@ -463,17 +463,17 @@ chrome.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
 });
 
 /**
- * Find the frame holding the video and make sure both our scripts are running in
- * it.
+ * Find the frame holding the video and make sure the provider's scripts are
+ * running in it.
  *
  * The video is not always in the tab's top frame, so injecting blindly is not
- * safe. `webNavigation.getAllFrames` tells us which frame is a youtube.com
- * document.
+ * safe. `webNavigation.getAllFrames` tells us which frame is a document the
+ * provider recognises.
  *
- * Both files are injected, not just the content script: on a tab that was
- * already open when the extension loaded, the manifest-declared content scripts
- * are absent too, so the MAIN-world bridge would be missing and every request
- * would come back empty.
+ * The bridge is injected first and always, because it is what the content
+ * script talks to, and on a tab that was already open when the extension loaded
+ * the manifest-declared scripts are absent too — so without injecting both,
+ * every request would come back empty.
  *
  * @param {number} tabId
  * @returns {Promise<number|null>} frameId, or null if there is no such frame.
@@ -483,17 +483,23 @@ async function ensureContentScript(tabId) {
   if (!frames?.length) return null;
 
   const frame =
-    frames.find((f) => f.frameId === 0 && YOUTUBE_URL.test(f.url ?? '')) ??
-    frames.find((f) => YOUTUBE_URL.test(f.url ?? ''));
+    frames.find((f) => f.frameId === 0 && providerFor(f.url)) ??
+    frames.find((f) => providerFor(f.url));
   if (!frame) return null;
 
   if (injectedFrames.has(frameKey(tabId, frame.frameId))) return frame.frameId;
 
+  const provider = providerFor(frame.url);
+  if (!provider) return null;
+
   const target = { tabId, frameIds: [frame.frameId] };
   try {
-    // Bridge first: it is what the content script talks to.
-    await chrome.scripting.executeScript({ target, world: 'MAIN', files: ['src/content/page-bridge.js'] });
-    await chrome.scripting.executeScript({ target, files: ['src/content/youtube-content.js'] });
+    for (const file of provider.bridgeFiles) {
+      await chrome.scripting.executeScript({ target, world: 'MAIN', files: [file] });
+    }
+    for (const file of provider.contentFiles) {
+      await chrome.scripting.executeScript({ target, files: [file] });
+    }
     injectedFrames.add(frameKey(tabId, frame.frameId));
   } catch {
     // The page refuses injection (a chrome:// page, say). Leave it unmarked so a
@@ -514,7 +520,7 @@ const CONTENT_TIMEOUT_MS = 4000;
  */
 async function sendToContent(tabId, message) {
   const frameId = await ensureContentScript(tabId);
-  if (frameId === null) throw new Error('no youtube frame');
+  if (frameId === null) throw new Error('no readable frame');
 
   let timer = 0;
   try {
@@ -559,13 +565,13 @@ async function refreshInner() {
   if (trackedTabId !== null) {
     // A tracked tab can be closed or navigated away since we last looked.
     const alive = await chrome.tabs.get(trackedTabId).catch(() => null);
-    if (!alive || !YOUTUBE_URL.test(alive.url ?? '')) trackedTabId = null;
+    if (!alive || !providerFor(alive.url)) trackedTabId = null;
   }
 
   if (trackedTabId === null) {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id || !YOUTUBE_URL.test(tab.url ?? '')) {
-      pendingError = 'No YouTube video in the active tab.';
+    if (!tab?.id || !providerFor(tab.url)) {
+      pendingError = `No ${providerNames()} video in the active tab.`;
       broadcastState();
       return;
     }
@@ -1306,7 +1312,7 @@ function deriveState() {
       rows: [],
       activeIndex,
       activePaused,
-      error: pendingError ?? (trackedTabId === null ? 'No YouTube tab is active.' : null),
+      error: pendingError ?? (trackedTabId === null ? `No ${providerNames()} tab is active.` : null),
       learning: learningState(),
       lists: availableLists,
     };

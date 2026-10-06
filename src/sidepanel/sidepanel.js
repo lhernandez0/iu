@@ -14,6 +14,7 @@
 import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
 import { definition } from '../common/settings.js';
+import { providerNames } from '../common/providers.js';
 import { attachHover, showEntry, hide as hidePopover, renderTokens } from './marks.js';
 
 /**
@@ -988,5 +989,5 @@ if (USE_AUDIO_CAPTURE) void enableAudioCapture();
 
 // --- Boot -------------------------------------------------------------------
 
-setStatus('Looking for a YouTube video…');
+setStatus(`Looking for a ${providerNames()} video…`);
 connectToWorker();
