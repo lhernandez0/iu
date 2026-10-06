@@ -1,6 +1,6 @@
 {
   "derivedFrom": "iuSyntheticS2U",
-  "derivedAt": "2026-10-06T03:24:43.699Z",
+  "derivedAt": "2026-10-06T03:47:34.225Z",
   "note": "Dimensions measured from the real capture; text invented. Compare against test/fixtures/<id>/normalised/.",
   "synthetic": {
     "cueCount": 403,
@@ -26,6 +26,8 @@
         "isTranslatable": true
       }
     ],
-    "translationLanguageCount": 156
+    "translationLanguageCount": 156,
+    "realXmlBodySeen": false,
+    "formatsSeen": []
   }
 }

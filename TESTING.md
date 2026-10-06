@@ -131,6 +131,32 @@ Noticing YouTube changing shape is now the capture tool's job: re-run
 video, taken when you decide to take it, rather than a suite that reaches the
 network whenever someone remembers the flag exists.
 
+## The capture tool has four modes, and only one of them opens anything
+
+`tools/capture.mjs` is the only file in the project that touches youtube.com, so the
+modes that do not are where the work happens. All three offline modes were added
+because a capture is single-shot: a failure discovered during the open is a failure
+discovered in the one place it cannot be repeated.
+
+| Command | Opens | What it proves |
+| --- | --- | --- |
+| `npm run capture -- --list` | nothing | The plan: which videos, which already captured. |
+| `npm run capture -- --check` | nothing | Preconditions, **and that the parser runs on a blank page** — the exact failure that cost a capture. |
+| `npm run capture -- --replay` | nothing | The whole pipeline against the previous capture, network stubbed: routing, staging, both parsers, the normalised writes, the shape report. |
+| `npm run capture -- --replay --fail-after=N` | nothing | The **failure** path: the loop throws after N requests, and the partial results must still be preserved and named. |
+| `npm run capture [--force]` | **once** | The capture itself. |
+
+The rehearsal asserts rather than prints. It checks that both formats were served,
+that every body produced cues, that no markup leaked into text, that an entity
+decoded and a child element flattened, and — the one most easily faked — that **no
+request received a format other than the one it asked for**. A body is classified by
+what it *is*, not by what was requested, so a server disagreeing is recorded as the
+disagreement it is instead of as the format we hoped for.
+
+`--fail-after` exists because the failure path is the one that matters and had never
+run. A mid-loop throw must leave a `<id>.partial/` beside the untouched good capture,
+with both manifests written, so a spent open still yields evidence to derive from.
+
 ## Where the fixtures come from
 
 Two kinds, and mixing them up is the mistake this repository made for a long time.
@@ -153,6 +179,25 @@ something if its shape traces to something real.
 The loader falls back to a tiny self-contained fixture when nothing has been
 derived, so a fresh clone can still run `npm test`. Do not assert on the fallback:
 it is a bootstrapping aid, not a second source of truth.
+
+## What we do not have yet
+
+Stated plainly, because the alternative is a suite that looks broader than it is.
+
+**No real XML caption body.** Every capture so far requested `fmt=json3`, so the
+`default format` row in the collection plan has never produced a body we hold. The
+XML branch of the parser is therefore only ever exercised against XML *we* built
+from JSON3 — including in `--replay`, whose stubbed route synthesises the XML. That
+tests the parser, but it does not prove what YouTube actually sends by default. The
+collection plan now asks for the default format first for exactly this reason.
+
+Consequences to keep in mind:
+
+- A green rehearsal does **not** mean the default-format path is verified. It means
+  the code that will handle it is.
+- `derive-synthetic.mjs` must skip, with a visible message, when a source capture has
+  no XML body — never fall back to the JSON3-derived stand-in and let the result read
+  as if a real body had been seen.
 
 ## Where the browser comes from
 

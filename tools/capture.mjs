@@ -63,7 +63,7 @@
  */
 
 import { chromium } from 'playwright';
-import { mkdir, writeFile, rename, rm, readdir } from 'node:fs/promises';
+import { mkdir, writeFile, rename, rm, readdir, cp } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -75,6 +75,79 @@ const STAGING = join(FIXTURES, '.staging');
 
 /** How long to let the real page boot its own scripts before reading it. */
 const PAGE_SETTLE_MS = 5000;
+
+/**
+ * How long one caption request may take before it is abandoned.
+ *
+ * A capture is a single page load, so a request that never answers does not just
+ * lose its own body — it holds the run open until the browser gives up, and the
+ * bodies still to come are lost with it. Bounding each request means the worst
+ * case is one missing body rather than a spent capture.
+ */
+const REQUEST_TIMEOUT_MS = 15000;
+
+/**
+ * Classify a body by what it IS, not by what we asked for.
+ *
+ * A response is the ground truth about its own format; the request that produced
+ * it is only a hope. Classifying by the request would let a server that ignores
+ * `fmt` (answering XML to a `fmt=json3` call, or JSON to no-`fmt` at all) be
+ * recorded as whatever we wanted, and the disagreement — which is the interesting
+ * part — would be invisible.
+ *
+ * @param {string} body
+ * @returns {'json3'|'xml'|'empty'|'other'}
+ */
+function bodyShape(body) {
+  const text = body.trim();
+  if (!text) return 'empty';
+  if (text.startsWith('{') || text.startsWith('[')) return 'json3';
+  if (text.startsWith('<')) return 'xml';
+  return 'other';
+}
+
+/**
+ * Does the body look like the resource we asked for?
+ *
+ * The question the recorded `shape` exists to answer, kept as a function so the
+ * rehearsal can assert it across every entry rather than leaving a reader to spot
+ * a mismatch.
+ *
+ * `ttml` is served as XML, so an XML body satisfies a `ttml` request. Anything
+ * else — including an HTML error page, which is neither — is a mismatch.
+ *
+ * @param {string|undefined} shape Observed body shape.
+ * @param {string|null} fmt What the request asked for.
+ * @returns {boolean}
+ */
+function formatMatches(shape, fmt) {
+  const wanted = fmt === 'json3' ? 'json3' : 'xml';
+  return shape === wanted;
+}
+
+/**
+ * Reject if a promise has not settled within `ms`.
+ *
+ * Playwright's own timeout is generous, and a caption request that hangs does not
+ * fail — it just never returns, holding the single page load open. This bounds the
+ * cost of a hang to one body instead of the whole capture.
+ *
+ * The underlying request is not cancelled (it cannot be, from here); it is
+ * abandoned, which is enough because every later step works from the body we hold.
+ *
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @param {string} message
+ * @returns {Promise<T>}
+ */
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 /**
  * Read `.env` from the project root, if there is one.
@@ -259,18 +332,24 @@ function rendererReport(body) {
  * resource: any question not answered here costs another page load, which is the
  * thing this tool exists to avoid.
  *
- * `client` is which player response supplies the URL — the page's own initial
- * response, or a fresh ANDROID-client one. They can disagree, and the extension
- * uses both.
+ * ORDER MATTERS and is deliberate. The one shape we do not hold is a real
+ * default-format body — everything captured so far was requested with `fmt=json3`
+ * — so that is collected FIRST, before anything else can fail and take the shot
+ * with it. The page client comes before the fallback for the same reason: it is the
+ * path the extension tries first, so it is the one worth having.
+ *
+ * `client` is which player response supplies the URL. They can disagree, and the
+ * extension uses both.
  *
  * @param {object[]} tracks
  * @param {string|null} translateTo
- * @returns {Array<{name: string, track: object, client: 'page'|'android', fmt: 'json3'|null, tlang: string|null}>}
+ * @returns {Array<{name: string, track: object, client: 'page'|'android', fmt: string|null, tlang: string|null}>}
  */
 function collectionPlan(tracks, translateTo) {
   const plan = [];
   for (const track of tracks) {
-    for (const fmt of ['json3', null]) {
+    // No `fmt` first: the shape we are missing, and the reason for the shot.
+    for (const fmt of [null, 'json3']) {
       for (const client of ['page', 'android']) {
         plan.push({
           name: `${client} client, ${fmt ?? 'default format'}`,
@@ -281,6 +360,21 @@ function collectionPlan(tracks, translateTo) {
         });
       }
     }
+
+    // Explicit alternative format names, tried because they cost nothing beyond one
+    // more request inside a page load we have already opened. If omitting `fmt`
+    // still returns JSON3, these are the remaining ways to reach the XML branch of
+    // a parser that has only ever seen bodies we built ourselves.
+    for (const fmt of ['srv3', 'ttml']) {
+      plan.push({
+        name: `page client, explicit ${fmt}`,
+        track,
+        client: 'page',
+        fmt,
+        tlang: null,
+      });
+    }
+
     // One translation per translatable track is enough to learn the shape; the
     // target language is recorded so it is reproducible.
     if (translateTo && track.isTranslatable) {
@@ -312,19 +406,6 @@ function requestLabel(request) {
   const parts = ['captions', request.track.languageCode, request.client, request.fmt ?? 'default'];
   if (request.tlang) parts.push(`tlang-${request.tlang}`);
   return parts.join('-');
-}
-
-/**
- * Whether a caption body is JSON3 or XML, as a word.
- *
- * @param {string} body
- * @returns {string}
- */
-function captionBodyShape(body) {
-  const text = body.trim();
-  if (text.startsWith('{')) return 'json3';
-  if (text.startsWith('<')) return 'xml';
-  return 'unknown';
 }
 
 /** @param {string} text @returns {string} */
@@ -418,6 +499,25 @@ const MODE_REPLAY = flags.has('--replay');
 const MODE_LIST = flags.has('--list');
 const FORCE = flags.has('--force');
 
+/**
+ * `--fail-after=N` — rehearse the FAILURE path, not just the happy one.
+ *
+ * The capture that cost the shot failed part-way through the collection loop, and
+ * the code that decides what to keep on failure had never once been executed. A
+ * rehearsal that only proves the success path is rehearsing the wrong thing. This
+ * makes the loop throw after N requests, so the partial-promotion path runs for
+ * real.
+ *
+ * Ignored outside `--replay`; a real run must never be sabotaged.
+ */
+const failAfterArg = args.find((a) => a.startsWith('--fail-after='));
+const FAIL_AFTER = failAfterArg ? Number.parseInt(failAfterArg.split('=')[1], 10) : null;
+if (failAfterArg && !(Number.isInteger(FAIL_AFTER) && FAIL_AFTER >= 0)) {
+  console.error(`--fail-after needs a whole number of requests, got "${failAfterArg}".
+`);
+  process.exit(2);
+}
+
 loadEnv();
 
 const explicit = args.filter((a) => !a.startsWith('-'));
@@ -494,6 +594,57 @@ if (MODE_CHECK || MODE_REPLAY) {
   console.log('  all preconditions satisfied');
 
   if (MODE_CHECK) {
+    // Parse a sample body on a blank page, exactly as the real run will.
+    //
+    // This is what `--check` is FOR. Every other precondition is a file or a flag;
+    // this one is the thing that actually cost a capture — `DOMParser.parseFromString`
+    // refusing a plain string under `require-trusted-types-for`. Proving the
+    // blank-page path works here means it is known-good before the open is spent,
+    // rather than discovered during it.
+    const browser = await chromium.launch({
+      executablePath,
+      headless: true,
+      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+    });
+    const context = await browser.newContext();
+    const parser = await context.newPage();
+    await parser.goto('about:blank');
+
+    section('Parse check — opens nothing');
+    // A minimal body of each shape, built here so the check does not depend on
+    // any capture existing. Both branches of the parser are exercised, which is
+    // the point: the XML branch had never run against a real body, and the check
+    // is only worth anything if it covers the path that is actually at risk.
+    const sampleJson3 = JSON.stringify({
+      events: [
+        { tStartMs: 0, dDurationMs: 1200, segs: [{ utf8: 'rehearsal sentence one' }] },
+        { tStartMs: 1200, dDurationMs: 900, segs: [{ utf8: 'rehearsal sentence two' }] },
+      ],
+    });
+    const samples = [
+      ['json3', sampleJson3],
+      ['xml', xmlFromJson3(sampleJson3)],
+    ];
+    let parseFailed = 0;
+    for (const [name, body] of samples) {
+      try {
+        const parsed = await parseCaptionBodyInPage(parser, body);
+        const ok = parsed.length > 0;
+        if (!ok) parseFailed++;
+        console.log(`  ${ok ? 'pass' : 'FAIL'}  ${name} body parsed (${parsed.length} cue${parsed.length === 1 ? '' : 's'})`);
+      } catch (error) {
+        parseFailed++;
+        console.log(`  FAIL  ${name} body threw: ${error?.message ?? error}`);
+      }
+    }
+    await context.close();
+    await browser.close();
+
+    if (parseFailed) {
+      console.log('\n  the parser cannot run on a blank page — a capture would lose every body.');
+      process.exit(1);
+    }
+    console.log('\n  the parser works where the capture will run it.');
     console.log('\n  Run `npm run capture` to spend the open.\n');
     process.exit(0);
   }
@@ -714,6 +865,78 @@ async function parseCaptionBodyInPage(page, body) {
 }
 
 /**
+ * Write the two manifests that describe a capture.
+ *
+ * Split out and called REPEATEDLY — after the player responses and after every
+ * collected body — rather than once at the end. A capture is single-shot, so a run
+ * that dies part-way must still be able to say what it got: the previous version
+ * wrote these after the whole loop, so a mid-loop failure left bodies on disk with
+ * nothing that named them, and the most informative run was the emptiest.
+ *
+ * Rewriting on each step is cheap and makes the staging directory readable at any
+ * moment, including from a process that was killed.
+ *
+ * @param {string} normalised The capture's `normalised/` directory.
+ * @param {object} summary The in-progress summary.
+ */
+async function writeManifests(normalised, summary) {
+  await writeFile(
+    join(normalised, 'video.json'),
+    `${JSON.stringify(
+      {
+        videoId: summary.videoId,
+        title: summary.title,
+        isLive: summary.isLive,
+        capturedAt: summary.capturedAt,
+        consentWall: summary.consentWall,
+        trackList: summary.tracks.map((t) => ({
+          languageCode: t.languageCode,
+          name: t.name,
+          kind: t.kind,
+          isTranslatable: t.isTranslatable,
+        })),
+        translationLanguages: summary.translationLanguages,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  // The structural report: keys, types and counts only. No content, which is what
+  // makes it safe to commit and useful to diff.
+  await writeFile(
+    join(normalised, 'shape-report.json'),
+    `${JSON.stringify(
+      { ...summary.shapes, collection: summary.collection.map((c) => ({ ...c, bytes: c.bytes })) },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
+/**
+ * Keep a failed run's staging somewhere it can be found and derived from.
+ *
+ * A failed capture must not be an empty one — there may be no second attempt, so
+ * whatever was fetched before the failure is the only evidence that will ever
+ * exist. Copying (not moving) into a `.partial/` sibling means the good capture is
+ * untouched, the partial is nameable, and `derive-synthetic` can merge the two.
+ *
+ * @param {string} videoId
+ * @returns {Promise<string|null>} The partial path, or null if there was nothing.
+ */
+async function promotePartial(videoId) {
+  const staging = join(STAGING, videoId);
+  if (!existsSync(staging)) return null;
+  if (!(await readdir(staging)).length) return null;
+
+  const partial = join(FIXTURES, `${videoId}.partial`);
+  await rm(partial, { recursive: true, force: true });
+  await cp(staging, partial, { recursive: true });
+  return partial;
+}
+
+/**
  * Capture one video.
  *
  * Writes into a staging directory and is only moved into place on success. The
@@ -820,6 +1043,24 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
     shapes: {},
   };
 
+  // A consent or bot-check screen means the open is already spent and there is
+  // nothing here worth asking for. Bail out BEFORE the android player request and
+  // the whole collection loop — there is no point spending a dozen requests
+  // against a page that is not the video, and a run that does looks like work.
+  if (probe.consentWall) {
+    console.log('    !! consent or bot-check screen — no video on the page');
+    console.log('    !! stopping here rather than spending requests on it');
+    summary.collection.push({ name: 'aborted', note: 'consent or bot-check screen' });
+    await writeManifests(normalised, summary);
+    await page.close();
+    await parser.close();
+    return summary;
+  }
+
+  // Manifest written before anything else can fail, so even a run that dies here
+  // leaves something that names the video and its tracks.
+  await writeManifests(normalised, summary);
+
   // The page's own player response, verbatim — what the bridge reads.
   const pageResponse = await page.evaluate(() => JSON.stringify(window.ytInitialPlayerResponse ?? null));
   if (pageResponse && pageResponse !== 'null') {
@@ -845,6 +1086,10 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
   } else {
     console.log(`    ! android player response unavailable: ${android.error}`);
   }
+
+  // Both player responses are on disk now; record them before the collection loop
+  // starts, so a failure inside the loop still leaves the track lists behind.
+  await writeManifests(normalised, summary);
 
   // Raw transport traffic, for the record.
   let rawIndex = 0;
@@ -878,17 +1123,47 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
     null;
 
   // Every body shape, in the one page load.
+  //
+  // Each request is isolated. The previous version only guarded the PARSE, so a
+  // throw from `fetchCaption` or a write — a navigation, a closed page, a transient
+  // failure on the fourth of twelve requests — abandoned the loop and every body
+  // still to come. One request failing must cost one request.
+  let attempted = 0;
   for (const request of collectionPlan(probe.tracks, translateTo)) {
     const source = request.client === 'android' ? androidTracks : probe.tracks;
     const track = source.find((t) => t.languageCode === request.track.languageCode);
     const label = requestLabel(request);
 
+    // A rehearsal of the failure path: throw exactly as a real mid-loop failure
+    // would, so the code that keeps and names the partial actually runs.
+    if (replay && Number.isInteger(FAIL_AFTER) && attempted >= FAIL_AFTER) {
+      throw new Error(`injected failure after ${FAIL_AFTER} request(s) (--fail-after)`);
+    }
+
     if (!track?.baseUrl) {
       summary.collection.push({ ...describeRequest(request), note: 'no baseUrl from this client' });
+      await writeManifests(normalised, summary);
       continue;
     }
 
-    const result = await fetchCaption(page, track.baseUrl, request.fmt, request.tlang);
+    attempted++;
+    let result;
+    try {
+      // Bounded, so one request that never answers cannot hold the whole capture
+      // open. A timeout is recorded like any other failure and the loop carries on.
+      result = await withTimeout(
+        fetchCaption(page, track.baseUrl, request.fmt, request.tlang),
+        REQUEST_TIMEOUT_MS,
+        `${label} timed out after ${REQUEST_TIMEOUT_MS}ms`,
+      );
+    } catch (error) {
+      const note = String(error?.message ?? error);
+      summary.collection.push({ ...describeRequest(request), ok: false, status: 0, bytes: 0, shape: null, file: null, note });
+      await writeManifests(normalised, summary);
+      console.log(`    ${label}: ERR — ${note}`);
+      continue;
+    }
+
     const entry = {
       ...describeRequest(request),
       ok: result.ok,
@@ -903,7 +1178,10 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
     if (result.body.trim()) {
       await writeFile(join(raw, `${label}.txt`), result.body);
       entry.file = `raw/${label}.txt`;
-      entry.shape = captionBodyShape(result.body);
+      // Classified by what the body IS, so a server ignoring `fmt` is recorded as
+      // the disagreement it is rather than as the format we asked for.
+      entry.shape = bodyShape(result.body);
+      entry.formatMatches = formatMatches(entry.shape, request.fmt);
 
       // Parsed straight away, not just stored. Transport succeeding says nothing
       // about whether the PARSER handles the body — and the XML branch has never
@@ -940,19 +1218,34 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
     }
 
     summary.collection.push(entry);
+    // Flushed on every request, so a failure on the next one still leaves a
+    // manifest describing everything collected so far.
+    await writeManifests(normalised, summary);
+
     const bits = [result.ok ? `${result.status}` : 'ERR', `${result.body.length}B`, result.contentType ?? ''];
-    const parsed = entry.shape ? ` → ${entry.segments} cues` : '';
+    const parsedCues = entry.shape ? ` → ${entry.segments} cues` : '';
     const leaked = entry.markupLeaked ? ' !! MARKUP LEAKED INTO TEXT' : '';
-    console.log(`    ${label}: ${bits.filter(Boolean).join(' ')}${entry.shape ? ` (${entry.shape})` : ''}${parsed}${leaked}${entry.note ? ` — ${entry.note}` : ''}`);
+    const mismatch = entry.shape && entry.formatMatches === false ? ' !! FORMAT MISMATCH' : '';
+    console.log(`    ${label}: ${bits.filter(Boolean).join(' ')}${entry.shape ? ` (${entry.shape})` : ''}${parsedCues}${leaked}${mismatch}${entry.note ? ` — ${entry.note}` : ''}`);
   }
 
   // --- Normalised: the segments a reviewer (and the replay tier) can read -----
   for (const track of probe.tracks) {
-    // Prefer a json3 body that actually had content; fall back to anything.
-    // AND the normalised form, read from the stored body rather than from the
-    // in-memory parse, so the file on disk is the thing that is checked.
-    const stored = summary.collection.filter((c) => c.languageCode === track.languageCode && c.file && !c.tlang);
-    const entry = stored.find((c) => c.fmt === 'json3') ?? stored[0];
+    // Pick the body whose format actually matches what was asked for, preferring
+    // the default-format body — the shape we are structuring the whole capture
+    // around — and falling back to json3 and then anything with content.
+    //
+    // Written to disk based on the STORED body, not the in-memory parse, so the
+    // file a reviewer reads is the file that was checked.
+    const stored = summary.collection.filter(
+      (c) => c.languageCode === track.languageCode && c.file && !c.tlang && c.segments > 0,
+    );
+    const entry =
+      stored.find((c) => c.format === 'default' && c.formatMatches) ??
+      stored.find((c) => c.formatMatches && c.segments > 0) ??
+      stored.find((c) => c.format === 'default') ??
+      stored.find((c) => c.fmt === 'json3') ??
+      stored[0];
     if (!entry) continue;
 
     // Parsed on the blank page, same as above.
@@ -970,6 +1263,9 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
           // and "it captured" would otherwise hide that the obvious one is empty.
           source: entry.client,
           format: entry.fmt ?? 'default',
+          // What the body actually WAS, not what was asked for. The derive step
+          // reads this to say honestly whether a real XML body has ever been seen.
+          shape: entry.shape,
           segments: parsed,
         },
         null,
@@ -979,33 +1275,8 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
     summary.files.push({ file: `normalised/${name}`, kind: 'captions', source: entry.client, segments: parsed.length });
   }
 
-  await writeFile(
-    join(normalised, 'video.json'),
-    `${JSON.stringify(
-      {
-        videoId: summary.videoId,
-        title: summary.title,
-        isLive: summary.isLive,
-        capturedAt: summary.capturedAt,
-        trackList: summary.tracks.map((t) => ({
-          languageCode: t.languageCode,
-          name: t.name,
-          kind: t.kind,
-          isTranslatable: t.isTranslatable,
-        })),
-        translationLanguages: summary.translationLanguages,
-      },
-      null,
-      2,
-    )}\n`,
-  );
-
-  // The structural report: keys, types and counts only. No content, which is what
-  // makes it safe to commit and useful to diff.
-  await writeFile(
-    join(normalised, 'shape-report.json'),
-    `${JSON.stringify({ ...summary.shapes, collection: summary.collection.map((c) => ({ ...c, bytes: c.bytes })) }, null, 2)}\n`,
-  );
+  // One last flush, now that the normalised segments and file list are in.
+  await writeManifests(normalised, summary);
 
   await page.close();
   await parser.close();
@@ -1064,6 +1335,15 @@ for (const videoId of videoIds) {
   } catch (error) {
     console.log(`    FAILED: ${error?.message ?? error}`);
     opened.failed = true;
+    // Whatever was fetched before the failure is the only evidence that will
+    // exist, so it is copied somewhere findable rather than left in `.staging`
+    // where the next run's first line would delete it. The good capture is never
+    // touched on a failure — that is the whole point of staging.
+    const partial = await promotePartial(videoId).catch(() => null);
+    if (partial) {
+      console.log(`    partial results kept at: ${partial.slice(ROOT.length + 1)}`);
+      console.log('    the existing capture was left untouched');
+    }
   }
 }
 
@@ -1088,36 +1368,92 @@ if (MODE_REPLAY) {
   const collection = summaries.flatMap((s) => s.collection ?? []);
   const checks = [];
 
-  const xmlEntries = collection.filter((c) => c.shape === 'xml');
-  const jsonEntries = collection.filter((c) => c.shape === 'json3');
-  checks.push(['both formats were served', xmlEntries.length > 0 && jsonEntries.length > 0]);
-  checks.push(['every collected body produced cues', collection.filter((c) => c.file).every((c) => c.segments > 0)]);
-  checks.push(['no markup leaked into any parsed text', collection.every((c) => !c.markupLeaked)]);
+  if (Number.isInteger(FAIL_AFTER)) {
+    // --fail-after rehearses the FAILURE path. The happy-path assertions do not
+    // apply — the loop was deliberately cut short — so what is checked instead is
+    // that the partial was preserved and is self-describing, which is the code
+    // path that had never run when the last shot was lost.
+    const summary = summaries[0] ?? { collection: [] };
+    const partial = join(FIXTURES, `${videoIds[0]}.partial`);
+    // The partial is the only record — a thrown run returns no summary, so what it
+    // collected has to be read back from the file on disk. That is the point: the
+    // evidence must outlive the process.
+    const partialShape = existsSync(join(partial, 'normalised', 'shape-report.json'))
+      ? JSON.parse(readFileSync(join(partial, 'normalised', 'shape-report.json'), 'utf8'))
+      : null;
+    const collectedBeforeFailure = partialShape?.collection?.filter((c) => c.file).length ?? 0;
 
-  // The synthetic cues, checked against exactly what they must decode to. Only
-  // the XML entries carry them.
-  const anyXml = xmlEntries.length > 0;
-  checks.push([
-    'entity decoded (a single ampersand, not &amp;)',
-    !anyXml || xmlEntries.some((c) => c.parsedText?.includes(REHEARSAL_EXPECTED[0])),
-  ]);
-  checks.push([
-    'child element flattened (no tags in the text)',
-    !anyXml || xmlEntries.some((c) => c.parsedText?.includes(REHEARSAL_EXPECTED[1])),
-  ]);
-  checks.push(['no raw entity survived', !collection.some((c) => c.parsedText?.some((t) => /&amp;|&lt;/.test(t)))]);
+    checks.push(['the loop threw after the injected point', opened.failed === true]);
+    checks.push([
+      'the requests before the failure still ran',
+      collectedBeforeFailure >= 1,
+    ]);
+    checks.push([
+      'the partial was promoted and is self-describing',
+      existsSync(join(partial, 'normalised', 'video.json')) && Boolean(partialShape),
+    ]);
+    checks.push([
+      'the requests after the failure were NOT attempted',
+      // Everything the partial holds came before the cut, so none of the later
+      // requests ran. If this were false the injection did nothing.
+      (summary.collection ?? []).length === 0,
+    ]);
 
-  section('Rehearsal self-check');
-  let failed = 0;
-  for (const [name, ok] of checks) {
-    console.log(`  ${ok ? 'pass' : 'FAIL'}  ${name}`);
-    if (!ok) failed++;
-  }
-  if (failed) {
-    console.log(`\n  ${failed} check(s) failed — the live run would be discovering this.`);
-    process.exitCode = 1;
+    section('Failure-path self-check');
+    let failed = 0;
+    for (const [name, ok] of checks) {
+      console.log(`  ${ok ? 'pass' : 'FAIL'}  ${name}`);
+      if (!ok) failed++;
+    }
+    if (failed) {
+      console.log(`\n  ${failed} check(s) failed — the partial-preservation path is broken.`);
+      process.exitCode = 1;
+    } else {
+      console.log('\n  a mid-loop failure preserves and names its partial results.');
+    }
+
+    // Clean up the partial this run deliberately created; it is rehearsal debris,
+    // not a real capture. Clearing the failure flag lets the ordinary staging
+    // cleanup below run, so a rehearsal does not leave the "staging kept for
+    // inspection" state that a real failure is supposed to have.
+    await rm(partial, { recursive: true, force: true }).catch(() => {});
+    opened.failed = false;
   } else {
-    console.log('\n  every branch exercised offline. The live run should see nothing new.');
+    const xmlEntries = collection.filter((c) => c.shape === 'xml');
+    const jsonEntries = collection.filter((c) => c.shape === 'json3');
+    checks.push(['both formats were served', xmlEntries.length > 0 && jsonEntries.length > 0]);
+    checks.push(['every collected body produced cues', collection.filter((c) => c.file).every((c) => c.segments > 0)]);
+    checks.push(['no markup leaked into any parsed text', collection.every((c) => !c.markupLeaked)]);
+    // The response is the ground truth about its own format. If a server ignored
+    // `fmt`, the capture must record the disagreement rather than the format we
+    // hoped for — otherwise the one interesting finding is the one we cannot see.
+    checks.push(['no request received a format other than the one asked for', collection.every((c) => c.formatMatches !== false)]);
+
+    // The synthetic cues, checked against exactly what they must decode to. Only
+    // the XML entries carry them.
+    const anyXml = xmlEntries.length > 0;
+    checks.push([
+      'entity decoded (a single ampersand, not &amp;)',
+      !anyXml || xmlEntries.some((c) => c.parsedText?.includes(REHEARSAL_EXPECTED[0])),
+    ]);
+    checks.push([
+      'child element flattened (no tags in the text)',
+      !anyXml || xmlEntries.some((c) => c.parsedText?.includes(REHEARSAL_EXPECTED[1])),
+    ]);
+    checks.push(['no raw entity survived', !collection.some((c) => c.parsedText?.some((t) => /&amp;|&lt;/.test(t)))]);
+
+    section('Rehearsal self-check');
+    let failed = 0;
+    for (const [name, ok] of checks) {
+      console.log(`  ${ok ? 'pass' : 'FAIL'}  ${name}`);
+      if (!ok) failed++;
+    }
+    if (failed) {
+      console.log(`\n  ${failed} check(s) failed — the live run would be discovering this.`);
+      process.exitCode = 1;
+    } else {
+      console.log('\n  every branch exercised offline. The live run should see nothing new.');
+    }
   }
 }
 

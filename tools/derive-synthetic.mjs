@@ -282,15 +282,31 @@ const videoIds = requested.length
         .map((e) => e.name)
     : [];
 
-if (!videoIds.length) {
+// A failed capture leaves `<id>.partial/` beside the good one. It is not a
+// capture: it holds however much was fetched before the failure. Deriving a corpus
+// from it would bake a truncated run into the committed fixtures, so it is left
+// out of the automatic list — but it is reported, because its existence means a
+// shot was spent and its bodies are worth looking at.
+const partials = videoIds.filter((id) => id.endsWith('.partial'));
+const complete = videoIds.filter((id) => !id.endsWith('.partial'));
+
+if (!complete.length) {
   console.error('No captures found. Run `npm run capture` once, first.');
   console.error('This tool reads test/fixtures/ and writes test/synthetic/.');
+  if (partials.length) {
+    console.error(`\nOnly partial results are present: ${partials.join(', ')}.`);
+    console.error('A partial is a failed run, not a capture — derive from a complete one.');
+  }
   process.exit(1);
 }
 
 console.log(`\nDeriving synthetic fixtures — reads local captures, opens nothing\n`);
+if (partials.length) {
+  console.log(`  note: partial results present, not used: ${partials.join(', ')}`);
+  console.log('        a partial is a failed run; inspect it, but do not derive from it.\n');
+}
 
-for (const videoId of videoIds) {
+for (const videoId of complete) {
   const dir = join(FIXTURES, videoId, 'normalised');
   if (!existsSync(join(dir, 'video.json'))) {
     console.log(`  ${videoId}: no capture, skipping`);
@@ -299,14 +315,20 @@ for (const videoId of videoIds) {
 
   const video = JSON.parse(readFileSync(join(dir, 'video.json'), 'utf8'));
   const tracks = [];
+  const formatsSeen = new Set();
   for (const track of video.trackList ?? []) {
     const suffix = track.kind === 'asr' ? '-asr' : '';
     const file = join(dir, `captions-${track.languageCode}${suffix}.json`);
-    const real = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).segments ?? [] : [];
+    const stored = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
+    const real = stored?.segments ?? [];
+    if (stored?.shape) formatsSeen.add(stored.shape);
     tracks.push({
       ...track,
       // Kept as a fact about the real track, not used as fixture text.
       realSegmentCount: real.length,
+      // What the body actually was, so the report can say whether a real XML body
+      // has ever been seen rather than implying coverage it does not have.
+      realShape: stored?.shape ?? null,
       // The real track's measured duration range, so a reviewer can confirm the
       // synthetic cues sit inside it.
       realDurationRange: real.length
@@ -314,6 +336,11 @@ for (const videoId of videoIds) {
         : null,
     });
   }
+
+  // The gap that must not be papered over. The normalised file records the shape
+  // the body actually had; if every one is json3, the XML parser has still only
+  // ever run against XML we built ourselves, and the report must say so.
+  const sawRealXml = formatsSeen.has('xml');
 
   // Chinese content for any track whose language is Chinese, English otherwise.
   const cuesFor = (languageCode) =>
@@ -404,6 +431,11 @@ for (const videoId of videoIds) {
         measured: {
           trackList: video.trackList,
           translationLanguageCount: video.translationLanguages?.length ?? 0,
+          // Whether a real (not self-built) XML caption body was ever captured.
+          // False means the XML parser has only been exercised against XML derived
+          // from JSON3, which is a real limitation and is recorded as one.
+          realXmlBodySeen: sawRealXml,
+          formatsSeen: [...formatsSeen],
         },
       },
       null,
@@ -417,6 +449,10 @@ for (const videoId of videoIds) {
     console.log(`    ${track.languageCode}: real had ${track.realSegmentCount} cues (${range}); wrote ${SHAPE.cueCount}`);
   }
   console.log(`    translation languages carried through: ${video.translationLanguages?.length ?? 0}`);
+  if (!sawRealXml) {
+    console.log('    note: no real XML caption body in this capture.');
+    console.log('          the XML parser has still only seen XML we built from JSON3.');
+  }
   console.log(`    wrote test/synthetic/${name}/`);
 }
 
