@@ -35,6 +35,22 @@ npm run test:panel # side panel
 
 No dependencies — plain Node scripts, so `npm test` works with nothing installed.
 
+### Designing the panel
+
+```bash
+npm run ui   # http://127.0.0.1:8099
+```
+
+Serves the side panel against a mock worker, for working on layout without
+loading the extension or opening a YouTube video. Pick a scenario from the bar —
+two languages, one subtitle, a long silence, an error — or override with
+`?view=focus&fontSize=22`.
+
+It runs the **real panel**: the only thing faked is the Port the panel connects
+to, because that is its entire contact with the extension. It does not exercise
+the content scripts, the caption fetch, or the word marking — a layout proved here
+is a layout, and nothing more.
+
 Each suite boots a real module against stubbed browser globals and drives it
 through its message surface, rather than testing extracted functions. That is
 deliberate: every bug found so far has been in the wiring, not the logic, and

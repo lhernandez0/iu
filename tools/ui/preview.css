@@ -1,0 +1,74 @@
+/*
+ * Styles for the preview shell ONLY.
+ *
+ * The panel's own stylesheet is loaded unchanged, so what is previewed is the
+ * panel. Everything here decorates the shell around it — the scenario switcher
+ * and the note — and must not leak into the panel's rules. Class names are
+ * prefixed `preview-` so a future panel class cannot collide with one of these.
+ */
+
+.preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid #2a2e37;
+  background: #101216;
+}
+
+.preview-title {
+  margin-right: 4px;
+  color: #9aa0ad;
+  font: 11px/1.4 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.preview-scenario {
+  padding: 3px 8px;
+  border: 1px solid #333844;
+  border-radius: 999px;
+  background: #1e2128;
+  color: #e7e9ee;
+  font: 12px/1.4 system-ui, sans-serif;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.preview-scenario:hover {
+  border-color: #4f8cff;
+}
+
+.preview-scenario.on {
+  border-color: #4f8cff;
+  background: #24304a;
+}
+
+.preview-note {
+  margin: 0;
+  padding: 6px 10px;
+  border-bottom: 1px solid #2a2e37;
+  background: #1a1d24;
+  color: #9aa0ad;
+  font: 12px/1.5 system-ui, sans-serif;
+}
+
+/*
+ * The page is served as a normal document, so the panel's `height: 100vh` body
+ * would put the footer off screen behind the preview chrome. The panel expects to
+ * BE the viewport, which it is in a real side panel. Constraining it to a
+ * side-panel-ish width here reproduces that, and makes the narrow-layout
+ * behaviour visible — which is the thing most likely to be wrong and least likely
+ * to be noticed when previewing full-width.
+ */
+body {
+  height: auto;
+  min-height: 100vh;
+}
+
+.transcript {
+  /* Roughly a real Chrome side panel, and resizable by dragging the window. */
+  min-height: 320px;
+  max-height: 60vh;
+}
