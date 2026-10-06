@@ -281,19 +281,18 @@ would arrive twice.
 
 ## Known limitations
 
-- **Marking works on Chinese and Japanese *kanji*, not kana or spaced scripts.**
-  The tokeniser splits by CJK codepoint and passes non-CJK runs through whole.
-  Chinese works; Japanese kanji works because kanji is in that range. But **kana
-  is not** — a hiragana or katakana word passes through unmatched even when it is
-  in the word list, and a large share of Japanese vocabulary is kana-native
-  (とても, そして, です). Korean hangul and English/Spanish alike cannot be marked
-  at all — an English sentence is a single token. See
+- **Marking covers Chinese and Japanese (kanji *and* kana), not spaced scripts.**
+  The tokeniser splits by CJK codepoint — Han and kana — and passes anything else
+  through whole. Chinese and Japanese therefore both segment, including kana-native
+  vocabulary (とても, いらっしゃい). Korean hangul and English/Spanish alike cannot
+  be marked at all — an English sentence is a single token. See
   `docs/design-decisions/0002-language-extensibility.md`.
-- **Japanese inflected forms mark their first kanji, not the word.** The matcher
-  compares against dictionary headwords, so `食べました` does not equal `食べる` —
-  but `食` is itself a headword, so it gets marked carrying the wrong scope. This
-  is the least bad outcome available without lemmatisation, but it means Japanese
-  marks are occasionally narrower than the word on screen.
+- **Japanese inflected forms mark the dictionary headword, not the inflected word
+  on screen.** The matcher compares against dictionary headwords, so `食べました`
+  does not equal `食べる`. Where the stem is itself a headword (`食`) it marks that,
+  carrying a narrower scope than the word on screen. This is the least bad outcome
+  available without lemmatisation; kanji forms of a word mark correctly
+  (`日本語` matches `日本語`).
 - **A few Japanese words with the same spelling share one entry.** JMdict splits
   genuine homographs (`私` is わたし and あたし; `一時` is いちじ and
  ひととき), and the build keeps the first. 156 spellings are affected, so a

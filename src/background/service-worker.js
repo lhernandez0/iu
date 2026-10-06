@@ -210,6 +210,27 @@ function defaultThreshold(list) {
 }
 
 /**
+ * What a level is CALLED in its own list.
+ *
+ * The stored level is ordered 1..N so the ramp and the threshold comparison are
+ * the same for every list, but the NAME differs and it differs in direction: HSK
+ * counts 1..9 getting harder, JLPT counts N5..N1 getting harder. So the number is
+ * an implementation detail and must never be shown as if it were the name — doing
+ * that rendered 私 (JLPT N5, stored 1) as "JLPT 1", which reads as N1, the HARDEST
+ * level, on the easiest word in the language.
+ *
+ * Falls back to the number for a list with no names, so a list that omits them
+ * degrades to the old behaviour instead of rendering `undefined`.
+ *
+ * @param {object|undefined} list
+ * @param {number} level  1-based, easiest first.
+ * @returns {string}
+ */
+function levelName(list, level) {
+  return list?.levelNames?.[level - 1] ?? String(level);
+}
+
+/**
  * A word list by id, or the first available.
  *
  * Resolved from `availableLists` rather than passed around, because the two
@@ -309,8 +330,15 @@ async function ensureDictionaryFor(listId) {
   const path = listIndex?.dictionaries?.[language] ?? listIndex?.dictionaries?.zh;
   if (!path) return dictionary;
 
+  // Timed, because this is the suspected cost behind "captions got slow after
+  // Japanese". A dictionary is 1.4-3MB of synchronous JSON.parse plus an index
+  // build, on the same thread a caption request is waiting on, and the worker is
+  // evicted after ~30s idle so it repeats on every wake. Measuring it is what
+  // separates that from a slow network — they need opposite fixes.
+  const started = Date.now();
   dictionary = await loadDictionary(chrome.runtime.getURL(path));
   dictionaryLanguage = language;
+  console.log(`[IU] dictionary load: ${language} ${Date.now() - started}ms`);
   return dictionary;
 }
 
@@ -433,7 +461,7 @@ function levelsFor(dictionary, word) {
   for (const list of dictionary.lists) {
     const level = levelOf(dictionary, list.id, word);
     if (level !== null) {
-      out.push({ id: list.id, label: list.label, level, levelCount: list.levelCount });
+      out.push({ id: list.id, label: list.label, level, levelName: levelName(list, level), levelCount: list.levelCount });
     }
   }
   return out;
@@ -739,6 +767,7 @@ async function refreshInner() {
   // `null` for the study line, always: the line being learned is never machine
   // translated, so the provider is asked for the plain track.
   let provided;
+  const fetchStarted = Date.now();
   try {
     provided = await sendToContent(trackedTabId, {
       type: MSG.PROVIDE,
@@ -753,6 +782,7 @@ async function refreshInner() {
     broadcastState();
     return;
   }
+  console.log(`[IU] caption fetch: ${Date.now() - fetchStarted}ms`);
 
   if (!provided?.ok && !provided?.fetched) {
     entry.error = provided?.error ?? errorText('TRACK004');
@@ -1375,6 +1405,7 @@ async function applyMarks(entry) {
     activePaused = false;
   }
 
+  const segmentStarted = Date.now();
   const tokensPerLine = segmentSegments(
     entry.rows.map((row) => ({ start: row.start, text: row.text })),
     dictionary.headwords,
@@ -1389,6 +1420,7 @@ async function applyMarks(entry) {
   }));
   entry.markedWith = wanted;
 
+  console.log(`[IU] segment+mark: ${entry.rows.length} lines ${Date.now() - segmentStarted}ms`);
   broadcastState();
 }
 
@@ -1607,8 +1639,11 @@ function learningState(entry = null) {
     // the schema, because which lists exist is a property of the data and which are
     // useful is a property of the video.
     listOptions: offered.map((list) => ({ value: list.id, label: list.label })),
+    // Labelled with the list's OWN level names, easiest first, so JLPT reads
+    // N5→N1 and HSK reads 1→9. The option VALUE stays the internal number because
+    // that is what the threshold comparison uses.
     thresholdOptions: active
-      ? Array.from({ length: active.levelCount }, (_, i) => ({ value: i + 1, label: `${i + 1}+` }))
+      ? Array.from({ length: active.levelCount }, (_, i) => ({ value: i + 1, label: levelName(active, i + 1) }))
       : [],
   };
 }
@@ -1853,7 +1888,19 @@ async function primeDictionary() {
     broadcastState();
     rebuildRows(currentEntry());
 
-    await ensureDictionaryFor(settings.listId);
+    // Deliberately NOT loading the dictionary here.
+    //
+    // This used to be `await ensureDictionaryFor(settings.listId)`, which parses
+    // the language of the STORED or DEFAULT list — Chinese, on a fresh install.
+    // The marking path then parses the language of the VIDEO, which may be the
+    // other one. So a Japanese video made the worker parse BOTH bundled files:
+    // 1.4MB of Chinese it would never read, then 3MB of Japanese it needed. That
+    // is 4.4MB where the budget before Japanese existed was 1.4MB.
+    //
+    // It is synchronous JSON.parse plus an index build on the same thread the
+    // caption request is waiting on, and an MV3 worker is evicted after ~30s idle
+    // so it repeats on every wake. `applyMarks` loads the dictionary it actually
+    // needs and is already deferred, so the eager call had no reader.
   } catch (error) {
     broadcastError(codeError('DICT001', error));
   }

@@ -100,18 +100,67 @@ if (jaSource && !jlptDir) {
  * `defaultThreshold` is the level marking STARTS at for this list. It is per list
  * because a threshold is relative: 4 means "upper intermediate" in a 6-level list
  * and something else in a 9-level one.
+ *
+ * It is NOT hand-picked per list any more. It used to be `4` for both HSK lists,
+ * which encoded one person's own level as a global constant in data that ships to
+ * every user — and JLPT's `3` was picked the same way. It is now the MIDDLE of the
+ * list's own range: marks neither everything nor nothing, needs no tuning for a
+ * new language, and cannot smuggle a personal preference into the data.
+ *
+ * `levelNames` is what the level is CALLED, easiest first. The stored level is an
+ * ordered 1..N so the ramp and the threshold comparison work the same for every
+ * list; the NAME is the only part that differs, and it differs a lot — HSK counts
+ * 1..9 getting harder, JLPT counts N5..N1 getting harder, so the same internal
+ * "2" is "2" in one list and "N4" in the other. Printing the internal number as
+ * though it were the list's own name is what made 私 (JLPT N5, internal 1) show as
+ * "JLPT 1", which a reader takes for N1 — the hardest level — on the easiest word.
  */
 const CHINESE_LISTS = [
-  { id: 'hsk2_0', label: 'HSK 2.0', language: 'zh', levelCount: 6, defaultThreshold: 4, field: 'hsk2_0' },
-  { id: 'hsk3_0', label: 'HSK 3.0', language: 'zh', levelCount: 9, defaultThreshold: 4, field: 'hsk3_0' },
+  { id: 'hsk2_0', label: 'HSK 2.0', language: 'zh', levelCount: 6, levelNames: ['1', '2', '3', '4', '5', '6'], field: 'hsk2_0' },
+  { id: 'hsk3_0', label: 'HSK 3.0', language: 'zh', levelCount: 9, levelNames: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], field: 'hsk3_0' },
 ];
 
 // JLPT is ONE list with five levels, not five lists — mirroring how HSK 2.0 is one
 // list with six. Numbering is N5=1 (easiest) … N1=5, so the ramp runs cool→warm
-// easy→hard exactly as the HSK lists do.
+// easy→hard exactly as the HSK lists do. The internal number stays ascending so
+// nothing downstream has to know JLPT counts backwards; only the NAME differs.
 const JAPANESE_LISTS = [
-  { id: 'jlpt', label: 'JLPT', language: 'ja', levelCount: 5, defaultThreshold: 3 },
+  { id: 'jlpt', label: 'JLPT', language: 'ja', levelCount: 5, levelNames: ['N5', 'N4', 'N3', 'N2', 'N1'] },
 ];
+
+/**
+ * Where marking starts by default: the middle of the list's range.
+ *
+ * The top of the range rather than the bottom, because the point of the tool is
+ * to surface what a learner does NOT know yet. Derived rather than declared so a
+ * new list cannot arrive with a threshold that was chosen for someone else.
+ *
+ * @param {number} levelCount
+ * @returns {number}
+ */
+const defaultThresholdFor = (levelCount) => Math.ceil(levelCount / 2);
+
+/**
+ * The fields the app reads off a list, in the shape both builders emit.
+ *
+ * Shared so the Chinese and Japanese payloads cannot drift, and so a field added
+ * here cannot be emitted by one builder and forgotten by the other — which is how
+ * `defaultThreshold` came to be hand-added to the JSON and then silently dropped
+ * by the next rebuild.
+ *
+ * @param {{id: string, label: string, language: string, levelCount: number, levelNames: string[]}} list
+ * @param {Record<string, number>} levelsForList
+ * @returns {object}
+ */
+const listMeta = (list, levelsForList) => ({
+  id: list.id,
+  label: list.label,
+  language: list.language,
+  levelCount: list.levelCount,
+  levelNames: list.levelNames,
+  levelled: Object.keys(levelsForList).length,
+  defaultThreshold: defaultThresholdFor(list.levelCount),
+});
 
 /** @returns {Promise<object[]>} */
 async function buildChinese(sourcePath) {
@@ -166,14 +215,7 @@ async function buildChinese(sourcePath) {
       note: 'HSK levels from the official MOE HSK 3.0 word list (via TeaPearce data/hsk31-words-pleco.txt; "Pleco" there is the OCR tool, not the author). Unlevelled words have a definition but no level.',
       wordCount: Object.keys(words).length,
     },
-    lists: CHINESE_LISTS.map(({ id, label, language, levelCount, defaultThreshold }) => ({
-      id,
-      label,
-      language,
-      levelCount,
-      levelled: Object.keys(levels[id]).length,
-      defaultThreshold,
-    })),
+    lists: CHINESE_LISTS.map((list) => listMeta(list, levels[list.id])),
     levels,
     words,
   };
@@ -402,17 +444,10 @@ async function buildJapanese(sourcePath, jlptDirPath) {
       sourceTag: '3.6.2+20261005200550',
       sourceSha256: '956cb65b95d12d2b81fa550716d53163dbd3c70ca171a9c7dce97d7238c9d87a',
       levelsCommit: '1ad66734417aca9dbcca6b2d5ee440cb13ab3ba0',
-      note: 'Definitions and readings from JMdict (CC BY-SA 4.0, EDRDG); JLPT levels from open-anki-jlpt-decks (MIT). Kana-initial words cannot be marked by the current segmenter, and words absent from JMdict "common" have no definition.',
+      note: 'Definitions and readings from JMdict (CC BY-SA 4.0, EDRDG); JLPT levels from open-anki-jlpt-decks (MIT). Words absent from JMdict "common" have no definition.',
       wordCount: Object.keys(words).length,
     },
-    lists: JAPANESE_LISTS.map(({ id, label, language, levelCount, defaultThreshold }) => ({
-      id,
-      label,
-      language,
-      levelCount,
-      levelled: Object.keys(levels[id]).length,
-      defaultThreshold,
-    })),
+    lists: JAPANESE_LISTS.map((list) => listMeta(list, levels[list.id])),
     levels,
     words,
   };

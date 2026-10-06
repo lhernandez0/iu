@@ -133,7 +133,10 @@ const stateWithSettings = (learning, top) => ({
     translateInto: null,
     glossTranslated: false,
     listOptions: [{ value: 'hsk2_0', label: 'HSK 2.0' }, { value: 'hsk3_0', label: 'HSK 3.0' }],
-    thresholdOptions: [{ value: 1, label: '1+' }, { value: 2, label: '2+' }, { value: 3, label: '3+' }],
+    // Named by the list, and the numeric HSK names are the same as their values,
+    // so the panel test does not depend on the naming — the browser test is where
+    // JLPT's N5..N1 ordering is exercised.
+    thresholdOptions: [{ value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }],
     ...(learning ?? {}),
   },
 });

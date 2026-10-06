@@ -54,38 +54,45 @@ const JA_MAX_LEN = Math.max(...[...JA_HEADWORDS].map((w) => w.length));
 
 // --- Japanese: what the segmenter can and cannot mark ------------------------
 
-section('the segmenter marks kanji-initial Japanese, and nothing else yet');
+section('the segmenter marks kanji and kana Japanese alike');
 
 {
-  // This is the measured boundary the Japanese plan is built on, asserted so the
-  // documentation cannot drift away from the behaviour. A token matches only if
-  // its FIRST character is CJK — `segment()` skips the longest-match loop for a
-  // non-CJK run, so a run starting with kana passes through whole and is never
-  // looked up.
+  // This was the measured boundary the Japanese plan was built on, and it has
+  // MOVED. The segmenter used to try a word list only when a token's FIRST
+  // character was Han, so a run beginning with kana passed through whole and was
+  // never looked up — which left a large share of ordinary Japanese unmarkable,
+  // because much of it is written in kana and nowhere else. The kana blocks are
+  // now in the matcher, so this asserts the new behaviour.
   //
-  // If this ever starts passing for kana, Phase 2 has landed and the README's
-  // "Known limitations" is out of date.
+  // ⚠️ Chinese is unaffected: Chinese text contains no kana, so no run of Chinese
+  // can tokenise differently than it did before.
   const known = (text) => segment(text, JA_HEADWORDS, JA_MAX_LEN).some((t) => t.known);
 
   check('a kanji-initial verb is matched', known('会う'), true);
   check('a kanji compound is matched', known('日本語'), true);
   check('kanji with okurigana is matched', known('食べる'), true);
 
-  // The gaps, asserted rather than merely described.
-  check('a kana-initial word is NOT matched, even though it is in the list', JA_HEADWORDS.has('とても'), true);
-  check('and yet it does not mark', known('とても'), false);
+  // The gap that closed. とても is a kana-only headword: present in the dictionary
+  // since the Japanese build, and previously unmatchable no matter what.
+  check('the kana word is in the list', JA_HEADWORDS.has('とても'), true);
+  check('and it is now matched', known('とても'), true);
+  check('including a long kana word', known('いらっしゃい'), true);
 
-  // Inflection is the second gap, and it is worse than "does not match". The
-  // matcher is exact against headwords, so `食べました` does not equal `食べる`
-  // — but `食` IS a headword on its own, so longest match takes the bare
+  // Tokens must still reproduce the input exactly, or marks land on the wrong
+  // characters — the invariant the whole render depends on.
+  const toks = segment('私は学生です', JA_HEADWORDS, JA_MAX_LEN);
+  check('tokenising still reproduces the line', toks.map((t) => t.text).join(''), '私は学生です');
+  check('and the particles are looked up too', toks.some((t) => t.known && t.text === 'は'), true);
+
+  // Inflection remains a SEPARATE, unfixed gap, and this is still the honest
+  // account of it. The matcher is exact against headwords, so 食べました does not
+  // equal 食べる — but 食 IS a headword alone, so longest match takes the bare
   // character and marks it. The result is a colour on 食 carrying the meaning of
   // 食 while the line says 食べました: a confident wrong mark, not a missing one.
-  //
-  // Asserted precisely, because "inflected forms are not marked" would be wrong
-  // in the direction that matters — it would suggest nothing happens.
   check('the dictionary form is present', JA_HEADWORDS.has('食べる'), true);
-  check('an inflected form marks only its bare first character', segment('食べました', JA_HEADWORDS, JA_MAX_LEN).map((t) => t.text).join('/'), '食/べました');
+  check('an inflected form still marks its bare first character', known('食べました'), true);
   check('and that character is the one marked, not the whole word', segment('食べました', JA_HEADWORDS, JA_MAX_LEN).some((t) => t.known && t.text === '食'), true);
+  check('leaving the inflected tail unmarked', segment('食べました', JA_HEADWORDS, JA_MAX_LEN).some((t) => !t.known && t.text === 'べ'), true);
 }
 
 section('the Japanese dictionary is internally consistent');
@@ -105,8 +112,8 @@ section('the Japanese dictionary is internally consistent');
   check('every word carries a reading', noReading, []);
 
   // The kana-only entries are the ones the transform keys on kana. They are
-  // present and correct in the data even though the segmenter cannot match them
-  // yet — so when kana support lands they work with no rebuild.
+  // present and correct in the data AND matchable by the segmenter since the kana
+  // blocks were added to its character class.
   check('a kana-only entry is present and keyed by its kana', japanese.words['とても']?.p, 'とても');
 }
 

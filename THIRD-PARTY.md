@@ -136,8 +136,6 @@ Those changes are in the committed file, so the derived work is available.
 
 **Known gaps, recorded because they are limitations of the build, not bugs:**
 
-- **Kana-initial words cannot be marked by the current segmenter.** They are present
-  in the data (so a lookup finds them) but the tokeniser never looks them up.
 - **Words absent from JMdict `common`** have no definition and therefore no level.
   Measured at about 6% of JLPT rows; consuming the full 11.5 MB `jmdict-eng` variant
   instead would close it at eight times the size.

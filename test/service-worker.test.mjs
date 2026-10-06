@@ -1092,16 +1092,17 @@ section('the panel is told which word lists exist, and a default is chosen');
   // fresh install — and on a Chinese video that list covers nothing, which is
   // the very symptom the widest-list rule exists to prevent.
   check('the widest list is chosen by default', state?.learning?.listId, 'hsk3_0');
-  // The learner studies HSK 4, so marking starts there until told otherwise.
-  check('threshold defaults to 4', state?.learning?.threshold, 4);
-
-  // The default must be the list that can mark the most, not whichever is first
-  // in the data. HSK 2.0 places 4,993 of 11,470 words; the other 6,477 exist
-  // only in 3.0, so defaulting to 2.0 makes most of the dictionary silently
-  // invisible — which looks exactly like the highlighting being broken.
-  check('the widest list is chosen by default', state?.learning?.listId, 'hsk3_0');
-  // The learner studies HSK 4, so marking starts there until told otherwise.
-  check('threshold defaults to 4', state?.learning?.threshold, 4);
+  // Derived from the list, not chosen: the middle of its range. Asserted against
+  // the list's own declared count so it stays true if the derivation changes —
+  // the point is the RELATIONSHIP, not the number 5.
+  check('threshold defaults to the middle of the list', state?.learning?.threshold, Math.ceil(lists[1].levelCount / 2));
+  // The options are named by the list, so HSK reads 1..9. This is the check that
+  // would have caught the JLPT badge printing an internal number as a name.
+  check('the level options are named by the list', state?.learning?.thresholdOptions?.[0]?.label, '1');
+  check('through to its top level', state?.learning?.thresholdOptions?.at(-1)?.label, '9');
+  // The stored number is what the comparison uses; the label is what a person
+  // reads. Keeping them separate is the whole point.
+  check('with the option value still the internal number', state?.learning?.thresholdOptions?.[0]?.value, 1);
 }
 
 section('the default list is the one that can mark the most words');
@@ -1192,6 +1193,61 @@ section('switching to a Japanese list loads Japanese words and marks them');
   check('and it has an English gloss', typeof reply?.entry?.m === 'string' && reply.entry.m.length > 0, true);
 }
 
+section('a level is shown by its own list\'s name, not its stored number');
+
+{
+  // The reported bug: 私 — the simplest word in the language, JLPT N5 — was shown
+  // as "JLPT 1", which a reader takes for N1, the HARDEST level. The stored level
+  // is an ordering (1 = easiest); JLPT names its levels backwards from there, so
+  // printing the number as a name inverts the meaning.
+  const JAPANESE_VIDEO = {
+    videoId: 'jaLevelName',
+    title: 'Japanese Test',
+    isLive: false,
+    trackList: [{ languageCode: 'ja', name: 'Japanese', kind: null, isTranslatable: true }],
+    translationLanguages: [{ languageCode: 'ja', name: 'Japanese' }],
+  };
+
+  const { received, sendFromPanel } = await boot({
+    describePayload: DESCRIBE(JAPANESE_VIDEO),
+    providePayload: {
+      ok: true,
+      video: JAPANESE_VIDEO,
+      requested: 'ja',
+      fetched: { languageCode: 'ja', segments: [{ start: 0, duration: 2, text: '私は学生です' }] },
+    },
+    trackPayload: GERMAN,
+  });
+  await waitForState(received, (s) => Array.isArray(s.lists) && s.lists.length > 0, 'startup');
+  await waitForState(received, (s) => s.learning?.listId !== null, 'a default list to be chosen');
+  sendFromPanel({ type: 'set-list', listId: 'jlpt' });
+  // Keep the state from this wait rather than reading the newest message later.
+  // The lookup below adds an `entry` message, and `waitForState` only inspects
+  // the most recent message — so asking for the threshold options afterwards
+  // would never be satisfied and would time out, which reads as a code failure.
+  const state = await waitForState(received, (s) => s.learning?.listId === 'jlpt', 'JLPT to be adopted');
+
+  // The selector must read the same way as the badge, or the control and the
+  // hover disagree about what level 1 is.
+  check('the threshold options run N5 to N1', state?.learning?.thresholdOptions?.map((o) => o.label), ['N5', 'N4', 'N3', 'N2', 'N1']);
+  // Easiest first, so choosing the top of the range marks the hardest words.
+  check('with the stored numbers still ascending for the comparison', state?.learning?.thresholdOptions?.map((o) => o.value), [1, 2, 3, 4, 5]);
+
+  // 私 is JLPT N5 — stored level 1. The badge must say N5.
+  sendFromPanel({ type: 'lookup', word: '私' });
+  const reply = await waitForMessage(received, (m) => m.type === 'entry' && m.word === '私', 'the 私 definition');
+
+  const jlpt = (reply?.levels ?? []).find((l) => l.id === 'jlpt');
+  check('私 has a JLPT level at all', Boolean(jlpt), true);
+  // The RELATIONSHIP, not the string: the level the list places it at must be the
+  // level the list CALLS that position. Asserting 'N5' would pass even if the
+  // names were reordered; this cannot.
+  check('and it carries the list\'s name for that level', jlpt?.levelName, 'N5');
+  check('not the stored number, which would read as N1', jlpt?.levelName !== String(jlpt?.level), true);
+  // And the name has to agree with the selector, not merely be spelled right.
+  check('which is the first option in the selector', state?.learning?.thresholdOptions?.[0]?.label, jlpt?.levelName);
+}
+
 section('a Japanese video offers only the Japanese list');
 
 {
@@ -1258,39 +1314,48 @@ section('a Chinese video offers only the Chinese lists');
 
   check('the two HSK numberings are offered, and JLPT is not', state.learning.listOptions.map((o) => o.value), ['hsk2_0', 'hsk3_0']);
   check('the stored default is unchanged', state.learning.listId, 'hsk3_0');
-  check('and its own threshold applies', state.learning.threshold, 4);
+  // HSK 3.0 has nine levels, so its derived default is the middle one, 5.
+  check('and its own threshold applies', state.learning.threshold, 5);
 }
 
 section('a word only the 3.0 list knows is still marked by default');
 
 {
-  // 早安 is the case the user reported. It is not a headword, so it segments
-  // into 早 and 安 — and neither has an HSK 2.0 level, so under that list both
-  // stayed blank. Both are levelled in 3.0 (1 and 4), so the default list has to
-  // be 3.0 for the marks to appear at all.
+  // 早安 was the case the user reported when the threshold was 4: it is not a
+  // headword, so it segments into its characters, and the one at the learner's
+  // frontier was marked while the known one stayed quiet.
+  //
+  // The threshold is no longer a hardcoded 4 — it is derived from the list's own
+  // range, so HSK 3.0 (nine levels) starts at 5. 早安's characters are HSK 3.0
+  // levels 1 and 4, so BOTH now sit below the threshold and neither is marked.
+  // That would make this test assert nothing, so it uses a pair that straddles
+  // the derived boundary: 啊 is level 2 and 哎 is level 7, and 啊哎 is not a
+  // headword. The behaviour under test is unchanged; only the fixture moved with
+  // the default.
   const { received } = await boot({
     describePayload: DESCRIBE(VIDEO),
     providePayload: {
       ok: true,
       video: VIDEO,
       requested: 'zh-Hans',
-      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '早安' }] },
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '啊哎' }] },
     },
     trackPayload: GERMAN,
   });
   await waitForMarks(received);
 
-  const row = received.at(-1)?.state?.rows?.[0];
+  const state = received.at(-1)?.state;
+  const row = state?.rows?.[0];
   const texts = row?.tokens?.map((t) => t.text) ?? [];
-  check('早安 breaks into its characters', texts, ['早', '安']);
+  check('the pair breaks into its characters', texts, ['啊', '哎']);
 
-  // Which of the two is marked depends on the threshold, and the default is 4.
-  // 早 is HSK 3.0 level 1 and 安 is level 4, so exactly one should be marked —
-  // the one at the learner's frontier. This is the "surface the unknown"
-  // behaviour working: the known character stays quiet.
+  // Which of the two is marked depends on the threshold. Exactly one should be —
+  // the one at the learner's frontier. This is "surface the unknown" working: the
+  // known character stays quiet.
   const byText = Object.fromEntries((row?.tokens ?? []).map((t) => [t.text, t.level]));
-  check('the level-1 character stays unmarked', byText['早'], null);
-  check('the level-4 character is marked', byText['安'], 4);
+  const threshold = state?.learning?.threshold;
+  check('the below-threshold character stays unmarked', byText['啊'], null);
+  check('the above-threshold character is marked', byText['哎'] > threshold, true);
   check('exactly one of the two is marked', row?.tokens?.filter((t) => t.level !== null).length, 1);
 }
 
@@ -1761,8 +1826,8 @@ section('switching word list re-marks rather than reusing the old levels');
 
   check('the list changed', state.learning.listId, 'hsk3_0');
   // Levels are numbered differently between the lists, so a threshold cannot be
-  // carried across: 4 means something else in a 9-level list.
-  check('the threshold was reset for the new list', state.learning.threshold, 4);
+  // carried across: 4 means something else in a 9-level list. HSK 3.0 derives 5.
+  check('the threshold was reset for the new list', state.learning.threshold, 5);
   check('rows were rebuilt', Array.isArray(state.rows[0]?.tokens), true);
 }
 

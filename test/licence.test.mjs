@@ -254,7 +254,7 @@ section('every dictionary carries the fields the app reads from a list');
   // So every field the code reads off a list is asserted to be present here,
   // for every dictionary rather than only the Chinese one.
   const index = JSON.parse(readFileSync(join(ROOT, 'src/learn/data/index.json'), 'utf8'));
-  const REQUIRED = ['id', 'label', 'language', 'levelCount', 'levelled', 'defaultThreshold'];
+  const REQUIRED = ['id', 'label', 'language', 'levelCount', 'levelled', 'defaultThreshold', 'levelNames'];
 
   for (const [language, rel] of Object.entries(index.dictionaries ?? {})) {
     const data = JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
@@ -275,6 +275,37 @@ section('every dictionary carries the fields the app reads from a list');
       (l) => !Number.isFinite(l.defaultThreshold) || l.defaultThreshold < 1 || l.defaultThreshold > l.levelCount,
     );
     check(`[${language}] every default threshold is a level that exists in its list`, bad.map((l) => l.id), []);
+
+    // The threshold the learner starts at is DERIVED from the list, not chosen.
+    //
+    // It used to be a hand-written number, and the number was 4 for both HSK
+    // lists — the personal level of the person who built it, shipped as a global
+    // constant. That is wrong for anyone else, and it meant a new language needed
+    // someone to guess a starting point for it.
+    //
+    // Asserting the derivation rather than the value is what keeps a hand-picked
+    // number from creeping back in: change the rule above and this fails, whereas
+    // a test asserting `4` would have ENCODED the bug it was meant to catch.
+    const wrongDefaults = lists.filter((l) => l.defaultThreshold !== Math.ceil((l.levelCount ?? 0) / 2));
+    check(`[${language}] every default threshold is the middle of its range`, wrongDefaults.map((l) => l.id), []);
+
+    // Every list names its own levels, ascending in difficulty. JLPT runs N5->N1
+    // while HSK runs 1->N, so the label cannot be derived from the level number —
+    // printing the number rendered JLPT's easiest level (internal 1) as "JLPT 1",
+    // which a human reads as N1, the hardest.
+    const wrongNames = lists.filter((l) => (l.levelNames ?? []).length !== l.levelCount);
+    check(`[${language}] every list names exactly as many levels as it declares`, wrongNames.map((l) => l.id), []);
+
+    // Difficulty must ascend, or the threshold's "at or above" test marks the
+    // wrong end of the list. Checked on the label where the list carries one.
+    const unordered = [];
+    for (const list of lists) {
+      if (list.id !== 'jlpt') continue;
+      if (String(list.levelNames?.[0]) !== 'N5' || String(list.levelNames?.at(-1)) !== 'N1') {
+        unordered.push(list.id);
+      }
+    }
+    check(`[${language}] a list whose naming is reversed is declared in that order`, unordered, []);
   }
 }
 

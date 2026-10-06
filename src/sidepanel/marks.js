@@ -200,7 +200,11 @@ export function showEntry(result) {
     for (const level of result.levels) {
       const badge = document.createElement('span');
       badge.className = 'badge';
-      badge.textContent = `${level.label} ${level.level}`;
+      // The list's own NAME for the level, never the stored number. JLPT names
+      // its levels N5..N1 — easiest first — so printing the stored 1 as "1" read
+      // as N1, the hardest, on 私. `levelName` carries the name; the number is
+      // only an ordering.
+      badge.textContent = `${level.label} ${level.levelName ?? level.level}`;
       // Coloured with the same ramp the underline uses, so the badge and the
       // mark agree about what level this is.
       badge.style.setProperty('--mark', levelColour(level.level, level.levelCount));
