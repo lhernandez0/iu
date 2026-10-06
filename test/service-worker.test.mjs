@@ -669,6 +669,59 @@ section('a translation needs its own track, and skips one that is already loaded
   check('and the second language is still the source', state?.secondary, 'de');
 }
 
+section('one language occupies both slots: itself, and its translation');
+
+{
+  // The reported case. A video whose only subtitle is English, and the wish to
+  // read English with its translation underneath. "Off" cannot be translated —
+  // a translation needs a source track to convert — so the second slot has to
+  // hold English a second time for the translation to have anything to work on.
+  //
+  // The cache was keyed by language code alone, so the translated fetch
+  // OVERWROTE the untranslated one. Both slots then read back the same entry and
+  // the panel showed the translation on BOTH lines: the original English was
+  // gone, which is what "both converted to Chinese" was.
+  const stub = await boot({
+    describePayload: DESCRIBE(VIDEO),
+    providePayload: PROVIDER(VIDEO, SEGMENTS),
+    trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
+  });
+
+  stub.sendFromPanel({ type: 'set-secondary', languageCode: 'en' });
+  await settle();
+
+  check('English can be the second language as well as the first', stub.received.at(-1)?.state?.secondary, 'en');
+  check('with both lines showing the untranslated text', stub.received.at(-1)?.state?.rows?.[0]?.secondary, 'Hey there');
+
+  stub.sendFromPanel({ type: 'set-setting', id: 'translateSecondary', value: 'ko' });
+  await settle();
+
+  const state = stub.received.at(-1)?.state;
+  // The point of the whole arrangement: one line original, one line translated.
+  check('the FIRST line stays the original', state?.rows?.[0]?.text, 'Hey there');
+  check('and only the second line is translated', state?.rows?.[0]?.secondary, '[ko] Hey there');
+  // Every row, not just the first — a collision would affect all of them.
+  check('the last row keeps its original too', state?.rows?.[2]?.text, 'welcome back');
+  check('and its translation', state?.rows?.[2]?.secondary, '[ko] welcome back');
+
+  // Swapping must not reintroduce the collision: the two renderings still
+  // differ, so the cache has to keep holding both at once.
+  //
+  // The secondary translation is cleared first, on purpose. Translation
+  // preferences are per SLOT, not per language, so a swap alone would leave both
+  // slots asking for Korean — and "both lines are translated" would then be the
+  // settings being obeyed rather than a bug. Clearing one makes the two slots
+  // ask for different renderings, which is what has to keep working.
+  stub.sendFromPanel({ type: 'set-setting', id: 'translateSecondary', value: null });
+  stub.sendFromPanel({ type: 'set-setting', id: 'translatePrimary', value: 'ko' });
+  await settle();
+
+  const swapped = stub.received.at(-1)?.state;
+  check('the first line is translated', swapped?.rows?.[0]?.text, '[ko] Hey there');
+  check('and the second line is the original', swapped?.rows?.[0]?.secondary, 'Hey there');
+  check('with the last row agreeing', swapped?.rows?.[2]?.secondary, 'welcome back');
+}
+
 // --- 3c. Settings -----------------------------------------------------------
 
 section('a cached video still hands its transcript to the content script');

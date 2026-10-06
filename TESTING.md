@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 560 checks)
+## Tier 1 — hermetic (`npm test`, 569 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies — plain Node scripts,
@@ -39,7 +39,7 @@ so they run with nothing installed.
 | --- | --- | --- |
 | `unit.test.mjs` | nothing | 48 |
 | `manifest.test.mjs` | nothing | 23 |
-| `service-worker.test.mjs` | worker + `chrome` stub | 190 |
+| `service-worker.test.mjs` | worker + `chrome` stub | 199 |
 | `sidepanel.test.mjs` | panel + DOM stub | 107 |
 | `page-bridge.test.mjs` | bridge + page stub | 50 |
 | `content.test.mjs` | content script | 98 |

@@ -631,10 +631,17 @@ async function refreshInner() {
   rebuildRows(entry);
 
   // Show the primary immediately, then fill in the second language.
+  //
+  // The check is for the SECOND SLOT'S RENDERING, not for its language code.
+  // Choosing the same language twice is legitimate — it is how you ask for one
+  // language and its translation side by side — and a language-code test would
+  // see the primary's entry and decide the second slot was already loaded,
+  // leaving it showing the primary's text instead of its own translation.
   const wantsSecondary =
     entry.secondaryLang &&
-    !entry.tracks.has(entry.secondaryLang) &&
-    entry.secondaryLang !== entry.primaryLang;
+    !entry.tracks.has(trackKey(entry.secondaryLang, effectiveTranslation(entry, 'secondary'))) &&
+    trackKey(entry.secondaryLang, effectiveTranslation(entry, 'secondary')) !==
+      trackKey(entry.primaryLang ?? '', effectiveTranslation(entry, 'primary'));
   if (wantsSecondary) broadcastState();
 
   if (wantsSecondary) {
@@ -746,7 +753,7 @@ function isCached(entry) {
   if (entry.error) return false;
   if (!entry.primaryLang || !entry.rows.length) return false;
 
-  const cached = entry.tracks.get(entry.primaryLang);
+  const cached = entry.tracks.get(trackKey(entry.primaryLang, effectiveTranslation(entry, 'primary')));
   if (!cached) return false;
 
   // The cached text has to be the rendering now being asked for.
@@ -806,11 +813,32 @@ function currentEntry() {
 }
 
 /**
- * Store a fetched track, keyed by its SOURCE language.
+ * The cache key for one RENDERING of one source track.
  *
- * A translation is recorded as a field on the source track rather than filed
- * under the target's code. Keying it by target would mean a video with both a
- * real Japanese track and an English-to-Japanese translation would have the two
+ * A source track and its translation are two different transcripts with the same
+ * language code, and they have to coexist: "English" and "English translated into
+ * Chinese" is the whole point of the second slot, and it is the one bilingual
+ * setup where both lines come from the same source.
+ *
+ * Keying by language code alone made those collide. The second fetch overwrote
+ * the first, so both slots read back the same entry and the panel showed the
+ * translation on BOTH lines — the original source text was gone. It also meant
+ * choosing the same language twice silently discarded one of the choices.
+ *
+ * @param {string} languageCode
+ * @param {string|null} translateTo
+ * @returns {string}
+ */
+function trackKey(languageCode, translateTo) {
+  return `${languageCode}|${translateTo ?? ''}`;
+}
+
+/**
+ * Store a fetched track, keyed by its source language AND its translation.
+ *
+ * A translation is recorded alongside its source track rather than filed under
+ * the target's code. Keying it by target would mean a video with both a real
+ * Japanese track and an English-to-Japanese translation would have the two
  * silently overwrite one another, and the rows would be built from whichever
  * arrived last. It also keeps `hasTrack` honest: a translated line exists
  * because its source track does.
@@ -821,7 +849,7 @@ function currentEntry() {
 function recordTrack(entry, fetched) {
   if (!fetched?.languageCode || !fetched.segments?.length) return false;
 
-  entry.tracks.set(fetched.languageCode, {
+  entry.tracks.set(trackKey(fetched.languageCode, fetched.translateTo ?? null), {
     segments: fetched.segments,
     translateTo: fetched.translateTo ?? null,
   });
@@ -850,7 +878,7 @@ function recordTrack(entry, fetched) {
  */
 async function primeContentPosition(entry) {
   if (trackedTabId === null) return;
-  const segments = entry.tracks.get(entry.primaryLang ?? '')?.segments;
+  const segments = entry.tracks.get(trackKey(entry.primaryLang ?? '', effectiveTranslation(entry, 'primary')))?.segments;
   if (!segments?.length) return;
 
   try {
@@ -877,7 +905,7 @@ async function loadTrack(entry, languageCode, translateTo = null) {
   // the cache and refetching: a translation can fail, and dropping the track
   // first would leave the video with no transcript at all when it does. This
   // way the old text stays on screen and only the error is new.
-  const cached = entry.tracks.get(languageCode);
+  const cached = entry.tracks.get(trackKey(languageCode, translateTo ?? null));
   if (cached && cached.translateTo === (translateTo ?? null)) return null;
 
   let result;
@@ -939,8 +967,10 @@ function rebuildRows(entry) {
     entry.markedWith = null;
   }
 
-  const primary = entry.tracks.get(entry.primaryLang ?? '')?.segments ?? [];
-  const secondary = entry.secondaryLang ? entry.tracks.get(entry.secondaryLang)?.segments ?? [] : [];
+  const primary = entry.tracks.get(trackKey(entry.primaryLang ?? '', effectiveTranslation(entry, 'primary')))?.segments ?? [];
+  const secondary = entry.secondaryLang
+    ? entry.tracks.get(trackKey(entry.secondaryLang, effectiveTranslation(entry, 'secondary')))?.segments ?? []
+    : [];
   const aligned = secondary.length && primary.length ? alignSecondary(primary, secondary) : null;
 
   entry.rows = primary.map((segment, index) => ({
