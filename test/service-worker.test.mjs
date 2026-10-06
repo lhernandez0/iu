@@ -537,7 +537,7 @@ section('the study line is not translated even when the gloss is');
   const state = stub.received.at(-1)?.state;
   check('the gloss is translated', state?.rows?.[0]?.secondary, '[ja] Hey there');
   check('and the study line is not', state?.rows?.[0]?.text, 'Hey there');
-  check('nothing reports the study line as translated', state?.studyTranslation, undefined);
+  check('nothing reports the study line as translated', state?.studyTranslation, null);
 }
 
 section('the translate menu comes from the video, and excludes the source language');

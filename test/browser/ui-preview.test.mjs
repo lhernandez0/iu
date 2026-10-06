@@ -25,6 +25,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
@@ -54,6 +55,38 @@ const executablePath = findChrome();
 if (!executablePath) {
   console.log('SKIP  no Chromium found; cannot smoke-test the preview server.');
   process.exit(0);
+}
+
+/**
+ * The preview page duplicates the panel's markup, and that duplication has a cost
+ * that was paid for real: `layout` was added here and not to `sidepanel.html`, so
+ * the preview worked while the SHIPPING panel threw on the missing element and
+ * rendered nothing. The browser tier caught it; nothing in the preview did.
+ *
+ * So the two files are compared directly. Any id the panel reaches for must exist
+ * in both, and this runs before a browser is even launched.
+ *
+ * @param {string} html
+ * @returns {Set<string>}
+ */
+function declaredIds(html) {
+  return new Set([...html.matchAll(/id="([^"]+)"/g)].map((match) => match[1]));
+}
+
+{
+  const panelHtml = await readFile(join(ROOT, 'src/sidepanel/sidepanel.html'), 'utf8');
+  const previewHtml = await readFile(join(ROOT, 'tools/ui/index.html'), 'utf8');
+  const panel = declaredIds(panelHtml);
+  const preview = declaredIds(previewHtml);
+
+  const onlyPanel = [...panel].filter((id) => !preview.has(id));
+  // Preview-only ids are expected: the switcher and the note are the shell around
+  // the panel and have no counterpart in the shipped markup. What matters is the
+  // other direction — the panel needing something the preview does not declare.
+  const onlyPreview = [...preview].filter((id) => !panel.has(id) && !id.startsWith('preview-'));
+
+  check('the preview declares no panel id that the panel does not', onlyPreview, []);
+  check('and the panel declares no id the preview does not', onlyPanel, []);
 }
 
 /**
@@ -161,7 +194,8 @@ try {
         first: rows[0]?.querySelector('.primary')?.textContent ?? '',
         gloss: rows[0]?.querySelector('.secondary')?.textContent ?? '',
         marks: document.querySelectorAll('.mark').length,
-        glossOptionsHidden: document.getElementById('gloss-options')?.hidden ?? null,
+        targetHidden: document.getElementById('translate-target-row')?.hidden ?? null,
+        mtBoxes: [...document.querySelectorAll('.line-translate input')].map((input) => input.id),
         status: (document.getElementById('status')?.textContent ?? '').slice(0, 40),
       };
     });
@@ -177,10 +211,14 @@ try {
       check('the status has left its placeholder', rendered.status.includes('lines'), true);
     }
 
-    // The translation controls are only offered when there is a line to translate.
-    if (scenario.tracks.length) {
-      check('the gloss controls follow the scenario', rendered.glossOptionsHidden, !scenario.settings.glossLanguage);
-    }
+    // The target control follows whether anything has asked to be translated,
+    // rather than whether a second line exists: either line can be translated now,
+    // so a single-line video still gets the control.
+    const wantsTarget = Boolean(scenario.settings.glossTranslated || scenario.settings.studyTranslated);
+    check('the translate target follows the scenario', rendered.targetHidden, !wantsTarget);
+    // Both lines always offer their own MT checkbox, disabled where the track
+    // cannot take a translation.
+    check('both lines have a translate checkbox', rendered.mtBoxes, ['study-translated', 'gloss-translated']);
 
     // Each scenario exists to make one state reachable, so what matters is that
     // the state is actually on screen. A preview that rendered every scenario
@@ -200,8 +238,20 @@ try {
       check('there is no gloss line at all', rendered.gloss, '');
     }
     if (scenario.id === 'no-marks') {
-      check('nothing is marked', rendered.marks, 0);
-      check('but the text is still there', rendered.first.length > 0, true);
+      // The point of this scenario is that a higher threshold highlights FEWER
+      // words. Asserted against the same page at level 1 rather than a magic
+      // count, so the check survives the corpus or the dictionary changing.
+      check('a high threshold still marks something', rendered.marks > 0, true);
+      check('and the text is still there', rendered.first.length > 0, true);
+
+      await page.selectOption('#threshold', '1');
+      await page.waitForFunction(
+        (before) => document.querySelectorAll('.mark').length > before,
+        rendered.marks,
+        { timeout: 10000 },
+      );
+      const atLevelOne = await page.evaluate(() => document.querySelectorAll('.mark').length);
+      check('and level 1 marks strictly more', atLevelOne > rendered.marks, true);
     }
 
     await context.close();

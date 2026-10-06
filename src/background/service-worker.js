@@ -771,42 +771,42 @@ function isCached(entry) {
 /**
  * The translation actually worth asking for, for one ROLE.
  *
- * The study line is never translated. That is a rule, not a preference: the line
- * being learned is the text you are reading in its own language, and the marks,
- * the hover definitions and the HSK levels all describe that text. Machine
- * translation paraphrases rather than glosses and hides word boundaries — which
- * is exactly what those marks exist to supply — so translating it would put a
- * coloured, studiable overlay on a text the learner cannot see. The old model
- * allowed it, because a translation was a property of a slot and the first slot
- * was always the study line.
+ * EITHER line can be translated. Each has its own bit sharing the one target, and
+ * the rule is about the LINE, not about which line it is.
  *
- * The gloss is translated when the target is set and its source track supports
- * it. `glossTranslated` is the per-line bit: with the target global, that is all
- * that varies per line.
+ * An earlier version allowed only the gloss, reasoning that the study line is
+ * "the text being learned". That conflated two different things — which line
+ * carries the learning MARKS, and which line can be TRANSLATED — and forbade a
+ * feature for a reason that only applies to the other one. The cases it broke are
+ * ordinary: a Chinese-only video where you want the Chinese line translated with
+ * the original kept alongside, or an English video where the first line is the one
+ * you want naturalised.
  *
- * When the gloss is NOT translated it is an ordinary second track — which is the
- * common case, and why the same picker serves both.
+ * The rule that does hold is about marks: a machine translation carries NONE,
+ * whichever line it is on, because it paraphrases rather than glosses and hides
+ * the word boundaries the marks exist to point at. `rebuildRows` enforces that,
+ * and it is the reason translating the marked line is safe to allow.
  *
  * @param {VideoEntry} entry
  * @param {'study'|'gloss'} role
  * @returns {string|null}
  */
 function effectiveTranslation(entry, role) {
-  if (role === 'study') return null;
-  if (!settings.glossTranslated) return null;
-
   const wanted = settings.translateInto;
   if (!wanted) return null;
 
-  const languageCode = entry.glossLang;
-  // No gloss track chosen. Nothing to translate — and, unlike before, no asking
-  // the provider to pick a track "with translation in mind", because there is no
-  // line for the result to appear on.
+  const on = role === 'study' ? settings.studyTranslated : settings.glossTranslated;
+  if (!on) return null;
+
+  const languageCode = role === 'study' ? entry.studyLang : entry.glossLang;
+  // Nothing to translate. Unlike before, the provider is not asked to choose a
+  // track "with translation in mind" — the result has to land on a line that
+  // exists.
   if (!languageCode) return null;
 
-  // Its own language is not a translation target: asking YouTube to turn Chinese
-  // into Chinese returns the original text, which would be presented as though a
-  // translation had happened.
+  // Its own language is not a target: asking YouTube to turn Chinese into Chinese
+  // returns the original text, which would be presented as though a translation
+  // had happened.
   if (languageCode === wanted) return null;
 
   const track = entry.trackList.find((t) => t.languageCode === languageCode);
@@ -961,6 +961,46 @@ async function loadTrack(entry, languageCode, translateTo = null) {
  *
  * @param {VideoEntry|null} entry
  */
+/** @param {VideoEntry|null} entry @returns {object|undefined} */
+function activeList(entry) {
+  return availableLists.find((list) => list.id === settings.listId) ?? availableLists[0];
+}
+
+/**
+ * Whether a word list can mark text in this language.
+ *
+ * A list declares a language (`zh` today). Track codes are more specific —
+ * `zh-Hans`, `zh-Hant`, `en-US` — so the comparison is on the primary subtag.
+ *
+ * This is the real gate on whether a line can be marked, and it replaces a rule
+ * that was wrong: "a machine translation carries no marks". That is true where
+ * the translation has no words from the list — Chinese into English — and false
+ * the other way, where an English line translated into Chinese has plenty of
+ * Chinese to level. The gate is the language of the text ON SCREEN, not which
+ * line it is on and not whether a machine produced it.
+ *
+ * @param {object|undefined} list
+ * @param {string|null|undefined} languageCode
+ * @returns {boolean}
+ */
+function listCoversLanguage(list, languageCode) {
+  if (!list?.language || !languageCode) return false;
+  const primary = String(languageCode).split('-')[0].toLowerCase();
+  return primary === String(list.language).split('-')[0].toLowerCase();
+}
+
+/**
+ * The language a line is actually DISPLAYING, which is not always its track's: a
+ * translated line shows the target's text.
+ *
+ * @param {VideoEntry} entry
+ * @param {'study'|'gloss'} role
+ * @returns {string|null}
+ */
+function shownLanguage(entry, role) {
+  return effectiveTranslation(entry, role) ?? (role === 'study' ? entry.studyLang : entry.glossLang);
+}
+
 function rebuildRows(entry) {
   if (!entry) return;
 
@@ -989,12 +1029,23 @@ function rebuildRows(entry) {
     : [];
   const aligned = secondary.length && primary.length ? alignSecondary(primary, secondary) : null;
 
+  // Whether the STUDY line's text is machine output.
+  //
+  // This drops the marks, and it is an APPROXIMATION of the real rule, which is
+  // language coverage: a line can be marked when a word list exists for the
+  // language it is DISPLAYING. Today the only lists are Chinese, so translating
+  // the study line away from Chinese does lose its marks, which is what this
+  // achieves. It is wrong the other way — an English line translated INTO Chinese
+  // is markable and this would refuse — and it should be replaced by the coverage
+  // check rather than by another guess. Noted rather than silently left.
+  const studyTranslated = Boolean(effectiveTranslation(entry, 'study'));
+
   entry.rows = primary.map((segment, index) => ({
     start: segment.start,
     duration: segment.duration,
     text: segment.text,
     secondary: aligned ? aligned[index] : '',
-    tokens: previous.get(segment.text),
+    tokens: studyTranslated ? undefined : previous.get(segment.text),
   }));
 
   // Segmentation is deferred and may not have run yet, so marks are applied
@@ -1166,8 +1217,10 @@ function deriveState() {
       trackList: [],
       translationLanguages: [],
       translationAvailable: {},
+      studyTranslation: null,
       glossTranslation: null,
       translateInto: settings.translateInto,
+      studyTranslated: Boolean(settings.studyTranslated),
       glossTranslated: Boolean(settings.glossTranslated),
       study: null,
       gloss: null,
@@ -1196,12 +1249,14 @@ function deriveState() {
     translationAvailable: Object.fromEntries(
       (entry.trackList ?? []).map((track) => [track.languageCode, Boolean(track.isTranslatable)]),
     ),
-    // What is actually on screen for the gloss, which is not always what was
+    // What is actually on screen for each line, which is not always what was
     // asked for: a video whose tracks cannot be translated falls back to the
-    // original text. The study line has no equivalent because it is never
-    // translated — `null` here would be indistinguishable from "not available".
+    // original text. Both are present because EITHER line can be translated, so a
+    // null here means "this line is not translated", never "this line cannot be".
+    studyTranslation: effectiveTranslation(entry, 'study'),
     glossTranslation: effectiveTranslation(entry, 'gloss'),
     translateInto: settings.translateInto,
+    studyTranslated: Boolean(settings.studyTranslated),
     glossTranslated: Boolean(settings.glossTranslated),
     study: entry.studyLang,
     gloss: entry.glossLang,
@@ -1313,31 +1368,41 @@ async function applySetting(id, value) {
       break;
 
     case 'translateInto':
+    case 'studyTranslated':
     case 'glossTranslated': {
       // Only the RENDERING changes, not the chosen language, so this re-renders
-      // rather than re-choosing. Both settings decide the same one thing — what
-      // the gloss shows — so they share a branch.
+      // rather than re-choosing. All three settings decide the same thing — what
+      // the lines show — so they share a branch.
       //
       // No cache surgery: loadTrack compares the cached rendering against the
       // one wanted, so a different target refetches and an unreachable target
       // leaves the existing text alone.
       const entry = currentEntry();
-      const languageCode = entry?.glossLang ?? null;
 
-      // There is a target and a track, but the track cannot be translated, so
-      // there is nothing to fetch and the rendering is already the original. Say
-      // WHY rather than silently doing nothing — the learner asked for English
-      // and is looking at Chinese, and without this the feature appears broken.
-      const wanted = Boolean(settings.glossTranslated && settings.translateInto);
-      translationError =
-        wanted && languageCode && !effectiveTranslation(entry, 'gloss')
-          ? 'This caption track cannot be auto-translated.'
-          : null;
+      // A line whose track cannot be translated has nothing to fetch and is
+      // already showing the original, so say WHY rather than silently doing
+      // nothing: the learner ticked the box and is looking at unchanged text, and
+      // without this the feature appears broken.
+      const wanted = Boolean(settings.translateInto && (settings.studyTranslated || settings.glossTranslated));
+      const refused =
+        (settings.studyTranslated && entry?.studyLang && !effectiveTranslation(entry, 'study')) ||
+        (settings.glossTranslated && entry?.glossLang && !effectiveTranslation(entry, 'gloss'));
+      translationError = wanted && refused ? 'This caption track cannot be auto-translated.' : null;
 
-      // No language to load when there is no gloss chosen; broadcast the reason
-      // instead of re-selecting a track that does not exist.
-      if (languageCode) void selectTrack('gloss', languageCode);
-      else broadcastState();
+      // Re-render BOTH lines. Either may have changed rendering, and a line whose
+      // rendering is already cached returns immediately — so this is cheap when
+      // only one of them moved. Doing only the study line was a real bug: the
+      // gloss kept its old text, so ticking a box changed nothing on screen.
+      const study = entry?.studyLang ?? null;
+      const gloss = entry?.glossLang ?? null;
+      if (!study && !gloss) {
+        broadcastState();
+        break;
+      }
+      void (async () => {
+        if (study) await selectTrack('study', study);
+        if (gloss) await selectTrack('gloss', gloss);
+      })();
       break;
     }
 

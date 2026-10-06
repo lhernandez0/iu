@@ -526,39 +526,47 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('the original text is shown first', untranslated, 'こんにちは');
     check('with no machine tag', await page.evaluate(() => document.querySelectorAll('.machine').length), 0);
 
-    // The translation controls belong to the GLOSS, because a translation needs a
-    // line to translate. This video has one subtitle, so the second line is set
-    // to that same language — which is the reported scenario, and the only way to
-    // get "Japanese with its translation underneath".
+    // Either line can be translated. This video has one subtitle, so the test
+    // translates the FIRST line by its own checkbox — which is the case that used
+    // to be impossible, because translation was tied to the second slot.
     //
-    // For the same reason the STUDY line cannot be translated at all: putting
-    // machine output there would leave the learning marks describing a text the
-    // learner cannot see.
-    check('the translation controls are hidden with no second line', await page.evaluate(() => document.getElementById('gloss-options').hidden), true);
-    await page.selectOption('#gloss', 'ja');
-    await page.waitForFunction(() => !document.getElementById('gloss-options').hidden, null, { timeout: 10000 });
-    check('and appear once a second line exists', await page.evaluate(() => document.getElementById('gloss-options').hidden), false);
+    // The target control appears only once something is asking to be translated,
+    // rather than being permanently on screen.
+    check('the target is hidden until a line asks for it', await page.evaluate(() => document.getElementById('translate-target-row').hidden), true);
 
-    // Tick the box and choose a target, as a user does.
-    await page.check('#gloss-translated');
+    // Tick the FIRST line's box and choose a target, as a user does.
+    //
+    // Dispatched rather than clicked: the panel re-renders on every worker state
+    // push, and a push landing between Playwright's click and its confirmation
+    // resets `checked`, so `page.check` reports "did not change its state" even
+    // though the control works. Setting the value and firing `change` is the same
+    // event the browser would send, without depending on that timing.
+    await page.evaluate(() => {
+      const box = document.getElementById('study-translated');
+      box.checked = true;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await page.waitForFunction(() => !document.getElementById('translate-target-row').hidden, null, { timeout: 10000 });
+    check('and appears once a line asks for it', await page.evaluate(() => document.getElementById('translate-target-row').hidden), false);
     await page.selectOption('#translate-into', 'en');
     // The text has to actually change, so waiting on the value alone would pass
     // before the refetch landed.
     await page.waitForFunction(
-      () => (document.querySelector('.row .secondary')?.textContent ?? '').includes('[en]'),
+      () => (document.querySelector('.row .primary')?.textContent ?? '').includes('[en]'),
       null,
       { timeout: 20000 },
     );
 
-    const translated = await page.textContent('.row .secondary');
+    const translated = await page.textContent('.row .primary');
     // The MT tag is part of the line's text because it is inside the same span.
-    check('the translated text is on the second line', translated, '[en] こんにちはMT');
-    // And the study line is untouched, so the marks still describe what was said.
-    check('and the first line is the real transcript', await page.textContent('.row .primary'), 'こんにちは');
+    check('the translated text is on the first line', translated, '[en] こんにちはMT');
     // Tagged as machine output, so a translated line is not mistaken for a real
     // subtitle track.
-    const tag = await page.evaluate(() => document.querySelector('.row .secondary .machine')?.textContent ?? '');
+    const tag = await page.evaluate(() => document.querySelector('.row .primary .machine')?.textContent ?? '');
     check('the line is marked as machine output', tag, 'MT');
+    // A machine translation carries no learning marks: the word list describes the
+    // source language and the translation no longer holds those words.
+    check('and a translated line carries no marks', await page.evaluate(() => document.querySelectorAll('.row .primary .mark').length), 0);
 
     // The source track is unchanged in the picker: a translation is a rendering
     // of the same track, not a switch to a different one.
@@ -574,13 +582,17 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('but other languages are', options.includes('en'), true);
 
     // Unticking must refetch, not keep the translation.
-    await page.uncheck('#gloss-translated');
+    await page.evaluate(() => {
+      const box = document.getElementById('study-translated');
+      box.checked = false;
+      box.dispatchEvent(new Event('change', { bubbles: true }));
+    });
     await page.waitForFunction(
-      () => (document.querySelector('.row .secondary')?.textContent ?? '') === 'こんにちは',
+      () => (document.querySelector('.row .primary')?.textContent ?? '') === 'こんにちは',
       null,
       { timeout: 20000 },
     );
-    check('and the original comes back', await page.textContent('.row .secondary'), 'こんにちは');
+    check('and the original comes back', await page.textContent('.row .primary'), 'こんにちは');
   }
 
   section('the focus view really hides the other lines, and text size really scales');

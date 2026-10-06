@@ -42,6 +42,24 @@ const VIEW_OPTIONS = [
 ];
 
 /**
+ * How much of the panel's chrome is on screen.
+ *
+ * `full` keeps every control visible. `collapsed` reduces the bars to the two
+ * language pickers and folds the reading controls away, so the transcript — which
+ * is what the panel is for — gets the vertical space. A side panel is roughly
+ * 600px tall on a laptop, and three bars plus a status line is a large fraction
+ * of it.
+ *
+ * A setting rather than an automatic behaviour: whether the controls should yield
+ * to the text depends on what you are doing, and guessing wrong either hides a
+ * control you were reaching for or spends height you wanted for reading.
+ */
+const LAYOUT_OPTIONS = [
+  { value: 'full', label: 'Full' },
+  { value: 'collapsed', label: 'Collapsed' },
+];
+
+/**
  * @type {SettingDefinition[]}
  */
 export const SETTINGS = [
@@ -53,6 +71,15 @@ export const SETTINGS = [
     options: VIEW_OPTIONS,
     default: 'all',
     coerce: (value) => (VIEW_OPTIONS.some((o) => o.value === value) ? value : 'all'),
+  },
+  {
+    id: 'layout',
+    label: 'Controls',
+    group: 'reading',
+    type: 'select',
+    options: LAYOUT_OPTIONS,
+    default: 'full',
+    coerce: (value) => (LAYOUT_OPTIONS.some((o) => o.value === value) ? value : 'full'),
   },
   {
     id: 'fontSize',
@@ -137,15 +164,29 @@ export const SETTINGS = [
     coerce: (value) => (typeof value === 'string' && value ? value : null),
   },
   {
-    // Whether the gloss shows the translation instead of the original. One bit
-    // per line, which is all that actually varies once the target is global.
+    // Whether a line shows the translation instead of the original. Two bits,
+    // one per line, sharing the single target above.
     //
-    // There is no equivalent for the study line and that is deliberate: the line
-    // being learned is the thing you are reading *in its own language*, and
-    // translating it would mean the marks, the hover definitions and the HSK
-    // levels describe a text the learner cannot see. Machine translation also
-    // paraphrases rather than glosses and hides word boundaries, which is exactly
-    // what those marks exist to supply.
+    // BOTH lines can be translated. An earlier version allowed only the second,
+    // on the reasoning that the first is "the line being learned". That conflated
+    // two separate things — which line carries the learning MARKS, and which line
+    // can be TRANSLATED — and made a real feature look like a principle. The
+    // cases it broke are ordinary: a Chinese-only video where you want the
+    // Chinese line translated with the original kept for reading, or an English
+    // video where the first line is the one you want naturalised.
+    //
+    // The rule that actually holds is about marks, not translation: a machine
+    // translation carries no learning marks, because it paraphrases rather than
+    // glosses and hides the word boundaries the marks exist to point at. That
+    // applies to whichever line is translated.
+    id: 'studyTranslated',
+    label: 'Translate first',
+    group: 'language',
+    type: 'toggle',
+    default: false,
+    coerce: (value) => Boolean(value),
+  },
+  {
     id: 'glossTranslated',
     label: 'Translate second',
     group: 'language',

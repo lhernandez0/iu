@@ -44,12 +44,14 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 /** The ids sidepanel.html actually declares. */
 const PANEL_IDS = [
   'study',
+  'study-translated',
   'gloss',
-  'gloss-options',
   'gloss-translated',
+  'translate-target-row',
   'translate-into',
   'swap',
   'view-mode',
+  'layout',
   'font-size',
   'list',
   'threshold',
@@ -62,7 +64,7 @@ const PANEL_IDS = [
 ];
 
 /** Ids the real sidepanel.html starts hidden. */
-const HIDDEN_IDS = ['gloss-options'];
+const HIDDEN_IDS = ['translate-target-row'];
 
 /**
  * Evaluate a fresh copy of the panel against fresh stubs.
@@ -213,6 +215,7 @@ section('STATE renders rows, and the spoken line highlights');
       secondary: null,
       study: 'en',
       gloss: null,
+      studyTranslation: null,
       glossTranslation: null,
       rows: [
         { start: 0, duration: 2, text: 'Hey there', secondary: '' },
@@ -475,69 +478,78 @@ section('the controls are built from the schema, not hand-written here');
 
 // --- 12. Auto-translate ------------------------------------------------------
 
-section('the translation controls stay hidden until there is a second line');
+section('either line can be translated, independently');
 
 {
   const { lastPort, byId } = await bootPanel();
 
-  // The reported confusion: to translate English, the second line had to hold a
-  // language even though the point was only to translate the FIRST line. Now the
-  // translation controls belong to the gloss, so with no gloss there is nothing
-  // to translate and nothing to show.
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: null }) });
-  check('hidden with no second line', byId.get('gloss-options').hidden, true);
-
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'de' }) });
-  check('shown once one is chosen', byId.get('gloss-options').hidden, false);
+  // The thing I got wrong twice: translation was tied to the second line, first
+  // because it was a property of a slot and then because I called the first line
+  // "the one being learned". Neither is a reason. Both lines can be translated, and
+  // both controls are always present so neither is discoverable only by accident.
+  check('the first line has its own box', byId.get('study-translated') !== undefined, true);
+  check('and so does the second', byId.get('gloss-translated') !== undefined, true);
 }
 
-section('the target list excludes the gloss language, and needs the box ticked');
+section('the target appears only when something is asking to be translated');
 
 {
   const { lastPort, byId } = await bootPanel();
-  // `en` is translatable, so the list is offered — minus `en` itself, since
-  // translating a language into itself is a no-op that looks like a working menu.
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en', glossTranslated: true }) });
+
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { studyTranslated: false, glossTranslated: false }) });
+  check('hidden with nothing ticked', byId.get('translate-target-row').hidden, true);
+
+  // The first line alone is enough to need a target.
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { study: 'en', studyTranslated: true }) });
+  check('shown for the first line alone', byId.get('translate-target-row').hidden, false);
+}
+
+section('the target list excludes both languages in use');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  // Both lines are English and German, so neither is a useful target: translating
+  // a language into itself is a no-op that looks like a working menu entry.
+  lastPort().emit({
+    type: 'state',
+    state: stateWithSettings(null, { study: 'en', gloss: 'de', glossTranslated: true }),
+  });
 
   const options = byId.get('translate-into').find((el) => el.tagName === 'OPTION');
-  check('the source language is not offered', options.map((o) => o.value), ['ja', 'ko']);
+  check('neither source language is offered', options.map((o) => o.value), ['ja', 'ko']);
   check('with readable names', options.map((o) => o.text), ['Japanese', 'Korean']);
   check('and the picker is enabled', byId.get('translate-into').disabled, false);
-
-  // Untick it and the target is not a choice yet, so it is disabled rather than
-  // silently inert.
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en', glossTranslated: false }) });
-  check('the picker is disabled until the box is ticked', byId.get('translate-into').disabled, true);
-  check('and says what to do', byId.get('translate-into').title, 'Tick the box to translate the second line');
 }
 
-section('a track that cannot be translated disables the controls, with a reason');
+section('a track that cannot be translated disables its own box, with a reason');
 
 {
   const { lastPort, byId } = await bootPanel();
   // YouTube offers a translate menu for a human-authored track too, but applying
   // it returns the ORIGINAL text. Offering it would look like it worked.
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'de', glossTranslated: true, translationAvailable: { en: true, de: false } }) });
+  lastPort().emit({
+    type: 'state',
+    state: stateWithSettings(null, { gloss: 'de', glossTranslated: true, translationAvailable: { en: true, de: false } }),
+  });
 
-  check('nothing is offered for it', byId.get('translate-into').disabled, true);
-  check('the picker explains why', byId.get('translate-into').title, 'This caption track cannot be auto-translated');
-  check('and the box cannot be ticked either', byId.get('gloss-translated').disabled, true);
+  check('the box cannot be ticked', byId.get('gloss-translated').disabled, true);
+  check('and it explains why', byId.get('gloss-translated').title, 'This caption track cannot be auto-translated');
 }
 
-section('the checkbox reflects and changes the per-line bit');
+section('each checkbox reflects and changes its own bit');
 
 {
   const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en', glossTranslated: true }) });
+  lastPort().emit({ type: 'state', state: stateWithSettings(null, { studyTranslated: true, glossTranslated: true }) });
 
-  check('it starts ticked when translated', byId.get('gloss-translated').checked, true);
+  check('the first starts ticked', byId.get('study-translated').checked, true);
+  check('and so does the second', byId.get('gloss-translated').checked, true);
 
   const port = lastPort();
-  byId.get('gloss-translated').checked = false;
-  byId.get('gloss-translated').dispatch('change');
-  check('unticking sends the setting', port.sent.at(-1)?.type, 'set-setting');
-  check('for the per-line bit', port.sent.at(-1)?.id, 'glossTranslated');
-  check('as a boolean, not a string', port.sent.at(-1)?.value, false);
+  byId.get('study-translated').checked = false;
+  byId.get('study-translated').dispatch('change');
+  check('unticking the first sends its setting', port.sent.at(-1)?.id, 'studyTranslated');
+  check('as a boolean', port.sent.at(-1)?.value, false);
 }
 
 section('choosing a target sends it as the global preference');
@@ -625,24 +637,27 @@ section('the study line is never reported as translated');
   check('the study line is not itself translated', status.includes('→English'), false);
 }
 
-// --- 13. The gloss options are inline, not behind an icon ---------------------
+// --- 13. The Collapsed layout ------------------------------------------------
 
-section('the second line controls are visible, not hidden behind a toggle');
+section('the Collapsed layout hides the reading controls, not the languages');
 
 {
   const { lastPort, byId } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: 'en' }) });
 
-  // The old design put two translation pickers behind a globe icon, which meant
-  // the learner had to know the icon existed to discover translation at all, and
-  // two of the four language controls were dead whenever the video had one
-  // subtitle. These are now inline, shown only when there is a line to translate.
-  check('the options are on screen', byId.get('gloss-options').hidden, false);
-  check('with no toggle to find', byId.get('gloss-options') !== null, true);
+  // The panel is roughly 600px tall and had three bars plus a status line above
+  // the transcript. Collapsed gives the height back to the text — but keeps the
+  // language row, because changing language is the one control you reach for while
+  // reading, and folding it away would mean leaving the mode to get at it.
+  lastPort().emit({ type: 'state', state: stateWithSettings({ layout: 'collapsed' }) });
+  check('the body carries the layout class', byId.get('layout').value, 'collapsed');
 
-  // Nothing is asked of the learner until there is something to ask about.
-  lastPort().emit({ type: 'state', state: stateWithSettings(null, { gloss: null }) });
-  check('and gone when there is no second line', byId.get('gloss-options').hidden, true);
+  lastPort().emit({ type: 'state', state: stateWithSettings({ layout: 'full' }) });
+  check('and switching back clears it', byId.get('layout').value, 'full');
+
+  const port = lastPort();
+  byId.get('layout').value = 'collapsed';
+  byId.get('layout').dispatch('change');
+  check('changing it sends the setting', port.sent.at(-1)?.id, 'layout');
 }
 
 section('the paused line holds its place in both views');

@@ -24,36 +24,34 @@
 import { MSG, TARGET } from '../../src/common/messages.js';
 import { alignSecondary } from '../../src/common/transcript.js';
 import { normalise } from '../../src/common/settings.js';
+import { loadDictionary, lookup, levelOf } from '../../src/learn/wordlist.js';
+import { segmentSegments } from '../../src/learn/segment.js';
 
 /**
- * The word list the preview pretends to be grading against.
+ * Mark a line the way the worker does, using the REAL dictionary and segmenter.
  *
- * Deliberately small and coarse. The real levels come from a 1.4MB dictionary in
- * the worker; a preview only needs enough spread to see the colour ramp and the
- * threshold working, and pretending to more than that would make the tool look
- * like it had validated the marking rather than the layout.
- */
-const PREVIEW_LIST = { id: 'preview', label: 'Preview list', levelCount: 3 };
-
-/**
- * Whether a character is "known", and at what level.
- *
- * A cheap hash rather than a lookup, so the preview shows a plausible spread of
- * marked and unmarked words on any text. The point is the LAYOUT of marks, not
- * which words they land on — and a real dictionary here would be a second source
- * of truth to keep in step.
+ * This used to hash words into fake levels, on the reasoning that the preview
+ * only needed to show the layout of marks. That was wrong: a demo whose word list
+ * is invented cannot be used to judge whether the highlighting looks right, and
+ * "Preview list" in the dropdown gives no idea which words are actually being
+ * caught. The real dictionary is 1.4MB, loads in the browser, and is the same code
+ * the extension runs.
  *
  * @param {string} text
- * @returns {number|null} 1-based level, or null when unmarked.
+ * @param {object} dictionary
+ * @param {object} list
+ * @param {number} threshold
+ * @returns {object[]}
  */
-function previewLevel(text) {
-  if (!text) return null;
-  let hash = 0;
-  for (const char of text) hash = (hash * 31 + char.codePointAt(0)) % 997;
-  // Roughly a third unmarked, so "nothing here is marked" is visible as a state
-  // rather than assumed from a wall of colour.
-  if (hash % 3 === 0) return null;
-  return (hash % PREVIEW_LIST.levelCount) + 1;
+function markLine(text, dictionary, list, threshold) {
+  const [tokens] = segmentSegments([{ start: 0, text }], dictionary.words, dictionary.maxWordLength);
+  return tokens.map((token) => {
+    const defined = token.known && Boolean(lookup(dictionary, token.text));
+    if (!defined || !list) return { text: token.text, defined, level: null };
+    const level = levelOf(dictionary, list.id, token.text);
+    if (level === null || level < threshold) return { text: token.text, defined, level: null };
+    return { text: token.text, defined, level };
+  });
 }
 
 /** How often the mock playhead advances, in ms. */
@@ -109,6 +107,34 @@ export function createMockWorker(scenario) {
     ...scenario.settings,
   });
 
+  // The REAL dictionary and word lists, loaded lazily.
+  //
+  // Using the real one is the difference between a demo that shows whether the
+  // highlighting looks right and one that shows coloured rectangles of the right
+  // size. It also puts real list names (HSK 2.0, HSK 3.0) and real levels in the
+  // controls, which is what you need to judge them.
+  //
+  // NOT awaited here. `loadDictionary` reaches for `chrome.runtime.getURL`, and
+  // `globalThis.chrome` is installed by `installMockChrome` AFTER this function
+  // returns — so loading at construction time read an undefined `chrome` and the
+  // dictionary silently failed, taking every mark with it. Deferred to `start()`,
+  // by which point the mock is in place.
+  let dictionary = null;
+  let list = null;
+  const ready = () =>
+    loadDictionary()
+      .then((loaded) => {
+        dictionary = loaded;
+        list = loaded.lists.find((l) => l.id === settings.listId) ?? loaded.lists[0];
+      })
+      .catch((error) => {
+        // Loud, because a preview with no marks looks like a marking bug rather
+        // than like the dictionary having failed to load.
+        console.error('[ui-preview] the word list did not load:', error?.message ?? error);
+      });
+
+  const threshold = () => scenario.forceThreshold ?? settings.threshold ?? list?.defaultThreshold ?? 1;
+
   /** The tracks this scenario offers, as YouTube would report them. */
   const trackList = scenario.tracks.map((t) => ({
     languageCode: t.languageCode,
@@ -160,16 +186,11 @@ export function createMockWorker(scenario) {
     return t?.isTranslatable ? settings.translateInto : null;
   };
 
-  /** Mark every token, the way `applyMarks` does — one hash, no dictionary. */
-  const markTokens = (text) =>
-    [...text].map((char) => {
-      const level = scenario.noMarks ? null : previewLevel(char);
-      return { text: char, defined: level !== null, level };
-    });
+  /** Mark every token, with the real dictionary and segmenter. */
+  const markTokens = (text) => (dictionary && list ? markLine(text, dictionary, list, threshold()) : undefined);
 
   const buildRows = () => {
-    const threshold = scenario.forceThreshold ?? settings.threshold ?? 1;
-    const study = segmentsFor(settings.studyLanguage, null) ?? [];
+    const study = segmentsFor(settings.studyLanguage, effectiveTranslation('study')) ?? [];
     const gloss = settings.glossLanguage
       ? segmentsFor(settings.glossLanguage, effectiveTranslation('gloss')) ?? []
       : [];
@@ -180,17 +201,17 @@ export function createMockWorker(scenario) {
       duration: segment.duration,
       text: segment.text,
       secondary: aligned ? aligned[index] : '',
-      // Level comes back on each token, but a token below the threshold is
-      // unmarked — the same rule the worker applies, so the preview can show a
-      // transcript with nothing highlighted at all.
-      tokens: markTokens(segment.text).map((token) =>
-        token.level !== null && token.level >= threshold ? token : { ...token, level: null },
-      ),
+      // Marks are dropped when the study line is machine output, because the word
+      // list describes the source language and a translation no longer holds those
+      // words — the same rule the worker applies.
+      tokens: effectiveTranslation('study') ? undefined : markTokens(segment.text),
     }));
   };
 
   const state = () => {
     const rows = scenario.error || !scenario.tracks.length ? [] : buildRows();
+    const lists = dictionary ? dictionary.lists : [];
+    const levels = list?.levelCount ?? 0;
     return {
       videoId: 'preview',
       title: scenario.error ? '' : 'Preview video',
@@ -202,8 +223,10 @@ export function createMockWorker(scenario) {
       ),
       study: settings.studyLanguage,
       gloss: settings.glossLanguage,
+      studyTranslation: effectiveTranslation('study'),
       glossTranslation: effectiveTranslation('gloss'),
       translateInto: settings.translateInto,
+      studyTranslated: Boolean(settings.studyTranslated),
       glossTranslated: Boolean(settings.glossTranslated),
       rows,
       activeIndex,
@@ -211,21 +234,25 @@ export function createMockWorker(scenario) {
       error: scenario.error ?? null,
       learning: {
         view: settings.view,
+        layout: settings.layout,
         fontSize: settings.fontSize,
-        listId: PREVIEW_LIST.id,
-        threshold: scenario.forceThreshold ?? settings.threshold ?? 1,
+        listId: list?.id ?? null,
+        threshold: threshold(),
         studyLanguage: settings.studyLanguage,
         glossLanguage: settings.glossLanguage,
         translateInto: settings.translateInto,
+        studyTranslated: settings.studyTranslated,
         glossTranslated: settings.glossTranslated,
-        listOptions: [{ value: PREVIEW_LIST.id, label: PREVIEW_LIST.label }],
-        thresholdOptions: Array.from({ length: PREVIEW_LIST.levelCount }, (_, i) => ({
+        // The REAL lists, so the control says HSK 2.0 / HSK 3.0 and the levels are
+        // the levels those lists actually have.
+        listOptions: lists.map((l) => ({ value: l.id, label: l.label })),
+        thresholdOptions: Array.from({ length: levels }, (_, i) => ({
           value: i + 1,
           label: `${i + 1}+`,
         })),
       },
       // The panel reads the level count off the list it is marking against.
-      lists: [{ ...PREVIEW_LIST, levelCount: PREVIEW_LIST.levelCount }],
+      lists: lists.map((l) => ({ id: l.id, label: l.label, levelCount: l.levelCount })),
     };
   };
 
@@ -255,6 +282,13 @@ export function createMockWorker(scenario) {
 
   const push = () => port.deliver({ type: MSG.STATE, state: state() });
   const pushPosition = () => port.deliver({ type: MSG.POSITION, index: activeIndex, seconds, paused: activePaused });
+
+  // Rebuilt on every state push, which is why nothing caches the rows.
+  //
+  // A threshold change has to produce different TOKENS, not just a different
+  // control value: the marks are what the setting affects. The earlier version
+  // rebuilt rows from a threshold read at build time, so a setting arriving
+  // mid-session left the old marks on screen and the change looked ignored.
 
   const tick = () => {
     seconds += TICK_MS / 1000;
@@ -287,6 +321,19 @@ export function createMockWorker(scenario) {
         pushPosition();
         return;
       }
+      case MSG.SET_THRESHOLD:
+        // A threshold change changes the MARKS, so the rows have to be rebuilt —
+        // it is not a control value that only the panel cares about. Without this
+        // the mock logged the message as unhandled and the marks stayed as they
+        // were, which made the threshold look broken in the preview.
+        settings.threshold = Number(message.threshold) || 1;
+        push();
+        return;
+      case MSG.SET_LIST:
+        settings.listId = message.listId;
+        list = dictionary?.lists.find((l) => l.id === settings.listId) ?? list;
+        push();
+        return;
       case MSG.SET_SETTING: {
         settings = normalise({ ...settings, [message.id]: message.value });
         push();
@@ -311,7 +358,12 @@ export function createMockWorker(scenario) {
       activePaused = paused;
       pushPosition();
     },
-    start: () => {
+    start: async () => {
+      // Wait for the dictionary before the first push, so the panel's first render
+      // already has marks. Pushing unmarked rows and marking a moment later is
+      // what the extension does, but in a preview it just looks like flashing.
+      await ready();
+
       const gap = scenario.startInGap ? rows().find((row, i) => (rows()[i + 1]?.start ?? 0) - (row.start + row.duration) > 10) : null;
       if (gap) seconds = gap.start + gap.duration + 1;
       push();
@@ -334,6 +386,10 @@ export function installMockChrome(scenario) {
   globalThis.chrome = {
     runtime: {
       connect: () => worker.port,
+      // The word list loader resolves its data through this, exactly as the real
+      // extension does. Vite serves `/src/...` from the repository root, so the
+      // URL maps straight onto the committed dictionary.
+      getURL: (path) => `/${path}`,
       // The panel reads this after a disconnect. Nothing disconnects here, but
       // the property has to exist or reading it throws.
       get lastError() {

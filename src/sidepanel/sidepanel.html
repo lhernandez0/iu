@@ -9,29 +9,35 @@
     <header class="bar">
       <div class="lang">
         <select id="study" aria-label="Language to learn"></select>
+        <label class="line-translate" title="Replace this line with a machine translation">
+          <input type="checkbox" id="study-translated" aria-label="Translate the first line" />
+          MT
+        </label>
       </div>
       <button id="swap" type="button" title="Swap the two lines" aria-label="Swap the two lines">&#8646;</button>
       <div class="lang">
         <select id="gloss" aria-label="Second line, explaining the first"></select>
+        <label class="line-translate" title="Replace this line with a machine translation">
+          <input type="checkbox" id="gloss-translated" aria-label="Translate the second line" />
+          MT
+        </label>
       </div>
     </header>
 
     <!--
-      Only shown when a second line is chosen, because translation needs a line to
-      translate. One checkbox and one global target replace the two per-line
-      translation menus: the target almost never changes, so it is a preference,
-      and what varies per line is only whether the line is translated.
+      The translate target, one per panel rather than one per line: it is a
+      preference you set once, and what varies per line is only WHETHER that line
+      is translated — which is what the two checkboxes above are for. Either line
+      can be translated; both at once is allowed.
     -->
-    <div id="gloss-options" class="gloss-options" hidden>
-      <label class="translate-toggle">
-        <input type="checkbox" id="gloss-translated" />
-        Translate the second line into
-      </label>
-      <select id="translate-into" aria-label="Language to translate the second line into"></select>
+    <div id="translate-target-row" class="translate-target-row" hidden>
+      <span class="translate-target-label">Translate into</span>
+      <select id="translate-into" aria-label="Language to translate into"></select>
     </div>
 
     <header class="bar learning">
       <select id="view-mode" aria-label="How much of the transcript to show"></select>
+      <select id="layout" aria-label="How much of the chrome to show"></select>
       <label class="size" title="Text size in pixels">
         <input id="font-size" type="number" min="10" max="32" step="1" aria-label="Text size in pixels" />
         <span class="size-unit">px</span>

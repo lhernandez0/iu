@@ -70,6 +70,10 @@ export default defineConfig({
     // Loopback only. This serves the repository with no authentication, so it
     // must not be reachable from the network.
     host: '127.0.0.1',
-    open: '/tools/ui/',
+    // Vite prints the URL rather than launching anything. `open: true` tries to
+    // spawn a system browser, which in a remote or headless session fails with a
+    // message that looks like the server is broken. The URL is right there in the
+    // output, and it is the same URL every time.
+    open: false,
   },
 });

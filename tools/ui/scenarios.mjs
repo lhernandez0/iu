@@ -72,14 +72,10 @@ export const SCENARIOS = [
   },
   {
     id: 'no-marks',
-    label: 'Nothing marked',
-    note: 'No word is highlighted, as if none of them are in the list. A transcript can legitimately be plain.',
+    label: 'High threshold',
+    note: 'Marking only from level 3, so only the rarer words are highlighted. A threshold above every level is no longer expressible — the list is real now.',
     tracks: [zh, en],
-    settings: { studyLanguage: zh.languageCode, glossLanguage: en.languageCode },
-    // Not a threshold above the ramp: the control only offers levels the list
-    // has, so "nothing marked" cannot be expressed that way without the picker
-    // showing a value it does not offer. The mock simply marks nothing.
-    noMarks: true,
+    settings: { studyLanguage: zh.languageCode, glossLanguage: en.languageCode, threshold: 3 },
   },
   {
     id: 'long-silence',

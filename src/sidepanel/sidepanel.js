@@ -47,14 +47,16 @@ const MAX_RECONNECT_ATTEMPTS = 6;
 
 const els = {
   study: /** @type {HTMLSelectElement} */ (document.getElementById('study')),
+  studyTranslated: /** @type {HTMLInputElement} */ (document.getElementById('study-translated')),
   gloss: /** @type {HTMLSelectElement} */ (document.getElementById('gloss')),
-  glossOptions: /** @type {HTMLElement} */ (document.getElementById('gloss-options')),
   glossTranslated: /** @type {HTMLInputElement} */ (document.getElementById('gloss-translated')),
+  translateTargetRow: /** @type {HTMLElement} */ (document.getElementById('translate-target-row')),
   translateInto: /** @type {HTMLSelectElement} */ (document.getElementById('translate-into')),
   swap: /** @type {HTMLButtonElement} */ (document.getElementById('swap')),
   list: /** @type {HTMLSelectElement} */ (document.getElementById('list')),
   threshold: /** @type {HTMLSelectElement} */ (document.getElementById('threshold')),
   viewMode: /** @type {HTMLSelectElement} */ (document.getElementById('view-mode')),
+  layout: /** @type {HTMLSelectElement} */ (document.getElementById('layout')),
   fontSize: /** @type {HTMLInputElement} */ (document.getElementById('font-size')),
   follow: /** @type {HTMLInputElement} */ (document.getElementById('follow')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
@@ -84,7 +86,8 @@ const view = {
   speaking: true,
   /** Whether that held line was speaking or a gap, for the rebuild restore. */
   lastSpeaking: true,
-  /** What the second line was machine-translated into, if anything, for the MT tag. */
+  /** What each line was machine-translated into, if anything, for the MT tags. */
+  studyTranslation: null,
   glossTranslation: null,
   /** The last state received, so a row tag can name the target language. */
   state: null,
@@ -276,6 +279,7 @@ function renderState(state) {
   // Kept so row tags and the status line can name a language they only know
   // about from the state that is currently on screen.
   view.state = state;
+  view.studyTranslation = state.studyTranslation ?? null;
   view.glossTranslation = state.glossTranslation ?? null;
   renderPickers(state);
   renderLearning(state);
@@ -291,50 +295,72 @@ function renderPickers(state) {
   // "Off" first, so a second line is opt-in rather than a surprise.
   fillSelect(els.gloss, tracks, state.gloss, 'Off', { includeNone: true });
 
-  // The translation controls are only shown when there is a second line, because
-  // a translation needs something to translate. "Off" has no source track to
-  // convert, which is why the old model forced a language into the second slot
-  // even when the point was only to translate the first line.
-  const hasGloss = Boolean(state.gloss);
-  els.glossOptions.hidden = !hasGloss;
+  // Either line can be translated, independently. Each has its own checkbox beside
+  // its picker, and they share the one target below.
+  //
+  // A checkbox is disabled when its line's track cannot take a translation — or
+  // when there is no line on that side at all — and says why on hover, rather than
+  // letting the learner tick it and see nothing happen.
+  const translatable = (language) =>
+    Boolean(language) && (state.translationAvailable ?? {})[language] !== false;
 
-  if (hasGloss) {
-    // Only offer targets a track can actually take. YouTube offers auto-translate
-    // for any video, but applying it to a human-authored track silently returns
-    // the ORIGINAL text — so offering it would produce a menu that appears to
-    // work and changes nothing.
-    //
-    // The gloss's own language is excluded: translating a language into itself is
-    // a no-op that looks like a working menu entry.
-    const translatable = (state.translationAvailable ?? {})[state.gloss] !== false;
-    const options = translatable
-      ? (state.translationLanguages ?? [])
-          .filter((l) => l.languageCode !== state.gloss)
-          .map((l) => ({ value: l.languageCode, label: l.name }))
-      : [];
-
-    // A target and no options means the track cannot be translated. Say so on the
-    // control rather than letting the learner discover it by choosing.
-    const wanted = Boolean(state.glossTranslated);
-    fillSelectOptions(els.translateInto, options, state.translateInto, 'Choose a language', {
-      disabled: !options.length || !wanted,
-    });
-    els.translateInto.title = !options.length
-      ? 'This caption track cannot be auto-translated'
-      : wanted
-        ? 'Translate the second line into this language'
-        : 'Tick the box to translate the second line';
-
-    els.glossTranslated.checked = wanted;
-    els.glossTranslated.disabled = !options.length;
-    els.glossTranslated.title = options.length
-      ? 'Replace the second line with a machine translation'
+  const studyOk = translatable(state.study);
+  // `checked` is only written when it differs. Assigning unconditionally is what
+  // broke a real interaction: a state push arriving between a click and its
+  // confirmation reset the box, so the click appeared to do nothing and the
+  // setting was never sent. A checkbox the user is touching is theirs until the
+  // worker contradicts it.
+  if (els.studyTranslated.checked !== Boolean(state.studyTranslated)) {
+    els.studyTranslated.checked = Boolean(state.studyTranslated);
+  }
+  els.studyTranslated.disabled = !studyOk;
+  els.studyTranslated.title = !state.study
+    ? 'No subtitle selected'
+    : studyOk
+      ? 'Replace this line with a machine translation'
       : 'This caption track cannot be auto-translated';
+
+  const glossOk = translatable(state.gloss);
+  if (els.glossTranslated.checked !== Boolean(state.glossTranslated)) {
+    els.glossTranslated.checked = Boolean(state.glossTranslated);
+  }
+  els.glossTranslated.disabled = !glossOk;
+  els.glossTranslated.title = !state.gloss
+    ? 'No second line selected'
+    : glossOk
+      ? 'Replace this line with a machine translation'
+      : 'This caption track cannot be auto-translated';
+
+  // The target is only shown when something is asking to be translated: with both
+  // boxes clear there is no target to choose, and a permanently visible language
+  // list is one more control competing with the transcript.
+  const wanted = Boolean(state.studyTranslated || state.glossTranslated);
+  // Only offer targets a track can actually take. YouTube offers auto-translate
+  // for any video, but applying it to a human-authored track silently returns the
+  // ORIGINAL text — so offering it would produce a menu that appears to work and
+  // changes nothing.
+  //
+  // Both languages in use are excluded, since translating either into itself is a
+  // no-op that looks like a working menu entry.
+  const excluded = new Set([state.study, state.gloss].filter(Boolean));
+  const options = (state.translationLanguages ?? [])
+    .filter((l) => !excluded.has(l.languageCode))
+    .map((l) => ({ value: l.languageCode, label: l.name }));
+
+  const usable = wanted && (studyOk || glossOk);
+  els.translateTargetRow.hidden = !usable;
+  if (usable) {
+    fillSelectOptions(els.translateInto, options, state.translateInto, 'Choose a language', {
+      disabled: !options.length,
+    });
+    els.translateInto.title = options.length
+      ? 'Language to translate into'
+      : 'Neither line can be auto-translated';
   }
 
   els.swap.disabled = !state.gloss;
   els.swap.title = state.gloss
-    ? 'Swap the two lines, so the second becomes the one being learned'
+    ? 'Swap the two lines'
     : 'No second line selected';
 }
 
@@ -406,7 +432,11 @@ function renderStatus(state) {
   // Say what is actually on screen, including a translation that is in effect.
   // Without the arrow a translated line reads as a real track in that language,
   // which is a materially different thing to be looking at.
-  const study = state.study ? shortName(state, state.study) : null;
+  const study = state.study
+    ? state.studyTranslation
+      ? `${shortName(state, state.study)}→${shortName(state, state.studyTranslation)}`
+      : shortName(state, state.study)
+    : null;
   const gloss = state.gloss
     ? state.glossTranslation
       ? `${shortName(state, state.gloss)}→${shortName(state, state.glossTranslation)}`
@@ -439,6 +469,11 @@ function renderLearning(state) {
   fillSelectOptions(els.threshold, learning.thresholdOptions ?? [], learning.threshold, '—');
 
   fillSelectOptions(els.viewMode, VIEW_OPTIONS, learning.view, 'Full');
+
+  if (els.layout) {
+    fillSelectOptions(els.layout, optionsFor('layout'), learning.layout, 'Full');
+    applyLayout(learning.layout);
+  }
 
   // Bounds come from the schema rather than being repeated in the HTML, so the
   // control cannot offer a range the worker would clamp away.
@@ -558,6 +593,33 @@ function applyView(mode) {
   // Entering focus mode has to reveal the current line, which the normal render
   // path would not do because nothing about the rows changed.
   if (view.focusMode) revealNearActive();
+  // ...and when there is no current line to reveal, nothing would be shown at
+  // all: the focus view hides every row except `.active` and `.next`, and both are
+  // decided by playback. On a fresh panel — or a paused video, where the worker
+  // may have sent no cue yet — that is an entirely blank panel, which is what
+  // "Live mode is blank" was. Highlighting the first row is the honest fallback:
+  // the transcript has to start somewhere, and starting at the top is what the
+  // Full view does too.
+  if (view.focusMode && view.activeIndex < 0 && view.elements.length) setActive(0);
+}
+
+/**
+ * How much of the panel's chrome is on screen.
+ *
+ * A class on the body rather than re-rendering, so switching is instant and no
+ * control loses its value. `collapsed` hides the reading controls and the status
+ * line, leaving the language row and the transcript — a side panel is around
+ * 600px tall on a laptop, and three bars plus a status line is a large fraction
+ * of that.
+ *
+ * @param {string} mode
+ */
+function applyLayout(mode) {
+  // `body` is not guaranteed: the audio path and the DOM stubs used by the tests
+  // both construct a document without one. Guarded rather than assumed, because an
+  // unguarded dereference here threw during the FIRST state render and took the
+  // whole panel down — no rows, no status, just the panel's error placeholder.
+  document.body?.classList.toggle('collapsed', mode === 'collapsed');
 }
 
 /**
@@ -582,22 +644,23 @@ els.gloss.addEventListener('change', () => {
   send({ type: MSG.SET_GLOSS, languageCode: els.gloss.value || null });
 });
 
-// The tick and the target are two halves of one choice, so they share a handler:
-// ticking the box with no target yet must still tell the worker what to aim at.
+// The tick and the target are two halves of one choice: ticking either box must
+// tell the worker what to aim at, so they share a handler.
+els.studyTranslated.addEventListener('change', () => {
+  send({ type: MSG.SET_SETTING, id: 'studyTranslated', value: els.studyTranslated.checked });
+});
+
 els.glossTranslated.addEventListener('change', () => {
-  send({
-    type: MSG.SET_SETTING,
-    id: 'glossTranslated',
-    value: els.glossTranslated.checked,
-  });
-  // A target is required for a translation to happen, and the select is disabled
-  // until the box is ticked — so ticking it focuses the thing now needed.
-  if (els.glossTranslated.checked && els.translateInto.disabled) els.translateInto.disabled = false;
-  if (els.glossTranslated.checked) els.translateInto.focus?.();
+  send({ type: MSG.SET_SETTING, id: 'glossTranslated', value: els.glossTranslated.checked });
 });
 
 els.translateInto.addEventListener('change', () => {
   send({ type: MSG.SET_SETTING, id: 'translateInto', value: els.translateInto.value || null });
+});
+
+els.layout.addEventListener('change', () => {
+  applyLayout(els.layout.value);
+  send({ type: MSG.SET_SETTING, id: 'layout', value: els.layout.value });
 });
 
 els.list.addEventListener('change', () => {
@@ -763,10 +826,8 @@ function buildRow(row, index) {
   const lines = document.createElement('span');
   lines.className = 'lines';
 
-  // The study line: the one being learned. Never machine translated, and the only
-  // line that carries learning marks — the second line is a gloss, and putting
-  // HSK colour on a machine translation would grade a text the learner is not
-  // reading.
+  // The study line. Machine output when this line is the one translated — the tag
+  // belongs to whichever line is machine text, not to the second one by position.
   const study = document.createElement('span');
   study.className = 'primary';
 
@@ -777,6 +838,13 @@ function buildRow(row, index) {
     study.append(renderTokens(row.tokens, view.levelCount, view.palette));
   } else {
     study.textContent = row.text;
+  }
+  if (view.studyTranslation) {
+    const tag = document.createElement('span');
+    tag.className = 'machine';
+    tag.textContent = 'MT';
+    tag.title = `Machine-translated into ${shortName(view.state ?? {}, view.studyTranslation)}`;
+    study.append(tag);
   }
   lines.append(study);
 
@@ -876,11 +944,13 @@ function setStatus(text, isError = false) {
 async function enableAudioCapture() {
   const { startAudioCapture, stopAudioCapture } = await import('./audio-capture.js');
   els.transcript.replaceChildren();
-  // Hiding the two language pickers and the gloss options, since the audio path
+  // Hiding the language controls and the translate target, since the audio path
   // has no caption tracks to choose between.
   els.study.hidden = true;
   els.gloss.hidden = true;
-  els.glossOptions.hidden = true;
+  els.studyTranslated.hidden = true;
+  els.glossTranslated.hidden = true;
+  els.translateTargetRow.hidden = true;
   els.follow.hidden = true;
   els.swap.textContent = 'Start';
 
