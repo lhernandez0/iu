@@ -32,6 +32,8 @@
  * @property {Record<string, Record<string, number>>} levels  list id -> word -> level
  * @property {WordList[]} lists
  * @property {number} maxWordLength  Longest headword, which bounds the search.
+ * @property {Set<string>} headwords  Every recognised SURFACE form, both scripts.
+ * @property {Record<string, string>} variants  Traditional form -> the key in `words`.
  */
 
 /** @type {Dictionary|null} */
@@ -40,11 +42,40 @@ let loaded = null;
 let loading = null;
 
 /**
+ * Drop the cached dictionary.
+ *
+ * The cache is per-worker-lifetime, which is right in production: a worker starts
+ * on every wake and re-parsing 1.4MB each time would be felt. In a test harness
+ * that evaluates the worker repeatedly in ONE process, the same cache silently
+ * carries the first load into every later run — so a test that changes the served
+ * word lists sees the previous ones and passes or fails for the wrong reason.
+ *
+ * Only the tests call this. Nothing in the extension does.
+ */
+export function resetDictionary() {
+  // Wait for any in-flight load before clearing, or a previous worker instance's
+  // pending `loadDictionary()` resolves AFTER the reset and repopulates the cache
+  // with the old data — which is how a later test saw a dictionary that did not
+  // exist yet and reported an empty word list far from the cause.
+  const pending = loading;
+  loaded = null;
+  loading = null;
+  return pending?.catch(() => {});
+}
+
+/**
  * Load and index the bundled data.
  *
  * Fetched rather than imported so the JSON is not parsed at module load: the
  * service worker starts on every wake, and 1.4MB of JSON.parse on each one would
  * be felt. The result is cached for the worker's lifetime.
+ *
+ * The index built here is what makes TRADITIONAL text work. The data is keyed by
+ * simplified form, so a traditional character is not a key, is not a headword, and
+ * resolves to nothing — every traditional character rendered unmarked and
+ * undefined. `variants` maps a traditional surface form back to the simplified key
+ * it belongs to, and `headwords` includes both forms so the segmenter can find a
+ * word in either script.
  *
  * @returns {Promise<Dictionary>}
  */
@@ -59,12 +90,33 @@ export async function loadDictionary() {
 
     const raw = await response.json();
 
-    // The longest headword bounds the segmentation window. Computing it here
-    // means the segmenter never has to assume a length — a language with longer
-    // words would simply raise it.
+    const simplified = new Set(Object.keys(raw.words));
+    /** @type {Record<string, string>} */
+    const variants = {};
+    const headwords = new Set(simplified);
+
+    // The longest headword bounds the segmentation window. Computed over BOTH
+    // scripts, so a traditional form longer than any simplified one cannot fall
+    // outside the window and go unmatched.
     let maxWordLength = 0;
-    for (const word of Object.keys(raw.words)) {
-      if (word.length > maxWordLength) maxWordLength = word.length;
+    for (const key of simplified) {
+      if (key.length > maxWordLength) maxWordLength = key.length;
+    }
+
+    for (const [key, entry] of Object.entries(raw.words)) {
+      const traditional = entry.t;
+      if (!traditional || traditional === key) continue;
+
+      // A traditional form that is ITSELF a simplified headword is a genuine
+      // ambiguity, and the simplified meaning wins: the text is being read as
+      // simplified, so remapping it elsewhere would be wrong. None of the 6,675
+      // variants in the current data collide, but this does not depend on that
+      // staying true as the data changes.
+      if (simplified.has(traditional) || traditional in variants) continue;
+
+      variants[traditional] = key;
+      headwords.add(traditional);
+      if (traditional.length > maxWordLength) maxWordLength = traditional.length;
     }
 
     loaded = {
@@ -72,6 +124,8 @@ export async function loadDictionary() {
       levels: raw.levels,
       lists: raw.lists,
       maxWordLength,
+      headwords,
+      variants,
     };
     return loaded;
   })();
@@ -86,6 +140,23 @@ export async function loadDictionary() {
 export const DATA_PATH = 'src/learn/data/chinese.json';
 
 /**
+ * The key a surface form is stored under.
+ *
+ * The data is keyed by simplified form, so a traditional word has to be mapped
+ * back before it can be looked up. Everything that reads the dictionary goes
+ * through here, which is what stops one caller remembering and another forgetting
+ * — the failure mode being a word that is defined in one place and undefined in
+ * the next.
+ *
+ * @param {Dictionary} dictionary
+ * @param {string} word
+ * @returns {string}
+ */
+export function canonical(dictionary, word) {
+  return dictionary.variants?.[word] ?? word;
+}
+
+/**
  * The definition for a word, or null.
  *
  * @param {Dictionary} dictionary
@@ -93,7 +164,7 @@ export const DATA_PATH = 'src/learn/data/chinese.json';
  * @returns {WordEntry|null}
  */
 export function lookup(dictionary, word) {
-  return dictionary.words[word] ?? null;
+  return dictionary.words[canonical(dictionary, word)] ?? null;
 }
 
 /**
@@ -109,7 +180,7 @@ export function lookup(dictionary, word) {
  * @returns {number|null}
  */
 export function levelOf(dictionary, listId, word) {
-  return dictionary.levels[listId]?.[word] ?? null;
+  return dictionary.levels[listId]?.[canonical(dictionary, word)] ?? null;
 }
 
 // --- Colour ------------------------------------------------------------------

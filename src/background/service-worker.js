@@ -969,15 +969,21 @@ function activeList(entry) {
 /**
  * Whether a word list can mark text in this language.
  *
- * A list declares a language (`zh` today). Track codes are more specific —
- * `zh-Hans`, `zh-Hant`, `en-US` — so the comparison is on the primary subtag.
+ * BCP-47 is language + optional script + optional region, so "does A cover B" is
+ * not a string comparison:
  *
- * This is the real gate on whether a line can be marked, and it replaces a rule
- * that was wrong: "a machine translation carries no marks". That is true where
- * the translation has no words from the list — Chinese into English — and false
- * the other way, where an English line translated into Chinese has plenty of
- * Chinese to level. The gate is the language of the text ON SCREEN, not which
- * line it is on and not whether a machine produced it.
+ *   list `zh`      covers `zh`, `zh-Hans`, `zh-Hant` — unspecified means either
+ *   list `zh-Hans` covers `zh-Hans`, and `zh` (unknown, so we try)
+ *   list `zh-Hans` does NOT cover `zh-Hant` — a stated script must match
+ *
+ * The asymmetry is deliberate: permissive when the LIST is vague, strict when both
+ * sides declare. A stated mismatch is a real one, and marking it would colour text
+ * with the wrong vocabulary list.
+ *
+ * This is the FALLBACK path. The primary fix is that the dictionary now indexes
+ * both scripts, so a `zh-Hant` track is genuinely markable and the common case
+ * never reaches here. This is for the case the index cannot cover at all — English
+ * text against a Chinese list — where attempting it produces silent nothing.
  *
  * @param {object|undefined} list
  * @param {string|null|undefined} languageCode
@@ -985,8 +991,25 @@ function activeList(entry) {
  */
 function listCoversLanguage(list, languageCode) {
   if (!list?.language || !languageCode) return false;
-  const primary = String(languageCode).split('-')[0].toLowerCase();
-  return primary === String(list.language).split('-')[0].toLowerCase();
+
+  const [langA, ...restA] = String(list.language).split('-');
+  const [langB, ...restB] = String(languageCode).split('-');
+
+  // Different languages: no coverage, whatever the scripts say.
+  if (langA.toLowerCase() !== langB.toLowerCase()) return false;
+
+  // A script subtag is four letters; a region is two or three digits.
+  const scriptA = restA.find((part) => part.length === 4);
+  const scriptB = restB.find((part) => part.length === 4);
+
+  // The list is vague about the script, so it covers any script — true here
+  // because the index holds both forms.
+  if (!scriptA) return true;
+  // The list states a script and the text does not: unknown, so try rather than
+  // refuse a line that may well be markable.
+  if (!scriptB) return true;
+
+  return scriptA.toLowerCase() === scriptB.toLowerCase();
 }
 
 /**
@@ -1086,6 +1109,24 @@ async function applyMarks(entry) {
   // whatever happens to be current.
   if (videos.get(entry.videoId) !== entry) return;
 
+  // Can the chosen list mark the language actually on screen?
+  //
+  // Asked BEFORE segmenting, because the answer changes what "no marks" means. If
+  // the list cannot cover the line at all — English text against a Chinese list —
+  // then marking would find nothing and the transcript would render plain with no
+  // explanation, which reads as a broken feature. Recording it lets the panel say
+  // why. It also skips the segmentation work for a line it cannot help with.
+  const list = activeList(entry);
+  const covers = listCoversLanguage(list, shownLanguage(entry, 'study'));
+  entry.markedReason = covers ? null : `${list?.label ?? 'This list'} does not cover ${shownLanguage(entry, 'study') ?? 'this language'}`;
+
+  if (!covers) {
+    entry.rows = entry.rows.map((row) => ({ ...row, tokens: undefined }));
+    entry.markedWith = wanted;
+    broadcastState();
+    return;
+  }
+
   // A cue index is only meaningful against the transcript it was measured on.
   // Re-marking can change the row list, so a remembered index could point at a
   // different line — or past the end.
@@ -1096,11 +1137,10 @@ async function applyMarks(entry) {
 
   const tokensPerLine = segmentSegments(
     entry.rows.map((row) => ({ start: row.start, text: row.text })),
-    dictionary.words,
+    dictionary.headwords,
     dictionary.maxWordLength,
   );
 
-  const list = dictionary.lists.find((l) => l.id === settings.listId) ?? dictionary.lists[0];
   const threshold = settings.threshold;
 
   entry.rows = entry.rows.map((row, index) => ({
@@ -1258,6 +1298,11 @@ function deriveState() {
     translateInto: settings.translateInto,
     studyTranslated: Boolean(settings.studyTranslated),
     glossTranslated: Boolean(settings.glossTranslated),
+    // Why nothing is marked, when the chosen list cannot cover the line. Sent so
+    // the panel can explain a plain transcript rather than leaving it looking
+    // broken — "HSK 3.0 does not cover en" is actionable; an unmarked transcript
+    // is not.
+    markedReason: entry.markedReason ?? null,
     study: entry.studyLang,
     gloss: entry.glossLang,
     rows: entry.rows,

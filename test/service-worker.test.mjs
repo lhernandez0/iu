@@ -169,12 +169,20 @@ function connectPanel(stub) {
 
 // --- Fixtures ----------------------------------------------------------------
 
-const ENGLISH = {
-  languageCode: 'en',
+/**
+ * The primary track.
+ *
+ * Chinese, because the bundled word list is Chinese and the marking gate refuses a
+ * line no list covers. An English fixture here would be refused before marking ran,
+ * so every marking assertion would fail for a reason unrelated to what it tests —
+ * which is exactly what happened when this was English text.
+ */
+const CHINESE = {
+  languageCode: 'zh-Hans',
   segments: [
-    { start: 0, duration: 2, text: 'Hey there' },
-    { start: 2, duration: 2, text: 'how are you' },
-    { start: 4, duration: 2, text: 'welcome back' },
+    { start: 0, duration: 2, text: '大家早安' },
+    { start: 2, duration: 2, text: '你好吗' },
+    { start: 4, duration: 2, text: '欢迎回来' },
   ],
 };
 
@@ -193,19 +201,20 @@ const VIDEO = {
   title: 'Test Video',
   isLive: false,
   trackList: [
-    { languageCode: 'en', name: 'English', kind: null, isTranslatable: true },
+    { languageCode: 'zh-Hans', name: 'Chinese (Simplified)', kind: null, isTranslatable: true },
     { languageCode: 'de', name: 'Deutsch', kind: null, isTranslatable: true },
   ],
   // The translate menu, per video. Note `en` is offered even though it is also a
   // track: YouTube lists the source among its own targets.
   translationLanguages: [
+    { languageCode: 'zh-Hans', name: 'Chinese (Simplified)' },
     { languageCode: 'en', name: 'English' },
     { languageCode: 'ja', name: 'Japanese' },
     { languageCode: 'ko', name: 'Korean' },
   ],
 };
 
-const PROVIDE_OK = { ok: true, video: VIDEO, requested: 'en', fetched: ENGLISH };
+const PROVIDE_OK = { ok: true, video: VIDEO, requested: 'zh-Hans', fetched: CHINESE };
 
 /**
  * The stub's answer to DESCRIBE, which the worker now calls first so it can
@@ -256,11 +265,11 @@ section('panel connects and receives state');
   check('carries the video id', state?.videoId, 'dQw4w9WgXcQ');
   check('carries the title', state?.title, 'Test Video');
   check('carries the track list', state?.trackList?.length, 2);
-  check('primary defaulted to the fetched track', state?.study, 'en');
+  check('primary defaulted to the fetched track', state?.study, 'zh-Hans');
   check('secondary is opt-in, so null', state?.gloss, null);
   check('no error reported', state?.error, null);
   check('rows were built', state?.rows?.length, 3);
-  check('a row has text', state?.rows?.[0]?.text, 'Hey there');
+  check('a row has text', state?.rows?.[0]?.text, '大家早安');
   check('a row carries duration for SRT export', state?.rows?.[0]?.duration, 2);
   check('no second track means empty secondary', state?.rows?.[0]?.secondary, '');
 
@@ -337,7 +346,7 @@ const PROVIDER = (video, tracksByLanguage) => (request) => {
   return { ok: true, video, requested: languageCode, fetched: { languageCode, translateTo: null, segments } };
 };
 
-const SEGMENTS = { en: ENGLISH.segments, de: GERMAN.segments };
+const SEGMENTS = { 'zh-Hans': CHINESE.segments, de: GERMAN.segments };
 
 /**
  * A FETCH_TRACK payload, which is the segment list itself rather than the
@@ -463,7 +472,7 @@ section('both languages stay chosen together');
   await settle();
 
   const state = stub.received.at(-1)?.state;
-  check('primary stayed', state?.study, 'en');
+  check('primary stayed', state?.study, 'zh-Hans');
   check('secondary stayed', state?.gloss, 'de');
   check('and paired rows are still produced', state?.rows?.[0]?.secondary, 'Hallo');
 }
@@ -506,7 +515,7 @@ section('translating the second line shows machine text there, and only there');
   // The study line is never machine translated: it is the text being learned, and
   // the marks and definitions describe it. Translating it would put a studiable
   // overlay on a text the learner cannot see.
-  check('and the study line is untouched', state?.rows?.[0]?.text, 'Hey there');
+  check('and the study line is untouched', state?.rows?.[0]?.text, '大家早安');
   // The cache is keyed on the SOURCE track, so this must not have become a `ja`
   // track — that would collide with a real Japanese track on the same video.
   check('the gloss language is still the source', state?.gloss, 'de');
@@ -529,14 +538,14 @@ section('the study line is not translated even when the gloss is');
     trackPayload: TRACK_FETCHER(VIDEO, SEGMENTS),
   });
 
-  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'en' });
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'zh-Hans' });
   await settle();
   translateGloss(stub, 'ja');
   await settle();
 
   const state = stub.received.at(-1)?.state;
-  check('the gloss is translated', state?.rows?.[0]?.secondary, '[ja] Hey there');
-  check('and the study line is not', state?.rows?.[0]?.text, 'Hey there');
+  check('the gloss is translated', state?.rows?.[0]?.secondary, '[ja] 大家早安');
+  check('and the study line is not', state?.rows?.[0]?.text, '大家早安');
   check('nothing reports the study line as translated', state?.studyTranslation, null);
 }
 
@@ -550,11 +559,13 @@ section('the translate menu comes from the video, and excludes the source langua
   });
 
   const state = stub.received.at(-1)?.state;
-  check('the languages are offered', state?.translationLanguages?.length, 3);
-  check('with their codes', state?.translationLanguages?.map((l) => l.languageCode), ['en', 'ja', 'ko']);
+  check('the languages are offered', state?.translationLanguages?.length, 4);
+  check('with their codes', state?.translationLanguages?.map((l) => l.languageCode), ['zh-Hans', 'en', 'ja', 'ko']);
   // Translating a track into itself does nothing, so the panel must be able to
   // filter it out rather than offering an entry with no effect.
-  check('the panel filters the source out', state?.translationLanguages?.some((l) => l.languageCode === state.study), true);
+  // The video offers the source language among its targets, which is why the PANEL
+  // has to filter it out rather than the data doing so.
+  check('the video itself offers the source language', state?.translationLanguages?.some((l) => l.languageCode === state.study), true);
 }
 
 section('unticking the box refetches rather than keeping the translation');
@@ -623,7 +634,7 @@ section('a gloss that cannot be translated falls back to the original');
   const untranslatable = {
     ...VIDEO,
     trackList: [
-      { languageCode: 'en', name: 'English', kind: 'asr', isTranslatable: true },
+      { languageCode: 'zh-Hans', name: 'Chinese (Simplified)', kind: 'asr', isTranslatable: true },
       { languageCode: 'de', name: 'Deutsch', kind: null, isTranslatable: false },
     ],
   };
@@ -647,7 +658,7 @@ section('a gloss that cannot be translated falls back to the original');
   stub.sendFromPanel({ type: 'set-setting', id: 'glossTranslated', value: false });
   await settle();
   check('clearing it clears the error', stub.received.at(-1)?.state?.error, null);
-  check('and the transcript is intact', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
+  check('and the transcript is intact', stub.received.at(-1)?.state?.rows?.[0]?.text, '大家早安');
 }
 
 section('a cached track still refetches when the translation target changed');
@@ -690,7 +701,7 @@ section('an untranslatable gloss is not asked again on every refresh');
   const untranslatable = {
     ...VIDEO,
     trackList: [
-      { languageCode: 'en', name: 'English', kind: 'asr', isTranslatable: true },
+      { languageCode: 'zh-Hans', name: 'Chinese (Simplified)', kind: 'asr', isTranslatable: true },
       { languageCode: 'de', name: 'Deutsch', kind: null, isTranslatable: false },
     ],
   };
@@ -711,7 +722,7 @@ section('an untranslatable gloss is not asked again on every refresh');
   const after = stub.calls.sendMessage.filter((c) => c.message?.type === 'provide').length;
 
   check('the second refresh fetched nothing', after, before);
-  check('the transcript is still shown', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
+  check('the transcript is still shown', stub.received.at(-1)?.state?.rows?.[0]?.text, '大家早安');
 }
 
 section('one language on both lines: itself, and its translation');
@@ -725,32 +736,32 @@ section('one language on both lines: itself, and its translation');
   // The cache was keyed by language code alone, so the translated fetch
   // OVERWROTE the untranslated one and both lines rendered the translation: the
   // original English was gone, which is what "both converted to Chinese" was.
-  const englishOnly = {
+  const chineseOnly = {
     ...VIDEO,
-    trackList: [{ languageCode: 'en', name: 'English', kind: null, isTranslatable: true }],
+    trackList: [{ languageCode: 'zh-Hans', name: 'Chinese (Simplified)', kind: null, isTranslatable: true }],
   };
   const stub = await boot({
-    describePayload: DESCRIBE(englishOnly),
-    providePayload: PROVIDER(englishOnly, SEGMENTS),
-    trackPayload: TRACK_FETCHER(englishOnly, SEGMENTS),
+    describePayload: DESCRIBE(chineseOnly),
+    providePayload: PROVIDER(chineseOnly, SEGMENTS),
+    trackPayload: TRACK_FETCHER(chineseOnly, SEGMENTS),
   });
 
-  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'en' });
+  stub.sendFromPanel({ type: 'set-gloss', languageCode: 'zh-Hans' });
   await settle();
 
-  check('English can be the second line as well as the first', stub.received.at(-1)?.state?.gloss, 'en');
-  check('with both lines showing the untranslated text', stub.received.at(-1)?.state?.rows?.[0]?.secondary, 'Hey there');
+  check('the same language can be the second line as well as the first', stub.received.at(-1)?.state?.gloss, 'zh-Hans');
+  check('with both lines showing the untranslated text', stub.received.at(-1)?.state?.rows?.[0]?.secondary, '大家早安');
 
   translateGloss(stub, 'ko');
   await settle();
 
   const state = stub.received.at(-1)?.state;
   // The point of the whole arrangement: one line original, one line translated.
-  check('the study line stays the original', state?.rows?.[0]?.text, 'Hey there');
-  check('and only the gloss is translated', state?.rows?.[0]?.secondary, '[ko] Hey there');
+  check('the study line stays the original', state?.rows?.[0]?.text, '大家早安');
+  check('and only the gloss is translated', state?.rows?.[0]?.secondary, '[ko] 大家早安');
   // Every row, not just the first — a collision would affect all of them.
-  check('the last row keeps its original too', state?.rows?.[2]?.text, 'welcome back');
-  check('and its translation', state?.rows?.[2]?.secondary, '[ko] welcome back');
+  check('the last row keeps its original too', state?.rows?.[2]?.text, '欢迎回来');
+  check('and its translation', state?.rows?.[2]?.secondary, '[ko] 欢迎回来');
 
   // Untick, and the two renderings still differ, so the cache has to keep
   // holding both at once.
@@ -758,8 +769,8 @@ section('one language on both lines: itself, and its translation');
   await settle();
 
   const untranslated = stub.received.at(-1)?.state;
-  check('unticking restores the original gloss', untranslated?.rows?.[0]?.secondary, 'Hey there');
-  check('with the study line unchanged throughout', untranslated?.rows?.[0]?.text, 'Hey there');
+  check('unticking restores the original gloss', untranslated?.rows?.[0]?.secondary, '大家早安');
+  check('with the study line unchanged throughout', untranslated?.rows?.[0]?.text, '大家早安');
 }
 
 // --- 3c. Settings -----------------------------------------------------------
@@ -992,7 +1003,7 @@ section('a video already cached is not fetched again');
 
   check('the second visit fetched nothing new', provides(), afterBoot);
   check('rows are still shown', received.at(-1)?.state?.rows?.length, 3);
-  check('from the cache, not a fetch', received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
+  check('from the cache, not a fetch', received.at(-1)?.state?.rows?.[0]?.text, '大家早安');
 }
 
 section('switching to a different video fetches that one, and keeps the first cached');
@@ -1017,8 +1028,8 @@ section('switching to a different video fetches that one, and keeps the first ca
   stub.setAnswer('providePayload', {
     ok: true,
     video: { ...VIDEO, videoId: STUB_SWAP, title: 'Second Video' },
-    requested: 'en',
-    fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: 'Second content' }] },
+    requested: 'zh-Hans',
+    fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: 'Second content' }] },
   });
 
   stub.sendFromPanel({ type: 'refresh' });
@@ -1035,7 +1046,7 @@ section('switching to a different video fetches that one, and keeps the first ca
   await settle();
 
   check('going back reuses the cache', provides(), 2);
-  check('and shows the original transcript', stub.received.at(-1)?.state?.rows?.[0]?.text, 'Hey there');
+  check('and shows the original transcript', stub.received.at(-1)?.state?.rows?.[0]?.text, '大家早安');
 }
 
 section('a non-YouTube tab is reported rather than crashed on');
@@ -1099,8 +1110,8 @@ section('a word only the 3.0 list knows is still marked by default');
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
-      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '早安' }] },
+      requested: 'zh-Hans',
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '早安' }] },
     },
     trackPayload: GERMAN,
   });
@@ -1128,9 +1139,9 @@ section('rows carry tokens, and only words at or beyond the threshold are marked
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
+      requested: 'zh-Hans',
       fetched: {
-        languageCode: 'en',
+        languageCode: 'zh-Hans',
         // 我 is HSK 2.0 level 1, 们 is level 1, 岸上 is high. The threshold is 4,
         // so the early characters must stay unmarked.
         segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }],
@@ -1168,8 +1179,8 @@ section('lowering the threshold marks more');
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
-      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+      requested: 'zh-Hans',
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
     },
     trackPayload: GERMAN,
   });
@@ -1289,8 +1300,8 @@ section('a word the list cannot place is still hoverable, just unmarked');
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
-      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '你这样说了吗' }] },
+      requested: 'zh-Hans',
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '你这样说了吗' }] },
     },
     trackPayload: GERMAN,
   });
@@ -1357,8 +1368,8 @@ section('the same word marks differently in the two lists');
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
-      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '他挨着我' }] },
+      requested: 'zh-Hans',
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '他挨着我' }] },
     },
     trackPayload: GERMAN,
   });
@@ -1399,8 +1410,8 @@ section('a word we cannot define stays plain text');
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
-      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '囍嚻' }] },
+      requested: 'zh-Hans',
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '囍嚻' }] },
     },
     trackPayload: GERMAN,
   });
@@ -1512,8 +1523,8 @@ section('switching video clears the remembered cue');
   stub.setAnswer('providePayload', {
     ok: true,
     video: { ...VIDEO, videoId: 'othervid001', title: 'Other' },
-    requested: 'en',
-    fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: 'Different' }] },
+    requested: 'zh-Hans',
+    fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: 'Different' }] },
   });
 
   stub.sendFromPanel({ type: 'refresh' });
@@ -1534,8 +1545,8 @@ section('switching language keeps the marks');
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
-      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+      requested: 'zh-Hans',
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
     },
     trackPayload: {
       languageCode: 'de',
@@ -1571,8 +1582,8 @@ section('switching word list re-marks rather than reusing the old levels');
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
-      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+      requested: 'zh-Hans',
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
     },
     trackPayload: GERMAN,
   });
@@ -1604,8 +1615,8 @@ section('marks appear without the learner having to touch the controls');
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
-      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+      requested: 'zh-Hans',
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
     },
     trackPayload: GERMAN,
   });
@@ -1635,8 +1646,8 @@ section('marks appear without the learner having to touch the controls');
     providePayload: {
       ok: true,
       video: VIDEO,
-      requested: 'en',
-      fetched: { languageCode: 'en', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
+      requested: 'zh-Hans',
+      fetched: { languageCode: 'zh-Hans', segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }] },
     },
     trackPayload: GERMAN,
   });
