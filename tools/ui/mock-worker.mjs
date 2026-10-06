@@ -24,7 +24,7 @@
 import { MSG, TARGET } from '../../src/common/messages.js';
 import { alignSecondary } from '../../src/common/transcript.js';
 import { normalise } from '../../src/common/settings.js';
-import { loadDictionary, lookup, levelOf } from '../../src/learn/wordlist.js';
+import { loadDictionary, lookup, levelOf, DATA_PATH } from '../../src/learn/wordlist.js';
 import { segmentSegments } from '../../src/learn/segment.js';
 
 /**
@@ -122,7 +122,9 @@ export function createMockWorker(scenario) {
   let dictionary = null;
   let list = null;
   const ready = () =>
-    loadDictionary()
+    // The URL is resolved here, as the worker does: `learn/` is a data module and
+    // does not know it is running in a browser.
+    loadDictionary(chrome.runtime.getURL(DATA_PATH))
       .then((loaded) => {
         dictionary = loaded;
         list = loaded.lists.find((l) => l.id === settings.listId) ?? loaded.lists[0];
