@@ -88,6 +88,43 @@
   const VIDEO_CHECK_MS = 1000;
 
   /**
+   * How long a caption request may hang before it is abandoned.
+   *
+   * A request that STALLS — rather than being refused — is the one failure this
+   * script could not previously survive, and it is the reason a transcript
+   * sometimes never arrived. `fetch` has no default timeout, so an unanswered
+   * request waits forever: `provide()` never returns, the reply to the worker is
+   * never sent, and the message channel closes with nothing on it. Chrome
+   * reports that as "a listener indicated an asynchronous response by returning
+   * true, but the message channel closed before a response was received" — a
+   * sentence that names the channel and not the cause, which is why it took a
+   * real browser and a slow endpoint to surface at all.
+   *
+   * A deadline converts that into an ordinary rejection: the fetch aborts, the
+   * existing TRACK003 / VIDEO004 path reports it, and — the point of the exercise
+   * — the reply still reaches the worker. Deliberately shorter than the worker's
+   * own fetch budget (CONTENT_FETCH_TIMEOUT_MS), so this script reports its own
+   * timeout with a real cause rather than being cut off from outside with none.
+   */
+  const CAPTION_FETCH_TIMEOUT_MS = 12000;
+
+  /**
+   * `fetch` with a deadline attached.
+   *
+   * Every request this script makes is to a YouTube endpoint it does not control;
+   * none of them should be able to hang the caller indefinitely. `AbortSignal
+   * .timeout` aborts the underlying request rather than merely rejecting the
+   * promise, so the socket is actually released.
+   *
+   * @param {string} url
+   * @param {object} [init]
+   * @returns {Promise<Response>}
+   */
+  function fetchBounded(url, init = {}) {
+    return fetch(url, { ...init, signal: AbortSignal.timeout(CAPTION_FETCH_TIMEOUT_MS) });
+  }
+
+  /**
    * Tracks for the video currently loaded here. Rebuilt on every PROVIDE, and
    * replaced wholesale when the page navigates.
    *
@@ -245,7 +282,7 @@
   async function fetchSegments(track, videoId, innertubeApiKey, translateTo) {
     const url = buildTrackUrl(track.baseUrl, translateTo);
 
-    const direct = await fetch(url, { credentials: 'include' }).catch(() => null);
+    const direct = await fetchBounded(url, { credentials: 'include' }).catch(() => null);
     if (direct?.ok) {
       const body = await direct.text();
       if (body.trim()) return parseTimedText(body);
@@ -256,7 +293,7 @@
     // freshly signed baseUrl that is valid for this session.
     if (!innertubeApiKey || !videoId) return [];
 
-    const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${innertubeApiKey}`, {
+    const response = await fetchBounded(`https://www.youtube.com/youtubei/v1/player?key=${innertubeApiKey}`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -273,7 +310,7 @@
     const match = tracks.find((t) => t.languageCode === track.languageCode) ?? tracks[0];
     if (!match?.baseUrl) return [];
 
-    const retry = await fetch(buildTrackUrl(match.baseUrl, translateTo), { credentials: 'include' }).catch(() => null);
+    const retry = await fetchBounded(buildTrackUrl(match.baseUrl, translateTo), { credentials: 'include' }).catch(() => null);
     if (!retry?.ok) return [];
     return parseTimedText(await retry.text());
   }
@@ -357,7 +394,7 @@
       return { languageCode, translateTo: null, segments: [], error: err('VIDEO003') };
     }
 
-    const response = await fetch(`https://www.youtube.com/youtubei/v1/player?key=${key}`, {
+    const response = await fetchBounded(`https://www.youtube.com/youtubei/v1/player?key=${key}`, {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },

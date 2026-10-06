@@ -273,6 +273,7 @@ function define(name, value) {
 // here.
 
 import { fixture, json3From, xmlFrom, summaryFrom } from './synthetic/load.mjs';
+import { readFileSync } from 'node:fs';
 
 const SYNTHETIC = fixture();
 
@@ -875,6 +876,36 @@ section('a reply to a request that outlived the context does not throw');
 
   check('nothing was thrown', thrown, null);
   check('and it stopped cleanly', script.runningIntervals(), 0);
+}
+
+// --- Every fetch is bounded --------------------------------------------------
+
+section('no request in the content script can hang the reply');
+
+{
+  // The bug this pins: `fetch` has no default timeout, so a caption request that
+  // STALLS rather than being refused never resolves. `provide()` then never
+  // returns, the reply is never sent, and Chrome reports "the message channel
+  // closed before a response was received" — a sentence that names the channel
+  // and not the cause. The request has to reach a deadline so the reply is sent.
+  const source = readFileSync(new URL('../src/content/youtube-content.js', import.meta.url), 'utf8');
+
+  // Exactly one raw fetch — the one inside the wrapper. Any second one is a
+  // request that can hang the reply, which is the whole failure being fixed.
+  const rawFetch = source.match(/(?<![\w.])fetch\(/g) ?? [];
+  check('exactly one raw fetch call exists', rawFetch.length, 1);
+
+  check('the wrapper is defined', source.includes('function fetchBounded('), true);
+  check('the wrapper attaches a deadline', source.includes('AbortSignal.timeout('), true);
+  check(
+    'and a sane budget is used',
+    /const CAPTION_FETCH_TIMEOUT_MS = (\d+)/.exec(source)?.[1],
+    '12000',
+  );
+
+  // The wrapper must be what the fetch paths call, not a definition nobody uses.
+  const boundedCalls = source.match(/fetchBounded\(/g) ?? [];
+  check('the fetch paths go through the wrapper', boundedCalls.length >= 4, true);
 }
 
 // --- Result ------------------------------------------------------------------
