@@ -168,6 +168,10 @@ section('attribution is where a person would find it');
     check('it states the share-alike obligation', /share.?alike/i.test(text), true);
     check('it records the resolved HSK source', /MOE|elkmovie\/hsk30/.test(text), true);
     check('and that Pleco is the OCR tool, not the author', /OCR/i.test(text), true);
+    // A4: the notices must carry the pin too, so a reader who never opens the
+    // build script can still find the exact revision.
+    check('it records the pinned source revision', /a9aea223269eb9820590e5bca783eb299c317439/.test(text), true);
+    check('and the content hash', /e49bf4a732790bda359376a10ad59a6d4874be3b0dab66f1add907c0fedf3c10/.test(text), true);
   }
 
   // The notices file existing is not enough: the README is where a reader looks
@@ -193,7 +197,47 @@ section('the bundled dictionary declares its own provenance');
   check('the data carries a licence', typeof meta.licence, 'string');
   check('and it is the share-alike one', meta.licence, 'CC BY-SA 4.0');
   check('it names its source', /CC-CEDICT/.test(String(meta.source)), true);
+  check('it names the upstream compiler', /Tim Pearce/.test(String(meta.compiledBy)), true);
   check('with a word count that matches the payload', meta.wordCount, Object.keys(data.words).length);
+
+  // Finding A4. The input is not committed, so reproducibility depends on the
+  // artefact naming the exact revision it was built from. A commit alone can be
+  // rewritten; the content hash cannot, so both are required.
+  check('it pins the source commit', /^[0-9a-f]{40}$/.test(String(meta.sourceCommit)), true);
+  check('and the source content hash', /^[0-9a-f]{64}$/.test(String(meta.sourceSha256)), true);
+}
+
+section('the dictionary carries every field the app reads from a list');
+
+{
+  // Reproducibility has a second half that a hash check cannot see. Pinning the
+  // input only helps if the BUILD is faithful: a field hand-added to the JSON and
+  // never taught to `tools/build-wordlist.mjs` disappears the moment anyone
+  // rebuilds — which is exactly what happened to `defaultThreshold`, silently
+  // moving the starting level.
+  //
+  // So every field the code reads off a list is asserted to be present here.
+  const data = JSON.parse(readFileSync(join(ROOT, 'src/learn/data/chinese.json'), 'utf8'));
+  const lists = data.lists ?? [];
+
+  check('there is at least one list', lists.length > 0, true);
+
+  const REQUIRED = ['id', 'label', 'language', 'levelCount', 'levelled', 'defaultThreshold'];
+  const missing = [];
+  for (const list of lists) {
+    for (const field of REQUIRED) {
+      if (!(field in list)) missing.push(`${list.id ?? '?'}.${field}`);
+    }
+  }
+  check('every list has every required field', missing, []);
+
+  // `defaultThreshold` in particular: the worker reads it and falls back to 1,
+  // so its absence is not an error, only a silent behaviour change. Bounds-check
+  // it against its own list instead of trusting the value.
+  const bad = lists.filter(
+    (l) => !Number.isFinite(l.defaultThreshold) || l.defaultThreshold < 1 || l.defaultThreshold > l.levelCount,
+  );
+  check('every default threshold is a level that exists in its list', bad.map((l) => l.id), []);
 }
 
 section('no committed fixture contains a real video title');

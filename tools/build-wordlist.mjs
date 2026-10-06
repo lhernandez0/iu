@@ -7,11 +7,27 @@
  *   node tools/build-wordlist.mjs path/to/parsed_hsk_enriched.json
  *
  * Source: https://github.com/TeaPearce/chinese-english-dictionary
- *   data/parsed_hsk_enriched.json — 11,494 entries, CC BY-SA 4.0, derived from
- *   CC-CEDICT, with HSK levels overridden from the official HSK 3.0 word list
- *   (upstream file data/hsk31-words-pleco.txt). "Pleco" in that filename is the
- *   OCR tool, not the author: the list is the MOE-published standard, extracted
- *   from the official PDF and OCR'd with Pleco OCR.
+ *   data/parsed_hsk_enriched.json — 11,470 usable entries, CC BY-SA 4.0,
+ *   derived from CC-CEDICT, with HSK levels overridden from the official HSK 3.0
+ *   word list (upstream file data/hsk31-words-pleco.txt; "Pleco" in that
+ *   filename is the OCR tool, not the author — the list is the MOE-published
+ *   standard, extracted from the official PDF and OCR'd with Pleco OCR).
+ *
+ * PINNED SOURCE — this is what makes the build reproducible (see the licence
+ * audit, finding A4). The input is not committed and is not fetched by this
+ * script, so the only way to rebuild a checkout is to take the exact revision:
+ *
+ *   commit  a9aea223269eb9820590e5bca783eb299c317439  (2026-08-27)
+ *   blob    7562130dea9284b99c86c9e8a5b8fe0a2cc003a1
+ *   sha256  e49bf4a732790bda359376a10ad59a6d4874be3b0dab66f1add907c0fedf3c10
+ *   url     https://raw.githubusercontent.com/TeaPearce/chinese-english-dictionary/\
+ *             a9aea223269eb9820590e5bca783eb299c317439/data/parsed_hsk_enriched.json
+ *
+ * Verified 2026-10-06: rebuilding from that revision reproduces the committed
+ * `chinese.json` exactly — same 11,470 words, identical levels, zero differing
+ * entries. The blob hash is recorded as well as the commit because a commit can
+ * be rewritten while a blob hash cannot; if the two ever disagree, trust the
+ * blob than the URL.
  *
  * What it emits, and why in this shape:
  *
@@ -45,10 +61,22 @@ const source = JSON.parse(await readFile(sourcePath, 'utf8'));
  *
  * `levelCount` is what the colour ramp divides by, so it has to be the real
  * count for the list rather than the highest level present.
+ *
+ * `defaultThreshold` is the level marking STARTS at for this list, and it lives
+ * here rather than being hand-edited into the JSON. It was hand-added once, and
+ * the consequence was not obvious until this file was re-run: the rebuild
+ * silently dropped it, the worker's `defaultThreshold()` fell back to 1, and the
+ * starting level moved without anything saying so. A field the artefact carries
+ * must be a field this script emits, or the artefact is not reproducible — which
+ * is the whole point of pinning the input.
+ *
+ * It is per list, not global, because a threshold is relative: 4 means "upper
+ * intermediate" in a 6-level list and something else in a 9-level one, so a
+ * JLPT list would carry its own value (or none, and fall back to 1).
  */
 const LISTS = [
-  { id: 'hsk2_0', label: 'HSK 2.0', levelCount: 6, field: 'hsk2_0' },
-  { id: 'hsk3_0', label: 'HSK 3.0', levelCount: 9, field: 'hsk3_0' },
+  { id: 'hsk2_0', label: 'HSK 2.0', levelCount: 6, defaultThreshold: 4, field: 'hsk2_0' },
+  { id: 'hsk3_0', label: 'HSK 3.0', levelCount: 9, defaultThreshold: 4, field: 'hsk3_0' },
 ];
 
 /** @type {Record<string, Record<string, string>>} */
@@ -92,19 +120,26 @@ for (const entry of source) {
 
 const payload = {
   // Provenance travels with the data so the licence is discoverable from the
-  // artefact itself, not only from this script.
+  // artefact itself, not only from this script. Generated here rather than
+  // hand-written into the JSON, because a hand-edited note and a script that
+  // does not know about it drift apart the moment either one changes — which is
+  // exactly what happened once already.
   meta: {
     source: 'CC-CEDICT via TeaPearce/chinese-english-dictionary',
+    compiledBy: 'Tim Pearce (TeaPearce/chinese-english-dictionary)',
     licence: 'CC BY-SA 4.0',
-    note: 'HSK levels from the official MOE HSK 3.0 word list (via TeaPearce data/hsk31-words-pleco.txt; "Pleco" there is the OCR tool). Unlevelled words have a definition but no level.',
+    sourceCommit: 'a9aea223269eb9820590e5bca783eb299c317439',
+    sourceSha256: 'e49bf4a732790bda359376a10ad59a6d4874be3b0dab66f1add907c0fedf3c10',
+    note: 'HSK levels from the official MOE HSK 3.0 word list (via TeaPearce data/hsk31-words-pleco.txt; "Pleco" there is the OCR tool, not the author). Unlevelled words have a definition but no level.',
     wordCount: Object.keys(words).length,
   },
-  lists: LISTS.map(({ id, label, levelCount }) => ({
+  lists: LISTS.map(({ id, label, levelCount, defaultThreshold }) => ({
     id,
     label,
     language: 'zh',
     levelCount,
     levelled: Object.keys(levels[id]).length,
+    defaultThreshold,
   })),
   levels,
   words,

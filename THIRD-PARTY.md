@@ -21,14 +21,16 @@ Derived through, in order:
 | HSK 3.0 word list (`data/hsk31-words-pleco.txt` upstream) | HSK levels override the CC-CEDICT-derived ones | Official MOE standard; see below |
 
 **Attribution.** CC-CEDICT is a community dictionary, a continuation of the CEDICT
-project begun by Paul Denisowski in 1997. Its licence requires that we say where
-the data came from, which is what this section is.
+project begun by Paul Denisowski in 1997. The compilation we consume is
+**© 2026 Tim Pearce** (*Chinese-English HSK Dictionary*), which is itself a CC BY-SA
+4.0 work derived from CC-CEDICT. CC BY-SA 4.0 requires that we say where the data
+came from, which is what this section is.
 
 **Share-alike.** The licence also requires that improvements and additions be
 shared under the same licence. The changes made here are:
 
 - entries merged by simplified character (done upstream by the standardising step);
-- HSK levels overridden from the HSK 3.1 list;
+- HSK levels overridden from the HSK 3.0 list;
 - reshaped into keyed objects with abbreviated field names, and with levels
   *absent* rather than null for unlevelled words.
 
@@ -62,11 +64,29 @@ What this means for us:
 
 `node tools/build-wordlist.mjs <parsed_hsk_enriched.json>`
 
-The input is **not committed** and is not fetched by the script: it comes from the
-TeaPearce repository above. A clean checkout therefore cannot rebuild the file
-without obtaining it separately. This is recorded rather than fixed, because
-vendoring 11.5k entries of someone else's data to make a build self-contained is a
-worse answer than naming the dependency.
+The input is **not committed** and is not fetched by the script. It is instead
+**pinned to an exact revision**, so a clean checkout can reproduce the file
+byte-for-byte:
+
+| | |
+| --- | --- |
+| Repository | `TeaPearce/chinese-english-dictionary` |
+| Commit | `a9aea223269eb9820590e5bca783eb299c317439` (2026-08-27) |
+| Blob | `7562130dea9284b99c86c9e8a5b8fe0a2cc003a1` |
+| SHA-256 | `e49bf4a732790bda359376a10ad59a6d4874be3b0dab66f1add907c0fedf3c10` |
+| Path | `data/parsed_hsk_enriched.json` (5,092,448 bytes) |
+
+**Verified 2026-10-06:** fetching that exact revision and rebuilding reproduces
+the committed `chinese.json` exactly — the same 11,470 words, identical levels,
+**zero differing entries**. So the pin is not a claim, it is a tested fact.
+
+The blob hash is recorded *as well as* the commit, because a commit can be
+rewritten or force-pushed while a blob hash cannot. If the commit URL and the hash
+ever disagree, trust the hash.
+
+The choice not to vendor the 5 MB input is deliberate: duplicating someone else's
+data to make a build self-contained is worse than naming the exact revision it came
+from, and the vendored copy would carry the same CC BY-SA obligation anyway.
 
 ## Development dependencies
 
