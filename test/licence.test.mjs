@@ -169,6 +169,17 @@ section('attribution is where a person would find it');
     check('it records the resolved HSK source', /MOE|elkmovie\/hsk30/.test(text), true);
     check('and that Pleco is the OCR tool, not the author', /OCR/i.test(text), true);
   }
+
+  // The notices file existing is not enough: the README is where a reader looks
+  // first, and a licence section that names the data obligation is what makes the
+  // attribution findable rather than merely present.
+  const readme = join(ROOT, 'README.md');
+  check('README.md exists', existsSync(readme), true);
+  if (existsSync(readme)) {
+    const text = readFileSync(readme, 'utf8');
+    check('the README points at the third-party notices', /THIRD-PARTY\.md/.test(text), true);
+    check('and names the data licence', /CC BY-SA 4\.0/.test(text), true);
+  }
 }
 
 section('the bundled dictionary declares its own provenance');

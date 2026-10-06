@@ -315,3 +315,15 @@ would arrive twice.
 - [ ] Search within the transcript.
 - [ ] Improve the UI (currently functional, not pretty).
 - [ ] Optional in-page subtitle overlay.
+
+## Licence
+
+Our own code — everything in `src/`, the icons, the tests — is **MIT** (see
+[`LICENSE`](LICENSE)). The extension ships no third-party code, fonts or images.
+
+The bundled dictionary, [`src/learn/data/chinese.json`](src/learn/data/chinese.json),
+is **not** ours and is **not** covered by the MIT licence: it is a derived work of
+[CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict) (CC BY-SA 4.0),
+with HSK levels from the official MOE HSK 3.0 word list. It **must remain CC BY-SA
+4.0** and cannot be relicensed. Full attribution and the exact source chain are in
+[`THIRD-PARTY.md`](THIRD-PARTY.md).
