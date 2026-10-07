@@ -373,15 +373,32 @@ export async function waitForStatus(page, timeout = 20000) {
 /**
  * Wait until the panel has rendered transcript lines.
  *
+ * ⚠️ A ROW COUNT ALONE IS NOT THE CONDITION, and waiting on it is how this helper
+ * produced a flaky test. The panel keeps showing the previous video's rows until
+ * the new video's transcript arrives, so `waitForRows(page, 2)` returns
+ * IMMEDIATELY when a previous section left three rows on screen — and the test
+ * then asserts against the old video's text. It passed most of the time only
+ * because the rebuild usually won the race.
+ *
+ * So when the section before yours could leave rows behind, pass `text` and wait
+ * for the content you are about to assert on. The count still has to hold; the
+ * text is what makes the wait mean "the panel is showing THIS video".
+ *
  * @param {object} page
  * @param {number} [count] Minimum rows, defaults to one.
- * @param {number} [timeout]
+ * @param {{timeout?: number, text?: string|null}} [options]
+ *   `text` waits for a row whose primary line contains it.
  * @returns {Promise<number>}
  */
-export async function waitForRows(page, count = 1, timeout = 20000) {
+export async function waitForRows(page, count = 1, { timeout = 20000, text = null } = {}) {
   await page.waitForFunction(
-    (expected) => document.querySelectorAll('.row').length >= expected,
-    count,
+    ({ expected, wanted }) => {
+      const rows = [...document.querySelectorAll('.row')];
+      if (rows.length < expected) return false;
+      if (!wanted) return true;
+      return rows.some((row) => (row.querySelector('.primary')?.textContent ?? '').includes(wanted));
+    },
+    { expected: count, wanted: text },
     { timeout },
   );
   return page.locator('.row').count();

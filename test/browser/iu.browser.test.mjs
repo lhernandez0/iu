@@ -462,7 +462,11 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('the fixture is parked inside a gap', await watch.evaluate(() => window.__position()), 1.5);
 
     const { page } = await openPanel(context, extensionId, watch);
-    await waitForRows(page, 3);
+    // Wait for THIS video's text, not just three rows: the previous section left
+    // its own rows on screen, and a count-only wait is satisfied by them. Same
+    // hazard as the auto-translate section, which is where it was caught costing
+    // a flaky run.
+    await waitForRows(page, 3, { text: 'First line' });
 
     // The panel must place itself without waiting for a cue change, because on a
     // paused video none comes. The watch page is a BACKGROUND tab while the panel
@@ -523,7 +527,14 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     await routeYouTube(context, { videoId: 'translat01', title: 'Translate', tracks: [japanese] });
     const watch = await openWatchPage(context, 'translat01');
     const { page } = await openPanel(context, extensionId, watch);
-    await waitForRows(page, 2);
+    // Wait for THIS video's text, not merely for two rows.
+    //
+    // The section above leaves its own rows on screen, and the panel keeps them
+    // until this video's transcript arrives — so a count-only wait returned
+    // immediately and the assertion below read the PREVIOUS video's first line
+    // ("First line"). It failed roughly one run in three, depending on whether
+    // the rebuild beat the read.
+    await waitForRows(page, 2, { text: 'こんにちは' });
 
     const untranslated = await page.textContent('.row .primary');
     check('the original text is shown first', untranslated, 'こんにちは');
@@ -618,7 +629,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     await routeYouTube(context, { videoId: 'focusview01', title: 'Focus', tracks: [chinese] });
     const watch = await openWatchPage(context, 'focusview01');
     const { page } = await openPanel(context, extensionId, watch);
-    await waitForRows(page, 3);
+    await waitForRows(page, 3, { text: '我们在岸上等你' });
 
     /** How many rows a real layout is showing, plus the body font size. */
     const layout = () => page.evaluate(() => {
@@ -730,7 +741,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     await openWatchPage(context, 'firstvideo1');
     const first = context.pages().at(-1);
     const { page } = await openPanel(context, extensionId, first);
-    await waitForRows(page, 3);
+    await waitForRows(page, 3, { text: 'Hey there' });
     check('first video loaded', (await panelState(page)).rows[0]?.text, 'Hey there');
 
     const second = await openWatchPage(context, 'secondvideo1');
