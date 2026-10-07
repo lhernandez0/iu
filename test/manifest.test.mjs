@@ -131,5 +131,52 @@ section('package.json and the manifest describe the extension the same way');
   check('and the versions match', pkg.version, manifest.version);
 }
 
+section('shipped documents do not point at things a reader cannot have');
+
+{
+  // `docs/` is gitignored — planning notes, ADRs, the roadmap. They are ours and
+  // deliberately private, which means a tracked file that references one publishes
+  // a pointer to something a reader of the repository cannot open.
+  //
+  // This has gone wrong three times: two README links to design-decisions files
+  // that 404 on GitHub, and then three "see ADR 0007" references in
+  // CHROMEWEBSTORE.md. Each was found by a person noticing, not by anything
+  // running. The fix is one grep, so it should never have been a person's job.
+  //
+  // Scanned rather than imported: the point is the FILE as a reader receives it,
+  // and the failure mode is text in prose that no module ever evaluates.
+  const SHIPPED = ['README.md', 'CHROMEWEBSTORE.md', 'TESTING.md', 'THIRD-PARTY.md'];
+  // A path into a gitignored directory, or an ADR reference. ADRs live in docs/,
+  // so naming one is the same mistake written a different way.
+  const PRIVATE = /docs\/(design-decisions|private)\/|\bADR\s*\d{3,4}\b/;
+
+  const offenders = [];
+  for (const file of SHIPPED) {
+    const full = join(ROOT, file);
+    if (!existsSync(full)) continue;
+    readFileSync(full, 'utf8')
+      .split('\n')
+      .forEach((line, index) => {
+        if (PRIVATE.test(line)) offenders.push(`${file}:${index + 1}`);
+      });
+  }
+
+  check('no shipped document references a private doc or an ADR', offenders, []);
+
+  // The other half, and the one a reader actually hits: a relative link that does
+  // not resolve. A link to a tracked file is fine; a link to `docs/` is not.
+  const broken = [];
+  for (const file of SHIPPED) {
+    const full = join(ROOT, file);
+    if (!existsSync(full)) continue;
+    for (const match of readFileSync(full, 'utf8').matchAll(/\]\(([A-Za-z0-9._/-]+)\)/g)) {
+      const target = match[1];
+      if (target.startsWith('http') || target.startsWith('#')) continue;
+      if (!existsSync(join(ROOT, target))) broken.push(`${file} -> ${target}`);
+    }
+  }
+  check('and every relative link in them resolves', broken, []);
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) process.exitCode = 1;

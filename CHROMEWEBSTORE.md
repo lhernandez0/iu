@@ -236,21 +236,21 @@ From the store review checklist. The ones that apply to this extension:
 ## Language Claim, and Why It Is Worded Carefully
 
 The description says **Chinese and Japanese**, names **YouTube**, and does not say
-"any video". All three are deliberate, and the reasoning is ADR 0007:
+"any video". All three are deliberate:
 
 - **"Any video" is gone.** It was in the short description and the first line of
 the detailed one, and it was FALSE — `host_permissions` is `https://*.youtube.com/*`.
-The video source sits behind a provider seam (ADR 0003), so another site is a
-registry entry plus a content script rather than a rewrite, but one provider is
-implemented today and a store can test a claim like that.
+The video source sits behind a provider seam, so another site is a registry entry
+plus a content script rather than a rewrite, but one provider is implemented today
+and a store can test a claim like that.
 - **Only the languages that work are named.** Chinese (HSK) and Japanese (JLPT)
 ship. **Korean is planned and is deliberately not named in the listing**, because
 it is not a data addition — Hangul is outside the segmenter's character class, so
 it needs code before a dictionary would help. An extension that claimed "any
 language" would fail the first reviewer who tried Spanish.
-- **"Dictionary", not "lesson".** ADR 0007 settled the positioning: this is a
-dictionary that marks what you do not know, not a course. The measured data agrees
-— 88% of Chinese entries carry more than one sense, and Japanese carries 50 parts
-of speech; a lesson product would not need either.
+- **"Dictionary", not "lesson".** This is a dictionary that marks what you do not
+know, not a course. The data agrees — 88% of Chinese entries carry more than one
+sense, and Japanese carries 50 parts of speech; a lesson product would not need
+either.
 - **YouTube is named wherever a permission has to be justified.** The seam is a
 reason to expect growth, not a claim about today.
