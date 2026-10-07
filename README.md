@@ -1,16 +1,47 @@
 # IU
 
-**Turn any video into a language lesson.**
+**Understand the video you're watching.**
 
-Subtitles you can actually study. Every word you have not learned yet is marked
-and explained, right there beside the video — so the video teaches you instead of
-washing over you.
+You know the feeling: there's a show or a channel you want to watch, and you can
+follow maybe two words in three. Every sentence has a hole in it, and looking the
+words up means leaving the video — so you stop watching, or you watch and
+understand nothing.
 
-Chinese and Japanese, from YouTube. One extension for Chrome, Edge, Brave and
-Firefox.
+IU fills the holes. The subtitles sit in a panel beside the video with every word
+you don't know picked out. Hover one and it tells you what it means. You keep
+watching, and the video is teaching you the whole time.
+
+Chinese and Japanese, on YouTube. Chrome, Edge, Brave and Firefox. Free, open
+source, no account.
 
 > **IU** — *I* and *you*. 友 means **friend** in Hokkien (*iú*), Mandarin (*yǒu*)
 > and Japanese (*tomo*). A companion to read beside you.
+
+## What you get in one click
+
+Click the toolbar icon on any video:
+
+- **The words you haven't learned are marked** — underlined, in a colour for how
+  hard they are. The ones you know stay plain, so one glance tells you how much of
+  a line is within reach.
+- **Hover any word** for its reading and meaning. Chinese gives pinyin, Japanese
+  gives kana.
+- **A second subtitle line** underneath if you want it — another track, or a
+  machine translation of the same one, tagged as such.
+- **The transcript follows the video.** Click any line to jump there.
+- **Come back to a video and it's still loaded.**
+- **Take it away** — export what you watched as text or a subtitle file.
+
+## A word list that knows what you're studying
+
+Pick HSK for Chinese or JLPT for Japanese, and set the level you're working at.
+Everything at or above it is marked; everything you already know gets out of the
+way.
+
+Each list keeps its own level names — JLPT reads N5 through N1, HSK counts 1
+upward — in the order that test actually uses, not a number we invented. When two
+lists disagree about a word, and HSK 2.0 and HSK 3.0 frequently do, you see both,
+because both are somebody's syllabus.
 
 ## Why it exists
 
@@ -18,9 +49,8 @@ There is an awkward stage in learning a language. Textbook dialogues and graded
 readers stop being interesting, but real video is still too fast, and every
 sentence hides two or three words you have to leave the video to look up.
 
-The thing standing in the way is just vocabulary. IU is meant to close that gap:
-you watch what you actually want to watch, and the words you are missing are the
-ones that stand out.
+What stands in the way is just vocabulary. IU closes that gap: you watch what you
+actually want to watch, and the words you're missing are the ones that stand out.
 
 ## Status
 
@@ -61,26 +91,6 @@ signed build from AMO.
 
 YouTube tabs that are **already open** work in both — the content scripts are
 injected on demand, so there is nothing to reload.
-
-## What it does
-
-**Every word you don't know, marked.** Pick HSK for Chinese or JLPT for Japanese,
-set the level you are working at, and the words you have not met yet are picked
-out in the transcript. Your known words fade into the background — so you can see
-at a glance how much of a sentence is actually in reach.
-
-**Look up anything without leaving the video.** Hover a word for its reading and
-meaning. Chinese shows pinyin, Japanese shows kana, and a word appears under every
-list that knows it — HSK 2.0 and HSK 3.0 disagree, and both are true.
-
-**Two subtitles at once.** Your target language with a second line underneath —
-another track, or a machine translation of the same one. Translated lines are
-tagged, so you always know what you are reading.
-
-**Never lose your place.** The transcript follows playback, and clicking a line
-jumps the video to it. Go back to a video and it is still there, waiting.
-
-**Take it away.** Export what you watched as text or a subtitle file.
 
 ## How it works
 
@@ -189,6 +199,18 @@ for that browser; the rest is the same source.
 
 Nothing else is requested. The extension makes no request to any server of ours,
 collects no analytics, and has no account.
+
+## Not for you if
+
+- **You can't read the script yet.** IU assumes you can read the characters and
+  want to build vocabulary. It won't teach you the alphabet.
+- **You want a course.** It doesn't teach grammar or give lessons — it explains
+  the words in whatever you choose to watch.
+- **You want to save words and review them later.** Not yet. IU is a reader; the
+  study loop comes next.
+- **Your language is Korean, or anything spaced.** Chinese and Japanese work.
+  Adding a language is data, not code, but a language we haven't added isn't
+  supported.
 
 ## Known limitations
 
