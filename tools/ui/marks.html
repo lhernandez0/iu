@@ -3,6 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <title>IU — mark styles</title>
+    <!-- Declared, because a page with no icon makes the browser request
+         /favicon.ico, and the 404 shows up as a console error. The browser smoke
+         test treats any console error as a failure, which is right — it is the
+         only signal that a page is broken in a way that still looks fine. -->
+    <link rel="icon" href="/icons/icon-32.png" />
     <link rel="stylesheet" href="/src/sidepanel/sidepanel.css" />
     <style>
       /* A comparison sheet, not the panel. The SAME text under each treatment, so
@@ -63,9 +68,6 @@
         text-transform: uppercase;
         margin-bottom: 4px;
       }
-      .grey {
-        filter: grayscale(1);
-      }
       .sheet .row {
         padding: 4px 6px;
       }
@@ -82,9 +84,8 @@
     <h1 class="sheet-head">Mark styles</h1>
     <p class="sheet-sub">
       The same Japanese, the same dictionary, the same levels. Only the treatment
-      of a mark differs. Below each column is the same text in
-      <strong>greyscale</strong> — what a colourblind reader sees. All five levels
-      of the ramp are drawn in the legend at the bottom.
+      of a mark differs. All five levels of the ramp are drawn in the legend at the
+      bottom.
     </p>
 
     <div class="grid" id="grid"></div>
@@ -171,17 +172,7 @@
         const p = document.createElement('p');
         p.textContent = style.note;
 
-        const strip = document.createElement('div');
-        strip.className = 'strip';
-        const label = document.createElement('div');
-        label.className = 'strip-label';
-        label.textContent = 'greyscale';
-        const grey = document.createElement('div');
-        grey.className = 'grey';
-        grey.append(renderTranscript());
-
-        strip.append(label, grey);
-        col.append(h, p, renderTranscript(), strip);
+        col.append(h, p, renderTranscript());
         grid.append(col);
       }
 

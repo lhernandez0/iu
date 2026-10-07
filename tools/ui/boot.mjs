@@ -61,6 +61,10 @@ async function boot() {
   if (params.has('view')) patch.view = params.get('view');
   if (params.has('fontSize')) patch.fontSize = Number(params.get('fontSize'));
   if (params.has('threshold')) patch.threshold = Number(params.get('threshold'));
+  // So a mark treatment can be linked to and compared, rather than rebuilt by
+  // hand each time. This is the only way to see `highlight` in the preview at all
+  // while the setting has no control.
+  if (params.has('markStyle')) patch.markStyle = params.get('markStyle');
   for (const [setting, value] of Object.entries(patch)) {
     worker.port.received({ type: 'set-setting', id: setting, value, target: 'background' });
   }

@@ -447,7 +447,17 @@ select:disabled {
   cursor: help;
 }
 
-html.mark-highlight .mark {
+/* Scoped to an ANCESTOR, not to `html` itself.
+ *
+ * The panel sets this class on the document root, which an ancestor selector
+ * matches. Written as `html.mark-highlight` it would match only there — and the
+ * mark comparison sheet (`tools/ui/marks.html`) puts the class on a column so both
+ * treatments can be on screen at once, which the `html`-qualified form silently
+ * ignored. The sheet rendered two identical columns and looked fine doing it.
+ *
+ * A test caught it ("the highlight draws one"), which is the only reason this is
+ * correct now rather than after someone noticed the page compared nothing. */
+.mark-highlight .mark {
   /* Colour behind the word instead of beneath it.
    *
    * A low alpha rather than a solid fill: at full strength a marked word becomes a

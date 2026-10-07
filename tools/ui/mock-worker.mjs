@@ -298,6 +298,12 @@ export function createMockWorker(scenario) {
         view: settings.view,
         layout: settings.layout,
         fontSize: settings.fontSize,
+        // Present so the panel applies it even though no control renders it yet.
+        // Omitted, the panel's `applyMarkStyle` reads `undefined` and falls back to
+        // the underline base — which is correct, but means the preview could never
+        // show the other treatment, and a missing value would look identical to a
+        // deliberate one. The mock reports what the worker reports.
+        markStyle: settings.markStyle,
         listId: list?.id ?? null,
         threshold: threshold(),
         studyLanguage: settings.studyLanguage,

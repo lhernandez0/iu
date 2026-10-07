@@ -257,6 +257,66 @@ try {
     await context.close();
   }
 
+  // --- The mark comparison sheet --------------------------------------------
+  //
+  // `marks.html` had no coverage at all, and it is a page whose whole job is to
+  // render marks — so a mistake in it produces a convincing-looking empty sheet,
+  // which is exactly the failure a person cannot distinguish from "the marks are
+  // subtle". It also writes its own marking loop rather than reusing the panel's,
+  // so nothing else exercises it.
+  console.log('\nmarks.html — the mark comparison sheet');
+
+  {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+    });
+
+    await page.goto(`http://127.0.0.1:${PORT}/tools/ui/marks.html`, { waitUntil: 'load' });
+    await page.waitForSelector('.col', { timeout: 5000 });
+
+    const sheet = await page.evaluate(() => {
+      const cols = [...document.querySelectorAll('.col')];
+      return {
+        cols: cols.length,
+        titles: cols.map((c) => c.querySelector('h2')?.textContent ?? ''),
+        // Each column must carry its OWN treatment class, or both columns render
+        // identically and the page compares nothing.
+        classes: cols.map((c) => [...c.classList].filter((n) => n.startsWith('mark-'))),
+        marks: cols.map((c) => c.querySelectorAll('.mark').length),
+        borderWidths: cols.map((c) => [
+          ...new Set([...c.querySelectorAll('.mark')].map((m) => getComputedStyle(m).borderBottomWidth)),
+        ]),
+        backgrounds: cols.map((c) => [
+          ...new Set([...c.querySelectorAll('.mark')].map((m) => getComputedStyle(m).backgroundColor)),
+        ]),
+        legend: document.querySelectorAll('#legend .mark').length,
+      };
+    });
+
+    check('both treatments are on the page', sheet.titles, ['Underline', 'Highlight']);
+    check('each column carries its own treatment class', sheet.classes, [['mark-underline'], ['mark-highlight']]);
+    check('every column has marks', sheet.marks.every((n) => n > 0), true);
+
+    // The two treatments must actually differ, or the page is decorative. The
+    // underline leaves no background; the highlight washes behind the word. That
+    // is the property that makes them two treatments rather than two headings.
+    const [underlineBgs, highlightBgs] = sheet.backgrounds;
+    const transparent = (c) => c === 'rgba(0, 0, 0, 0)' || c === 'transparent';
+    check('the underline draws no background', underlineBgs.every(transparent), true);
+    check('the highlight draws one', highlightBgs.some((c) => !transparent(c)), true);
+
+    // Every level is named in the legend, so the ramp can be read as a sequence.
+    check('the legend names every level of the list', sheet.legend, 5);
+
+    check('no console or page error', errors, []);
+
+    await context.close();
+  }
+
   console.log(`\n${checks - failures}/${checks} checks passed`);
 } catch (error) {
   console.log(`\n  FAIL  ${error?.message ?? error}`);
