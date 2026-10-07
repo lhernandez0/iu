@@ -13,9 +13,9 @@ IU
 
 **Short Description**
 
-Turn any video into a Chinese or Japanese lesson: unknown words marked, definitions on hover.
+A Chinese and Japanese dictionary for video: words you don't know marked, definitions on hover.
 
-<!-- 93 characters, within the 132 limit. MUST match manifest.json
+<!-- 94 characters, within the 132 limit. MUST match manifest.json
      "description" exactly — the store reads that field, and a mismatch between
      this file and the manifest is the kind of thing that is only noticed at
      submission. The manifest test asserts the two files agree, so this cannot
@@ -23,12 +23,11 @@ Turn any video into a Chinese or Japanese lesson: unknown words marked, definiti
 
 **Detailed Description**
 
-Turn any video into a lesson in the language you are learning.
+A dictionary for the video you are watching.
 
-The subtitles become text you can actually study. Every word you do not know yet
-is picked out and explained, right beside the video — so the video teaches you
-instead of washing over you. Learning Chinese and Japanese, on YouTube, in Chrome,
-Edge, Brave or Firefox.
+The subtitles become text you can look words up in. Every word you do not know yet
+is picked out and explained, right beside the video. Chinese and Japanese, on
+YouTube, in Chrome, Edge, Brave or Firefox.
 
 EVERY WORD YOU DON'T KNOW, MARKED
 
@@ -236,19 +235,22 @@ From the store review checklist. The ones that apply to this extension:
 
 ## Language Claim, and Why It Is Worded Carefully
 
-The description says **Chinese and Japanese** and names **YouTube**. Both are
-deliberate and both should stay accurate:
+The description says **Chinese and Japanese**, names **YouTube**, and does not say
+"any video". All three are deliberate, and the reasoning is ADR 0007:
 
-- The video source sits behind a provider seam, so another site is a data addition
-  rather than a rewrite. It is still **one provider today**, and the host
-  permission covers YouTube alone. Saying "any video site" would be false, and the
-  store can test a claim like that.
-- The dictionaries are Chinese (HSK) and Japanese (JLPT). Adding a language means
-  adding a word list and a dictionary document — no code change — but a language
-  that has not been added is not supported, and an extension that claimed "any
-  language" would fail the first reviewer who tried Spanish.
-
-"From video" is used rather than "from YouTube" where the sentence allows, because
-that is the direction of travel and it is not an overclaim — the subtitles really
-are read from the video. Where the source matters to a permission justification,
-YouTube is named plainly.
+- **"Any video" is gone.** It was in the short description and the first line of
+the detailed one, and it was FALSE — `host_permissions` is `https://*.youtube.com/*`.
+The video source sits behind a provider seam (ADR 0003), so another site is a
+registry entry plus a content script rather than a rewrite, but one provider is
+implemented today and a store can test a claim like that.
+- **Only the languages that work are named.** Chinese (HSK) and Japanese (JLPT)
+ship. **Korean is planned and is deliberately not named in the listing**, because
+it is not a data addition — Hangul is outside the segmenter's character class, so
+it needs code before a dictionary would help. An extension that claimed "any
+language" would fail the first reviewer who tried Spanish.
+- **"Dictionary", not "lesson".** ADR 0007 settled the positioning: this is a
+dictionary that marks what you do not know, not a course. The measured data agrees
+— 88% of Chinese entries carry more than one sense, and Japanese carries 50 parts
+of speech; a lesson product would not need either.
+- **YouTube is named wherever a permission has to be justified.** The seam is a
+reason to expect growth, not a claim about today.

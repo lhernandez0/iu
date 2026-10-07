@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "IU",
   "version": "0.1.0",
-  "description": "Turn any video into a Chinese or Japanese lesson: unknown words marked, definitions on hover.",
+  "description": "A Chinese and Japanese dictionary for video: words you don't know marked, definitions on hover.",
   "minimum_chrome_version": "116",
   "background": {
     "service_worker": "src/background/service-worker.js",
