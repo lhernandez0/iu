@@ -229,11 +229,12 @@ From the store review checklist. The ones that apply to this extension:
       against `manifest.json` before submitting, since the two drift.
 - [x] **Icons are real files at correct dimensions** — 16/32/48/128 verified.
 - [ ] **At least one screenshot at 1280×800 or 640×400** — none taken yet.
-- [ ] **ZIP excludes `node_modules/`, `.git/`, `.env`, `docs/`, `test/`, `tools/`** —
-      not staged. The loaded dev tree is ~78 MB because of `node_modules` and
-      `docs`; the files that actually ship are ~4.6 MB, of which 4.2 MB is the two
-      bundled dictionaries. A store ZIP must be built from the shipping set, not
-      from the repository root.
+- [x] **ZIP excludes `node_modules/`, `.git/`, `docs/`, `test/`, `tools/` and every
+      dotfile** — scripted. `make release` stages the shipping set, lints it with
+      `web-ext lint`, zips it and then asserts the archive contains exactly what
+      the Makefile declares. The loaded dev tree is ~78 MB because of
+      `node_modules` and `docs`; the package is ~4.6 MB, of which 4.2 MB is the two
+      bundled dictionaries. One ZIP serves both stores.
 - [ ] **Privacy policy URL live** — optional here (no data collection), not written.
 - [ ] **Version bumped in `manifest.json`** — 0.1.0 is the development version.
 

@@ -74,12 +74,20 @@ console.log(`  (${names.length} entries in ${zipFile})`);
 //
 // Checked first and by PREFIX, because this is the failure that actually happens:
 // a whole directory arriving because a new tool wrote into it.
+//
+// ANY leading dot is rejected, with no exception. An earlier version of this
+// check carved out `.env.example` — because the Makefile's SHIPPED list had it —
+// and that is the wrong direction: the guard was adjusted to permit the thing it
+// should have caught. `.env.example` documents `npm run capture`, which is a
+// development tool that is not in the package, so it explained a file that would
+// not be there. A dotfile in a shipping extension is a mistake until proven
+// otherwise, and proving it is a deliberate edit here.
 const FORBIDDEN = ['node_modules', 'docs', 'test', 'tools', '.git', '.agents', '.vscode'];
 const leaked = [];
 for (const entry of names) {
   const top = entry.split('/')[0];
   if (FORBIDDEN.includes(top)) leaked.push(entry);
-  if (top.startsWith('.') && top !== '.env.example') leaked.push(entry);
+  if (top.startsWith('.')) leaked.push(entry);
 }
 check('no development directory or dotfile is inside the package', leaked, []);
 

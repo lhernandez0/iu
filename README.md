@@ -140,6 +140,21 @@ npm run ui             # Vite preview of the side panel, for layout work
 There are no runtime dependencies, and nothing is built — the repository is the
 extension.
 
+### Building the store package
+
+```bash
+make release           # stage, lint, zip, verify -> build/iu-language-companion-<version>.zip
+```
+
+One ZIP serves both stores: the manifest carries each browser's keys and each
+ignores the other's, so there is nothing to build differently for Chrome and
+Firefox. `make help` lists the individual steps (`stage`, `lint`, `zip`, `verify`),
+which are independently useful while working a problem out.
+
+The list of what ships lives in the Makefile, in one place, and `make verify`
+asserts the archive contains exactly that — a dotfile or a development directory
+inside the package fails the build rather than reaching a reviewer.
+
 [`TESTING.md`](TESTING.md) covers the tiers, what each suite does and does not
 cover, the panel preview in detail, and where the fixtures come from.
 [`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the listing copy, permission
