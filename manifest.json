@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "IU",
   "version": "0.1.0",
-  "description": "Personal-use language-learning companion: reads a YouTube video's captions in the side panel.",
+  "description": "Learn Chinese and Japanese from video: marks the words above your level, dictionary on hover.",
   "minimum_chrome_version": "116",
   "background": {
     "service_worker": "src/background/service-worker.js",
@@ -25,8 +25,6 @@
     "default_path": "src/sidepanel/sidepanel.html"
   },
   "permissions": [
-    "tabCapture",
-    "offscreen",
     "storage",
     "sidePanel",
     "scripting",

@@ -1,18 +1,23 @@
 # IU
 
-Personal-use Chrome extension for learning a language by watching video. It
-shows a **YouTube video's captions in the side panel**, where clicking a line
-seeks the video to that moment. Two caption tracks can be shown at once
-(bilingual), and every video you visit stays cached so switching back is
+A Chrome extension for reading a language from video. It shows the video's
+captions in the side panel as a dictionary-backed text: every word you have not
+learned yet is marked, and hovering any word gives you its reading and meaning.
+Clicking a line seeks the video to that moment. Two caption tracks can be shown at
+once (bilingual), and every video you visit stays cached so switching back is
 instant.
+
+Today it reads **YouTube** captions. The video source sits behind a provider seam
+so another site is a data addition rather than a rewrite — see
+[ADR 0003](docs/design-decisions/0003-video-providers.md).
 
 > **IU** — *I* and *you*, the two of us.
 > 友 is *iú* in Hokkien, *yǒu* in Mandarin, *tomo* in Japanese — and it means
 > **friend** in all three. A companion to read beside you.
 
-Status: **captions phase**. The panel reads YouTube's own caption tracks — no
-audio capture is involved. The tab-capture + speech-recognition path is built
-but parked behind a flag (see [Parked: audio capture](#parked-audio-capture)).
+Status: **captions phase**. The panel reads the site's own caption tracks — no
+audio capture is involved. The tab-capture + speech-recognition path is built but
+parked behind a flag (see [Parked: audio capture](#parked-audio-capture)).
 
 ## Load it
 
@@ -217,6 +222,15 @@ outside tolerance, empty tracks).
 
 The tab-capture pipeline is still wired and tested, gated by `USE_AUDIO_CAPTURE`
 in `src/sidepanel/sidepanel.js`.
+
+> ⚠️ **Turning this on also needs two manifest permissions restored.** The
+> `tabCapture` and `offscreen` permissions were **removed** while the path is
+> unreachable, because a permission that no shipping feature uses is one the store
+> review team cannot be given an honest reason for — and "we might use it later" is
+> not a justification. No code changed; only the declarations. Add both back to
+> `permissions` in `manifest.json` before setting the flag, or
+> `chrome.tabCapture.getMediaStreamId` and `chrome.offscreen.createDocument` will
+> fail at runtime with the API undefined.
 
 A service worker cannot hold a `MediaStream`, so an **offscreen document** owns
 the stream and hosts the recognition engine:
