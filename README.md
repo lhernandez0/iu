@@ -1,26 +1,12 @@
 # IU
 
-**Turn any video into a language lesson.**
+A Chinese and Japanese dictionary for video. It reads the subtitles of the video
+in your tab and shows them as a transcript you can look words up in.
 
-Subtitles you can actually study. Every word you have not learned yet is marked
-and explained, right there beside the video — so the video teaches you instead of
-washing over you.
-
-Chinese and Japanese, from YouTube. One extension for Chrome, Edge, Brave and
-Firefox.
+YouTube, in Chrome, Edge, Brave and Firefox. Free, open source, no account.
 
 > **IU** — *I* and *you*. 友 means **friend** in Hokkien (*iú*), Mandarin (*yǒu*)
-> and Japanese (*tomo*). A companion to read beside you.
-
-## Why it exists
-
-There is an awkward stage in learning a language. Textbook dialogues and graded
-readers stop being interesting, but real video is still too fast, and every
-sentence hides two or three words you have to leave the video to look up.
-
-The thing standing in the way is just vocabulary. IU is meant to close that gap:
-you watch what you actually want to watch, and the words you are missing are the
-ones that stand out.
+> and Japanese (*tomo*).
 
 ## Status
 
@@ -28,21 +14,15 @@ ones that stand out.
 Web Store** and **Firefox Add-ons (AMO)**. One build serves both: the manifest
 declares each browser's keys and each ignores the other's.
 
-Until it is listed, install it from the source below. Store listing preparation —
-permission justifications, privacy disclosure, screenshots — lives in
-[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md).
+Until it is listed, install it from the source below.
+[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the store listing copy, permission
+justifications and privacy disclosure.
 
 ## Install from source
 
-For either browser, the folder you load is the repository root.
-
-> **Load a clean copy, not your working tree.** The repository root contains
-> `node_modules/` (≈52 MB), `docs/` (local notes, including an 8.9 MB conversation
-> log) and `test/fixtures/`. None of that belongs in an extension: it inflates what
-> the browser loads, and a store scanner reads large unfamiliar JSON as third-party
-> code. Clone into a scratch directory, or use the same file set the store package
-> uses — everything except `test/`, `tools/`, `docs/`, `node_modules/` and the
-> dotfiles.
+Load the folder in either browser, from a clean copy of the source — **not your
+working tree**, which also holds `node_modules/`, `docs/` and `test/fixtures/`.
+None of that belongs in an extension.
 
 **Chrome / Edge / Brave** (116+):
 
@@ -64,23 +44,19 @@ injected on demand, so there is nothing to reload.
 
 ## What it does
 
-**Every word you don't know, marked.** Pick HSK for Chinese or JLPT for Japanese,
-set the level you are working at, and the words you have not met yet are picked
-out in the transcript. Your known words fade into the background — so you can see
-at a glance how much of a sentence is actually in reach.
-
-**Look up anything without leaving the video.** Hover a word for its reading and
-meaning. Chinese shows pinyin, Japanese shows kana, and a word appears under every
-list that knows it — HSK 2.0 and HSK 3.0 disagree, and both are true.
-
-**Two subtitles at once.** Your target language with a second line underneath —
-another track, or a machine translation of the same one. Translated lines are
-tagged, so you always know what you are reading.
-
-**Never lose your place.** The transcript follows playback, and clicking a line
-jumps the video to it. Go back to a video and it is still there, waiting.
-
-**Take it away.** Export what you watched as text or a subtitle file.
+- **Marks the words you don't know.** Choose HSK for Chinese or JLPT for Japanese
+  and the level you are working at. Words at or above it are underlined in a colour
+  for their level; words you know are left plain.
+- **Defines any word on hover.** Reading and meaning. Chinese shows pinyin,
+  Japanese shows kana. A word shows every list that places it — HSK 2.0 and HSK 3.0
+  frequently disagree, and both are shown.
+- **Shows two subtitle tracks at once.** The language you are learning with a
+  second line beneath it. Either line can be a machine translation where the video
+  offers one; translated lines are tagged so they are not mistaken for a real
+  track.
+- **Follows playback.** The current line is highlighted and the list scrolls with
+  it. Clicking a line seeks the video to that moment.
+- **Exports** the transcript as plain text or an SRT subtitle file.
 
 ## How it works
 
@@ -138,10 +114,17 @@ scripts and cannot `import`, so they repeat the message names and the
 
 ## Word lists and languages
 
+Chinese and Japanese work. **Korean is planned.**
+
 Levels are data, not code. Each list declares its own levels, names and language,
 and nothing in the extension knows what HSK or JLPT is — so adding a list is a
 data change, and adding a *language* is a dictionary plus a row in the generated
 index.
+
+Korean is more than that. The segmenter's character class covers kana and Han and
+not Hangul, so Korean text currently comes through as one unbroken token and
+nothing can be marked; it needs a Korean dictionary, a TOPIK list, and work on the
+segmenter.
 
 Both dictionaries are bundled and parsed on demand. Nothing is fetched from a
 server we run.
@@ -192,9 +175,10 @@ collects no analytics, and has no account.
 
 ## Known limitations
 
-- **Marking covers Chinese and Japanese — kanji *and* kana — but not spaced
-  scripts.** Korean and English/Spanish cannot be marked: an English sentence is a
-  single token to a word-list matcher.
+- **Marking covers Chinese and Japanese — kanji *and* kana.** Korean is not
+  supported yet: Hangul is outside the segmenter's character class, and spaced
+  scripts (English, Spanish) cannot be marked at all — a sentence is one token to a
+  word-list matcher.
 - **Inflected Japanese forms mark the dictionary headword, not the word on
   screen.** `食べました` does not match `食べる`; where the stem is itself a
   headword it marks that, carrying a narrower scope. Kanji forms mark correctly.
