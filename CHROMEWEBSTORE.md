@@ -23,78 +23,55 @@ Turn any video into a Chinese or Japanese lesson: unknown words marked, definiti
 
 **Detailed Description**
 
-Understand the video you're watching.
+Turn any video into a lesson in the language you are learning.
 
-You know the feeling: there's a show or a channel you want to watch, and you can
-follow maybe two words in three. Every sentence has a hole in it, and looking the
-words up means leaving the video — so you stop watching, or you watch and
-understand nothing.
+The subtitles become text you can actually study. Every word you do not know yet
+is picked out and explained, right beside the video — so the video teaches you
+instead of washing over you. Learning Chinese and Japanese, on YouTube, in Chrome,
+Edge, Brave or Firefox.
 
-IU fills the holes. The subtitles sit in a panel beside the video with every word
-you don't know picked out. Hover one and it tells you what it means. You keep
-watching, and the video is teaching you the whole time.
+EVERY WORD YOU DON'T KNOW, MARKED
 
-Free, open source, no account. Chinese and Japanese, on YouTube.
+Pick HSK for Chinese or JLPT for Japanese, set the level you are working at, and
+the words you have not met yet are picked out in the transcript. Your known words
+fade into the background, so you can see at a glance how much of a sentence is
+actually in reach. Each list names its own levels — JLPT reads N5 to N1, HSK reads
+1 upward — in the order that language really counts.
 
-WHAT YOU GET IN ONE CLICK
+LOOK UP ANYTHING WITHOUT LEAVING THE VIDEO
 
-Click the toolbar icon on any video and the panel opens with the subtitles in it:
+Hover a word for its reading and meaning. Chinese shows pinyin, Japanese shows
+kana, and a word appears under every list that knows it — HSK 2.0 and HSK 3.0
+disagree, and both are true. Words that sit outside the graded lists are still
+defined; they simply carry no level.
 
-- The words you haven't learned yet are **underlined, in a colour for how hard
-  they are**. The words you already know stay plain — so one glance tells you how
-  much of a line is actually within reach.
-- **Hover any word** for its reading and meaning. Chinese gives you pinyin,
-  Japanese gives you kana.
-- **A second subtitle line** underneath, if you want it: another track, or a
-  machine translation of the same one, clearly tagged as such.
-- **The transcript follows the video** as it plays. Click any line to jump there.
-- **Return to a video and it's still loaded.**
+TWO SUBTITLES AT ONCE
 
-A WORD LIST THAT KNOWS WHAT YOU'RE STUDYING
+Your target language with a second line underneath — another subtitle track, or a
+machine translation of the same one. Translated lines are tagged, so you always
+know which you are reading.
 
-Choose HSK for Chinese or JLPT for Japanese, and set the level you're working at.
-Everything at or above it is marked; everything you already know gets out of the
-way.
+NEVER LOSE YOUR PLACE
 
-The lists keep their own level names, so JLPT reads N5 through N1 and HSK counts
-1 upward — the order each test actually uses, not a number we invented. And when
-two lists disagree about a word — HSK 2.0 and HSK 3.0 frequently do — you see both,
-because both are somebody's syllabus.
+The transcript follows playback, and clicking a line jumps the video to it. Return
+to a video and it is still there, waiting.
 
-BUILT FOR WATCHING, NOT FOR COLLECTING
+TAKE IT AWAY
 
-No account. No server. No sign-in, no sync, no analytics, no tracking of what you
-watch. Nothing leaves your browser, and there is nothing of yours on a machine of
-ours to leak.
+Export what you watched as plain text or an SRT subtitle file.
 
-YOUR PRIVACY IS THE PRODUCT WORKING, NOT A PROMISE
+HOW TO USE IT
 
-IU reads the subtitles of the video in the tab you have open and nothing else. It
-does not read your other tabs, your history, or your Google account — the
-permissions it asks for are four, and the store reason for each one is written out
-in plain English. It talks to no server except YouTube's own, the same one that
-serves the subtitles you can already see on screen.
+1. Install the extension and open a video.
+2. Click the extension icon to open the side panel.
+3. Choose your subtitle language, then your word list and level.
+4. Hover any marked word for its definition. Click any line to seek.
 
-HOW TO START
+PRIVACY
 
-1. Add the extension and open a video on YouTube.
-2. Click the toolbar icon — the panel opens beside the video.
-3. Pick your subtitle language, then your word list and your level.
-4. Watch. Hover any marked word. Click a line to jump to it.
-
-PROBABLY NOT FOR YOU IF…
-
-- **You can't read the script yet.** IU assumes you can read the characters and
-  want to build vocabulary. It won't teach you the alphabet.
-- **You want a course.** This doesn't teach grammar or give you lessons. It
-  explains the words in whatever you choose to watch.
-- **You want to save words and review them later.** Not yet — IU is a reader. See
-  the note below for what's coming.
-
-HONEST ABOUT WHAT IT DOESN'T DO YET
-
-Word saving, flashcard export, and grammar notes are not here. The reader works
-and it works well; the study loop comes next.
+The extension collects nothing. There is no analytics, no account, and no server.
+Your settings are stored in your own browser. See the privacy section below for
+detail.
 
 **Category**
 Productivity
