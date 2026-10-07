@@ -329,3 +329,6 @@ $RECYCLE.BIN/
 .cursor/
 .pi/
 
+
+# VS Code workspace file: local folder paths, not shared config.
+*.code-workspace
