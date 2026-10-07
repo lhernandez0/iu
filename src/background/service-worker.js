@@ -1654,6 +1654,10 @@ function learningState(entry = null) {
     // was stored, broadcast, and then immediately overwritten.
     layout: settings.layout,
     fontSize: settings.fontSize,
+    // A presentation choice, but it travels with the state like the others rather
+    // than being read from storage by the panel — one owner for settings, and the
+    // panel already has the value in hand when it renders.
+    markStyle: settings.markStyle,
     // The list actually in force, not the raw stored id. A stored value can name
     // a list that no longer exists (data changed under it), one that never did, or
     // one that does not cover this video's language — and reporting the raw id

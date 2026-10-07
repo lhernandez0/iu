@@ -6,6 +6,34 @@
   --danger: #ff6b6b;
   --surface: #1e2128;
 
+  /* The type stack for anything a learner READS, as opposed to chrome.
+
+     `system-ui` alone is a Latin-first face, and a Han glyph rendered by a
+     Latin-first fallback is drawn from whatever CJK face the OS happens to
+     substitute — often a thin, wide one that sits oddly beside the Latin text in
+     the same line. The panel is mostly CJK by volume, so the reading surface
+     names real CJK faces before falling back.
+
+     Not applied to the controls. A font stack with CJK first changes the metrics
+     of Latin labels in a toolbar button for no benefit, and the chrome is not
+     what anyone is reading. */
+  --font-reading: system-ui, -apple-system, "Segoe UI", "Hiragino Sans",
+    "Noto Sans CJK JP", "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+
+  /* More room between lines than Latin needs.
+
+     CJK glyphs fill their em box far more completely than Latin ones, so a
+     line-height that looks generous in English reads as cramped in Chinese. The
+     marks also hang a rule below the baseline, and the rule needs to clear the
+     line beneath rather than touching it. */
+  --reading-line-height: 1.65;
+
+  /* One duration and one curve for every state change, so the panel moves at a
+     single tempo. Per-property timings drift and read as sloppy even when each
+     is individually defensible. */
+  --ease: 140ms cubic-bezier(0.2, 0, 0.2, 1);
+
   /* The base size, in px, at the root. Every other size in this file is a
      multiple of it. A number rather than a multiplier: "18px" is unambiguous
      and is what a browser's own zoom and font settings speak, while a scale
@@ -34,7 +62,7 @@ body {
   height: 100vh;
   background: var(--bg);
   color: var(--fg);
-  font: var(--font-size) / var(--line-height) system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: var(--font-size) / var(--line-height) var(--font-reading);
 }
 
 .bar {
@@ -275,6 +303,13 @@ select:disabled {
   flex: 1;
   overflow-y: auto;
   padding: 4px 6px 12px;
+  /* Themed, because the default light scrollbar on a dark panel is the single
+     loudest thing on screen — it reads as a bright stripe down the right edge and
+     is the first thing the eye lands on. `scrollbar-color` is the standard
+     property and is enough on its own in current Chrome; no vendor prefixes and
+     no hand-built track, which is what this used to need. */
+  scrollbar-width: thin;
+  scrollbar-color: #343a46 transparent;
 }
 
 .transcript .empty {
@@ -290,25 +325,40 @@ select:disabled {
   align-items: flex-start;
   width: 100%;
   margin: 0;
-  padding: 3px 6px;
+  padding: 4px 7px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 5px;
   background: none;
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--ease), border-color var(--ease);
 }
 
+/* Hover must be declared BEFORE `.row.active`, not after.
+   Both are one class on the same element, so they have equal specificity and the
+   later one wins. With hover last, hovering the active row replaced its highlight
+   with the hover grey and the line you are reading lost its anchor under the
+   pointer. Ordering is the only mechanism here: a `.row.active:hover` rule would
+   also work but adds a state combinator for something the cascade already says. */
 .row:hover {
   background: #23262e;
   border-color: transparent;
 }
 
-/* The line currently being spoken. */
+/* The active line, marked on its leading edge as well as behind it.
+
+   A background alone has to compete with every other row for the eye; a vertical
+   accent at the left edge gives the highlight an anchor the eye can find without
+   reading, which is what makes it possible to glance back and know where you are.
+
+   Drawn with an inset shadow rather than a wider border, because a border grows
+   the box and would reflow every row the moment a line became active. */
 .row.active {
   background: #24304a;
   border-color: #35507f;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .row.active .time,
@@ -363,17 +413,58 @@ select:disabled {
 .primary {
   white-space: pre-wrap;
   word-break: break-word;
+  font-family: var(--font-reading);
+  /* Per-line rather than inherited from `body`: the transcript is the one region
+     where CJK density matters, and the chrome should stay at its own tighter
+     rhythm. */
+  line-height: var(--reading-line-height);
 }
 
 /* A marked word.
-   A soft rounded underline rather than text-decoration, which cannot round its
-   ends. The padding keeps the rule clear of descenders, and the colour comes
-   from --mark, set per token because it depends on the list's length. */
+ *
+ * TWO treatments, chosen by `markStyle` in the settings schema (no control
+ * renders it yet). Both use `--mark`, the level's colour, so the ramp is
+ * unchanged — only where that colour is put.
+ *
+ * Underline is the BASE rather than one of two equal branches. A rule that only
+ * applied under `html.mark-underline` would leave marks completely undrawn until
+ * the first state arrived, which is a flash of plain text on every panel open and
+ * a blank transcript if the worker never answers. The base case has to be the
+ * safe one.
+ *
+ * There is deliberately NO thickness variation between levels. It was tried: a
+ * 1px→3.5px ramp encodes level a second time and is genuinely more readable
+ * without colour. Rejected on sight — a row of words whose rules are all
+ * different weights reads as inconsistent rather than informative, and a
+ * transcript is read far more than it is scanned.
+ */
 .mark {
+  /* A soft rounded underline rather than text-decoration, which cannot round its
+     ends. The padding keeps the rule clear of descenders. */
   padding-bottom: 2px;
   border-bottom: 2px solid var(--mark, transparent);
   border-radius: 2px;
   cursor: help;
+}
+
+html.mark-highlight .mark {
+  /* Colour behind the word instead of beneath it.
+   *
+   * A low alpha rather than a solid fill: at full strength a marked word becomes a
+   * coloured block fighting the text on top of it, and a dense line turns into a
+   * row of chips. This is a wash — enough to see the extent of a mark from across
+   * the line, light enough to read through.
+   *
+   * `color-mix` rather than a hand-picked rgba per level, so the wash is derived
+   * from the same level colour as everything else and cannot drift out of step
+   * with the palette.
+   *
+   * A hairline stays on the lower edge. A wash alone has no definite end, so a
+   * two-word mark and a three-word one read alike where neighbouring colours are
+   * close; the hairline gives the mark an edge without becoming a rule. */
+  border-bottom: 1px solid color-mix(in srgb, var(--mark) 55%, transparent);
+  background: color-mix(in srgb, var(--mark) 22%, transparent);
+  border-radius: 3px;
 }
 
 /* A word we can define but the current list does not place.
@@ -510,6 +601,21 @@ select:disabled {
   font-size: calc(12px * var(--text-scale));
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Motion is the panel's to add, not its to impose.
+
+   Some people become ill from interface motion, and the operating system already
+   exposes that preference — `prefers-reduced-motion` is the configuration, so
+   there is nothing to build and no setting to maintain. Transitions are the only
+   thing here that moves, so they are the only thing this has to switch off; the
+   accent, the colours and the layout are all unchanged, which is the point. A
+   reduced-motion user gets the same information, delivered instantly. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 
 .row.active .secondary {

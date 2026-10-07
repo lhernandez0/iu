@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU — mark styles</title>
+    <link rel="stylesheet" href="/src/sidepanel/sidepanel.css" />
+    <style>
+      /* A comparison sheet, not the panel. The SAME text under each treatment, so
+         the only thing that differs between the columns is how a mark is drawn.
+
+         It uses the real `.mark` rules from sidepanel.css — by putting
+         `mark-underline` / `mark-highlight` on each column — rather than
+         restating them. A sheet with its own copy of the styles would compare the
+         copy, not the thing that ships. The panel toggles those same classes on
+         `html`; here they are on a column so both can be seen at once. */
+      body {
+        padding: 16px;
+        height: auto;
+        min-height: 0;
+      }
+      .sheet-head {
+        margin: 0 0 4px;
+        font-size: 15px;
+      }
+      .sheet-sub {
+        margin: 0 0 16px;
+        color: var(--muted);
+        font-size: 12px;
+        max-width: 78ch;
+        line-height: 1.5;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        align-items: start;
+      }
+      .col {
+        border: 1px solid #2a2e37;
+        border-radius: 8px;
+        padding: 10px;
+      }
+      .col h2 {
+        margin: 0 0 2px;
+        font-size: 13px;
+      }
+      .col p {
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.4;
+        min-height: 3.4em;
+      }
+      .strip {
+        margin-top: 12px;
+        padding-top: 8px;
+        border-top: 1px dashed #2a2e37;
+      }
+      .strip-label {
+        color: var(--muted);
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-bottom: 4px;
+      }
+      .grey {
+        filter: grayscale(1);
+      }
+      .sheet .row {
+        padding: 4px 6px;
+      }
+      .sheet .primary,
+      .sheet .secondary {
+        display: block;
+      }
+      .legend-row {
+        margin-top: 18px;
+      }
+    </style>
+  </head>
+  <body class="sheet">
+    <h1 class="sheet-head">Mark styles</h1>
+    <p class="sheet-sub">
+      The same Japanese, the same dictionary, the same levels. Only the treatment
+      of a mark differs. Below each column is the same text in
+      <strong>greyscale</strong> — what a colourblind reader sees. All five levels
+      of the ramp are drawn in the legend at the bottom.
+    </p>
+
+    <div class="grid" id="grid"></div>
+
+    <div class="legend-row">
+      <div class="strip-label">the ramp — N5 (easiest) to N1 (hardest)</div>
+      <div class="row"><p class="primary" id="legend"></p></div>
+    </div>
+
+    <script type="module">
+      import { indexDictionary, levelColour, lookup, levelOf } from '/src/learn/wordlist.js';
+      import { segmentSegments } from '/src/learn/segment.js';
+
+      const LIST_ID = 'jlpt';
+
+      // The real dictionary and the real segmenter, so the colours and the
+      // tokenisation here are the ones the extension produces rather than an
+      // illustration of them.
+      const raw = await (await fetch('/src/learn/data/japanese.json')).json();
+      const dictionary = indexDictionary(raw);
+      const list = dictionary.lists.find((l) => l.id === LIST_ID);
+
+      const LINES = [
+        '私は学生です。',
+        '日本語を勉強します。とても難しいです。',
+        '今日はいい天気ですね。',
+        'ありがとうございました。',
+        '毎日少しずつ練習しています。',
+      ];
+
+      /** One line, tokenised for real, with each known word marked. */
+      function renderLine(text) {
+        const p = document.createElement('p');
+        p.className = 'primary';
+        const [tokens] = segmentSegments([{ start: 0, text }], dictionary.headwords, dictionary.maxWordLength);
+        for (const token of tokens) {
+          const defined = token.known && Boolean(lookup(dictionary, token.text));
+          const level = defined ? levelOf(dictionary, LIST_ID, token.text) : null;
+          if (level === null) {
+            p.append(document.createTextNode(token.text));
+            continue;
+          }
+          const span = document.createElement('span');
+          span.className = 'mark';
+          span.textContent = token.text;
+          span.style.setProperty('--mark', levelColour(level, list.levelCount));
+          p.append(span);
+        }
+        return p;
+      }
+
+      function renderTranscript() {
+        const div = document.createElement('div');
+        div.className = 'transcript sheet';
+        for (const line of LINES) {
+          const row = document.createElement('div');
+          row.className = 'row';
+          row.append(renderLine(line));
+          div.append(row);
+        }
+        return div;
+      }
+
+      const STYLES = [
+        {
+          cls: 'mark-underline',
+          title: 'Underline',
+          note: 'The rule sits below the text and leaves the glyphs untouched, so reading is never interrupted. Quieter; harder to count marked words at a glance.',
+        },
+        {
+          cls: 'mark-highlight',
+          title: 'Highlight',
+          note: 'Colour washes behind the word, with a hairline at its foot. Reads from further away and makes marks countable at a glance, at the cost of ink behind the letters.',
+        },
+      ];
+
+      const grid = document.getElementById('grid');
+      for (const style of STYLES) {
+        const col = document.createElement('section');
+        col.className = `col ${style.cls}`;
+
+        const h = document.createElement('h2');
+        h.textContent = style.title;
+        const p = document.createElement('p');
+        p.textContent = style.note;
+
+        const strip = document.createElement('div');
+        strip.className = 'strip';
+        const label = document.createElement('div');
+        label.className = 'strip-label';
+        label.textContent = 'greyscale';
+        const grey = document.createElement('div');
+        grey.className = 'grey';
+        grey.append(renderTranscript());
+
+        strip.append(label, grey);
+        col.append(h, p, renderTranscript(), strip);
+        grid.append(col);
+      }
+
+      // The ramp itself, so the palette can be judged as a sequence and not only
+      // in context.
+      const legend = document.getElementById('legend');
+      for (let level = 1; level <= list.levelCount; level++) {
+        const span = document.createElement('span');
+        span.className = 'mark';
+        span.textContent = `${list.levelNames[level - 1]} `;
+        span.style.setProperty('--mark', levelColour(level, list.levelCount));
+        legend.append(span);
+      }
+    </script>
+  </body>
+</html>

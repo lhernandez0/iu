@@ -30,7 +30,24 @@
  * @property {string} [group]       Which section of the panel it belongs to.
  * @property {(value: any, context?: object) => any} [coerce] Normalise a stored value.
  * @property {boolean} [dynamic]    Options are supplied at render time, not here.
+ * @property {boolean} [hidden]     A real setting with no control yet, for a future
+ *                                  settings page. Not rendered by the toolbar.
  */
+
+/**
+ * How a known word is marked in the transcript.
+ *
+ * Two treatments, not a scale. They answer different questions:
+ *   - `underline` points AT the word. The rule sits below the text and leaves the
+ *     body of it completely untouched, so reading is unbroken.
+ *   - `highlight` puts colour BEHIND the word. It reads from further away and
+ *     makes marked words countable at a glance, at the cost of ink behind the
+ *     glyphs.
+ */
+const MARK_STYLE_OPTIONS = [
+  { value: 'underline', label: 'Underline' },
+  { value: 'highlight', label: 'Highlight' },
+];
 
 /** The base size every other size in the panel is a multiple of. */
 export const BASE_FONT_PX = 13;
@@ -159,6 +176,27 @@ export const SETTINGS = [
       }
       return out;
     },
+  },
+  {
+    // NOT on the toolbar, and deliberately so — it is a real setting with no
+    // control, which is the shape every setting takes until there are enough of
+    // them to deserve a settings page.
+    //
+    // `hidden: true` is what says so. The panel renders controls explicitly, so an
+    // unrendered setting would be invisible by accident rather than by intent, and
+    // an accident is indistinguishable from a bug the day someone adds a control
+    // loop. This is the flag a future settings sheet filters on.
+    //
+    // Still a full setting: persisted, coerced and broadcast on state like any
+    // other, so exposing it later is a control and nothing else.
+    id: 'markStyle',
+    label: 'Marks',
+    group: 'reading',
+    type: 'select',
+    options: MARK_STYLE_OPTIONS,
+    hidden: true,
+    default: 'underline',
+    coerce: (value) => (MARK_STYLE_OPTIONS.some((o) => o.value === value) ? value : 'underline'),
   },
   {
     id: 'studyLanguage',

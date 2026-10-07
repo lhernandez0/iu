@@ -30,6 +30,52 @@ const track = (languageCode) =>
 const en = track('en');
 const zh = track('zh-Hans') ?? track('en');
 
+/**
+ * A Japanese track, written here because the corpus has none.
+ *
+ * The committed corpus is `zh-Hans` and `en` only, so there was no way to preview
+ * the Japanese path at all — which is a problem now that it is the newest feature
+ * and the one with open design questions (JLPT level names, kana marks, and
+ * furigana if it lands). Hand-written text is the same convention `test/synthetic/`
+ * uses: ours, in real shapes.
+ *
+ * Deliberately mixes kanji and kana. `とても` is there to prove kana marks, since
+ * that was impossible until the segmenter learned the kana blocks, and a preview
+ * that only showed kanji would look correct while hiding the half that used to be
+ * broken.
+ *
+ * Short on purpose — five cues is enough to judge marks and reading. A 400-cue
+ * Japanese transcript would be more faithful and no more useful for styling.
+ */
+const ja = {
+  languageCode: 'ja',
+  name: 'Japanese',
+  kind: null,
+  isTranslatable: true,
+  segments: [
+    { start: 0, duration: 2.4, text: '私は学生です。' },
+    { start: 2.4, duration: 2.8, text: '日本語を勉強します。' },
+    { start: 5.2, duration: 2.6, text: 'とても難しいです。' },
+    { start: 7.8, duration: 2.4, text: '今日はいい天気ですね。' },
+    { start: 10.2, duration: 2.6, text: 'ありがとうございました。' },
+  ],
+};
+
+/** English for the Japanese track, aligned cue-for-cue so the gloss lines up. */
+const jaEn = {
+  languageCode: 'en',
+  name: 'English',
+  kind: null,
+  isTranslatable: false,
+  segments: [
+    { start: 0, duration: 2.4, text: 'I am a student.' },
+    { start: 2.4, duration: 2.8, text: 'I study Japanese.' },
+    { start: 5.2, duration: 2.6, text: 'It is very difficult.' },
+    { start: 7.8, duration: 2.4, text: 'Nice weather today.' },
+    { start: 10.2, duration: 2.6, text: 'Thank you very much.' },
+  ],
+};
+
 /** Everything the preview can render, in the order the switcher shows them. */
 export const SCENARIOS = [
   {
@@ -92,6 +138,13 @@ export const SCENARIOS = [
     tracks: [zh, en],
     settings: { studyLanguage: zh.languageCode, glossLanguage: en.languageCode },
     stretchLongestCue: 400,
+  },
+  {
+    id: 'japanese',
+    label: 'Japanese',
+    note: 'JLPT, so the level control reads N5 to N1 and the marks use kana as well as kanji. とても is the case that could not be marked at all until the segmenter learned the kana blocks.',
+    tracks: [ja, jaEn],
+    settings: { studyLanguage: 'ja', glossLanguage: 'en', listId: 'jlpt' },
   },
   {
     id: 'error',

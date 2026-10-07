@@ -501,6 +501,7 @@ function renderLearning(state) {
   // message that changes nothing on the other side.
   applyFontSize(learning.fontSize);
   applyView(learning.view);
+  applyMarkStyle(learning.markStyle);
 }
 
 /**
@@ -583,6 +584,25 @@ function sizeFrom(raw) {
  */
 function applyFontSize(pixels) {
   document.documentElement.style.setProperty('--font-size', `${sizeFrom(pixels)}px`);
+}
+
+/**
+ * How a marked word is drawn: an underline beneath it, or a highlight behind it.
+ *
+ * A class on the ROOT rather than on the transcript, so the choice reaches every
+ * mark wherever one is rendered — including the definition popover, which is a
+ * fixed-position element attached to the body and not inside the transcript at
+ * all.
+ *
+ * No control renders this yet; `hidden: true` in the schema says why. It is a real
+ * setting all the same, so exposing it later is a control and nothing more.
+ *
+ * @param {string} mode
+ */
+function applyMarkStyle(mode) {
+  const highlight = mode === 'highlight';
+  document.documentElement.classList.toggle('mark-highlight', highlight);
+  document.documentElement.classList.toggle('mark-underline', !highlight);
 }
 
 /**

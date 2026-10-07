@@ -12,6 +12,9 @@
  */
 
 import { installDomStub, installChromeStubForPanel } from './dom-stub.mjs';
+// `PANEL_IDS` is the set of controls the real HTML declares, so the schema and the
+// markup can be checked against each other rather than only in isolation.
+import { SETTINGS } from '../src/common/settings.js';
 
 let failures = 0;
 let checks = 0;
@@ -477,6 +480,41 @@ section('the controls are built from the schema, not hand-written here');
   check('the view offers both modes', viewOptions.length, 2);
   check('named as the schema names them', viewOptions.map((o) => o.text), ['Full', 'Live']);
   check('with the schema values', viewOptions.map((o) => o.value), ['all', 'focus']);
+}
+
+// --- 11b. Settings with no control yet ---------------------------------------
+
+section('a setting can exist without a control, and still be a real setting');
+
+{
+  // `markStyle` is the first of these: a genuine preference with no toolbar
+  // control, waiting for a settings page. Two things have to hold, and they pull
+  // in opposite directions — it must not clutter the toolbar, and it must not be
+  // a second-class setting that behaves differently from the visible ones.
+  const hidden = SETTINGS.filter((setting) => setting.hidden);
+  check('at least one setting is marked hidden', hidden.length > 0, true);
+
+  // Hidden has to MEAN something, or the flag is decoration. The panel renders
+  // controls explicitly, so nothing would render it today either way — which is
+  // exactly why the flag needs asserting now: it has to still be true on the day
+  // someone adds a loop that renders every setting in a group.
+  const rendered = new Set([...PANEL_IDS, ...HIDDEN_IDS]);
+  const withControls = SETTINGS.filter((s) => !s.hidden && s.type !== 'map').map((s) => s.id);
+  check('no hidden setting is also a rendered control', withControls.filter((id) => hidden.some((h) => h.id === id)), []);
+  check('and the rendered set is not empty, so the check above is meaningful', withControls.length > 0, true);
+
+  // Complete like any other setting, so exposing it later is a control and
+  // nothing else. A hidden setting with no options would render an empty select.
+  const incomplete = hidden.filter(
+    (s) => !s.group || !s.label || s.default === undefined || (s.type === 'select' && !(s.options ?? []).length),
+  );
+  check('every hidden setting is complete enough to render as-is', incomplete.map((s) => s.id), []);
+
+  const { lastPort, dom } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings({ markStyle: 'highlight' }) });
+  const root = dom.created.find((el) => el.tagName === 'HTML');
+
+  check('the panel applies a hidden setting it is sent', root?.classList.contains('mark-highlight'), true);
 }
 
 // --- 12. Auto-translate ------------------------------------------------------

@@ -143,7 +143,59 @@ export function createMockWorker(scenario) {
         console.error('[ui-preview] the word list did not load:', error?.message ?? error);
       });
 
-  const threshold = () => scenario.forceThreshold ?? settings.threshold ?? list?.defaultThreshold ?? 1;
+  // Which level to mark from: the learner's own remembered choice for THIS list,
+  // or the first level.
+  //
+  // Mirrors `thresholdFor` in the worker, including the per-list memory. It used
+  // to read a `defaultThreshold` off the list, which no longer exists — the list
+  // is not allowed to carry a starting level, because a starting level chosen by
+  // whoever wrote the data is one person's ability shipped to everyone.
+  //
+  // `scenario.forceThreshold` stays as a deliberate override, so a scenario can
+  // pin the marks for a screenshot without writing a preference.
+  const threshold = () =>
+    scenario.forceThreshold ?? settings.listThresholds?.[list?.id] ?? settings.threshold ?? 1;
+
+  /**
+   * What a list CALLS one of its levels.
+   *
+   * JLPT runs N5..N1 and HSK runs 1..N, so the stored number must never be shown
+   * as the name. Printing it rendered 私 — JLPT N5, stored 1 — as "JLPT 1", which
+   * a reader takes for N1, the hardest level, on the easiest word in the language.
+   * The preview shows the same names the panel does, or it is previewing a bug
+   * that was already fixed.
+   *
+   * @param {object|undefined} l
+   * @param {number} level  1-based, easiest first.
+   * @returns {string}
+   */
+  const levelName = (l, level) => l?.levelNames?.[level - 1] ?? String(level);
+
+  /** @param {string|undefined} listId @param {number} level */
+  const rememberThreshold = (listId, level) => {
+    if (!listId) return;
+    settings.listThresholds = { ...(settings.listThresholds ?? {}), [listId]: Math.floor(Number(level)) };
+  };
+
+  /**
+   * Every list that places this word, as the worker reports it for the popover.
+   *
+   * The hover reply was previously "unhandled", so the definition popover could
+   * not be previewed at all — which is a problem now that the popover is one of
+   * the things being designed.
+   *
+   * @param {string} word
+   * @returns {object[]}
+   */
+  const levelsFor = (word) =>
+    (dictionary?.lists ?? [])
+      .map((l) => {
+        const level = levelOf(dictionary, l.id, word);
+        return level === null
+          ? null
+          : { id: l.id, label: l.label, level, levelName: levelName(l, level), levelCount: l.levelCount };
+      })
+      .filter(Boolean);
 
   /** The tracks this scenario offers, as YouTube would report them. */
   const trackList = scenario.tracks.map((t) => ({
@@ -256,10 +308,11 @@ export function createMockWorker(scenario) {
         // The REAL lists, so the control says HSK 2.0 / HSK 3.0 and the levels are
         // the levels those lists actually have.
         listOptions: lists.map((l) => ({ value: l.id, label: l.label })),
-        thresholdOptions: Array.from({ length: levels }, (_, i) => ({
-          value: i + 1,
-          label: `${i + 1}+`,
-        })),
+        // Named by the list, so JLPT reads N5..N1 and HSK reads 1..9. The VALUE
+        // stays the internal number, because that is what the comparison uses.
+        thresholdOptions: list
+          ? Array.from({ length: levels }, (_, i) => ({ value: i + 1, label: levelName(list, i + 1) }))
+          : [],
       },
       // The panel reads the level count off the list it is marking against.
       lists: lists.map((l) => ({ id: l.id, label: l.label, levelCount: l.levelCount })),
@@ -337,12 +390,26 @@ export function createMockWorker(scenario) {
         // the mock logged the message as unhandled and the marks stayed as they
         // were, which made the threshold look broken in the preview.
         settings.threshold = Number(message.threshold) || 1;
+        // Remembered against the list, as the worker does, so switching list and
+        // back restores it rather than resetting.
+        rememberThreshold(list?.id, settings.threshold);
         push();
         return;
       case MSG.SET_LIST:
         settings.listId = message.listId;
         list = dictionary?.lists.find((l) => l.id === settings.listId) ?? list;
+        // Restore the level remembered for the list being switched TO.
+        settings.threshold = threshold();
         push();
+        return;
+      case MSG.LOOKUP:
+        port.deliver({
+          type: MSG.ENTRY,
+          word: message.word,
+          entry: dictionary ? lookup(dictionary, message.word) : null,
+          levels: levelsFor(message.word),
+          listId: list?.id ?? null,
+        });
         return;
       case MSG.SET_SETTING: {
         settings = normalise({ ...settings, [message.id]: message.value });
