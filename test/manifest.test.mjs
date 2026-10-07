@@ -112,5 +112,24 @@ section('the icon source is committed, so the PNGs can be regenerated');
 check('icons/icon.svg exists', existsSync(join(ROOT, 'icons', 'icon.svg')), true);
 check('the generator exists', existsSync(join(ROOT, 'tools', 'make-icons.mjs')), true);
 
+section('package.json and the manifest describe the extension the same way');
+
+{
+  // The store reads the manifest's description; everyone else reads package.json.
+  // They said different things for a while — the manifest had been rewritten for
+  // publication while package.json still called the project "Personal-use Chrome
+  // extension", which is the framing that was deliberately removed everywhere
+  // else. Two descriptions of one product drift because nothing compares them.
+  const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+
+  check('the descriptions match', pkg.description, manifest.description);
+  // The store rejects a description over 132 characters, and it reads the
+  // MANIFEST — so this is the one place the limit has to be enforced.
+  check('and fit the store limit', manifest.description.length <= 132, true);
+  // A description that disagrees with the version is a description of a different
+  // product. Both are bumped together at release time or not at all.
+  check('and the versions match', pkg.version, manifest.version);
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 if (failures) process.exitCode = 1;
