@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "IU",
+  "name": "IU Language Companion",
   "version": "0.1.0",
   "description": "A Chinese and Japanese dictionary for video: words you don't know marked, definitions on hover.",
   "minimum_chrome_version": "116",

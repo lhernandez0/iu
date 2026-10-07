@@ -777,6 +777,22 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const capture = captureFor(captureId);
     if (!capture?.tracks.length) continue;
 
+    // A capture whose tracks carry no cues is not a video to render — it is a
+    // capture that failed to collect any caption bodies, which happens when the
+    // server refuses (Google answers a refused caption request with HTTP 200 and
+    // an HTML block page, so the fetch "succeeds" and parses to nothing).
+    //
+    // Without this the section waits for a first line that does not exist and
+    // times out, failing the suite for a fixture that has nothing to test.
+    const firstLine = capture.tracks
+      .map((track) => track.segments?.[0]?.text)
+      .find((text) => typeof text === 'string' && text.length > 0);
+    if (!firstLine) {
+      section(`a real captured video renders (${captureId})`);
+      console.log('  SKIP  the capture holds no caption cues');
+      continue;
+    }
+
     section(`a real captured video renders (${captureId})`);
 
     // The capture carries the real track list, real segments and real
@@ -791,7 +807,6 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // "some rows" reads that as success and asserts against the wrong transcript.
     // This was intermittently failing for exactly that reason, and a stray
     // logging line was shifting the timing enough to hide it.
-    const firstLine = capture.tracks[0]?.segments[0]?.text;
     await page.waitForFunction(
       (expected) =>
         [...document.querySelectorAll('.row .primary')].some((node) => node.textContent === expected),

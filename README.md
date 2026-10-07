@@ -1,4 +1,4 @@
-# IU
+# IU Language Companion
 
 A Chinese and Japanese dictionary for video. It reads the subtitles of the video
 in your tab and shows them as a transcript you can look words up in.

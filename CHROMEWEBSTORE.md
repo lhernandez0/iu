@@ -1,4 +1,4 @@
-# Chrome Web Store Listing — IU
+# Chrome Web Store Listing — IU Language Companion
 
 > Last Updated: 2026-10-07
 > **Status: draft.** Nothing here has been submitted. Kept current so publishing is
@@ -7,9 +7,13 @@
 ## Store Listing
 
 **Extension Name**
-IU
+IU Language Companion
 
-<!-- Matches manifest.json "name". 2 characters. The store field allows 75. -->
+<!-- Matches manifest.json "name". 23 characters, inside the store's 75 limit.
+     The descriptor is not decoration: "IU" alone collides with a K-pop artist on
+     a store search, and a bare brand is neither findable nor unambiguous. It names
+     no language on purpose — Korean is next and the name should not expire when it
+     lands. -->
 
 **Short Description**
 
