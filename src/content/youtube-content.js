@@ -27,6 +27,21 @@
   if (window.__iuContentLoaded) return;
   window.__iuContentLoaded = true;
 
+  // --- The extension API namespace -----------------------------------------
+  //
+  // Copied from `src/common/api.js` rather than imported, because this is a
+  // CLASSIC script — it is injected as a content script and cannot `import`.
+  // The same one line appears in the offscreen document and the side panel for
+  // files that can import, which is the arrangement MSG, TARGET and ERR below
+  // already use. `browser` is the standard namespace and Chrome has had it since
+  // 148; taking whichever exists works in every browser we support with no
+  // dependency and no build step.
+  //
+  // A preference rather than a fix: MV3 Firefox supports promises on `chrome.*`
+  // too, so this changes nothing today. It is here so the code reads the same
+  // everywhere.
+  const api = globalThis.browser ?? globalThis.chrome;
+
   // --- Duplicated contract -------------------------------------------------
   const CHANNEL = 'iu-ext';
   const MSG = {
@@ -599,7 +614,7 @@
     }
   }
 
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || message.target !== TARGET.CONTENT) return false;
 
     switch (message.type) {
@@ -723,7 +738,7 @@
     try {
       // No receiver is a normal state, not a failure: the worker stops when
       // idle, and it is not this script's job to restart it.
-      chrome.runtime.sendMessage(payload)?.catch(() => {});
+      api.runtime.sendMessage(payload)?.catch(() => {});
     } catch {
       // Thrown synchronously when the context died between the check and here.
       teardown();

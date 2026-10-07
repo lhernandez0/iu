@@ -6,6 +6,7 @@
   "minimum_chrome_version": "116",
   "background": {
     "service_worker": "src/background/service-worker.js",
+    "scripts": ["src/background/service-worker.js"],
     "type": "module"
   },
   "action": {
@@ -23,6 +24,23 @@
   },
   "side_panel": {
     "default_path": "src/sidepanel/sidepanel.html"
+  },
+  "sidebar_action": {
+    "default_panel": "src/sidepanel/sidepanel.html",
+    "default_title": "IU",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "iu@lhernandez0.github.io",
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
   },
   "permissions": [
     "storage",

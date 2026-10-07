@@ -15,14 +15,17 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 
+/** The extension API namespace. See the note in `src/background/service-worker.js`. */
+const api = globalThis.browser ?? globalThis.chrome;
+
 /** @returns {Promise<void>} */
 export async function startAudioCapture() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await api.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) throw new Error('No active tab to capture.');
 
-  const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+  const streamId = await api.tabCapture.getMediaStreamId({ targetTabId: tab.id });
 
-  const reply = await chrome.runtime.sendMessage({
+  const reply = await api.runtime.sendMessage({
     type: MSG.START_CAPTURE,
     target: TARGET.BACKGROUND,
     streamId,
@@ -34,5 +37,5 @@ export async function startAudioCapture() {
 
 /** @returns {Promise<void>} */
 export async function stopAudioCapture() {
-  await chrome.runtime.sendMessage({ type: MSG.STOP_CAPTURE, target: TARGET.BACKGROUND }).catch(() => {});
+  await api.runtime.sendMessage({ type: MSG.STOP_CAPTURE, target: TARGET.BACKGROUND }).catch(() => {});
 }

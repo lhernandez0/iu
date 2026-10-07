@@ -466,20 +466,26 @@ export function createMockWorker(scenario) {
 export function installMockChrome(scenario) {
   const worker = createMockWorker(scenario);
 
-  globalThis.chrome = {
-    runtime: {
-      connect: () => worker.port,
-      // The word list loader resolves its data through this, exactly as the real
-      // extension does. Vite serves `/src/...` from the repository root, so the
-      // URL maps straight onto the committed dictionary.
-      getURL: (path) => `/${path}`,
-      // The panel reads this after a disconnect. Nothing disconnects here, but
-      // the property has to exist or reading it throws.
-      get lastError() {
-        return undefined;
-      },
+  const runtime = {
+    connect: () => worker.port,
+    // The word list loader resolves its data through this, exactly as the real
+    // extension does. Vite serves `/src/...` from the repository root, so the
+    // URL maps straight onto the committed dictionary.
+    getURL: (path) => `/${path}`,
+    // The panel reads this after a disconnect. Nothing disconnects here, but
+    // the property has to exist or reading it throws.
+    get lastError() {
+      return undefined;
     },
   };
+
+  globalThis.chrome = { runtime };
+  // Installed under BOTH names, because `src/common/api.js` prefers `browser` —
+  // it takes `globalThis.browser ?? globalThis.chrome`, and a real Chrome has
+  // only `chrome`. Without this the preview would exercise a branch the shipping
+  // extension never takes, so a difference between the two would be invisible
+  // here while breaking in the browser.
+  globalThis.browser = { runtime };
 
   return { worker, port: worker.port };
 }

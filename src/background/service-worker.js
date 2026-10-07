@@ -25,6 +25,31 @@ import { loadDictionary, loadIndex, dictionaryPathFor, levelOf, lookup, INDEX_PA
 import { segmentSegments } from '../learn/segment.js';
 
 /**
+ * The extension API namespace.
+ *
+ * `browser` is the standard and Chrome has had it since 148; `chrome` is what
+ * Chrome has always had. Taking whichever exists works in every browser and
+ * version we support, with no dependency and no build step.
+ *
+ * A PREFERENCE, not a fix. A first reading of the compatibility tables said
+ * Firefox's `chrome.*` is callback-only, which would have made this mandatory.
+ * That is true of Manifest V2 and false of MV3 — Mozilla: "In Manifest V3,
+ * Firefox supports promises for asynchronous events in the `chrome.*`
+ * namespace." Our code is promise-based `chrome.*` throughout, so it already
+ * works in Firefox. This is here because one identifier that reads the same
+ * everywhere is one fewer thing to know.
+ *
+ * DECLARED PER FILE rather than imported from a shared module, deliberately.
+ * Tried the module first and it broke the test suite: a module is evaluated
+ * once and cached, so `api` snapshots whichever global existed at first import,
+ * while the test stubs reassign `globalThis.chrome` for every boot — the worker
+ * ended up holding a dead stub. Reading the global where it is used cannot go
+ * stale. The content script cannot import at all (it is a classic script), so
+ * this also keeps one mechanism rather than two. Same shape as MSG and TARGET.
+ */
+const api = globalThis.browser ?? globalThis.chrome;
+
+/**
  * The list manifest URL, and the dictionary URL for its active list.
  *
  * Resolved here, not inside `learn/wordlist.js`. That module is about data and
@@ -35,7 +60,7 @@ import { segmentSegments } from '../learn/segment.js';
  * @returns {string}
  */
 function indexUrl() {
-  return chrome.runtime.getURL(INDEX_PATH);
+  return api.runtime.getURL(INDEX_PATH);
 }
 
 /** How many videos to keep transcripts for before evicting the oldest. */
@@ -108,7 +133,7 @@ let currentVideoId = null;
  */
 let panelPort = null;
 
-chrome.runtime.onConnect.addListener((port) => {
+api.runtime.onConnect.addListener((port) => {
   if (port.name !== 'panel') return;
   panelPort = port;
 
@@ -368,7 +393,7 @@ async function ensureDictionaryFor(listId) {
   // evicted after ~30s idle so it repeats on every wake. Measuring it is what
   // separates that from a slow network — they need opposite fixes.
   const started = Date.now();
-  dictionary = await loadDictionary(chrome.runtime.getURL(path));
+  dictionary = await loadDictionary(api.runtime.getURL(path));
   dictionaryLanguage = language;
   console.log(`[IU] dictionary load: ${language} ${Date.now() - started}ms`);
   return dictionary;
@@ -384,7 +409,7 @@ let session = null;
 // scripts use chrome.runtime.sendMessage and land here. Panel intents that
 // arrive here anyway — the parked capture control below — are handled too, so
 // the capture path keeps working whether or not a port is connected.
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.target !== TARGET.BACKGROUND) return false;
 
   switch (message.type) {
@@ -430,7 +455,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case MSG.SET_MONITOR_MUTED:
       // Parked: pure forward, the offscreen document owns the audio element.
-      chrome.runtime
+      api.runtime
         .sendMessage({ type: MSG.SET_MONITOR_MUTED, target: TARGET.OFFSCREEN, muted: message.muted })
         .catch(() => {});
       sendResponse({ ok: true });
@@ -506,11 +531,11 @@ function broadcastError(message) {
 
 // --- Tab tracking -----------------------------------------------------------
 
-chrome.tabs.onActivated.addListener(({ tabId }) => {
+api.tabs.onActivated.addListener(({ tabId }) => {
   void onTabActivated(tabId);
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+api.tabs.onRemoved.addListener((tabId) => {
   if (trackedTabId === tabId) trackedTabId = null;
   if (session?.tabId === tabId) void stopCapture();
 });
@@ -522,7 +547,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
  * @param {number} tabId
  */
 async function onTabActivated(tabId) {
-  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  const tab = await api.tabs.get(tabId).catch(() => null);
   if (!tab || !providerFor(tab.url)) return;
   trackedTabId = tabId;
   await refresh();
@@ -544,7 +569,7 @@ async function onContentVideoChanged(tabId) {
 
   if (tabId !== trackedTabId) {
     // Adopt it only if it is the tab the user is actually on.
-    const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [active] = await api.tabs.query({ active: true, currentWindow: true });
     if (active?.id !== tabId) return;
   }
 
@@ -574,7 +599,7 @@ const injectedFrames = new Set();
 /** @param {number} tabId @param {number} frameId */
 const frameKey = (tabId, frameId) => `${tabId}:${frameId}`;
 
-chrome.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
+api.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
   // A committed navigation destroys the page's scripts, so allow reinjection.
   injectedFrames.delete(frameKey(tabId, frameId));
 });
@@ -596,7 +621,7 @@ chrome.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
  * @returns {Promise<number|null>} frameId, or null if there is no such frame.
  */
 async function ensureContentScript(tabId) {
-  const frames = await chrome.webNavigation.getAllFrames({ tabId }).catch(() => null);
+  const frames = await api.webNavigation.getAllFrames({ tabId }).catch(() => null);
   if (!frames?.length) return null;
 
   const frame =
@@ -612,10 +637,10 @@ async function ensureContentScript(tabId) {
   const target = { tabId, frameIds: [frame.frameId] };
   try {
     for (const file of provider.bridgeFiles) {
-      await chrome.scripting.executeScript({ target, world: 'MAIN', files: [file] });
+      await api.scripting.executeScript({ target, world: 'MAIN', files: [file] });
     }
     for (const file of provider.contentFiles) {
-      await chrome.scripting.executeScript({ target, files: [file] });
+      await api.scripting.executeScript({ target, files: [file] });
     }
     injectedFrames.add(frameKey(tabId, frame.frameId));
   } catch {
@@ -675,7 +700,7 @@ async function sendToContent(tabId, message) {
   let timer = 0;
   try {
     return await Promise.race([
-      chrome.tabs.sendMessage(tabId, { ...message, target: TARGET.CONTENT }, { frameId }),
+      api.tabs.sendMessage(tabId, { ...message, target: TARGET.CONTENT }, { frameId }),
       new Promise((_, reject) => {
         timer = setTimeout(
           () => reject(new Error(errorText('CONN002', `${message.type} did not answer within ${timeoutMs}ms`))),
@@ -714,12 +739,12 @@ async function refresh() {
 async function refreshInner() {
   if (trackedTabId !== null) {
     // A tracked tab can be closed or navigated away since we last looked.
-    const alive = await chrome.tabs.get(trackedTabId).catch(() => null);
+    const alive = await api.tabs.get(trackedTabId).catch(() => null);
     if (!alive || !providerFor(alive.url)) trackedTabId = null;
   }
 
   if (trackedTabId === null) {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !providerFor(tab.url)) {
       pendingError = errorText('CONN005', providerNames());
       broadcastState();
@@ -1690,7 +1715,7 @@ function learningState(entry = null) {
 
 async function restoreSettings() {
   try {
-    const stored = await chrome.storage.local.get(storageKey);
+    const stored = await api.storage.local.get(storageKey);
     settings = normalise(stored?.[storageKey]);
   } catch {
     // Storage unavailable, or the worker is mid-shutdown. Defaults are a fine
@@ -1700,7 +1725,7 @@ async function restoreSettings() {
 }
 
 function persistSettings() {
-  chrome.storage.local.set(toStorage(settings)).catch(() => {});
+  api.storage.local.set(toStorage(settings)).catch(() => {});
 }
 
 /**
@@ -1800,10 +1825,28 @@ async function applySetting(id, value) {
 
 // --- Action -----------------------------------------------------------------
 
-/** Open the side panel when the toolbar icon is clicked. */
-chrome.action.onClicked.addListener((tab) => {
-  if (tab.windowId !== undefined) {
-    chrome.sidePanel.open({ windowId: tab.windowId });
+/**
+ * Reveal the transcript panel when the toolbar icon is clicked.
+ *
+ * The ONE genuinely browser-specific call in the extension. Chrome and Firefox
+ * provide incompatible sidebar APIs — `sidePanel` with `open()` on one,
+ * `sidebarAction` with `toggle()` on the other — and neither implements the
+ * other's. This is the whole of the difference on the code side.
+ *
+ * Feature-detected rather than browser-detected. Sniffing the user agent would
+ * be a guess that goes stale; asking whether the API exists is the thing that
+ * actually matters, and it stays correct if a browser adds the other one.
+ *
+ * Firefox's `toggle()` takes no argument because its sidebar is a per-window
+ * toggle rather than something a call can open into a specific window — and on a
+ * fresh install it starts hidden, so the first click shows it and the second
+ * hides it. That is Firefox's own affordance and not something to work around.
+ */
+api.action.onClicked.addListener((tab) => {
+  if (api.sidePanel?.open && tab.windowId !== undefined) {
+    api.sidePanel.open({ windowId: tab.windowId });
+  } else if (api.sidebarAction?.toggle) {
+    void api.sidebarAction.toggle();
   }
 });
 
@@ -1821,7 +1864,7 @@ async function startCapture({ streamId, tabId, tabTitle }) {
 
   session = { tabId, streamId, tabTitle: tabTitle ?? '' };
 
-  await chrome.runtime.sendMessage({
+  await api.runtime.sendMessage({
     type: MSG.START_CAPTURE,
     target: TARGET.OFFSCREEN,
     streamId,
@@ -1834,25 +1877,25 @@ async function stopCapture() {
   if (!session) return;
   session = null;
   // The offscreen document owns the stream; it tears itself down after stopping.
-  await chrome.runtime.sendMessage({ type: MSG.STOP_CAPTURE, target: TARGET.OFFSCREEN }).catch(() => {
+  await api.runtime.sendMessage({ type: MSG.STOP_CAPTURE, target: TARGET.OFFSCREEN }).catch(() => {
     // Offscreen document may already be gone — that is a valid stopped state.
   });
 }
 
 /** @returns {Promise<void>} */
 async function ensureOffscreenDocument() {
-  const url = chrome.runtime.getURL(OFFSCREEN_PATH);
-  const existing = await chrome.runtime.getContexts({
+  const url = api.runtime.getURL(OFFSCREEN_PATH);
+  const existing = await api.runtime.getContexts({
     contextTypes: ['OFFSCREEN_DOCUMENT'],
     documentUrls: [url],
   });
   if (existing.length > 0) return;
 
   // `offscreen.createDocument` rejects if another call raced us here; swallow it.
-  await chrome.offscreen
+  await api.offscreen
     .createDocument({
       url: OFFSCREEN_PATH,
-      reasons: [chrome.offscreen.Reason.USER_MEDIA],
+      reasons: [api.offscreen.Reason.USER_MEDIA],
       justification: 'Hold the captured tab audio stream and run the transcription engine.',
     })
     .catch((error) => {

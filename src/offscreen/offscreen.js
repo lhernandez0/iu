@@ -9,6 +9,9 @@
 import { createEngine } from '../engines/engine.js';
 import { MSG, TARGET } from '../common/messages.js';
 
+/** The extension API namespace. See the note in `src/background/service-worker.js`. */
+const api = globalThis.browser ?? globalThis.chrome;
+
 /** Which engine to use. No real engine exists yet, so 'stub' is the pipeline test. */
 const ENGINE_NAME = 'stub';
 
@@ -21,7 +24,7 @@ let monitor = null;
 /** @type {() => void} */
 let unsubscribe = () => {};
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message || message.target !== TARGET.OFFSCREEN) return false;
 
   if (message.type === MSG.START_CAPTURE) {
@@ -107,7 +110,7 @@ async function stop() {
 
 /** Broadcast to every extension context; the side panel filters on `target`. */
 function broadcast(payload) {
-  chrome.runtime
+  api.runtime
     .sendMessage({ ...payload, target: TARGET.SIDEPANEL })
     .catch(() => {
       // Nothing listening (side panel closed) is not an error.

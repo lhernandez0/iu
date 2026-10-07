@@ -18,6 +18,14 @@ import { providerNames } from '../common/providers.js';
 import { attachHover, showEntry, hide as hidePopover, renderTokens } from './marks.js';
 
 /**
+ * The extension API namespace — `browser` where it exists (Chrome 148+, and
+ * always in Firefox), `chrome` otherwise. Declared here rather than imported so
+ * it reads the global where it is used; a module would snapshot it. See the
+ * longer note in `src/background/service-worker.js`.
+ */
+const api = globalThis.browser ?? globalThis.chrome;
+
+/**
  * Options for the settings this panel renders itself.
  *
  * Read from the schema so a label or a value lives in one place, rather than
@@ -114,7 +122,7 @@ const view = {
 // connection. Receiving end does not exist", and a panel with no reconnect path
 // sits on its placeholder forever. So the port is re-established on disconnect.
 
-/** @type {chrome.runtime.Port|null} */
+/** @type {api.runtime.Port|null} */
 let port = null;
 let reconnectDelay = INITIAL_RECONNECT_MS;
 let reconnectTimer = 0;
@@ -130,7 +138,7 @@ function connectToWorker() {
   clearTimeout(reconnectTimer);
 
   try {
-    port = chrome.runtime.connect({ name: 'panel' });
+    port = api.runtime.connect({ name: 'panel' });
   } catch (error) {
     // "Extension context invalidated": this panel document outlived the
     // extension it belongs to. Only reopening the panel can fix that, and no
@@ -146,7 +154,7 @@ function connectToWorker() {
   port.onDisconnect.addListener(() => {
     // Reading lastError is required even though we only want the message: an
     // unread lastError is what Chrome logs as "Unchecked runtime.lastError".
-    const reason = chrome.runtime.lastError?.message ?? 'the worker stopped';
+    const reason = api.runtime.lastError?.message ?? 'the worker stopped';
     port = null;
     scheduleReconnect(reason);
   });
