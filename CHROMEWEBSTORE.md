@@ -13,43 +13,52 @@ IU
 
 **Short Description**
 
-Learn Chinese and Japanese from video: marks the words above your level, dictionary on hover.
+Turn any video into a Chinese or Japanese lesson: unknown words marked, definitions on hover.
 
-<!-- 103 characters, within the 132 limit. MUST match manifest.json
+<!-- 93 characters, within the 132 limit. MUST match manifest.json
      "description" exactly — the store reads that field, and a mismatch between
      this file and the manifest is the kind of thing that is only noticed at
-     submission. -->
+     submission. The manifest test asserts the two files agree, so this cannot
+     drift. -->
 
 **Detailed Description**
 
-Read any video as a dictionary-backed text. Every word you have not learned yet is
-marked, and hovering any word gives you its reading and meaning — so a video
-becomes a page you can actually study rather than a wall of text you skip past.
+Turn any video into a lesson in the language you are learning.
 
-WORDS ARE MARKED BY *YOUR* LEVEL, NOT A FIXED LIST
+The subtitles become text you can actually study. Every word you do not know yet
+is picked out and explained, right beside the video — so the video teaches you
+instead of washing over you. Learning Chinese and Japanese, on YouTube, in Chrome,
+Edge, Brave or Firefox.
 
-Pick a word list — HSK for Chinese, JLPT for Japanese — and set the level you are
-working at. Words at or above it are marked in the transcript; words you already
-know stay quiet. The point is to surface what you do not know, not to colour
-everything. Each list names its own levels, so JLPT reads N5 to N1 and HSK reads
-1 upward, in the order that language actually counts.
+EVERY WORD YOU DON'T KNOW, MARKED
 
-A DICTIONARY ON EVERY WORD
+Pick HSK for Chinese or JLPT for Japanese, set the level you are working at, and
+the words you have not met yet are picked out in the transcript. Your known words
+fade into the background, so you can see at a glance how much of a sentence is
+actually in reach. Each list names its own levels — JLPT reads N5 to N1, HSK reads
+1 upward — in the order that language really counts.
 
-Hover any word for its reading and meaning. Chinese shows pinyin; Japanese shows
-the kana reading. Words outside the graded lists are still defined — they simply
-carry no level.
+LOOK UP ANYTHING WITHOUT LEAVING THE VIDEO
 
-READ TWO SUBTITLES AT ONCE
+Hover a word for its reading and meaning. Chinese shows pinyin, Japanese shows
+kana, and a word appears under every list that knows it — HSK 2.0 and HSK 3.0
+disagree, and both are true. Words that sit outside the graded lists are still
+defined; they simply carry no level.
 
-Show the language you are learning with a second track beneath it, and click a
-line to jump the video to that moment. Machine translation is available for a line
-where the video offers it, and is always labelled so it is never mistaken for a
-real subtitle track.
+TWO SUBTITLES AT ONCE
 
-EXPORT WHAT YOU READ
+Your target language with a second line underneath — another subtitle track, or a
+machine translation of the same one. Translated lines are tagged, so you always
+know which you are reading.
 
-Copy or save the transcript as plain text or as an SRT subtitle file.
+NEVER LOSE YOUR PLACE
+
+The transcript follows playback, and clicking a line jumps the video to it. Return
+to a video and it is still there, waiting.
+
+TAKE IT AWAY
+
+Export what you watched as plain text or an SRT subtitle file.
 
 HOW TO USE IT
 

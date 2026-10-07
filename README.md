@@ -1,20 +1,26 @@
 # IU
 
-A browser extension that turns a video's captions into a readable, studyable text.
+**Turn any video into a language lesson.**
 
-Open a video and the side panel shows its subtitles as text you can actually work
-with. Words above your level are marked, with a colour for how hard they are;
-hovering any word gives its reading and meaning. Click a line to jump the video to
-that moment. Two subtitle tracks can be shown at once, and videos you have visited
-stay cached so switching back is instant.
+Subtitles you can actually study. Every word you have not learned yet is marked
+and explained, right there beside the video — so the video teaches you instead of
+washing over you.
 
-Learning **Chinese** (HSK) and **Japanese** (JLPT), from **YouTube**. The video
-source sits behind a provider seam, so another site is a data addition rather than
-a rewrite.
+Chinese and Japanese, from YouTube. One extension for Chrome, Edge, Brave and
+Firefox.
 
-> **IU** — *I* and *you*, the two of us.
-> 友 is *iú* in Hokkien, *yǒu* in Mandarin, *tomo* in Japanese — and it means
-> **friend** in all three. A companion to read beside you.
+> **IU** — *I* and *you*. 友 means **friend** in Hokkien (*iú*), Mandarin (*yǒu*)
+> and Japanese (*tomo*). A companion to read beside you.
+
+## Why it exists
+
+There is an awkward stage in learning a language. Textbook dialogues and graded
+readers stop being interesting, but real video is still too fast, and every
+sentence hides two or three words you have to leave the video to look up.
+
+The thing standing in the way is just vocabulary. IU is meant to close that gap:
+you watch what you actually want to watch, and the words you are missing are the
+ones that stand out.
 
 ## Status
 
@@ -58,17 +64,23 @@ injected on demand, so there is nothing to reload.
 
 ## What it does
 
-- **Marks words above your level.** Pick a word list — HSK for Chinese, JLPT for
-  Japanese — and the level to mark from. Words at or above it are underlined in
-  their level's colour; words you already know stay quiet.
-- **Defines any word on hover.** Reading and meaning, with the level from every
-  list that places it. Words outside the graded lists are still defined.
-- **Reads two tracks at once.** The language you are learning, with a second line
-  beneath it. Either line can be machine translated where the video offers it, and
-  a translated line is labelled so it is never mistaken for a real subtitle.
-- **Follows playback.** The spoken line highlights and scrolls; clicking one seeks
-  the video there.
-- **Exports** to `.txt` or `.srt`.
+**Every word you don't know, marked.** Pick HSK for Chinese or JLPT for Japanese,
+set the level you are working at, and the words you have not met yet are picked
+out in the transcript. Your known words fade into the background — so you can see
+at a glance how much of a sentence is actually in reach.
+
+**Look up anything without leaving the video.** Hover a word for its reading and
+meaning. Chinese shows pinyin, Japanese shows kana, and a word appears under every
+list that knows it — HSK 2.0 and HSK 3.0 disagree, and both are true.
+
+**Two subtitles at once.** Your target language with a second line underneath —
+another track, or a machine translation of the same one. Translated lines are
+tagged, so you always know what you are reading.
+
+**Never lose your place.** The transcript follows playback, and clicking a line
+jumps the video to it. Go back to a video and it is still there, waiting.
+
+**Take it away.** Export what you watched as text or a subtitle file.
 
 ## How it works
 
