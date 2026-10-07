@@ -306,6 +306,22 @@ const XML = `<?xml version="1.0" encoding="utf-8" ?>
   <text start="1.54" dur="4.16">Some additional text</text>
 </transcript>`;
 
+/**
+ * The real refusal body, copied verbatim from a capture.
+ *
+ * Google answers a caption request it does not want to serve with an HTTP **200**
+ * and this HTML page, so nothing about the status says failure. Trimmed to the
+ * significant parts — it is a 1103-byte document and the middle is inline CSS — but
+ * the title, the opening tag and the head are exactly as received, because those
+ * are what the detection keys on.
+ *
+ * Kept as a literal rather than read from `test/fixtures/`, which is gitignored and
+ * therefore absent on a fresh clone. A test that skipped without it would stop
+ * covering the case that mattered most.
+ */
+const BLOCK_PAGE = `<!doctype html><html><head><meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+<title>Sorry...</title><style> body { font-family: verdana, arial, sans-serif; background-color: #fff; color: #000; }</style></head><body><div><table><tr><td><b><font face=sans-serif size=10><font color=#4285f4>G</font><font color=#ea4335>o</font><font color=#fbbc05>o</font><font color=#4285f4>g</font><font color=#34a853>l</font><font color=#ea4335>e</font></font></b><p>Your computer or network may be sending automated queries. To protect our users, we can't process your request right now.</p></div></body></html>`;
+
 // --- 1. It evaluates ---------------------------------------------------------
 
 section('content script evaluates');
@@ -542,6 +558,44 @@ section('if the internal player API also fails, the failure is reported');
   const result = await script.ask({ type: 'fetch-track', languageCode: 'en' });
   check('no segments', result?.segments?.length, 0);
   check('and an explanation', result?.error, 'TRACK002 The caption track came back empty.');
+}
+
+section('a refusal is reported as a refusal, not as an empty track');
+
+{
+  // The body is the REAL one, taken from a capture: Google's "Sorry..." block
+  // page, which arrives as HTTP 200 with an HTML body. It is kept verbatim rather
+  // than paraphrased, because the whole bug was that its shape was not recognised
+  // — a hand-written stand-in would encode my idea of the page instead of the page.
+  //
+  // What used to happen: no `<text>` elements, so it parsed to zero cues, so the
+  // failure was reported as "the caption track came back empty". That says the
+  // VIDEO has no captions, which is a fact about the video. The truth was that the
+  // server had stopped answering, which is temporary and clears on its own. Those
+  // need opposite responses from a reader — wait, versus give up — and one message
+  // for both sent a whole session the wrong way.
+  //
+  // The block page is 1103 bytes, so `body.trim()` is truthy: this is not the
+  // empty-body path, and nothing but the shape can catch it.
+  const script = await bootContent({
+    summary: SUMMARY,
+    captionBody: BLOCK_PAGE,
+    innertubeBody: JSON.stringify({
+      captions: {
+        playerCaptionsTracklistRenderer: {
+          captionTracks: [
+            { baseUrl: 'https://www.youtube.com/api/timedtext?v=abc&lang=en&fresh=1', languageCode: 'en', name: { simpleText: 'English' } },
+          ],
+        },
+      },
+    }),
+  });
+
+  const result = await script.ask({ type: 'fetch-track', languageCode: 'en' });
+
+  check('no segments', result?.segments?.length, 0);
+  check('and the error names a refusal', result?.error, 'TRACK005 The caption request was refused — likely too many requests.');
+  check('not an empty track', (result?.error ?? '').startsWith('TRACK002'), false);
 }
 
 // --- 6. Track selection ------------------------------------------------------

@@ -105,6 +105,19 @@ export const ERRORS = Object.freeze({
     message: 'Could not load the selected track.',
     detail: true,
   },
+  TRACK005: {
+    // Added because TRACK002 is reported when a response arrives with no
+    // parseable cues — which is also what a REFUSAL looks like. A block page is
+    // HTTP 200 with an HTML body: no `<text>` elements, so it parses to zero cues
+    // and was reported as "the caption track came back empty". That told the
+    // reader the video had no captions when the truth was that the server stopped
+    // answering, and it sent a whole debugging session the wrong way.
+    //
+    // A refusal is temporary and the fix for it is to wait; an empty track is a
+    // fact about the video. Conflating them makes the wrong one look like the
+    // right one, which is the most expensive kind of error message.
+    message: 'The caption request was refused — likely too many requests.',
+  },
 
   // --- DICT: the bundled word list --------------------------------------------
   DICT001: {

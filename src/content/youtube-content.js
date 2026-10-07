@@ -74,6 +74,10 @@
     TRACK001: 'This caption track cannot be auto-translated.',
     TRACK002: 'The caption track came back empty.',
     TRACK003: 'Could not load captions.',
+    // A refusal, kept distinct from TRACK002 because they mean opposite things:
+    // one is temporary and clears on its own, the other is a fact about the
+    // video. See the note in `src/common/errors.js`.
+    TRACK005: 'The caption request was refused — likely too many requests.',
     PAGE001: 'The page bridge did not understand a request.',
   };
 
@@ -283,10 +287,41 @@
   }
 
   /**
+   * Whether a response body is the server refusing us rather than a caption file.
+   *
+   * The important case is the quiet one: a refusal arrives as HTTP **200** with an
+   * HTML body (Google's "Sorry..." block page). Nothing about the status says
+   * failure, so it is parsed like any other body, finds no `<text>` elements, and
+   * is reported as an empty track — which reads as "this video has no captions"
+   * when the truth is "stop asking".
+   *
+   * An HTML document is never a caption body in any format we request, so the
+   * shape alone is decisive.
+   *
+   * @param {string} body
+   * @returns {boolean}
+   */
+  function isRefusalBody(body) {
+    return /^\s*<(!doctype|html)/i.test(body ?? '');
+  }
+
+  /**
+   * @param {Response|null} response
+   * @returns {boolean}
+   */
+  function isRefusalStatus(response) {
+    return response?.status === 429 || response?.status === 403;
+  }
+
+  /**
    * Fetch a caption track. Primary path is a plain fetch from the page's own
    * origin, which carries the session's cookies. If YouTube refuses that
    * (jdepoix documents them blocking the embedded URL for server-side
    * callers), fall back to the internal player API.
+   *
+   * Throws a coded error for a REFUSAL, and returns an empty list for a track that
+   * genuinely has no cues. The two used to be indistinguishable, which is what made
+   * a rate limit look like a video with no subtitles.
    *
    * @param {object} track
    * @param {string} videoId
@@ -298,8 +333,10 @@
     const url = buildTrackUrl(track.baseUrl, translateTo);
 
     const direct = await fetchBounded(url, { credentials: 'include' }).catch(() => null);
+    if (isRefusalStatus(direct)) throw new Error(err('TRACK005'));
     if (direct?.ok) {
       const body = await direct.text();
+      if (isRefusalBody(body)) throw new Error(err('TRACK005'));
       if (body.trim()) return parseTimedText(body);
     }
 
@@ -326,8 +363,11 @@
     if (!match?.baseUrl) return [];
 
     const retry = await fetchBounded(buildTrackUrl(match.baseUrl, translateTo), { credentials: 'include' }).catch(() => null);
+    if (isRefusalStatus(retry)) throw new Error(err('TRACK005'));
     if (!retry?.ok) return [];
-    return parseTimedText(await retry.text());
+    const retryBody = await retry.text();
+    if (isRefusalBody(retryBody)) throw new Error(err('TRACK005'));
+    return parseTimedText(retryBody);
   }
 
   /**
@@ -381,7 +421,17 @@
         error: segments.length ? null : err('TRACK002'),
       };
     } catch (error) {
-      return { languageCode, translateTo: null, segments: [], error: err('TRACK003', String(error?.message ?? error)) };
+      // A REFUSAL passes through as itself. Wrapping it in TRACK003 would nest
+      // one code inside another — "TRACK003 Could not load captions. (TRACK005 The
+      // request was refused)" — and bury the only part that tells the reader what
+      // to do about it. The worker applies the same rule for its own codes.
+      const message = String(error?.message ?? error);
+      return {
+        languageCode,
+        translateTo: null,
+        segments: [],
+        error: /^[A-Z]{2,6}\d{3}\b/.test(message) ? message : err('TRACK003', message),
+      };
     }
   }
 
@@ -445,7 +495,17 @@
         error: segments.length ? null : err('TRACK002'),
       };
     } catch (error) {
-      return { languageCode, translateTo: null, segments: [], error: err('TRACK003', String(error?.message ?? error)) };
+      // A REFUSAL passes through as itself. Wrapping it in TRACK003 would nest
+      // one code inside another — "TRACK003 Could not load captions. (TRACK005 The
+      // request was refused)" — and bury the only part that tells the reader what
+      // to do about it. The worker applies the same rule for its own codes.
+      const message = String(error?.message ?? error);
+      return {
+        languageCode,
+        translateTo: null,
+        segments: [],
+        error: /^[A-Z]{2,6}\d{3}\b/.test(message) ? message : err('TRACK003', message),
+      };
     }
   }
 
