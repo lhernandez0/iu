@@ -332,3 +332,6 @@ $RECYCLE.BIN/
 
 # VS Code workspace file: local folder paths, not shared config.
 *.code-workspace
+
+# Build output: the staged set and the store ZIP. Reproducible from source.
+build/

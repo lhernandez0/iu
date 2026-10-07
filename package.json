@@ -10,6 +10,7 @@
     "derive-synthetic": "node tools/derive-synthetic.mjs",
     "icons": "node tools/make-icons.mjs",
     "ui": "vite --config tools/ui/vite.config.mjs",
+    "package": "make release",
     "test": "node test/run.mjs",
     "test:all": "npm test && npm run test:browser",
     "test:browser": "node test/browser/run-browser.mjs",
