@@ -88,6 +88,54 @@ const PAGE_SETTLE_MS = 5000;
 const REQUEST_TIMEOUT_MS = 15000;
 
 /**
+ * The most caption requests one run may make, across every video it is given.
+ *
+ * A hard ceiling rather than a hope. The endpoint is free and we are not its
+ * customer, so the tool does not get to spend an unbounded number of requests
+ * because a video happens to have many tracks. The plan is now shaped to sit well
+ * under this (about seven for the format matrix plus one per language), so hitting
+ * it means something is wrong rather than that a video is large.
+ *
+ * The previous version made 57 requests for one 9-track video. That is not a
+ * budget this tool had, and earning a rate limit from it is what made every video
+ * look like it had no captions for hours afterwards.
+ */
+const MAX_REQUESTS = 12;
+
+/**
+ * How many EXTRA tracks get a content request of their own.
+ *
+ * The parsing path does not vary by language — the first track proves it — so the
+ * only thing more languages buy is a different script and encoding. Two extra is
+ * enough for that, and it does not grow with the video: a nine-track video costs
+ * the same as a three-track one.
+ */
+const MAX_TRACK_CONTENT = 2;
+
+/**
+ * Whether a response is the server refusing us rather than answering.
+ *
+ * 429 is explicit. The other two are how a silent refusal actually arrives: a 200
+ * whose body is an HTML page — Google's "Sorry..." block page is 1103 bytes of
+ * HTML with a 200 status. Treating that as a caption body is what let a rate limit
+ * masquerade as "this video has no captions", because a parser finds no `<text>`
+ * elements in an error page and reports an empty track.
+ *
+ * `shape` is already computed per response, and an HTML error page is neither
+ * `json3` nor `xml`, so the shape test catches it without re-inspecting the body.
+ *
+ * @param {{status: number, shape: string|null, body: string}} result
+ * @returns {boolean}
+ */
+function isRefusal(result) {
+  if (result.status === 429) return true;
+  if (result.status === 403) return true;
+  // A body that is not a caption document, on a response that claimed success.
+  const looksLikeHtml = /^\s*<(!doctype|html)/i.test(result.body ?? '');
+  return looksLikeHtml || (result.ok && result.shape === 'other');
+}
+
+/**
  * Classify a body by what it IS, not by what we asked for.
  *
  * A response is the ground truth about its own format; the request that produced
@@ -329,9 +377,19 @@ function rendererReport(body) {
 /**
  * Every body shape worth having, as requests to make inside the one page load.
  *
- * The list is exhaustive rather than minimal because a capture is a single-shot
- * resource: any question not answered here costs another page load, which is the
- * thing this tool exists to avoid.
+ * WHY THIS IS NO LONGER PER-TRACK. The first version built the whole matrix for
+ * every caption track — 4 combinations plus two explicit formats plus a
+ * translation, times every track. On a real 9-track video that is 57 requests in
+ * one run, which is not a budget this tool gets to spend: it is a free endpoint we
+ * are not paying for, and 57 rapid requests in a row is indistinguishable from
+ * abuse. It earned a rate limit, and the rate limit then looked like "every video
+ * has no captions" for hours.
+ *
+ * The matrix answers questions about a FORMAT and a CLIENT — what shape does the
+ * endpoint return, does it honour `fmt`, do the two clients disagree. Those
+ * answers do not vary by language, so asking them once answers them for the whole
+ * video. What is genuinely per-track is the CONTENT, and that needs one request
+ * per language, not seven.
  *
  * ORDER MATTERS and is deliberate. The one shape we do not hold is a real
  * default-format body — everything captured so far was requested with `fmt=json3`
@@ -347,47 +405,72 @@ function rendererReport(body) {
  * @returns {Array<{name: string, track: object, client: 'page'|'android', fmt: string|null, tlang: string|null}>}
  */
 function collectionPlan(tracks, translateTo) {
-  const plan = [];
-  for (const track of tracks) {
-    // No `fmt` first: the shape we are missing, and the reason for the shot.
-    for (const fmt of [null, 'json3']) {
-      for (const client of ['page', 'android']) {
-        plan.push({
-          name: `${client} client, ${fmt ?? 'default format'}`,
-          track,
-          client,
-          fmt,
-          tlang: null,
-        });
-      }
-    }
+  if (!tracks.length) return [];
 
-    // Explicit alternative format names, tried because they cost nothing beyond one
-    // more request inside a page load we have already opened. If omitting `fmt`
-    // still returns JSON3, these are the remaining ways to reach the XML branch of
-    // a parser that has only ever seen bodies we built ourselves.
-    for (const fmt of ['srv3', 'ttml']) {
-      plan.push({
-        name: `page client, explicit ${fmt}`,
-        track,
-        client: 'page',
+  // The track that gets the format/client matrix. Deliberately the FIRST of the
+  // VIDEO'S OWN languages rather than an auto-generated one: a manual track is the
+  // case a learner actually studies from, and `kind` is the only signal available
+  // here for telling them apart.
+  const subject = tracks.find((t) => t.kind !== 'asr') ?? tracks[0];
+
+  const plan = [];
+  const add = (fields) => plan.push(fields);
+  /** Tracks already given a content request, so each language costs at most one. */
+  const content = [];
+
+  // --- The shape probe: one track, every format and client --------------------
+  for (const fmt of [null, 'json3']) {
+    for (const client of ['page', 'android']) {
+      add({
+        name: `${client} client, ${fmt ?? 'default format'}`,
+        track: subject,
+        client,
         fmt,
         tlang: null,
       });
     }
-
-    // One translation per translatable track is enough to learn the shape; the
-    // target language is recorded so it is reproducible.
-    if (translateTo && track.isTranslatable) {
-      plan.push({
-        name: `translated to ${translateTo}`,
-        track,
-        client: 'android',
-        fmt: 'json3',
-        tlang: translateTo,
-      });
-    }
   }
+
+  // Explicit alternative format names. They cost one request each and are the only
+  // remaining way to reach the XML branch of a parser that has otherwise only ever
+  // seen bodies we built ourselves.
+  for (const fmt of ['srv3', 'ttml']) {
+    add({ name: `page client, explicit ${fmt}`, track: subject, client: 'page', fmt, tlang: null });
+  }
+
+  // One translation, on the same track, to learn the shape. The target is recorded
+  // so it is reproducible.
+  if (translateTo && subject.isTranslatable) {
+    add({
+      name: `translated to ${translateTo}`,
+      track: subject,
+      client: 'android',
+      fmt: 'json3',
+      tlang: translateTo,
+    });
+  }
+
+  // --- Content for a few languages, because content is per-language -----------
+  //
+  // Bounded on purpose. The extension's parsing does not vary by language, so the
+  // first track already proves the path; what more languages add is DIFFERENT
+  // SCRIPTS — a CJK body and a Latin one exercise encoding and cue shapes that a
+  // single track does not. Three is enough for that and it does not grow with the
+  // video: a 9-track video does not get 9 content requests, it gets three.
+  for (const track of tracks) {
+    if (content.length >= MAX_TRACK_CONTENT) break;
+    if (track.languageCode === subject.languageCode) continue;
+    if (content.some((t) => t.languageCode === track.languageCode)) continue;
+    content.push(track);
+    add({
+      name: `${track.languageCode}, default format`,
+      track,
+      client: 'page',
+      fmt: null,
+      tlang: null,
+    });
+  }
+
   return plan;
 }
 
@@ -1155,7 +1238,24 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
   // failure on the fourth of twelve requests — abandoned the loop and every body
   // still to come. One request failing must cost one request.
   let attempted = 0;
-  for (const request of collectionPlan(probe.tracks, translateTo)) {
+  const plan = collectionPlan(probe.tracks, translateTo);
+  if (plan.length > MAX_REQUESTS) {
+    // Reported rather than silently truncated, because a plan larger than the cap
+    // means the shape of the plan changed and the cap is now arbitrary.
+    console.warn(
+      `    ! the plan wants ${plan.length} requests, over the ${MAX_REQUESTS} cap — the first ${MAX_REQUESTS} will be made`,
+    );
+  }
+
+  for (const request of plan) {
+    if (attempted >= MAX_REQUESTS) {
+      summary.collection.push({
+        note: `stopped at the ${MAX_REQUESTS}-request cap; ${plan.length - attempted} request(s) not made`,
+      });
+      console.log(`    ! stopped at the ${MAX_REQUESTS}-request cap`);
+      break;
+    }
+
     const source = request.client === 'android' ? androidTracks : probe.tracks;
     const track = source.find((t) => t.languageCode === request.track.languageCode);
     const label = requestLabel(request);
@@ -1200,6 +1300,32 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
       file: null,
       note: null,
     };
+
+    // --- Stop the whole run the moment we are refused --------------------------
+    //
+    // The previous version carried on through a rate limit and recorded every
+    // subsequent response as an ordinary body. 56 block pages were written to disk
+    // as though they were capture data, and because a block page parses to zero
+    // cues, the summary read as "this video has no captions" — a false conclusion
+    // that cost hours of looking in the wrong place.
+    //
+    // Stopping is also the correct behaviour towards the server. Continuing to ask
+    // after being told to stop is what turns a short rate limit into a longer one.
+    // The partial capture is kept and named, so the requests already paid for are
+    // not wasted.
+    if (isRefusal(result)) {
+      entry.shape = bodyShape(result.body);
+      entry.note = `REFUSED (${result.status}) — stopping the run`;
+      if (result.body.trim()) {
+        await writeFile(join(raw, `${label}.txt`), result.body);
+        entry.file = `raw/${label}.txt`;
+      }
+      summary.collection.push(entry);
+      summary.refusedAt = { label, status: result.status, after: attempted };
+      await writeManifests(normalised, summary);
+      console.log(`    ${label}: REFUSED (${result.status}) — stopping. ${attempted} request(s) made.`);
+      break;
+    }
 
     if (result.body.trim()) {
       await writeFile(join(raw, `${label}.txt`), result.body);
