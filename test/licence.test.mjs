@@ -254,7 +254,7 @@ section('every dictionary carries the fields the app reads from a list');
   // So every field the code reads off a list is asserted to be present here,
   // for every dictionary rather than only the Chinese one.
   const index = JSON.parse(readFileSync(join(ROOT, 'src/learn/data/index.json'), 'utf8'));
-  const REQUIRED = ['id', 'label', 'language', 'levelCount', 'levelled', 'defaultThreshold', 'levelNames'];
+  const REQUIRED = ['id', 'label', 'language', 'levelCount', 'levelled', 'levelNames'];
 
   for (const [language, rel] of Object.entries(index.dictionaries ?? {})) {
     const data = JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
@@ -268,26 +268,18 @@ section('every dictionary carries the fields the app reads from a list');
     }
     check(`[${language}] every list has every required field`, missing, []);
 
-    // `defaultThreshold` in particular: the worker reads it and falls back to 1,
-    // so its absence is not an error, only a silent behaviour change. Bounds-check
-    // it against its own list instead of trusting the value.
-    const bad = lists.filter(
-      (l) => !Number.isFinite(l.defaultThreshold) || l.defaultThreshold < 1 || l.defaultThreshold > l.levelCount,
-    );
-    check(`[${language}] every default threshold is a level that exists in its list`, bad.map((l) => l.id), []);
-
-    // The threshold the learner starts at is DERIVED from the list, not chosen.
+    // The starting level is NOT data. It is the learner's own choice, remembered
+    // per list by the app, defaulting to the first level.
     //
-    // It used to be a hand-written number, and the number was 4 for both HSK
-    // lists — the personal level of the person who built it, shipped as a global
-    // constant. That is wrong for anyone else, and it meant a new language needed
-    // someone to guess a starting point for it.
+    // It used to travel with the list, and it was `4` for both HSK lists — the
+    // personal level of whoever built this, shipped as a constant to everybody.
+    // The midpoint of the range replaced it and was no better: still the app
+    // deciding how good a stranger is at a language it has never seen them read.
     //
-    // Asserting the derivation rather than the value is what keeps a hand-picked
-    // number from creeping back in: change the rule above and this fails, whereas
-    // a test asserting `4` would have ENCODED the bug it was meant to catch.
-    const wrongDefaults = lists.filter((l) => l.defaultThreshold !== Math.ceil((l.levelCount ?? 0) / 2));
-    check(`[${language}] every default threshold is the middle of its range`, wrongDefaults.map((l) => l.id), []);
+    // Asserting the ABSENCE is the point. A field here would be a starting level
+    // chosen by whoever wrote the data, which is exactly the bug.
+    const stray = lists.filter((l) => 'defaultThreshold' in l);
+    check(`[${language}] no list carries a starting level`, stray.map((l) => l.id), []);
 
     // Every list names its own levels, ascending in difficulty. JLPT runs N5->N1
     // while HSK runs 1->N, so the label cannot be derived from the level number —

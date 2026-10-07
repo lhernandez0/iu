@@ -9,6 +9,7 @@
  */
 
 import { formatTimestamp, formatSrtTime, toPlainText, toSrt, findActiveIndex, alignSecondary } from '../src/common/transcript.js';
+import { defaults, SETTINGS } from '../src/common/settings.js';
 
 let failures = 0;
 let checks = 0;
@@ -155,6 +156,35 @@ section('alignSecondary — shape guarantees');
 const longPrimary = [seg(0, 'a'), seg(1, 'b'), seg(2, 'c'), seg(3, 'd')];
 check('output length always matches the primary', alignSecondary(longPrimary, [seg(0, 'A')]).length, longPrimary.length);
 check('output is always strings', alignSecondary(longPrimary, []).every((s) => typeof s === 'string'), true);
+
+section('settings defaults are copied, not shared');
+
+{
+  // A default that is an object is a single object living in the settings
+  // module, so handing it out unchanged gives every caller — and every service
+  // worker booted in one test process — the SAME reference. Writing to it then
+  // changes the default for everyone who reads it afterwards.
+  //
+  // This was not hypothetical: the per-list threshold memory is an object
+  // default, and mutating it carried one test's chosen level into the next
+  // worker's settings. The symptom was a level appearing in a list nobody had
+  // chosen, far from the cause. Scalars are copied by value and so never showed
+  // it, which is exactly why it is worth a guard of its own.
+  const first = defaults();
+  const second = defaults();
+  check('two calls do not return the same object', first === second, false);
+
+  const objectKeys = SETTINGS.filter((s) => s.default && typeof s.default === 'object').map((s) => s.id);
+  check('there is at least one object-valued default to guard', objectKeys.length > 0, true);
+
+  const shared = objectKeys.filter((key) => first[key] === second[key]);
+  check('and none of them is shared between calls', shared, []);
+
+  // The real failure: writing to one copy must not reach the other.
+  for (const key of objectKeys) first[key].__probe = true;
+  const leaked = objectKeys.filter((key) => second[key].__probe !== undefined);
+  check('writing to one copy does not reach another', leaked, []);
+}
 
 // --- Result ------------------------------------------------------------------
 

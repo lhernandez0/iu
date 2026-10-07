@@ -147,10 +147,11 @@ function handlePanelMessage(message) {
     // --- Learning layer ------------------------------------------------------
     case MSG.SET_LIST:
       settings.listId = message.listId;
-      // Take the new list's own default rather than carrying a threshold from a
-      // list with a different number of levels, where it would mean something
-      // else entirely.
-      settings.threshold = defaultThreshold(listById(message.listId));
+      // Restore this list's own remembered level, or start at the top if the
+      // learner has never narrowed THIS list. Not "carry the number over" (it
+      // means something else under a different numbering) and not "reset"
+      // (which would throw away a choice they made for this list before).
+      settings.threshold = thresholdFor(listById(message.listId));
       persistSettings();
       // Rows are rebuilt because switching lists can change which levels exist,
       // so the existing marks are no longer valid.
@@ -168,6 +169,9 @@ function handlePanelMessage(message) {
 
     case MSG.SET_THRESHOLD:
       settings.threshold = Number(message.threshold);
+      // Remembered against the list it was chosen for. This is the ONLY thing
+      // that ever sets a starting level: the learner, once, for this list.
+      rememberThreshold(settings.listId, settings.threshold);
       persistSettings();
       rebuildRows(currentEntry());
       broadcastState();
@@ -187,26 +191,54 @@ function handlePanelMessage(message) {
   }
 }
 
+/** The first level of any list, which is where a learner who has not chosen starts. */
+const FIRST_LEVEL = 1;
+
 /**
- * The level a list should mark from, if the learner has not chosen one.
+ * The level to mark from, for a list.
  *
- * Read from the LIST, not inferred from its id.
+ * The learner's own last choice for THAT list, or the first level if they have
+ * never chosen one. Nothing here guesses a starting point on their behalf.
  *
- * This used to be `listId.startsWith('hsk') ? 4 : 1`, which hardcoded both a
- * language and a standard into the worker: a JLPT or HSK 4.0 list would silently
- * start at 1 and look broken. The starting level is a property of the list — only
- * the data knows where a learner with that list is likely to be — so it travels
- * with the list like `levelCount` does.
+ * It used to be a number carried by the list, and that number was 4 for both HSK
+ * lists — the personal level of whoever built this, shipped to everybody. A
+ * midpoint of the range is no better: it is still the app deciding, on the
+ * learner's behalf, that they are average at a language it has never seen them
+ * read. Memory is the honest answer — it can only be wrong until they touch the
+ * control once, and after that it is right.
  *
- * Clamped by the caller to the list's own range, because a threshold only means
- * something relative to the list it applies to.
+ * Per list rather than global, because a threshold only means something against
+ * its own list's numbering.
+ *
+ * Clamped to the list's own range, because a number from a list with more levels
+ * does not mean the same thing in one with fewer.
  *
  * @param {object|undefined} list
  * @returns {number}
  */
-function defaultThreshold(list) {
-  const level = Number(list?.defaultThreshold);
-  return Number.isFinite(level) && level >= 1 ? Math.min(level, list.levelCount ?? level) : 1;
+function thresholdFor(list) {
+  if (!list) return FIRST_LEVEL;
+  const remembered = Number(settings.listThresholds?.[list.id]);
+  const level = Number.isFinite(remembered) && remembered >= 1 ? remembered : FIRST_LEVEL;
+  return Math.min(level, list.levelCount ?? level);
+}
+
+/**
+ * Record the level the learner chose, against the list they chose it for.
+ *
+ * The only writer of a starting level. When they switch away and back, this is
+ * what `thresholdFor` reads — so a deliberate choice survives a list change
+ * without leaking into a list it was never about.
+ *
+ * @param {string|null|undefined} listId
+ * @param {number} level
+ */
+function rememberThreshold(listId, level) {
+  if (!listId) return;
+  const number = Number(level);
+  if (!Number.isFinite(number) || number < 1) return;
+  if (!settings.listThresholds || typeof settings.listThresholds !== 'object') settings.listThresholds = {};
+  settings.listThresholds[listId] = Math.floor(number);
 }
 
 /**
@@ -1161,8 +1193,8 @@ function effectiveListId(entry) {
  * list and something else in a 5-level one — so it cannot be carried across a
  * language switch. When the effective list is the one the learner chose, their
  * stored threshold stands. When it is not (they were on a Chinese list and opened
- * a Japanese video, so JLPT took over), the list's own default is used rather
- * than a number that was never about this list.
+ * a Japanese video, so JLPT took over), that list's own REMEMBERED level is used
+ * — or the top of it if they have never chosen one there.
  *
  * The stored choice is deliberately NOT overwritten: switching to a Japanese
  * video and back must restore the HSK list and the level that was set for it.
@@ -1176,11 +1208,11 @@ function effectiveThreshold(entry) {
   // misfires: with no entry, `activeList` falls back to the first list in the
   // index, whose id differs from a stored one, and the stored threshold would be
   // replaced by a default the learner never chose.
-  if (!entry) return Number(settings.threshold) || 1;
+  if (!entry) return Number(settings.threshold) || FIRST_LEVEL;
 
   const active = activeList(entry);
-  if (active && active.id !== settings.listId) return defaultThreshold(active);
-  return Number(settings.threshold) || 1;
+  if (active && active.id !== settings.listId) return thresholdFor(active);
+  return Number(settings.threshold) || FIRST_LEVEL;
 }
 
 /**
@@ -1685,14 +1717,14 @@ async function applySetting(id, value) {
 
   switch (id) {
     case 'listId':
-      // A threshold is relative to its list, so moving list takes that list's
-      // own starting point rather than carrying a number that has changed
-      // meaning.
-      settings.threshold = defaultThreshold(listById(settings.listId));
+      // Moving list restores that list's remembered level rather than carrying a
+      // number that has changed meaning.
+      settings.threshold = thresholdFor(listById(settings.listId));
       rebuildRows(currentEntry());
       break;
 
     case 'threshold':
+      rememberThreshold(settings.listId, settings.threshold);
       rebuildRows(currentEntry());
       break;
 
@@ -1877,8 +1909,8 @@ async function primeDictionary() {
 
     if (!settings.listId || !availableLists.some((list) => list.id === settings.listId)) {
       settings.listId = widest?.id ?? null;
-      // The learner's own level, as the chosen list declares it.
-      settings.threshold = defaultThreshold(widest);
+      // Remembered if they have used this list before, otherwise the first level.
+      settings.threshold = thresholdFor(widest);
     }
 
     // Broadcast NOW, before loading any words. The picks can be populated and the

@@ -97,15 +97,11 @@ if (jaSource && !jlptDir) {
  * `levelCount` is what the colour ramp divides by, so it has to be the real count
  * for the list rather than the highest level present.
  *
- * `defaultThreshold` is the level marking STARTS at for this list. It is per list
- * because a threshold is relative: 4 means "upper intermediate" in a 6-level list
- * and something else in a 9-level one.
- *
- * It is NOT hand-picked per list any more. It used to be `4` for both HSK lists,
- * which encoded one person's own level as a global constant in data that ships to
- * every user — and JLPT's `3` was picked the same way. It is now the MIDDLE of the
- * list's own range: marks neither everything nor nothing, needs no tuning for a
- * new language, and cannot smuggle a personal preference into the data.
+ * There is deliberately NO starting level here. Where marking begins is the
+ * learner's own choice, remembered per list by the app — the only thing this data
+ * could say about someone it has never seen read is a guess about them. It used to
+ * carry one, and it was `4` for both HSK lists: the level of whoever built it,
+ * shipped as a constant to everyone.
  *
  * `levelNames` is what the level is CALLED, easiest first. The stored level is an
  * ordered 1..N so the ramp and the threshold comparison work the same for every
@@ -129,18 +125,6 @@ const JAPANESE_LISTS = [
 ];
 
 /**
- * Where marking starts by default: the middle of the list's range.
- *
- * The top of the range rather than the bottom, because the point of the tool is
- * to surface what a learner does NOT know yet. Derived rather than declared so a
- * new list cannot arrive with a threshold that was chosen for someone else.
- *
- * @param {number} levelCount
- * @returns {number}
- */
-const defaultThresholdFor = (levelCount) => Math.ceil(levelCount / 2);
-
-/**
  * The fields the app reads off a list, in the shape both builders emit.
  *
  * Shared so the Chinese and Japanese payloads cannot drift, and so a field added
@@ -159,7 +143,6 @@ const listMeta = (list, levelsForList) => ({
   levelCount: list.levelCount,
   levelNames: list.levelNames,
   levelled: Object.keys(levelsForList).length,
-  defaultThreshold: defaultThresholdFor(list.levelCount),
 });
 
 /** @returns {Promise<object[]>} */

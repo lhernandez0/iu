@@ -13,9 +13,15 @@
       "label": "HSK 2.0",
       "language": "zh",
       "levelCount": 6,
-      "levelNames": ["1", "2", "3", "4", "5", "6"],
+      "levelNames": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
       "levelled": 4993,
-      "defaultThreshold": 3,
       "dictionary": "zh"
     },
     {
@@ -23,9 +29,18 @@
       "label": "HSK 3.0",
       "language": "zh",
       "levelCount": 9,
-      "levelNames": ["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+      "levelNames": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ],
       "levelled": 10969,
-      "defaultThreshold": 5,
       "dictionary": "zh"
     },
     {
@@ -33,9 +48,14 @@
       "label": "JLPT",
       "language": "ja",
       "levelCount": 5,
-      "levelNames": ["N5", "N4", "N3", "N2", "N1"],
+      "levelNames": [
+        "N5",
+        "N4",
+        "N3",
+        "N2",
+        "N1"
+      ],
       "levelled": 11158,
-      "defaultThreshold": 3,
       "dictionary": "ja"
     }
   ]

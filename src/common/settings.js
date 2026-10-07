@@ -21,7 +21,7 @@
  * @typedef {Object} SettingDefinition
  * @property {string} id            Storage key and wire name.
  * @property {string} label         Shown beside the control.
- * @property {'select'|'number'} type
+ * @property {'select'|'number'|'map'} type
  * @property {any} default
  * @property {Array<{value: any, label: string}>} [options] For 'select'.
  * @property {number} [min]         For 'number'.
@@ -115,11 +115,49 @@ export const SETTINGS = [
     label: 'Highlight from',
     group: 'learning',
     type: 'select',
-    default: null,
+    // The FIRST level, so everything is marked until the learner narrows it.
+    //
+    // Deliberately not a per-list "sensible default": the right starting point
+    // depends on the person, and the only thing this app can know about someone
+    // it has never met is that they have not chosen yet. It used to be a number
+    // carried by the list, and that number was 4 for both HSK lists — the level
+    // of whoever built it — so a stranger's first panel opened at somebody
+    // else's ability.
+    default: 1,
     dynamic: true,
     coerce: (value) => {
       const number = Number(value);
       return Number.isFinite(number) && number >= 1 ? Math.floor(number) : null;
+    },
+  },
+  {
+    // The threshold last chosen FOR EACH LIST, restored when the learner returns
+    // to that list.
+    //
+    // Per list because a threshold only means something against its own list: 4
+    // is "upper intermediate" in a six-level list and something else entirely in
+    // a five-level one. So switching list is not "keep my number" (it has
+    // changed meaning) and not "reset" (which throws away a choice the learner
+    // made) — it is "restore what I chose here, or start at the top if I never
+    // chose".
+    //
+    // A map, and not rendered as a control: it is the memory BEHIND the
+    // threshold picker, not something edited directly.
+    id: 'listThresholds',
+    label: 'Level per list',
+    group: 'learning',
+    type: 'map',
+    default: {},
+    dynamic: true,
+    coerce: (value) => {
+      /** @type {Record<string, number>} */
+      const out = {};
+      if (!value || typeof value !== 'object') return out;
+      for (const [listId, raw] of Object.entries(value)) {
+        const number = Number(raw);
+        if (Number.isFinite(number) && number >= 1) out[listId] = Math.floor(number);
+      }
+      return out;
     },
   },
   {
@@ -201,10 +239,27 @@ const BY_ID = new Map(SETTINGS.map((setting) => [setting.id, setting]));
 
 const STORAGE_KEY = 'settings';
 
-/** Every setting at its default, plus anything stored that we still know about. */
+/**
+ * Every setting at its default, plus anything stored that we still know about.
+ *
+ * A structured clone of each default rather than the default itself. Object and
+ * array defaults are shared by reference, so handing one out means every caller
+ * — and every service-worker boot in a test process — receives the SAME object.
+ * Writing to it then changes the default for everything that reads it
+ * afterwards. That is not hypothetical: it silently carried one test's chosen
+ * level into the next worker's settings, and would do the same to a real user
+ * whose two contexts shared a module instance.
+ *
+ * Scalars are unaffected, which is exactly why the bug is easy to miss — it only
+ * appears once a setting's default is a collection.
+ */
 export function defaults() {
   const out = {};
-  for (const setting of SETTINGS) out[setting.id] = setting.default;
+  for (const setting of SETTINGS) {
+    out[setting.id] = setting.default && typeof setting.default === 'object'
+      ? structuredClone(setting.default)
+      : setting.default;
+  }
   return out;
 }
 

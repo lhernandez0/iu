@@ -1092,10 +1092,13 @@ section('the panel is told which word lists exist, and a default is chosen');
   // fresh install — and on a Chinese video that list covers nothing, which is
   // the very symptom the widest-list rule exists to prevent.
   check('the widest list is chosen by default', state?.learning?.listId, 'hsk3_0');
-  // Derived from the list, not chosen: the middle of its range. Asserted against
-  // the list's own declared count so it stays true if the derivation changes —
-  // the point is the RELATIONSHIP, not the number 5.
-  check('threshold defaults to the middle of the list', state?.learning?.threshold, Math.ceil(lists[1].levelCount / 2));
+  // Nothing is chosen yet, so marking starts at the FIRST level of the list —
+  // everything marked until the learner narrows it. Asserted against the list's
+  // own numbering rather than a literal, so the test does not encode a policy.
+  //
+  // This used to be the middle of the range, which is still the app deciding how
+  // good a stranger is at a language it has never seen them read.
+  check('marking starts at the first level when nothing is chosen', state?.learning?.threshold, 1);
   // The options are named by the list, so HSK reads 1..9. This is the check that
   // would have caught the JLPT badge printing an internal number as a name.
   check('the level options are named by the list', state?.learning?.thresholdOptions?.[0]?.label, '1');
@@ -1154,11 +1157,7 @@ section('switching to a Japanese list loads Japanese words and marks them');
   sendFromPanel({ type: 'set-list', listId: 'jlpt' });
 
   // Wait for the switch to take effect AND the rows to be tokenised, rather than
-  // for a mark or a duration. Waiting for a mark would never resolve here: the
-  // test sentence is 日本語を勉強します, whose words are all JLPT N5 (level 1), and
-  // the JLPT default threshold is 3 — so nothing is above it and nothing SHOULD
-  // be marked. Tokenising is the observable proof that Japanese words were
-  // loaded; the threshold check below proves the level data came with them.
+  // for a mark or a duration.
   const state = await waitForState(
     received,
     (s) => s.learning?.listId === 'jlpt' && Array.isArray(s.rows?.[0]?.tokens),
@@ -1166,7 +1165,10 @@ section('switching to a Japanese list loads Japanese words and marks them');
   );
 
   check('the list is now JLPT', state.learning.listId, 'jlpt');
-  check('the Japanese threshold is its own, not carried over', state.learning.threshold, 3);
+  // The learner has never chosen a level for JLPT, so it starts at the first.
+  // NOT carried over from the Chinese list, and not a guessed "sensible" middle —
+  // a threshold only means something against its own list's numbering.
+  check('the Japanese list starts at its own first level, not a carried number', state.learning.threshold, 1);
   // `markedReason` lives on the STATE, not on a row — it explains the whole
   // transcript, not one line. Null means the list covers the language on screen.
   check('the list covers Japanese, so no reason is given', state.markedReason, null);
@@ -1178,13 +1180,14 @@ section('switching to a Japanese list loads Japanese words and marks them');
   // distinguishes "words loaded" from "the row merely exists".
   check('the row segments into Japanese words, not bare characters', texts.includes('勉強'), true);
 
-  // Every word here is N5, so at threshold 3 none of them is marked. That is the
-  // correct behaviour and worth asserting: it proves the threshold is being read
-  // from the JLPT list (3) rather than carried over from the Chinese default (4),
-  // and that the levels travelled with the words.
-  const marked = (row?.tokens ?? []).filter((t) => t.level !== null);
-  check('N5 words sit below the N3 default, so none are marked', marked.length, 0);
-  check('the N5 word is still recognised, just not marked', row?.tokens?.find((t) => t.text === '勉強')?.defined, true);
+  // At the first level nothing is filtered out, so every word that HAS a level is
+  // marked. The interesting half is the second assertion: a word with no level at
+  // all is recognised but unmarked, which is the "definition yes, colour no"
+  // case that must not be confused with "below the threshold".
+  const withLevel = (row?.tokens ?? []).filter((t) => t.level !== null);
+  check('at the first level, levelled words are marked', withLevel.length > 0, true);
+  check('and every mark is at the list\'s first level', withLevel.every((t) => t.level === 1), true);
+  check('the N5 word is recognised', row?.tokens?.find((t) => t.text === '勉強')?.defined, true);
 
   // The definition travels with the mark, so hover can explain it.
   sendFromPanel({ type: 'lookup', word: '日本語' });
@@ -1295,7 +1298,9 @@ section('a Japanese video offers only the Japanese list');
 
     check(`${label}: only the JLPT list is offered`, state.learning.listOptions.map((o) => o.value), ['jlpt']);
     check(`${label}: it is selected without the learner choosing it`, state.learning.listId, 'jlpt');
-    check(`${label}: the Japanese default threshold applies`, state.learning.threshold, 3);
+    // Never chosen for this list, so it begins at the first level of JLPT — not a
+    // number carried from the Chinese list, whose numbering means something else.
+    check(`${label}: the Japanese list starts at its own first level`, state.learning.threshold, 1);
   }
 }
 
@@ -1314,25 +1319,22 @@ section('a Chinese video offers only the Chinese lists');
 
   check('the two HSK numberings are offered, and JLPT is not', state.learning.listOptions.map((o) => o.value), ['hsk2_0', 'hsk3_0']);
   check('the stored default is unchanged', state.learning.listId, 'hsk3_0');
-  // HSK 3.0 has nine levels, so its derived default is the middle one, 5.
-  check('and its own threshold applies', state.learning.threshold, 5);
+  // Nothing has been chosen yet, so it starts at the first level. For HSK 3.0
+  // that is level 1, which is what takes the patch above to a whole transcript
+  // of marks — the point is that the NUMBER comes from the list, not that it is
+  // any particular value.
+  check('and its own threshold applies', state.learning.threshold, 1);
 }
 
-section('a word only the 3.0 list knows is still marked by default');
+section('a word only the 3.0 list knows is marked once the learner sets a level');
 
 {
-  // 早安 was the case the user reported when the threshold was 4: it is not a
-  // headword, so it segments into its characters, and the one at the learner's
-  // frontier was marked while the known one stayed quiet.
-  //
-  // The threshold is no longer a hardcoded 4 — it is derived from the list's own
-  // range, so HSK 3.0 (nine levels) starts at 5. 早安's characters are HSK 3.0
-  // levels 1 and 4, so BOTH now sit below the threshold and neither is marked.
-  // That would make this test assert nothing, so it uses a pair that straddles
-  // the derived boundary: 啊 is level 2 and 哎 is level 7, and 啊哎 is not a
-  // headword. The behaviour under test is unchanged; only the fixture moved with
-  // the default.
-  const { received } = await boot({
+  // This test no longer asserts anything about a DEFAULT. Marking starts at the
+  // first level now, so every levelled word marks until the learner narrows it;
+  // a test that depended on a particular default was really testing a policy
+  // rather than the mechanism. It sets the threshold explicitly instead, which is
+  // what makes it durable.
+  const { received, sendFromPanel } = await boot({
     describePayload: DESCRIBE(VIDEO),
     providePayload: {
       ok: true,
@@ -1344,14 +1346,17 @@ section('a word only the 3.0 list knows is still marked by default');
   });
   await waitForMarks(received);
 
+  // 啊 is HSK 3.0 level 2 and 哎 is level 7, and 啊哎 is not a headword, so it
+  // segments into the two characters. A threshold between them must mark exactly
+  // the harder one — "surface the unknown", with the known half staying quiet.
+  sendFromPanel({ type: 'set-threshold', threshold: 5 });
+  await waitForState(received, (s) => s.learning?.threshold === 5, 'the threshold to apply');
+
   const state = received.at(-1)?.state;
   const row = state?.rows?.[0];
   const texts = row?.tokens?.map((t) => t.text) ?? [];
   check('the pair breaks into its characters', texts, ['啊', '哎']);
 
-  // Which of the two is marked depends on the threshold. Exactly one should be —
-  // the one at the learner's frontier. This is "surface the unknown" working: the
-  // known character stays quiet.
   const byText = Object.fromEntries((row?.tokens ?? []).map((t) => [t.text, t.level]));
   const threshold = state?.learning?.threshold;
   check('the below-threshold character stays unmarked', byText['啊'], null);
@@ -1362,7 +1367,7 @@ section('a word only the 3.0 list knows is still marked by default');
 section('rows carry tokens, and only words at or beyond the threshold are marked');
 
 {
-  const { received } = await boot({
+  const { received, sendFromPanel } = await boot({
     describePayload: DESCRIBE(VIDEO),
     providePayload: {
       ok: true,
@@ -1370,15 +1375,19 @@ section('rows carry tokens, and only words at or beyond the threshold are marked
       requested: 'zh-Hans',
       fetched: {
         languageCode: 'zh-Hans',
-        // 我 is HSK 2.0 level 1, 们 is level 1, 岸上 is high. The threshold is 4,
-        // so the early characters must stay unmarked.
+        // 我 is HSK 2.0 level 1, 们 is level 1, 岸上 is high. A threshold of 4
+        // must leave the early characters unmarked.
         segments: [{ start: 0, duration: 2, text: '我们在岸上等你' }],
       },
     },
     trackPayload: GERMAN,
   });
-
   await waitForMarks(received);
+
+  // Set explicitly rather than relying on a default: the point under test is that
+  // the threshold FILTERS, not what it happens to start at.
+  sendFromPanel({ type: 'set-threshold', threshold: 4 });
+  await waitForState(received, (s) => s.learning?.threshold === 4, 'the threshold to apply');
 
   const row = received.at(-1)?.state?.rows?.[0];
   check('the row has tokens', Array.isArray(row?.tokens), true);
@@ -1414,6 +1423,10 @@ section('lowering the threshold marks more');
   });
   await waitForMarks(received);
 
+  // Start from a narrowed threshold, because marking now BEGINS at the first
+  // level — so "lowering" from the default would test nothing.
+  sendFromPanel({ type: 'set-threshold', threshold: 4 });
+  await waitForState(received, (s) => s.learning?.threshold === 4, 'the narrow threshold to apply');
   const high = received.at(-1).state.rows[0].tokens.filter((t) => t.level !== null).length;
 
   sendFromPanel({ type: 'set-threshold', threshold: 1 });
@@ -1577,12 +1590,25 @@ section('a word the list cannot place is still hoverable, just unmarked');
   const byText3 = Object.fromEntries((row3?.tokens ?? []).map((t) => [t.text, t]));
 
   check('这样 is definable in every list', byText3['这样']?.defined, true);
-  check('and is below the threshold, so unmarked', byText3['这样']?.level, null);
+
+  // The threshold is set explicitly now rather than relied on. Marking starts at
+  // the first level, so nothing is "below the threshold" until the learner places
+  // it — this test is about WHERE the line falls, not about where it starts, so it
+  // draws the line itself. 这样 is HSK 3.0 level 2.
+  sendFromPanel({ type: 'set-threshold', threshold: 4 });
+  const narrowed = await waitForState(
+    received,
+    (s) => s.learning?.threshold === 4 && Array.isArray(s.rows?.[0]?.tokens),
+    'the raised threshold to re-mark',
+  );
+  const byText4 = Object.fromEntries((narrowed.rows?.[0]?.tokens ?? []).map((t) => [t.text, t]));
+
+  check('and is below the threshold, so unmarked', byText4['这样']?.level, null);
 
   // Words below the threshold must stay hoverable too, not only words the list
   // omits entirely.
-  check('a below-threshold word is still definable', byText3['你']?.defined, true);
-  check('with no level shown', byText3['你']?.level, null);
+  check('a below-threshold word is still definable', byText4['你']?.defined, true);
+  check('with no level shown', byText4['你']?.level, null);
 }
 
 section('the same word marks differently in the two lists');
@@ -1802,7 +1828,7 @@ section('switching language keeps the marks');
   check('and the marks survived', row.tokens.filter((t) => t.level !== null).length, markedBefore);
 }
 
-section('switching word list re-marks rather than reusing the old levels');
+section('a level chosen for one list is remembered, and never leaks into another');
 
 {
   const { received, sendFromPanel } = await boot({
@@ -1817,18 +1843,35 @@ section('switching word list re-marks rather than reusing the old levels');
   });
   await waitForMarks(received);
 
+  // The learner narrows HSK 2.0 to its top level. This is the ONLY thing that
+  // ever sets a starting level — the app does not guess one, and the data does
+  // not carry one.
+  sendFromPanel({ type: 'set-list', listId: 'hsk2_0' });
+  await waitForState(received, (s) => s.learning?.listId === 'hsk2_0', 'HSK 2.0 to be adopted');
+  sendFromPanel({ type: 'set-threshold', threshold: 6 });
+  await waitForState(received, (s) => s.learning?.threshold === 6, 'the chosen level to apply');
+
+  // HSK 3.0 has never been narrowed, so it starts fresh at its first level — the
+  // number is NOT carried over, because 6 in a six-level list is not 6 in a
+  // nine-level one.
   sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
-  const state = await waitForState(
+  const fresh = await waitForState(
     received,
     (s) => s.learning?.listId === 'hsk3_0' && Array.isArray(s.rows?.[0]?.tokens),
-    'the HSK 3.0 list to be adopted and re-marked',
+    'HSK 3.0 to be adopted and re-marked',
   );
+  check('an un-narrowed list starts at its first level', fresh.learning.threshold, 1);
+  check('rows were rebuilt', Array.isArray(fresh.rows[0]?.tokens), true);
 
-  check('the list changed', state.learning.listId, 'hsk3_0');
-  // Levels are numbered differently between the lists, so a threshold cannot be
-  // carried across: 4 means something else in a 9-level list. HSK 3.0 derives 5.
-  check('the threshold was reset for the new list', state.learning.threshold, 5);
-  check('rows were rebuilt', Array.isArray(state.rows[0]?.tokens), true);
+  // Back to HSK 2.0: the choice made there comes back, which is the whole point
+  // of remembering per list rather than resetting.
+  sendFromPanel({ type: 'set-list', listId: 'hsk2_0' });
+  const returned = await waitForState(
+    received,
+    (s) => s.learning?.listId === 'hsk2_0' && s.learning?.threshold === 6,
+    'HSK 2.0 to restore its remembered level',
+  );
+  check('returning to a list restores the level chosen for it', returned.learning.threshold, 6);
 }
 
 section('marks appear without the learner having to touch the controls');
