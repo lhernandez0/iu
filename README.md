@@ -1,153 +1,85 @@
 # IU
 
-A Chrome extension for reading a language from video. It shows the video's
-captions in the side panel as a dictionary-backed text: every word you have not
-learned yet is marked, and hovering any word gives you its reading and meaning.
-Clicking a line seeks the video to that moment. Two caption tracks can be shown at
-once (bilingual), and every video you visit stays cached so switching back is
-instant.
+A browser extension that turns a video's captions into a readable, studyable text.
 
-Today it reads **YouTube** captions. The video source sits behind a provider seam
-so another site is a data addition rather than a rewrite — see
-[ADR 0003](docs/design-decisions/0003-video-providers.md).
+Open a video and the side panel shows its subtitles as text you can actually work
+with. Words above your level are marked, with a colour for how hard they are;
+hovering any word gives its reading and meaning. Click a line to jump the video to
+that moment. Two subtitle tracks can be shown at once, and videos you have visited
+stay cached so switching back is instant.
+
+Learning **Chinese** (HSK) and **Japanese** (JLPT), from **YouTube**. The video
+source sits behind a provider seam, so another site is a data addition rather than
+a rewrite.
 
 > **IU** — *I* and *you*, the two of us.
 > 友 is *iú* in Hokkien, *yǒu* in Mandarin, *tomo* in Japanese — and it means
 > **friend** in all three. A companion to read beside you.
 
-Status: **captions phase**. The panel reads the site's own caption tracks — no
-audio capture is involved. The tab-capture + speech-recognition path is built but
-parked behind a flag (see [Parked: audio capture](#parked-audio-capture)).
+## Status
 
-## Load it
+**Not published yet.** The extension works and is being prepared for the **Chrome
+Web Store** and **Firefox Add-ons (AMO)**. One build serves both: the manifest
+declares each browser's keys and each ignores the other's.
+
+Until it is listed, install it from the source below. Store listing preparation —
+permission justifications, privacy disclosure, screenshots — lives in
+[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md).
+
+## Install from source
+
+For either browser, the folder you load is the repository root.
+
+> **Load a clean copy, not your working tree.** The repository root contains
+> `node_modules/` (≈52 MB), `docs/` (local notes, including an 8.9 MB conversation
+> log) and `test/fixtures/`. None of that belongs in an extension: it inflates what
+> the browser loads, and a store scanner reads large unfamiliar JSON as third-party
+> code. Clone into a scratch directory, or use the same file set the store package
+> uses — everything except `test/`, `tools/`, `docs/`, `node_modules/` and the
+> dotfiles.
+
+**Chrome / Edge / Brave** (116+):
 
 1. `chrome://extensions` → enable **Developer mode**.
-2. **Load unpacked** → select this folder.
-3. Click the extension icon to open the side panel.
+2. **Load unpacked** → select the folder.
+3. Open a video, then click the toolbar icon to open the side panel.
 
-No reloading of YouTube tabs is needed: the worker injects the content scripts
-on demand, so **tabs that were already open work too**. Requires Chrome 116+
-(side panel, `world: MAIN` content scripts).
+**Firefox** (128+):
 
-## Tests
+1. `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on**.
+2. Select `manifest.json` in that folder.
+3. Open a video, then click the toolbar icon — the panel opens as a sidebar.
 
-```bash
-npm test           # everything
-npm run test:unit  # pure logic, no stubs
-npm run test:sw    # service worker
-npm run test:panel # side panel
-```
+Firefox removes temporary add-ons when it closes; a permanent install needs the
+signed build from AMO.
 
-No dependencies — plain Node scripts, so `npm test` works with nothing installed.
+YouTube tabs that are **already open** work in both — the content scripts are
+injected on demand, so there is nothing to reload.
 
-### Designing the panel
+## What it does
 
-```bash
-npm i          # once — the preview needs Vite
-npm run ui     # http://127.0.0.1:8099
-```
+- **Marks words above your level.** Pick a word list — HSK for Chinese, JLPT for
+  Japanese — and the level to mark from. Words at or above it are underlined in
+  their level's colour; words you already know stay quiet.
+- **Defines any word on hover.** Reading and meaning, with the level from every
+  list that places it. Words outside the graded lists are still defined.
+- **Reads two tracks at once.** The language you are learning, with a second line
+  beneath it. Either line can be machine translated where the video offers it, and
+  a translated line is labelled so it is never mistaken for a real subtitle.
+- **Follows playback.** The spoken line highlights and scrolls; clicking one seeks
+  the video there.
+- **Exports** to `.txt` or `.srt`.
 
-Serves the side panel with [Vite](https://vite.dev) against a mock worker, for
-working on layout without loading the extension or opening a YouTube video. Edit
-`sidepanel.css` and the change lands in the browser **without a reload** — that is
-the point of using a dev server rather than a static one.
+## How it works
 
-Pick a scenario from the bar — two languages, one subtitle, a long silence, an
-error — or override with `?view=focus&fontSize=22`.
+The **service worker owns the transcript table**; the panel is a subscriber that
+renders what it is sent; content scripts are stateless fetch providers. That split
+is what makes tab switching instant, and it is why transcripts survive a panel
+being closed.
 
-It runs the **real panel**: the only thing faked is the Port the panel connects
-to, because that is its entire contact with the extension. It does not exercise
-the content scripts, the caption fetch, or the word marking — a layout proved here
-is a layout, and nothing more.
-
-Each suite boots a real module against stubbed browser globals and drives it
-through its message surface, rather than testing extracted functions. That is
-deliberate: every bug found so far has been in the wiring, not the logic, and
-none were visible to a linter. A panel that called `chrome.runtime.connect` once
-and had no recovery path looked completely reasonable and hung forever.
-
-| Suite | Boots | Covers |
-| --- | --- | --- |
-| `unit.test.mjs` | nothing | formatting, active-cue lookup, alignment |
-| `service-worker.test.mjs` | worker + `chrome` stub | routing, caching, injections |
-| `sidepanel.test.mjs` | panel + DOM stub | rendering, reconnect, intents |
-| `page-bridge.test.mjs` | bridge + page stub | the MAIN-world protocol |
-| `content.test.mjs` | content script | JSON3/XML parsing, INNERTUBE fallback |
-
-Suites run in separate processes because they share globals (`chrome`,
-`document`) and the module cache; one process would let a suite's stubs leak into
-another's.
-
-### What the tests do not cover
-
-Nothing here runs a real browser. Whether `chrome.scripting` reaches a tab whose
-page loaded before the extension, whether YouTube serves the caption `baseUrl` to
-a same-origin fetch, and whether two real caption tracks align well are all still
-open — they need a browser, and the answers come from the status line.
-
-### What to check
-
-- The panel resolves whatever YouTube video is in the active tab, automatically.
-- Status line reads `N lines · <lang> · <video title>`.
-- Clicking a line jumps the video to that timestamp.
-- The spoken line highlights as it plays; the list scrolls with it. **Follow**
-  toggles that scrolling.
-- The first dropdown is the **study line**: the language you are learning.
-  It is never machine translated, because the word marks and definitions
-  describe that text.
-- The second dropdown adds a **gloss** under each line. It may be a different
-  track, or the *same* language as the study line.
-- With a gloss chosen, **Translate the second line into** replaces it with a
-  machine translation. The target is a single global setting — set once, applied
-  to whatever the second line is.
-  - Choosing the same language twice is the way to get "English with its
-    translation underneath": a translation needs a source track to convert, and
-    "Off" has none.
-- The &#8646; button swaps the two lines.
-- Switching to another tab and back does **not** re-fetch — the transcript is
-  cached, and the panel swaps immediately.
-- The language choices and the translation target are remembered across restarts.
-
-## Architecture
-
-The **service worker owns the transcript table**. The panel is a subscriber that
-renders whatever it is sent; content scripts are stateless fetch providers.
-
-That split is what makes tab switching seamless. A panel document is destroyed
-when it closes or its tab closes, taking a panel-side cache with it. The worker
-is not, and the panel's open port keeps it alive, so everything you visit stays
-cached:
-
-```mermaid
-graph TB
-    subgraph SW["Service worker — owns state"]
-        CACHE["videos: Map&lt;videoId, VideoEntry&gt;<br/>rows, tracks, selection"]
-        TRACK["tabs.onActivated → refresh()"]
-    end
-    P["Side panel<br/><i>renders, sends intents</i>"]
-    CS["Content script<br/><i>fetch + parse + seek</i>"]
-    PB["Page bridge (MAIN)<br/><i>reads the page</i>"]
-
-    P -- "port: state pushes" --> P
-    SW -- "port: STATE / POSITION" --> P
-    P -- "port: REFRESH / SET_* / SEEK" --> SW
-    SW -- "PROVIDE / FETCH_TRACK / SEEK" --> CS
-    CS -- "CONTENT_POSITION / VIDEO_CHANGED" --> SW
-    CS -- "postMessage" --> PB
-```
-
-Two channels, deliberately: the **panel** talks over a long-lived port (which
-also keeps the worker alive), while **content scripts** use
-`chrome.runtime.sendMessage`. They are separate channels, so a port message
-never reaches `onMessage` and vice versa — that is why panel intents are handled
-in `handlePanelMessage` and content reports in the `onMessage` switch.
-
-## How captions are read
-
-The caption tracks for the video you are watching live on the page's `window`
-as `ytInitialPlayerResponse`. An isolated-world content script shares the DOM
-but **not** the page's JS globals, so it cannot read that. A tiny MAIN-world
-script bridges the gap.
+Caption tracks are not in the DOM — they live in the page's own JS as
+`ytInitialPlayerResponse`. An isolated-world content script cannot read that, so a
+tiny MAIN-world bridge hands it over:
 
 ```mermaid
 sequenceDiagram
@@ -160,203 +92,136 @@ sequenceDiagram
     SP->>SW: (port connect)
     SW->>CS: PROVIDE
     CS->>PB: postMessage get-player-response
-    PB->>PB: read window.ytInitialPlayerResponse
-    PB-->>CS: postMessage captionTracks
+    PB-->>CS: captionTracks
     CS->>YT: fetch track baseUrl (same-origin, session cookies)
     YT-->>CS: timedtext JSON3 / XML
     CS-->>SP: segments [{ start, duration, text }]
-    SP->>CS: SEEK { seconds }
-    CS->>YT: video.currentTime = seconds
 ```
 
-Captions are **not** in the DOM, and the `baseUrl` embedded in the page can no
-longer be fetched by server-side callers — jdepoix/youtube-transcript-api
-documents that, and works around it by re-asking the internal player API
-(INNERTUBE). We run inside the user's own tab, so a plain same-origin fetch is
-tried first; the INNERTUBE request is the fallback.
+Captions are fetched by the content script with the page's own session. The
+internal player API is the fallback when a direct fetch is refused.
 
-### Where the coupling is
-
-All page-specific knowledge — the player response shape, the timedtext formats
-(JSON3 and XML), track selection, seeking — is confined to
+All site-specific knowledge — the player response shape, the two timedtext
+formats, track selection, seeking — is confined to
 `src/content/youtube-content.js`. Everything above it deals in
-`{ start, duration, text }`. If YouTube changes something, that is the one file
-to look at, and the status line names which stage failed.
-
-## Bilingual subtitles
-
-Two lines, with different jobs. The **study line** is the language being
-learned: it carries the word marks, hover definitions and level colours. The
-**gloss** explains it, and is deliberately plain text — a gloss is for reading,
-not for studying.
-
-A gloss may be:
-
-| Setup | study | gloss |
-| --- | --- | --- |
-| Native subtitles | `zh` | `en` (a real track) |
-| Machine translation | `zh` | `zh → en` |
-| Same language twice | `en` | `en → zh` |
-| Subtitle practice | `en` | *(none)* |
-
-The study line is never machine translated, and that is a rule rather than a
-preference: machine translation paraphrases rather than glosses and hides word
-boundaries, which is exactly what the marks exist to supply. Translating it would
-put a coloured, studiable overlay on a text the learner cannot see. Because the
-target is a single global setting, the arrangement above is expressible without a
-second translation menu.
-
-The two tracks are separate downloads with independent cue boundaries and no ids
-linking them, so `alignSecondary` in `src/common/transcript.js` walks both lists
-once matching each primary cue to the nearest secondary cue by start time. A pair
-further apart than 1.5s is left unmatched rather than paired — without that
-threshold a few seconds of drift would put a plausible-looking wrong translation
-on every line.
-
-Alignment is approximate by design: it depends on the two tracks describing the
-same speech in roughly the same place. It is verified by unit-style checks run
-outside the browser (identical timings, differing granularity, drift inside and
-outside tolerance, empty tracks).
-
-## Parked: audio capture
-
-The tab-capture pipeline is still wired and tested, gated by `USE_AUDIO_CAPTURE`
-in `src/sidepanel/sidepanel.js`.
-
-> ⚠️ **Turning this on also needs two manifest permissions restored.** The
-> `tabCapture` and `offscreen` permissions were **removed** while the path is
-> unreachable, because a permission that no shipping feature uses is one the store
-> review team cannot be given an honest reason for — and "we might use it later" is
-> not a justification. No code changed; only the declarations. Add both back to
-> `permissions` in `manifest.json` before setting the flag, or
-> `chrome.tabCapture.getMediaStreamId` and `chrome.offscreen.createDocument` will
-> fail at runtime with the API undefined.
-
-A service worker cannot hold a `MediaStream`, so an **offscreen document** owns
-the stream and hosts the recognition engine:
-
-```mermaid
-sequenceDiagram
-    participant SP as Side panel
-    participant SW as Service worker
-    participant OD as Offscreen document
-    participant EG as Engine (stub)
-
-    SP->>SW: START_CAPTURE { streamId, tabId }
-    SW->>OD: ensure document, then START_CAPTURE { streamId }
-    OD->>OD: getUserMedia(chromeMediaSource: tab)
-    OD->>EG: start(stream)
-    EG-->>OD: TranscriptEvent
-    OD-->>SP: ENGINE_EVENT
-```
-
-Every message carries an explicit `target` and listeners ignore anything not
-addressed to them. The contract lives in one place: `src/common/messages.js`.
+`{ start, duration, text }`, so a second provider is a content script plus a
+registry entry.
 
 ```
 manifest.json
 src/
-  common/
-    messages.js                # message names + routing targets
-    transcript.js              # formatting, active-segment lookup, dual-track alignment
-  content/
-    page-bridge.js             # MAIN world: reads window.ytInitialPlayerResponse
-    youtube-content.js         # isolated: fetch + parse captions, seek, report position
-  background/service-worker.js # owns the transcript table + tab tracking
-  offscreen/                   # PARKED: owns the MediaStream + engine
-  engines/
-    engine.js                  # adapter interface + registry  <-- change point
-    stub-engine.js             # placeholder recogniser
-  sidepanel/
-    sidepanel.html/js/css      # renders state, sends intents
-    audio-capture.js           # PARKED: the panel's half of the capture path
+  common/        messages, transcript formatting/alignment, settings, errors
+  content/       page-bridge.js (MAIN world) + youtube-content.js (fetch/parse/seek)
+  background/    service worker: transcript table, tab tracking, marking
+  learn/         word lists, dictionaries, segmenter  (imports nothing)
+  sidepanel/     renders state, sends intents
+  offscreen/     PARKED: owns the MediaStream + engine
+  engines/       PARKED: recogniser adapter + registry
 ```
 
-Content scripts are injected as **classic** scripts and cannot use `import`, so
-`youtube-content.js` repeats the message names and the `findActiveIndex` helper
-that also live in `src/common/`. Both places carry a comment saying so.
+`src/learn/` deliberately imports nothing and touches no `chrome` API, so it can
+be reused outside an extension. Both content scripts are injected as **classic**
+scripts and cannot `import`, so they repeat the message names and the
+`findActiveIndex` helper that also live in `src/common/`. Both places say so.
 
-Both content scripts also carry a **re-entry guard** (`window.__iu*`
-flags). The worker injects them with `chrome.scripting` on every request, so
-without the guard each injection would add another set of listeners and answers
-would arrive twice.
+## Word lists and languages
+
+Levels are data, not code. Each list declares its own levels, names and language,
+and nothing in the extension knows what HSK or JLPT is — so adding a list is a
+data change, and adding a *language* is a dictionary plus a row in the generated
+index.
+
+Both dictionaries are bundled and parsed on demand. Nothing is fetched from a
+server we run.
+
+## Development
+
+```bash
+npm test               # hermetic suites, no browser, no network
+npm run test:browser   # real Chromium, fixture pages
+npm run ui             # Vite preview of the side panel, for layout work
+```
+
+There are no runtime dependencies, and nothing is built — the repository is the
+extension.
+
+[`TESTING.md`](TESTING.md) covers the tiers, what each suite does and does not
+cover, the panel preview in detail, and where the fixtures come from.
+[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the listing copy, permission
+justifications and privacy disclosure for both stores.
+
+### Cross-browser
+
+One manifest serves Chrome and Firefox. `background` declares both `service_worker`
+(Chrome) and `scripts` (Firefox); `side_panel` and `sidebar_action` are declared
+side by side, and each browser ignores the key it does not know. Code reads
+`globalThis.browser ?? globalThis.chrome` at each use site, so no bundler or
+polyfill is involved.
+
+The one genuinely browser-specific call is opening the panel: Chrome's
+`sidePanel.open` and Firefox's `sidebarAction.toggle` are incompatible, and that
+handler feature-detects. Everything else is identical.
+
+Adding a third target means checking `world: "MAIN"` support and the sidebar API
+for that browser; the rest is the same source.
 
 ## Permissions
 
-| Permission         | Why                                                        |
-| ------------------ | ---------------------------------------------------------- |
-| `sidePanel`        | Render the transcript UI.                                  |
-| `storage`          | Remember the chosen second language.                       |
-| `scripting`        | Inject the content scripts on demand.                      |
-| `webNavigation`    | Find which frame holds the video.                          |
-| `host_permissions` | `https://*.youtube.com/*` — read captions from the page.   |
-| `tabCapture`       | PARKED — read the current tab's audio.                     |
-| `offscreen`        | PARKED — host the `MediaStream` + engine in a DOM context. |
+| Permission         | Why                                                     |
+| ------------------ | ------------------------------------------------------- |
+| `sidePanel`        | Render the transcript UI.                                |
+| `storage`          | Remember your language and level choices.                |
+| `scripting`        | Inject the content scripts on demand.                    |
+| `webNavigation`    | Track which video the tab is on.                         |
+| `host_permissions` | `https://*.youtube.com/*` — read captions from the page. |
+
+Nothing else is requested. The extension makes no request to any server of ours,
+collects no analytics, and has no account.
 
 ## Known limitations
 
-- **Marking covers Chinese and Japanese (kanji *and* kana), not spaced scripts.**
-  The tokeniser splits by CJK codepoint — Han and kana — and passes anything else
-  through whole. Chinese and Japanese therefore both segment, including kana-native
-  vocabulary (とても, いらっしゃい). Korean hangul and English/Spanish alike cannot
-  be marked at all — an English sentence is a single token. See
-  `docs/design-decisions/0002-language-extensibility.md`.
-- **Japanese inflected forms mark the dictionary headword, not the inflected word
-  on screen.** The matcher compares against dictionary headwords, so `食べました`
-  does not equal `食べる`. Where the stem is itself a headword (`食`) it marks that,
-  carrying a narrower scope than the word on screen. This is the least bad outcome
-  available without lemmatisation; kanji forms of a word mark correctly
-  (`日本語` matches `日本語`).
-- **A few Japanese words with the same spelling share one entry.** JMdict splits
-  genuine homographs (`私` is わたし and あたし; `一時` is いちじ and
- ひととき), and the build keeps the first. 156 spellings are affected, so a
-  hover there shows one reading rather than both.
-- **Word lists and dictionaries are data.** Levels are per list, each list carries
-  its own count, starting level and language, and nothing in the code knows what
-  HSK or JLPT is. Adding a list is a data change; adding a *language* is a
-  dictionary plus a row in the generated index.
-- **YouTube is the only provider, but it is now a *provider*.** Captions come
-  from `ytInitialPlayerResponse` through a content script, and which site that is
-  and which scripts to inject are decided in `src/common/providers.js`. Adding
-  another site is a registry entry plus a content script — the worker, the panel,
-  the cache and the learning layer have no site knowledge in them. See
-  `docs/design-decisions/0003-video-providers.md`.
-- **Videos without captions show an error**, not a fallback. Auto-generated
-  tracks cover most videos, but not all.
-- **Live streams** have captions with unstable timing; seeking may not line up.
-- **Bilingual alignment is approximate.** It matches cues by start time, never
-  reusing a cue and leaving anything more than 1.5s apart blank. A track that
-  is genuinely offset will show blanks rather than wrong pairings.
-- **Transcripts are not persisted.** They live in the worker, so they survive
-  tab switches and panel closes, but not a worker restart or browser restart.
-- **The cache holds the 6 most recent videos**, and the one on screen is never
-  evicted.
-- **The stub engine transcribes nothing.** It emits placeholders.
-- **PARKED path is unverified in a browser.** The tab-capture flow is compiled
-  and reviewed but has never been run end to end; the stream-id call in
-  particular may need to move into the service worker.
+- **Marking covers Chinese and Japanese — kanji *and* kana — but not spaced
+  scripts.** Korean and English/Spanish cannot be marked: an English sentence is a
+  single token to a word-list matcher.
+- **Inflected Japanese forms mark the dictionary headword, not the word on
+  screen.** `食べました` does not match `食べる`; where the stem is itself a
+  headword it marks that, carrying a narrower scope. Kanji forms mark correctly.
+- **A few Japanese words share one entry where JMdict splits homographs** (`私` is
+  both わたし and あたし). 156 spellings are affected, so hover shows one reading.
+- **Bilingual alignment is approximate** — cues are matched by start time, and a
+  pair more than 1.5s apart is left blank rather than mismatched.
+- **Videos without captions show an error**, not a fallback. Auto-generated tracks
+  cover most, but not all.
+- **Live streams** have unstable caption timing; seeking may not line up.
+- **Transcripts are not persisted** — they survive tab switches and a closed panel,
+  but not a browser restart. The 6 most recent videos are cached.
 
-## Roadmap
+## Parked: audio capture
 
-- [ ] Verify the parked capture path, find or write a real engine.
-- [ ] Persist transcripts across restarts via `chrome.storage`.
-- [ ] Export formats beyond `.txt` / `.srt` (VTT, JSON).
-- [ ] Search within the transcript.
-- [ ] Improve the UI (currently functional, not pretty).
-- [ ] Optional in-page subtitle overlay.
+A tab-capture path exists — capturing tab audio and running a speech recogniser —
+but it is behind `USE_AUDIO_CAPTURE = false` and has never been run end to end.
+
+> ⚠️ **Turning it on also means restoring two manifest permissions.** `tabCapture`
+> and `offscreen` were **removed** while the path is unreachable, because a
+> permission no shipping feature uses cannot be honestly justified to a store
+> reviewer. Add both back to `permissions` in `manifest.json` before setting the
+> flag, or `getMediaStreamId` and `createDocument` fail with the API undefined.
+
+The engine is a stub that emits placeholder events, so the parked path is a
+pipeline test and not a transcriber.
 
 ## Licence
 
-Our own code — everything in `src/`, the icons, the tests — is **MIT** (see
-[`LICENSE`](LICENSE)). The extension ships no third-party code, fonts or images.
+Our code — everything in `src/`, the icons, the tests — is **MIT**; see
+[`LICENSE`](LICENSE). No third-party code, fonts or images are bundled.
 
-The bundled dictionaries are **not** ours and are **not** covered by the MIT
-licence. Both are **CC BY-SA 4.0** derived works and **must remain** so:
+The dictionaries are **not** ours and **not** MIT. Both are CC BY-SA 4.0 derived
+works:
 
-- [`src/learn/data/chinese.json`](src/learn/data/chinese.json) — CC-CEDICT
-  (CC BY-SA 4.0) with HSK levels from the official MOE HSK 3.0 word list;
-- [`src/learn/data/japanese.json`](src/learn/data/japanese.json) — JMdict by
-  EDRDG (CC BY-SA 4.0) with JLPT levels from an MIT-licensed list.
+- `src/learn/data/chinese.json` — CC-CEDICT, with HSK levels from the official MOE
+  HSK 3.0 word list;
+- `src/learn/data/japanese.json` — JMdict (EDRDG), with JLPT levels from an
+  MIT-licensed list.
 
-Full attribution, the exact source revisions and their content hashes are in
+Full attribution, source revisions and content hashes are in
 [`THIRD-PARTY.md`](THIRD-PARTY.md).
