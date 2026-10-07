@@ -50,6 +50,38 @@ import { segmentSegments } from '../learn/segment.js';
 const api = globalThis.browser ?? globalThis.chrome;
 
 /**
+ * Whether to log how long each stage of a caption load took.
+ *
+ * Off, because it printed on every load in everyone's console. It exists because
+ * the numbers are occasionally the only way to tell a slow dictionary from a slow
+ * network — they need opposite fixes — so removing it outright would mean writing
+ * it again the next time that question comes up. Set it in the service worker
+ * console: `chrome.storage` is not involved, so this is per-session and cannot be
+ * left on by accident.
+ */
+let TIMING = false;
+
+/**
+ * Log a stage's duration, when timing is on.
+ *
+ * @param {string} stage
+ * @param {string} detail
+ * @param {number} started  A `Date.now()` taken before the stage.
+ */
+function reportTiming(stage, detail, started) {
+  if (!TIMING) return;
+  console.log(`[IU] ${stage}: ${detail} ${Date.now() - started}ms`);
+}
+
+// Reachable from the service-worker console, which is the only place these
+// numbers are useful. Deliberately not a stored setting: it is a diagnostic, not
+// a preference, and a user should never find it on.
+globalThis.__iuTiming = (on = true) => {
+  TIMING = Boolean(on);
+  return `timing ${TIMING ? 'on' : 'off'}`;
+};
+
+/**
  * The list manifest URL, and the dictionary URL for its active list.
  *
  * Resolved here, not inside `learn/wordlist.js`. That module is about data and
@@ -392,10 +424,15 @@ async function ensureDictionaryFor(listId) {
   // build, on the same thread a caption request is waiting on, and the worker is
   // evicted after ~30s idle so it repeats on every wake. Measuring it is what
   // separates that from a slow network — they need opposite fixes.
+  //
+  // Reporting rather than logging. These numbers were logged unconditionally for
+  // a diagnostic that was never concluded, which printed on every caption load in
+  // everyone's console. Reachable when someone actually needs to measure again,
+  // silent when they do not.
   const started = Date.now();
   dictionary = await loadDictionary(api.runtime.getURL(path));
   dictionaryLanguage = language;
-  console.log(`[IU] dictionary load: ${language} ${Date.now() - started}ms`);
+  reportTiming('dictionary load', `${language}`, started);
   return dictionary;
 }
 
@@ -839,7 +876,7 @@ async function refreshInner() {
     broadcastState();
     return;
   }
-  console.log(`[IU] caption fetch: ${Date.now() - fetchStarted}ms`);
+  reportTiming('caption fetch', `fetched`, fetchStarted);
 
   if (!provided?.ok && !provided?.fetched) {
     entry.error = provided?.error ?? errorText('TRACK004');
@@ -1477,7 +1514,7 @@ async function applyMarks(entry) {
   }));
   entry.markedWith = wanted;
 
-  console.log(`[IU] segment+mark: ${entry.rows.length} lines ${Date.now() - segmentStarted}ms`);
+  reportTiming('segment+mark', `${entry.rows.length} lines`, segmentStarted);
   broadcastState();
 }
 

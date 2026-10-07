@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Personal-use Chrome extension: YouTube transcripts in the side panel.",
+  "description": "Learn Chinese and Japanese from video: marks the words above your level, dictionary on hover.",
   "license": "MIT",
   "scripts": {
     "capture": "node tools/capture.mjs",
