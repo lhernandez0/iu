@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU — reading layouts</title>
+    <link rel="icon" href="/icons/icon-32.png" />
+    <!--
+      The panel's OWN stylesheet, by its real path, so the rows below are styled by
+      the file that ships. A layout that only looks right under a preview
+      stylesheet would be telling us nothing.
+    -->
+    <link rel="stylesheet" href="/src/sidepanel/sidepanel.css" />
+    <link rel="stylesheet" href="/tools/ui/reading.css" />
+  </head>
+  <body class="reading-preview">
+    <header class="rp-controls">
+      <h1>Reading layouts</h1>
+
+      <div class="rp-group" role="group" aria-label="Layout">
+        <span class="rp-label">Layout</span>
+        <button type="button" class="rp-chip" data-layout="above" aria-pressed="true">拼音 above</button>
+        <button type="button" class="rp-chip" data-layout="below" aria-pressed="false">below</button>
+        <button type="button" class="rp-chip" data-layout="marked" aria-pressed="false">marked only</button>
+        <button type="button" class="rp-chip" data-layout="popover" aria-pressed="false">popover only</button>
+      </div>
+
+      <div class="rp-group" role="group" aria-label="Tone style">
+        <span class="rp-label">Tones</span>
+        <button type="button" class="rp-chip" data-tones="marks" aria-pressed="true">mā má</button>
+        <button type="button" class="rp-chip" data-tones="numbers" aria-pressed="false">ma1 ma2</button>
+      </div>
+
+      <div class="rp-group">
+        <span class="rp-label">Script</span>
+        <button type="button" class="rp-chip rp-switch" id="rp-script" aria-pressed="false">
+          <span class="rp-switch-knob"></span>
+          <span class="rp-switch-text">繁 ↔ 简</span>
+        </button>
+      </div>
+
+      <div class="rp-group">
+        <span class="rp-label">Language</span>
+        <button type="button" class="rp-chip" data-lang="zh" aria-pressed="true">中文</button>
+        <button type="button" class="rp-chip" data-lang="ja" aria-pressed="false">日本語</button>
+      </div>
+
+      <!--
+        The panel's own size control, wired for real.
+
+        It was decorative in the first version of this page: it showed 14 while the
+        content rendered at 13, so the one thing that decides whether a reading is
+        legible could not be adjusted at all. It now sets `--font-size` on the root,
+        which is what `--text-scale` is derived from — the same mechanism the panel
+        uses, so what you see here is what the panel does.
+      -->
+      <div class="rp-group">
+        <span class="rp-label">Size</span>
+        <label class="rp-size">
+          <input type="number" id="rp-size" min="10" max="32" step="1" value="13" aria-label="Text size" />
+          <span>px</span>
+        </label>
+      </div>
+
+      <p class="rp-note" id="rp-note"></p>
+    </header>
+
+    <!--
+      Two columns: the real panel width, and the same content at a comfortable
+      width. The narrow one is the honest one — the panel is ~350px — but a wide
+      version beside it shows what the layout does when space is not the problem,
+      so a bad idea is not mistaken for a tight fit.
+    -->
+    <main class="rp-columns">
+      <section class="rp-column">
+        <h2>Panel width <span class="rp-dim">350px</span></h2>
+        <div class="rp-panel rp-narrow">
+          <header class="bar">
+            <select aria-label="Language to learn"><option>中文</option></select>
+            <label class="line-translate"><input type="checkbox" aria-label="Translate the first line" /> MT</label>
+            <button type="button">&#8646;</button>
+            <select aria-label="Second line"><option>English</option></select>
+            <button type="button" class="layout-toggle" aria-pressed="false">&#9650;</button>
+          </header>
+          <header class="bar learning">
+            <select aria-label="View"><option>Focus</option></select>
+            <label class="size"><input type="number" value="14" aria-label="Text size" /><span class="size-unit">px</span></label>
+            <select aria-label="Word list"><option>HSK 3.0</option></select>
+            <select aria-label="Level"><option>Lv 3</option></select>
+          </header>
+          <p class="status" role="status" id="rp-status-narrow">3 lines · Chinese · preview</p>
+          <main class="transcript" id="rp-transcript-narrow" aria-label="Transcript"></main>
+          <footer class="bar">
+            <label class="follow"><input type="checkbox" checked /> Follow</label>
+            <button type="button">Copy</button>
+            <select class="format"><option>.txt</option></select>
+            <button type="button">Save</button>
+          </footer>
+        </div>
+      </section>
+
+      <section class="rp-column">
+        <h2>Comfortable <span class="rp-dim">640px</span></h2>
+        <div class="rp-panel rp-wide">
+          <p class="status" role="status" id="rp-status-wide">3 lines · Chinese · preview</p>
+          <main class="transcript" id="rp-transcript-wide" aria-label="Transcript"></main>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/tools/ui/reading.mjs"></script>
+  </body>
+</html>

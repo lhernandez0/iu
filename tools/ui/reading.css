@@ -1,0 +1,292 @@
+/*
+ * Styles for the reading-layout mock ONLY.
+ *
+ * Sits on top of the panel's real stylesheet, so rows, marks, level colours and
+ * spacing around the text are the shipped ones. Everything here is the new part:
+ * readings (ruby or below), the control chips, and the two-column shell.
+ *
+ * ## Sizing, and why the first version was wrong
+ *
+ * The panel's whole type system is `calc(Npx * var(--text-scale))`, where
+ * `--text-scale` is `calc(var(--font-size) / 13px)` — a plain number. The first
+ * version of this file used `em` off a 13px base for the reading, which measured
+ * at **8.06px**: smaller than anything else on the page, at the smallest size the
+ * panel offers. It was unreadable, and the measurement said so.
+ *
+ * Two corrections:
+ *   - the reading scales with `--text-scale` like everything else, so it grows
+ *     when the learner grows the text;
+ *   - its RATIO is bigger. Print ruby runs about 50% of the base, which is fine at
+ *     10pt on paper and wrong at 13px on a screen.
+ *
+ * ## Colour
+ *
+ * The first version annotated in `#8fb4ff`, a saturated blue LOUDER than the text
+ * it annotates — so the eye landed on the readings and the characters became the
+ * background. Annotation is secondary by definition: it is dimmer. Only the marks
+ * keep a strong colour, because those are the thing being pointed at.
+ */
+
+/*
+ * **No `font` shorthand here, deliberately.**
+ *
+ * The panel's own stylesheet sets `body { font: var(--font-size) / var(--line-height)
+ * var(--font-reading) }`, which is what makes the text-size control work at all.
+ * A `font: 13px/1.5 ...` on this selector has higher specificity (`body.class`
+ * beats `body`), so it froze the body at 13px while the readings — which use
+ * `calc(9.5px * var(--text-scale))` — kept scaling.
+ *
+ * The symptom was exactly backwards from what you would look for: the annotation
+ * grew and the text it annotates did not, so at 24px the readings were larger than
+ * the characters. Only `--font-size` is set, from the control.
+ */
+body.reading-preview {
+  margin: 0;
+  background: #0d0f13;
+  color: #e7e9ee;
+}
+
+/* --- Controls ------------------------------------------------------------ */
+
+.rp-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #2a2e37;
+  background: #111318;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.rp-controls h1 {
+  margin: 0 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.rp-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rp-label {
+  margin-right: 2px;
+  color: #7d838f;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.rp-chip {
+  padding: 4px 11px;
+  border: 1px solid #333844;
+  border-radius: 999px;
+  background: #1b1e25;
+  color: #e7e9ee;
+  font: 12px/1.4 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.rp-chip:hover {
+  border-color: #4f8cff;
+}
+
+.rp-chip[aria-pressed='true'] {
+  border-color: #4f8cff;
+  background: #24304a;
+}
+
+/* The 繁 ↔ 简 toggle, shaped like a switch rather than a chip: it is one binary
+   state, and a label alone does not say which way it is. */
+.rp-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-left: 5px;
+}
+
+.rp-switch-knob {
+  width: 26px;
+  height: 14px;
+  border-radius: 999px;
+  background: #333844;
+  position: relative;
+  transition: background 120ms ease;
+}
+
+.rp-switch-knob::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #9aa0ad;
+  transition: transform 120ms ease, background 120ms ease;
+}
+
+.rp-switch[aria-pressed='true'] .rp-switch-knob {
+  background: #2b4a86;
+}
+
+.rp-switch[aria-pressed='true'] .rp-switch-knob::after {
+  transform: translateX(12px);
+  background: #cfe0ff;
+}
+
+/* The size control, so the reading can be judged at the size someone will use. */
+.rp-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #7d838f;
+  font-size: 11px;
+}
+
+.rp-size input {
+  width: 48px;
+  padding: 3px 5px;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  background: #1b1e25;
+  color: #e7e9ee;
+  font: 12px/1.4 system-ui, sans-serif;
+}
+
+.rp-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: #9aa0ad;
+  font-size: 12px;
+}
+
+/* --- Columns ------------------------------------------------------------- */
+
+.rp-columns {
+  display: flex;
+  gap: 18px;
+  padding: 14px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.rp-column h2 {
+  margin: 0 0 6px;
+  color: #9aa0ad;
+  font: 600 10px/1.4 system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.rp-dim {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #6b7280;
+}
+
+.rp-panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #2a2e37;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #14171d;
+}
+
+/* 350px is the real panel. Not a round number chosen for looks — it is what a side
+   panel actually gets, and a layout that only works wider is not a layout. */
+.rp-narrow {
+  width: 350px;
+  height: 460px;
+}
+
+.rp-wide {
+  width: 660px;
+  height: 460px;
+}
+
+/* --- The new bit: readings ----------------------------------------------- */
+
+/*
+ * Ruby. A column so the reading and the glyph stack, and the GLYPH keeps its
+ * horizontal position — that is the reason to prefer this over a line underneath:
+ * the text below does not move.
+ *
+ * `vertical-align: bottom` pins a stack and a plain word to the same baseline, so
+ * a line mixing annotated and unannotated words does not wobble.
+ */
+.rp-ruby {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: bottom;
+  /* A hair of horizontal room, or adjacent readings touch and the line reads as
+     one continuous smear. */
+  padding: 0 1px;
+}
+
+.rp-rt {
+  /*
+   * Scaled by `--text-scale` like every other size in the panel.
+   *
+   * **0.85 of the base, which is much larger than print ruby.** Furigana runs about
+   * 50% because a Japanese reader already knows the character and only needs a
+   * reminder. Pinyin on a Chinese subtitle is doing more work than that — it IS the
+   * pronunciation, for a learner — so it has to be legible in its own right rather
+   * than decorative. 0.73 measured too small; this is a deliberate overshoot, to be
+   * brought back down if it now competes with the characters.
+   */
+  font-size: calc(11px * var(--text-scale));
+  /* Tight, so the reading sits close to its own characters rather than floating
+     between two lines. */
+  line-height: 1.15;
+  /* Desaturated and dimmer than the text. Annotation is secondary; the first
+     version annotated in a saturated blue that outshouted the characters. */
+  color: #7f93b8;
+  white-space: nowrap;
+  /* Pinyin runs long — `zhuāngzhòng` is wider than the characters under it — and
+     a reading that wraps breaks the association it exists to make. */
+  letter-spacing: -0.005em;
+}
+
+.rp-rb {
+  white-space: nowrap;
+}
+
+/* The reading BELOW the text: one line across the whole row. */
+.rp-below {
+  display: block;
+  margin-top: 2px;
+  color: #7f93b8;
+  font-size: calc(11px * var(--text-scale));
+  line-height: 1.35;
+  /* Spacing is visible here in a way it is not in ruby, because the reading is a
+     single run rather than one word at a time. */
+  word-spacing: 0.12em;
+}
+
+/* --- The panel's own parts, at preview sizes ----------------------------- */
+
+.rp-panel .transcript {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* The wide column carries the same header as the narrow one, so the comparison is
+   like for like: a layout that needs a second row of chrome is not free just
+   because the column is wider. */
+.rp-wide .bar .lang select {
+  min-width: 96px;
+}
+
+.rp-panel .status {
+  padding: 6px 10px;
+  color: #7d838f;
+}
