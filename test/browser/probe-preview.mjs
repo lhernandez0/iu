@@ -39,7 +39,15 @@ const report = await page.evaluate(() => ({
   threshold: document.getElementById('threshold')?.selectedOptions?.[0]?.textContent ?? '(none)',
   mt: [...document.querySelectorAll('.line-translate input')].map((input) => input.id),
   layout: document.getElementById('layout')?.value ?? '(missing)',
-  studyFirst: document.querySelector('.row .primary')?.textContent ?? '',
+  // Base text, not the raw `textContent` — the reading is <ruby>/<rt> inside
+  // this element, so raw text reads `wǒmen我们…`.
+  studyFirst: (() => {
+    const primary = document.querySelector('.row .primary');
+    if (!primary) return '';
+    const clone = primary.cloneNode(true);
+    for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+    return clone.textContent ?? '';
+  })(),
 }));
 
 console.log('errors:    ', errors.length ? errors : 'none');

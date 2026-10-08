@@ -56,6 +56,16 @@
         <input id="font-size" type="number" min="10" max="32" step="1" aria-label="Text size in pixels" />
         <span class="size-unit">px</span>
       </label>
+      <!--
+        Where a word's reading goes — 拼音 for Chinese, Rōmaji for Japanese.
+
+        A select rather than a toggle, because the four values are genuinely
+        different layouts rather than off and on: `above` is ruby, `below` is a
+        second line, `marked` annotates only what is already highlighted. The
+        label is generic because the same control serves both languages; the
+        options name the placement, not the language.
+      -->
+      <select id="reading" aria-label="Where to show the reading"></select>
       <select id="list" aria-label="Word list"></select>
       <select id="threshold" aria-label="Highlight from level"></select>
     </header>

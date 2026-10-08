@@ -491,9 +491,80 @@ select:disabled {
   filter: brightness(1.35);
 }
 
+/* --- Readings (拼音 / Rōmaji) -------------------------------------------
+ *
+ * Present but unreachable: the setting that selects a placement is `hidden`, so
+ * nothing renders these until a control exists. They live here rather than in the
+ * preview so the day a control is added, the panel already draws it — the same
+ * arrangement `markStyle` has.
+ *
+ * The sizes are `calc(Npx * var(--text-scale))` like every other size in this
+ * file, so a reading grows with the text-size control. An earlier mock measured
+ * 8px because it used `em` off the base instead, which is smaller than anything
+ * else in the panel at the smallest size the panel offers. Print ruby runs about
+ * 50% of the base, which is right at 10pt on paper and unreadable at 13px on a
+ * screen: this is 0.85, past the 0.73 that still read as small, and it can come
+ * back down if it competes with the characters.
+ */
+
+/* Ruby: the reading above its own word, so every glyph keeps its horizontal
+   position and the line reads as one unit. */
+.ruby {
+  /* The element does its own annotation layout — `ruby-align` and `ruby-position`
+     are the browser's job now, not ours. The previous flex column existed only
+     because this was a span pair imitating native ruby. */
+  padding: 0 1px;
+  /* Ruby over base by default; stated so a future rule cannot silently move it. */
+  ruby-position: over;
+  ruby-align: center;
+}
+
+.rt {
+  font-size: calc(11px * var(--text-scale));
+  /* Tight, so the reading sits close to its own characters rather than floating
+     between two lines. */
+  line-height: 1.15;
+  /* Dimmer than the text it annotates. Annotation is secondary by definition —
+     the marks are the thing being pointed at, and they keep the strong colour. */
+  color: var(--muted);
+  /* Pinyin runs long, and a reading that wraps breaks the association it exists
+     to make. */
+  white-space: nowrap;
+}
+
+
+/* The reading under the text, as one line across the whole row. */
+.reading-line {
+  display: block;
+  margin-top: 2px;
+  font-size: calc(11px * var(--text-scale));
+  line-height: 1.35;
+  color: var(--muted);
+  /* Visible here in a way it is not in ruby, because the reading is one run
+     rather than a word at a time. */
+  word-spacing: 0.12em;
+}
+
 /* The learning controls, visually separate from the language pickers. */
 .learning {
-  gap: 6px;
+  /* Tighter than a normal bar, in every dimension that costs height.
+   *
+   * Four controls share ~350px, and a side panel is about 600px tall on a laptop —
+   * so three bars plus a status line is a large fraction of the space before a
+   * single line of transcript is drawn. This bar is the one that can afford to be
+   * thin: its controls are secondary to the language pickers above it, and the
+   * reading placement is set once and left alone.
+   *
+   * `padding: 5px` and a `3px 6px` control padding take it from 43px to 38px.
+   * Anything smaller starts to fight the text size, because the height is driven
+   * by the tallest control and the size field has a `min-height` of its own.
+   */
+  gap: 4px;
+  padding: 5px;
+}
+
+.learning select {
+  padding: 3px 6px;
 }
 
 .learning-label {
@@ -505,6 +576,15 @@ select:disabled {
 #threshold {
   flex: 0 0 auto;
   max-width: 72px;
+}
+
+/* The reading placement. Short options (`Off`, `Above`, `Below`, `Marked`), so it
+   can be narrower than the other selects without clipping — which matters because
+   `flex: 1 1 0` would otherwise give it an equal share of a bar it needs less of,
+   taking width from the word list that has to hold `HSK 2.0`. */
+#reading {
+  flex: 0 1 auto;
+  max-width: 88px;
 }
 
 /* Focus view: only the current line and the next are shown.

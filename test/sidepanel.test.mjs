@@ -757,5 +757,162 @@ section('a state push carries the paused flag, so a panel opened mid-gap agrees'
 
 // --- Result ------------------------------------------------------------------
 
+section('readings render only when the setting asks for them');
+
+{
+  // The setting defaults to `off`, so every existing reader sees exactly the panel
+  // they saw before this existed. Asserted first because it is the property most
+  // likely to break quietly: a reading appearing unasked is a change to someone's
+  // reading surface that they did not choose.
+  //
+  // Counted from the `created` list with a mark and a slice, NOT a running total.
+  // The stub records every element ever built and a state push does not clear it,
+  // so a bare count accumulates across the pushes below — which made `below` look
+  // like it was drawing two rubies when it had drawn none.
+  const TOKENS = [
+    { text: '他', defined: true, level: 1, reading: 'tā' },
+    { text: '终于', defined: true, level: 3, reading: 'zhōngyú' },
+  ];
+
+  const { lastPort, dom } = await bootPanel();
+
+  /** Built since the previous read, grouped by class. */
+  let mark = dom.created.length;
+  const builtSince = () => dom.created.slice(mark);
+  const push = (learning, tokens) => {
+    mark = dom.created.length;
+    lastPort().emit({
+      type: 'state',
+      state: stateWithSettings(learning, {
+        rows: [{ start: 0, duration: 2, text: '他 终于', secondary: '', tokens }],
+      }),
+    });
+  };
+  /** @param {string} name */
+  const ofClass = (name) => builtSince().filter((el) => el.classList.contains(name));
+  /**
+   * The words a rendered node actually says, with the annotation taken out.
+   *
+   * A reading is drawn as `<rt>` INSIDE the ruby, so the ruby's raw text is
+   * `tā他` — annotation first, exactly as it is written in the markup. Any
+   * assertion about the WORD has to drop the `<rt>` first, which is the same
+   * rule the browser suite and `baseText` follow for a whole line.
+   *
+   * @param {object} node
+   * @returns {string}
+   */
+  const baseTextOf = (node) =>
+    (node?.children ?? [])
+      .filter((child) => !child.classList?.contains('rt'))
+      .map((child) => child.textContent ?? '')
+      .join('');
+
+  push({ romaji: 'off' }, TOKENS);
+  check('off draws no ruby', ofClass('ruby').length, 0);
+  check('and no reading text', ofClass('rt').length, 0);
+  // The words still render: a reading is an addition, not a replacement.
+  check('but the words are still there', ofClass('mark').length, 2);
+
+  push({ romaji: 'above' }, TOKENS);
+  check('above draws ruby', ofClass('ruby').length, 2);
+  check('with the reading above the word', ofClass('rt')[0]?.textContent, 'tā');
+  // `tā` is the annotation and `他` the base; only the base is the word.
+  check('and the word below it', baseTextOf(ofClass('ruby')[0]), '他');
+
+  push({ romaji: 'below' }, TOKENS);
+  check('below draws no ruby', ofClass('ruby').length, 0);
+  check('but a reading line', ofClass('reading-line').length, 1);
+  check('carrying both readings', ofClass('reading-line')[0]?.textContent, 'tā zhōngyú');
+
+  // `marked` annotates only what the list already highlights, which is why it is
+  // the placement that costs no extra row height.
+  push({ romaji: 'marked', threshold: 3 }, [
+    { text: '他', defined: true, level: null, reading: 'tā' },
+    { text: '终于', defined: true, level: 3, reading: 'zhōngyú' },
+  ]);
+  check('marked annotates only the marked word', ofClass('ruby').length, 1);
+  check('and it is the one above the threshold', ofClass('rt')[0]?.textContent, 'zhōngyú');
+}
+
+section('a reading with no word to attach to is not drawn as an empty stack');
+
+{
+  // The negative that would otherwise be invisible. A token with no reading must
+  // render as plain text rather than as an empty ruby stack — a stack still takes
+  // vertical space and indents its word, so a line of unknown words would come out
+  // looking centre-aligned for no visible reason.
+  const byClass = (dom, name) => dom.created.filter((el) => el.classList.contains(name));
+  const { lastPort, dom } = await bootPanel();
+  const mark = dom.created.length;
+
+  lastPort().emit({
+    type: 'state',
+    state: stateWithSettings(
+      { romaji: 'above' },
+      {
+        rows: [
+          {
+            start: 0,
+            duration: 2,
+            text: '。x',
+            secondary: '',
+            tokens: [
+              { text: '。', defined: false, level: null },
+              { text: 'x', defined: true, level: 2, reading: null },
+            ],
+          },
+        ],
+      },
+    ),
+  });
+
+  const built = dom.created.slice(mark);
+  const ofClass = (name) => built.filter((el) => el.classList.contains(name));
+
+  check('no ruby for an undefined token', ofClass('ruby').length, 0);
+  check('and none for a defined one with no reading', ofClass('ruby').length, 0);
+  // Read from the LAST row built, because `primary` is one element per row and
+  // rows are appended rather than replaced.
+  check('the text is still rendered', ofClass('primary').at(-1)?.textContent, '。x');
+}
+
+section('tone style changes how a reading is written, not where');
+
+{
+  const byClass = (dom, name) => dom.created.filter((el) => el.classList.contains(name));
+  const { lastPort, dom } = await bootPanel();
+  const push = (toneStyle) =>
+    lastPort().emit({
+      type: 'state',
+      state: stateWithSettings(
+        { romaji: 'above', toneStyle },
+        {
+          rows: [
+            {
+              start: 0,
+              duration: 2,
+              text: '终',
+              secondary: '',
+              tokens: [{ text: '终', defined: true, level: 3, reading: 'zhōngyú' }],
+            },
+          ],
+        },
+      ),
+    });
+
+  push('marks');
+  check('marks by default', dom.created.filter((el) => el.classList.contains('rt')).at(-1)?.textContent, 'zhōngyú');
+  push('numbers');
+  // Per syllable, which is the part that needed a syllable table: a naive
+  // conversion put the digit inside the syllable, and a per-word one at the end.
+  check(
+    'numbers put each tone on its own syllable',
+    dom.created.filter((el) => el.classList.contains('rt')).at(-1)?.textContent,
+    'zhong1yu2',
+  );
+}
+
+// --- Result ------------------------------------------------------------------
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exit(failures === 0 ? 0 : 1);

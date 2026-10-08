@@ -77,6 +77,51 @@ const LAYOUT_OPTIONS = [
 ];
 
 /**
+ * Where a word's reading (拼音 / Rōmaji) is drawn.
+ *
+ * Four options rather than a checkbox, because they are genuinely different
+ * layouts rather than degrees of one — decided by looking at all four on real
+ * content, not by argument. `off` first because it is the default.
+ */
+const READING_OPTIONS = [
+  { value: 'off', label: 'Off' },
+  // Ruby: the reading above its own word, so every glyph keeps its horizontal
+  // position and the line reads as one unit. Costs row height.
+  //
+  // Labels are SHORT because this is a `<select>` in a 350px bar shared with three
+  // other controls. "Above each word" rendered clipped, and a control whose text
+  // is cut off is worse than a terse one — the options themselves carry the
+  // explanation. ("Above" means "above the word also above", which is what the
+  // CSS namespace calls ruby, so that is what the option says.)
+  { value: 'above', label: 'Above' },
+  // One line under the text. Cheapest to draw, and it reads as a conversion
+  // rather than as annotation — the eye travels between two lines instead of
+  // staying on one.
+  { value: 'below', label: 'Below' },
+  // Only on words the highlight already covers. Row height unchanged, and the
+  // annotation lands where attention already is.
+  { value: 'marked', label: 'Marked' },
+];
+
+/** How a pinyin reading is written. */
+const TONE_OPTIONS = [
+  { value: 'marks', label: 'Tone marks (mā)' },
+  { value: 'numbers', label: 'Numbers (ma1)' },
+];
+
+/**
+ * Whether Chinese subtitles are rewritten to the other script.
+ *
+ * A display option and nothing more: the dictionary already resolves traditional
+ * text, so nothing is broken without this. See the note on the setting itself.
+ */
+const SCRIPT_OPTIONS = [
+  { value: 'off', label: 'As written' },
+  { value: 't2s', label: 'Traditional → Simplified' },
+  { value: 's2t', label: 'Simplified → Traditional' },
+];
+
+/**
  * @type {SettingDefinition[]}
  */
 export const SETTINGS = [
@@ -117,6 +162,61 @@ export const SETTINGS = [
       if (!Number.isFinite(number)) return BASE_FONT_PX;
       return Math.min(32, Math.max(10, Math.round(number)));
     },
+  },
+  {
+    // WHERE the reading goes, not whether to have one.
+    //
+    // The four values are the four layouts the mock compared; three of them are
+    // real choices rather than degrees of one, which is why this is not a boolean.
+    //
+    // Defaults to `above` — ruby, the reading over its own word — because that is
+    // the layout that keeps every glyph in place. `off` is still available and is
+    // the first option, so a reader who does not want it loses nothing.
+    id: 'romaji',
+    label: 'Reading',
+    group: 'reading',
+    type: 'select',
+    options: READING_OPTIONS,
+    // VISIBLE, and it is the one of the three that is. A reading is the feature
+    // people asked for; tone style and script conversion are refinements of it.
+    default: 'above',
+    coerce: (value) => (READING_OPTIONS.some((o) => o.value === value) ? value : 'above'),
+  },
+  {
+    // How a reading is written, not where it goes. Separate from `romaji`
+    // because they are independent: tone numbers are a Chinese convention with no
+    // Japanese equivalent, and both placements can show either form.
+    id: 'toneStyle',
+    label: 'Pinyin tones',
+    group: 'reading',
+    type: 'select',
+    options: TONE_OPTIONS,
+    hidden: true,
+    // Marks, because that is what a dictionary prints and what a learner meets
+    // first. Numbers are for typing and searching.
+    default: 'marks',
+    coerce: (value) => (TONE_OPTIONS.some((o) => o.value === value) ? value : 'marks'),
+  },
+  {
+    // Whether to rewrite Chinese subtitles between scripts.
+    //
+    // **Wired but not exposed, and I would argue against shipping it.** The
+    // dictionary already resolves traditional text — `wordlist.js` maps traditional
+    // forms back to simplified keys and includes them as headwords — so unlike a
+    // reading, nothing is BROKEN without this. It is purely a display rewrite, and
+    // it is lossy in one direction: 髮 and 發 both become 发, 後 and 后 both become
+    // 后. Subtitles are the author's text, and quietly rewriting them is a
+    // different kind of change from annotating them.
+    //
+    // Kept settable so the decision can be made with the machinery visible.
+    id: 'scriptConversion',
+    label: 'Chinese script',
+    group: 'reading',
+    type: 'select',
+    options: SCRIPT_OPTIONS,
+    hidden: true,
+    default: 'off',
+    coerce: (value) => (SCRIPT_OPTIONS.some((o) => o.value === value) ? value : 'off'),
   },
   {
     id: 'listId',

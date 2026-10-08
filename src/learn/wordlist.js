@@ -261,6 +261,274 @@ export function levelOf(dictionary, listId, word) {
   return dictionary.levels[listId]?.[canonical(dictionary, word)] ?? null;
 }
 
+/**
+ * How a word is read — 拼音 for Chinese, kana for Japanese — or null.
+ *
+ * Both languages store this in the SAME field, `p`, because the data was built
+ * from sources with the same shape: CC-CEDICT carries pinyin, JMdict carries the
+ * kana reading. So this is one function and not two, which is worth stating
+ * because "pinyin" and "the reading" are the same field and it would be easy to
+ * assume otherwise from the name.
+ *
+ * `canonical` is applied first, and that is the part worth remembering: the data
+ * is keyed by simplified form, so looking up a traditional surface form directly
+ * finds nothing. Resolving through `canonical` gives a traditional word its own
+ * reading instead of silently none — a failure that would look like missing data
+ * rather than a missing lookup.
+ *
+ * @param {Dictionary} dictionary
+ * @param {string} word
+ * @returns {string|null}
+ */
+export function readingOf(dictionary, word) {
+  const entry = lookup(dictionary, word);
+  // An empty string is present-but-empty in the data (JMdict has these for
+  // symbols and loanwords with no kana), treated the same as absent — a blank
+  // reading is not something to draw.
+  return entry?.p || null;
+}
+
+/**
+ * The other script's form of a Chinese word, or null.
+ *
+ * `t` is the traditional form, carried by every one of the 11,470 entries. There
+ * is no simplified field because the data is KEYED by simplified: the key already
+ * is that form.
+ *
+ * @param {Dictionary} dictionary
+ * @param {string} word
+ * @returns {string|null}
+ */
+export function traditionalOf(dictionary, word) {
+  return lookup(dictionary, word)?.t || null;
+}
+
+/**
+ * The tone-marked pinyin form a reading is written in, turned into numbered.
+ *
+ * `māma` becomes `ma1ma`, and `le` stays `le` — a syllable with no mark is the
+ * neutral tone and carries no number, which is the part a version built from the
+ * Latin letters alone gets wrong by appending `0` or nothing at the end of the
+ * whole string rather than per syllable.
+ *
+ * `ü` is handled because the data uses it (`lǜ` for 绿) and a table of the five
+ * vowels would silently leave it alone.
+ *
+ * @param {string} reading
+ * @returns {string}
+ */
+/**
+ * A tone-marked reading as numbered pinyin: `zhōngyú` becomes `zhong1yu2`.
+ *
+ * **The numbering is per SYLLABLE, and syllable boundaries cannot be found from
+ * the letters.** `zhongyu` could split as `zhong-yu` or `zho-ng-yu`, and nothing
+ * in the string says which — so two simpler implementations both produce
+ * something wrong:
+ *
+ *   - write the digit where the vowel was: `zho1ngyu2`, a number inside a syllable
+ *   - flush it at spaces: `zhongyu2`, because a Chinese word is written with no
+ *     spaces between its syllables at all
+ *
+ * So the string is segmented against the real inventory of Mandarin syllables
+ * first, then each syllable gets its digit at the end. That also makes the
+ * conversion reversible, which is the point of numbered pinyin — it exists so a
+ * reading can be typed and searched.
+ *
+ * @param {string} reading
+ * @returns {string}
+ */
+export function pinyinToNumbers(reading) {
+  if (!reading) return '';
+
+  // Tone marks become plain letters plus a digit per POSITION, so the two strings
+  // stay index-aligned and a syllable's digit can be found from its range.
+  let plain = '';
+  /** @type {string[]} */
+  const tones = [];
+  for (const char of reading) {
+    const mapped = TONE_NUMBERS[char];
+    if (mapped === undefined) {
+      plain += char;
+      tones.push('');
+    } else {
+      plain += mapped[0];
+      // A missing digit is the neutral tone, not an unknown one.
+      tones.push(mapped.length > 1 ? mapped[1] : '');
+    }
+  }
+
+  // Runs of letters are split as a whole, because the boundaries between them are
+  // not visible in the string — see `splitSyllables`.
+  return numberRuns(plain, tones);
+}
+
+/**
+ * Segment a pinyin string and put each syllable's tone after it.
+ *
+ * A run of letters is split by `splitSyllables`; anything between runs (spaces,
+ * apostrophes, hyphens) is passed through as the author wrote it, because it is
+ * their punctuation rather than ours.
+ *
+ * @param {string} plain  Tone marks already replaced with plain letters.
+ * @param {string[]} tones  One entry per character, `''` for the neutral tone.
+ * @returns {string}
+ */
+function numberRuns(plain, tones) {
+  let out = '';
+  let i = 0;
+
+  while (i < plain.length) {
+    if (!SYLLABLE_LETTER.test(plain[i])) {
+      out += plain[i];
+      i++;
+      continue;
+    }
+
+    // The end of this run of letters.
+    let end = i;
+    while (end < plain.length && SYLLABLE_LETTER.test(plain[end])) end++;
+    const run = plain.slice(i, end);
+
+    const split = splitSyllables(run);
+    if (!split) {
+      // No complete split exists — a shape the table does not know. Emitted whole
+      // with its last tone, so an unexpected string degrades to one wrong digit
+      // rather than to lost text.
+      const digit = tones.slice(i, end).filter(Boolean).pop();
+      out += digit ? `${run}${digit}` : run;
+      i = end;
+      continue;
+    }
+
+    let at = i;
+    for (const length of split) {
+      const syllable = plain.slice(at, at + length);
+      // The LAST tone in the syllable. A well-formed one carries exactly one, so
+      // this is that one; a malformed one is resolved deterministically rather
+      // than by whichever digit happened to come first.
+      const digit = tones.slice(at, at + length).filter(Boolean).pop();
+      out += digit ? `${syllable}${digit}` : syllable;
+      at += length;
+    }
+    i = end;
+  }
+
+  return out;
+}
+
+/**
+ * Split a run of toneless pinyin into syllables, or null if it cannot be done.
+ *
+ * **Backtracking, not greedy, and the difference is the whole function.** Written
+ * pinyin has no separator between syllables, so `fanu` is ambiguous: it could be
+ * `fan` + `u` or `fa` + `nu`. Longest-match takes `fan` — the longer reading — and
+ * then has an impossible `u` left over. The correct split is the shorter first
+ * syllable, which greedy never tries, and which only a search finds.
+ *
+ * That case is real data, not a contrived one: `fānù` (发怒) is `fa` + `nu`, and it
+ * is one of the entries that failed the exhaustive check.
+ *
+ * Result: the longest split that consumes the WHOLE run. Ambiguity with more than
+ * one valid split resolves to the longest first syllable, which is the convention
+ * dictionaries use.
+ *
+ * @param {string} run
+ * @returns {number[]|null} Syllable lengths in order, or null.
+ */
+function splitSyllables(run) {
+  const lower = run.toLowerCase();
+  /** @type {Map<number, number[]|null>} */
+  const memo = new Map();
+
+  /** @param {number} at */
+  function walk(at) {
+    if (at === lower.length) return [];
+    if (memo.has(at)) return memo.get(at);
+
+    // Longest first, so of two valid splits the longer opening syllable wins.
+    for (let length = Math.min(MAX_SYLLABLE, lower.length - at); length >= 1; length--) {
+      if (!PINYIN_SYLLABLES.has(lower.slice(at, at + length))) continue;
+      const rest = walk(at + length);
+      if (rest) {
+        const out = [length, ...rest];
+        memo.set(at, out);
+        return out;
+      }
+    }
+
+    memo.set(at, null);
+    return null;
+  }
+
+  return walk(0);
+}
+
+/** The longest syllable in the inventory (`zhuang`, `chuang`). */
+const MAX_SYLLABLE = 6;
+
+/** What counts as inside a syllable, so a tone is not flushed mid-word. */
+const SYLLABLE_LETTER = /[a-zü]/i;
+
+/**
+ * Every Mandarin syllable, toneless.
+ *
+ * The inventory is closed — about 410 forms — which is what makes longest-match
+ * segmentation exact rather than heuristic. Derived from the standard pinyin
+ * table; `v` stands in for `ü`, as it does everywhere numbered pinyin is typed.
+ */
+export const PINYIN_SYLLABLES = new Set(
+  (
+    'a ai an ang ao ba bai ban bang bao bei ben beng bi bian biao bie bin bing bo bu ' +
+    'ca cai can cang cao ce cen ceng cha chai chan chang chao che chen cheng chi chong chou chu chua chuai chuan chuang chui chun chuo ci cong cou cu cuan cui cun cuo ' +
+    'da dai dan dang dao de dei den deng di dia dian diao die ding diu dong dou du duan dui dun duo ' +
+    'e ei en eng er fa fan fang fei fen feng fo fou fu ' +
+    'ga gai gan gang gao ge gei gen geng gong gou gu gua guai guan guang gui gun guo ' +
+    'ha hai han hang hao he hei hen heng hong hou hu hua huai huan huang hui hun huo ' +
+    'ji jia jian jiang jiao jie jin jing jiong jiu ju juan jue jun ' +
+    'ka kai kan kang kao ke ken keng kong kou ku kua kuai kuan kuang kui kun kuo ' +
+    'la lai lan lang lao le lei leng li lia lian liang liao lie lin ling liu lo long lou lu luan lun luo lv lve ' +
+    'ma mai man mang mao me mei men meng mi mian miao mie min ming miu mo mou mu ' +
+    'na nai nan nang nao ne nei nen neng ni nian niang niao nie nin ning niu nong nou nu nuan nun nuo nv nve ' +
+    // `nu`/`nv` were missing from the n row, so `nù` split as `n`+`u` — a         // one-letter fallback that still produced a digit, which is why only the
+    // exhaustive decomposition check could see it.
+    'n ng hm hng m ' +
+    'o ou pa pai pan pang pao pei pen peng pi pian piao pie pin ping po pou pu ' +
+    'qi qia qian qiang qiao qie qin qing qiong qiu qu quan que qun ' +
+    'ran rang rao re ren reng ri rong rou ru ruan rui run ruo ' +
+    'sa sai san sang sao se sen seng sha shai shan shang shao she shei shen sheng shi shou shu shua shuai shuan shuang shui shun shuo si song sou su suan sui sun suo ' +
+    'ta tai tan tang tao te teng ti tian tiao tie ting tong tou tu tuan tui tun tuo ' +
+    'wa wai wan wang wei wen weng wo wu ' +
+    'xi xia xian xiang xiao xie xin xing xiong xiu xu xuan xue xun ' +
+    'ya yan yang yao ye yi yin ying yo yong you yu yuan yue yun ' +
+    'za zai zan zang zao ze zei zen zeng zha zhai zhan zhang zhao zhe zhei zhen zheng zhi zhong zhou zhu zhua zhuai zhuan zhuang zhui zhun zhuo zi zong zou zu zuan zui zun zuo ' +
+    // FINALS, which are not standalone syllables but must be matchable, because
+    // written pinyin has no separator between syllables: `bàngōng` is `bang` +
+    // `ong`, and a table of standalone syllables alone splits it into `bang` +
+    // `o` + `ng` — digits in the wrong places, which is what the exhaustive
+    // check caught. Longest-match still prefers `bang` over `ba`+`ng`, so adding
+    // these cannot steal a syllable that already matched whole.
+    'ong uan iang uang iong uo ua ia iao ian ie iu in ing ui un ue uai ve er r ' +
+    'ang eng ong ao an ai ou ei en ia ua uo uai uan uang ue ui un v'
+  ).split(' '),
+);
+
+/**
+ * Tone-marked vowel to the plain letter and its tone number.
+ *
+ * The neutral tone maps to no digit, which is why a value can be one character
+ * long. `ü` is here because it appears with a tone in the data and without one in
+ * the plain form.
+ */
+const TONE_NUMBERS = {
+  ā: 'a1', á: 'a2', ǎ: 'a3', à: 'a4',
+  ē: 'e1', é: 'e2', ě: 'e3', è: 'e4',
+  ī: 'i1', í: 'i2', ǐ: 'i3', ì: 'i4',
+  ō: 'o1', ó: 'o2', ǒ: 'o3', ò: 'o4',
+  ū: 'u1', ú: 'u2', ǔ: 'u3', ù: 'u4',
+  ǖ: 'v1', ǘ: 'v2', ǚ: 'v3', ǜ: 'v4',
+  ü: 'v',
+};
+
 // --- Colour ------------------------------------------------------------------
 
 /**

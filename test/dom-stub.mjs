@@ -269,6 +269,28 @@ export function installDomStub(ids = [], { hidden = [] } = {}) {
     }
   }
 
+  /**
+   * A text node, which `append` accepts and `textContent` reads through.
+   *
+   * **This was missing, and its absence made a stub report a bug that was not
+   * there.** `renderTokens` emits a bare text node for a token it cannot define —
+   * which is every punctuation mark in a Chinese transcript — so its absence meant
+   * those characters vanished from `textContent`, and a test asserting the text of
+   * a row came back empty while the real panel rendered it fine.
+   */
+  class FakeText {
+    /** @param {string} data */
+    constructor(data) {
+      this.data = data;
+    }
+
+    get textContent() {
+      return this.data;
+    }
+  }
+
+  document.createTextNode = (data) => new FakeText(data);
+
   globalThis.document = document;
   globalThis.Option = FakeOption;
 

@@ -21,7 +21,16 @@ import { errorText, codeError } from '../common/errors.js';
 import { alignSecondary } from '../common/transcript.js';
 import { defaults, normalise, toStorage, storageKey, definition } from '../common/settings.js';
 import { providerFor, providerNames } from '../common/providers.js';
-import { loadDictionary, loadIndex, dictionaryPathFor, levelOf, lookup, INDEX_PATH } from '../learn/wordlist.js';
+import {
+  loadDictionary,
+  loadIndex,
+  dictionaryPathFor,
+  levelOf,
+  lookup,
+  readingOf,
+  traditionalOf,
+  INDEX_PATH,
+} from '../learn/wordlist.js';
 import { segmentSegments } from '../learn/segment.js';
 
 /**
@@ -1655,7 +1664,7 @@ async function applyMarks(entry) {
 
   entry.rows = entry.rows.map((row, index) => ({
     ...row,
-    tokens: markLine(tokensPerLine[index], dictionary, list, threshold),
+    tokens: markLine(tokensPerLine[index], dictionary, list, threshold, settings.romaji !== 'off'),
   }));
   entry.markedWith = wanted;
 
@@ -1664,8 +1673,8 @@ async function applyMarks(entry) {
 }
 
 /**
- * Turn tokens into renderable pieces: text, whether we can define it, and a
- * level when the selected list places it at or beyond the threshold.
+ * Turn tokens into renderable pieces: text, whether we can define it, a level when
+ * the selected list places it at or beyond the threshold, and the reading.
  *
  * `defined` is separate from `level` on purpose, and the distinction is the
  * whole point of keeping the dictionary independent of the graded lists. A word
@@ -1675,23 +1684,62 @@ async function applyMarks(entry) {
  *
  * Conflating the two is what made whole sentences look unmarked.
  *
+ * The reading is attached HERE rather than looked up by the panel, for the same
+ * reason the level is: the dictionary lives in the worker, and a second lookup
+ * path in the panel would be a second place for `canonical` to be forgotten. It
+ * is computed only when a reading will be shown, because it is a lookup per token
+ * and a transcript is hundreds of them.
+ *
  * @param {Array<{text: string, known: boolean}>} tokens
  * @param {object} dictionary
  * @param {object|undefined} list
  * @param {number} threshold
- * @returns {Array<{text: string, defined: boolean, level: number|null}>}
+ * @param {boolean} [withReading] Attach `reading` and `traditional`.
+ * @returns {Array<{text: string, defined: boolean, level: number|null,
+ *   reading?: string|null, traditional?: string|null}>}
  */
-function markLine(tokens, dictionary, list, threshold) {
+function markLine(tokens, dictionary, list, threshold, withReading = false) {
   return tokens.map((token) => {
     // Only words we hold a definition for are worth making interactive. An
     // unknown token has nothing to show, so it stays plain text.
     const defined = token.known && Boolean(lookup(dictionary, token.text));
-    if (!defined || !list) return { text: token.text, defined, level: null };
+
+    if (!defined || !list) {
+      return { text: token.text, defined, level: null, ...annotations(defined, withReading, dictionary, token.text) };
+    }
 
     const level = levelOf(dictionary, list.id, token.text);
-    if (level === null || level < threshold) return { text: token.text, defined, level: null };
-    return { text: token.text, defined, level };
+    const marked = level !== null && level >= threshold;
+    return {
+      text: token.text,
+      defined,
+      level: marked ? level : null,
+      ...annotations(defined, withReading, dictionary, token.text),
+    };
   });
+}
+
+/**
+ * The extra fields a token carries when readings are being shown.
+ *
+ * Empty when `withReading` is false, so the row payload is byte-identical to what
+ * it was before readings existed when the setting is off — which is the default,
+ * and means no reader who has not asked for this pays for it.
+ *
+ * @param {boolean} defined
+ * @param {boolean} withReading
+ * @param {object} dictionary
+ * @param {string} text
+ */
+function annotations(defined, withReading, dictionary, text) {
+  if (!withReading || !defined) return {};
+  return {
+    reading: readingOf(dictionary, text),
+    // The other script's form, used only by the script-conversion display. Kept
+    // alongside the reading because both come from the same entry and looking it
+    // up twice would be a second round trip for no reason.
+    traditional: traditionalOf(dictionary, text),
+  };
 }
 
 // --- Panel intents ----------------------------------------------------------
@@ -1865,6 +1913,15 @@ function learningState(entry = null) {
     // than being read from storage by the panel — one owner for settings, and the
     // panel already has the value in hand when it renders.
     markStyle: settings.markStyle,
+    // Where a word's reading goes, and how it is written. Sent like the other
+    // presentation settings rather than read from storage by the panel — one owner
+    // for settings, and the panel has the value in hand when it renders.
+    //
+    // All three default to their `off`-equivalent, so a reader who has never
+    // touched them gets the panel they had before any of this existed.
+    romaji: settings.romaji,
+    toneStyle: settings.toneStyle,
+    scriptConversion: settings.scriptConversion,
     // The list actually in force, not the raw stored id. A stored value can name
     // a list that no longer exists (data changed under it), one that never did, or
     // one that does not cover this video's language — and reporting the raw id
@@ -1989,6 +2046,18 @@ async function applySetting(id, value) {
       })();
       break;
     }
+
+    case 'romaji':
+    case 'toneStyle':
+      // The reading is attached to each TOKEN by `markLine`, and the tone style is
+      // applied when it is drawn — so a change here has to rebuild the rows, not
+      // just repaint them. Without this the setting appeared to do nothing until
+      // the next video, because the tokens already in hand carried the old answer.
+      //
+      // Not the same as `view` or `fontSize`, which are pure presentation and are
+      // applied by the panel with nothing to send.
+      rebuildRows(currentEntry());
+      break;
 
     default:
       // view and fontSize are pure presentation: the panel applies them and

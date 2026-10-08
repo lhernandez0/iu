@@ -15,7 +15,7 @@ import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
 import { definition } from '../common/settings.js';
 import { providerNames } from '../common/providers.js';
-import { attachHover, showEntry, hide as hidePopover, renderTokens } from './marks.js';
+import { attachHover, showEntry, hide as hidePopover, renderTokens, renderReading, setReadingSettings } from './marks.js';
 
 /**
  * The extension API namespace — `browser` where it exists (Chrome 148+, and
@@ -65,6 +65,7 @@ const els = {
   list: /** @type {HTMLSelectElement} */ (document.getElementById('list')),
   threshold: /** @type {HTMLSelectElement} */ (document.getElementById('threshold')),
   viewMode: /** @type {HTMLSelectElement} */ (document.getElementById('view-mode')),
+  reading: /** @type {HTMLSelectElement} */ (document.getElementById('reading')),
   layout: /** @type {HTMLButtonElement} */ (document.getElementById('layout')),
   fontSize: /** @type {HTMLInputElement} */ (document.getElementById('font-size')),
   follow: /** @type {HTMLInputElement} */ (document.getElementById('follow')),
@@ -288,6 +289,16 @@ function renderState(state) {
   // Kept so row tags and the status line can name a language they only know
   // about from the state that is currently on screen.
   view.state = state;
+  // Pushed before any row is built, so the first render of a transcript already
+  // has the right placement — a row built with the previous state's settings and
+  // then rebuilt would flicker.
+  //
+  // Read from `state.learning`, NOT `state.settings`. There is no `settings` field
+  // on a state payload: the presentation settings travel inside `learning` with
+  // `view`, `fontSize` and `markStyle`, and reading a field that does not exist
+  // returned `undefined` for every push — so an explicit parameter was silently
+  // ignored. Caught by the test asserting the placements actually differ.
+  setReadingSettings(state.learning);
   view.studyTranslation = state.studyTranslation ?? null;
   view.glossTranslation = state.glossTranslation ?? null;
   renderPickers(state);
@@ -478,6 +489,14 @@ function renderLearning(state) {
   fillSelectOptions(els.threshold, learning.thresholdOptions ?? [], learning.threshold, '—');
 
   fillSelectOptions(els.viewMode, VIEW_OPTIONS, learning.view, 'Full');
+
+  // Rebuilt from the schema, so an option added there appears here with no second
+  // edit. Guarded because the preview harness renders this bar from its own copy
+  // of the markup, and a control it has not been given is `null` rather than an
+  // error — the same arrangement `els.layout` uses.
+  if (els.reading) {
+    fillSelectOptions(els.reading, optionsFor('romaji'), learning.romaji, 'Off');
+  }
 
   if (els.layout) {
     // The button reports its own state and says what pressing it will do, so the
@@ -726,6 +745,15 @@ els.viewMode.addEventListener('change', () => {
   send({ type: MSG.SET_SETTING, id: 'view', value: els.viewMode.value });
 });
 
+if (els.reading) {
+  els.reading.addEventListener('change', () => {
+    // Sent rather than applied here, unlike the view and the text size. Those are
+    // pure presentation; this one decides whether the WORKER attaches a reading to
+    // every token, so the state has to come back round before anything changes.
+    send({ type: MSG.SET_SETTING, id: 'romaji', value: els.reading.value });
+  });
+}
+
 // Only a complete, in-range value is applied live. Typing "18" passes through
 // "1", and applying that immediately clamped to 10 and re-rendered the whole
 // transcript mid-keystroke — the field fighting the person typing in it. An
@@ -881,7 +909,13 @@ function buildRow(row, index) {
   // Tokens arrive from the worker once the word list has loaded, which is not
   // necessarily by the time the transcript does. Until then the line renders as
   // plain text, so the transcript is never withheld waiting on the dictionary.
-  if (row.tokens) {
+  //
+  // A machine-translated line gets plain text on purpose: a translation is not a
+  // transcript, so annotating it with the original's pronunciation would be
+  // labelling the wrong language.
+  if (row.tokens && !view.studyTranslation) {
+    study.append(renderReading(row.tokens, view.levelCount, view.palette));
+  } else if (row.tokens) {
     study.append(renderTokens(row.tokens, view.levelCount, view.palette));
   } else {
     study.textContent = row.text;

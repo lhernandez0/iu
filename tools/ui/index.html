@@ -59,6 +59,9 @@
         <input id="font-size" type="number" min="10" max="32" step="1" aria-label="Text size in pixels" />
         <span class="size-unit">px</span>
       </label>
+      <!-- Where a word's reading goes. Kept in step with sidepanel.html by
+           `test/browser/ui-preview.test.mjs`, which fails when the two diverge. -->
+      <select id="reading" aria-label="Where to show the reading"></select>
       <select id="list" aria-label="Word list"></select>
       <select id="threshold" aria-label="Highlight from level"></select>
     </header>

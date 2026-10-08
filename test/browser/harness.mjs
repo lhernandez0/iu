@@ -396,7 +396,17 @@ export async function waitForRows(page, count = 1, { timeout = 20000, text = nul
       const rows = [...document.querySelectorAll('.row')];
       if (rows.length < expected) return false;
       if (!wanted) return true;
-      return rows.some((row) => (row.querySelector('.primary')?.textContent ?? '').includes(wanted));
+      return rows.some((row) => {
+        const primary = row.querySelector('.primary');
+        if (!primary) return false;
+        // Ruby annotation removed before matching. The reading sits inside the
+        // line's element, so a substring test against `textContent` sees
+        // `wǒmen我们…` and never matches `我们` — which made this wait time out
+        // with the transcript visibly correct on screen.
+        const clone = primary.cloneNode(true);
+        for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+        return (clone.textContent ?? '').includes(wanted);
+      });
     },
     { expected: count, wanted: text },
     { timeout },
@@ -416,7 +426,16 @@ export async function panelState(page) {
     isError: document.getElementById('status')?.classList.contains('error') ?? false,
     rows: [...document.querySelectorAll('.row')].map((row) => ({
       time: row.querySelector('.time')?.textContent ?? '',
-      text: row.querySelector('.primary')?.textContent ?? '',
+      // Ruby annotation removed, as everywhere else that reads a line's text —
+      // see `baseText`. `textContent` includes the reading, so any assertion
+      // against this would see `wǒmen我们…`.
+      text: (() => {
+        const primary = row.querySelector('.primary');
+        if (!primary) return '';
+        const clone = primary.cloneNode(true);
+        for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+        return clone.textContent ?? '';
+      })(),
       secondary: row.querySelector('.secondary')?.textContent ?? '',
       active: row.classList.contains('active'),
     })),
@@ -436,3 +455,55 @@ export async function panelState(page) {
 export async function pagePosition(page) {
   return page.evaluate(() => window.__position?.() ?? null);
 }
+
+/**
+ * A row's line text with any ruby annotation removed.
+ *
+ * **Pass to `page.evaluate(baseText, selector)`**, not `page.evaluate(baseText(sel))`.
+ * The distinction is the whole reason this is written the way it is: a function
+ * closed over its argument cannot be serialised into the page, so
+ * `page.evaluate(closure)` throws `selector is not defined` and looks like a
+ * problem with the page rather than with how it was called. Taking the selector as
+ * an ARGUMENT is what makes the function self-contained and serialisable.
+ *
+ * **Why not `textContent` directly.** The panel can draw a reading over each word —
+ * 拼音 or Rōmaji — and the annotation lives inside the line's element, correctly,
+ * because `<rt>` belongs beside its base text. `textContent` therefore returns
+ * `wǒmen我们zài在…`, so an assertion comparing the line to what was said fails while
+ * the panel is perfectly right. That is not hypothetical: it broke the moment
+ * readings defaulted on.
+ *
+ * Dropping `<rt>` is the platform's own rule for ruby — it is what a screen reader
+ * skips and what a copy of the rendered text produces.
+ *
+ * Exports are unaffected either way: copy and save read the panel's row data, not
+ * the DOM.
+ *
+ * @param {string} selector
+ * @returns {string}
+ */
+export const baseText = (selector) => {
+  const element = document.querySelector(selector);
+  if (!element) return '';
+  const clone = element.cloneNode(true);
+  for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+  return clone.textContent ?? '';
+};
+
+/**
+ * Whether an element's text, minus ruby annotation, equals an expected string.
+ *
+ * A separate function for `page.waitForFunction`, which needs a PREDICATE rather
+ * than a value — and which takes its argument the same way, so this stays
+ * serialisable for the same reason.
+ *
+ * @param {{selector: string, expected: string}} args
+ * @returns {boolean}
+ */
+export const baseTextIs = ({ selector, expected }) => {
+  const element = document.querySelector(selector);
+  if (!element) return false;
+  const clone = element.cloneNode(true);
+  for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+  return (clone.textContent ?? '') === expected;
+};

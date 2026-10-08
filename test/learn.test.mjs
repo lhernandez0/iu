@@ -12,7 +12,17 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { segment, segmentSegments } from '../src/learn/segment.js';
-import { levelColour, DEFAULT_PALETTE } from '../src/learn/wordlist.js';
+const TONE_MARKED = /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ]/;
+
+import {
+  levelColour,
+  DEFAULT_PALETTE,
+  indexDictionary,
+  readingOf,
+  traditionalOf,
+  pinyinToNumbers,
+  PINYIN_SYLLABLES,
+} from '../src/learn/wordlist.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -361,6 +371,172 @@ section('the learning layer does not depend on the browser');
     check(`${file} does not reach for chrome`, /chrome\s*\./.test(code), false);
     check(`${file} imports nothing`, /^\s*import\s/m.test(code), false);
   }
+}
+
+// --- Result ------------------------------------------------------------------
+
+section('a word carries its reading and its other script, through canonical');
+
+{
+  // The reading is one function for both languages, because the data stores them
+  // in the same field: `p` is pinyin in the Chinese bundle and the kana reading in
+  // the Japanese one. Easy to get wrong from the name, so it is asserted rather
+  // than assumed.
+  const zh = indexDictionary(bundle);
+  const ja = indexDictionary(japanese);
+
+  check('Chinese pinyin', readingOf(zh, '北京'), 'běijīng');
+  check('Japanese kana', readingOf(ja, '日本語'), 'にほんご');
+
+  // **The case that needs `canonical`.** The data is keyed by simplified form, so
+  // a traditional surface form is not a key and a direct lookup finds nothing —
+  // which would look like missing data rather than a missing lookup, and would
+  // give every traditional word no reading at all.
+  //
+  // `阿拉伯語` is traditional for `阿拉伯语`, and its reading is only reachable
+  // through `canonical` — a direct lookup misses.
+  check('a traditional form resolves through canonical', readingOf(zh, '阿拉伯語'), 'ālābóyǔ');
+  check('and calling it by its traditional name is impossible', Object.hasOwn(bundle.words, '阿拉伯語'), false);
+
+  // The reading is stored lowercase, so `Běijīng` is wrong in a test — the
+  // capital comes from the dictionary's own casing, not from us.
+  check('the reading keeps the data\'s own casing', readingOf(zh, '北京'), 'běijīng');
+
+  check('the other script', traditionalOf(zh, '阿拉伯语'), '阿拉伯語');
+  // Japanese has no traditional field to fill, so this is null rather than an
+  // empty string — one thing for a caller to check.
+  check('and null when there is none', traditionalOf(ja, '日本語'), null);
+
+  // A word we do not hold gives nothing, rather than throwing or inventing.
+  check('an unknown word has no reading', readingOf(zh, 'zzzz'), null);
+}
+
+section('tone marks convert to numbers, per syllable');
+
+{
+  // The whole-string version of this is tempting and wrong: appending the tone at
+  // the end of `zhōngyú` gives `zhongyu2`, which is a different word to a reader
+  // and ambiguous to anything parsing it back.
+  check('a two-syllable word keeps both tones in place', pinyinToNumbers('zhōngyú'), 'zhong1yu2');
+  check('a neutral syllable takes no number', pinyinToNumbers('māma'), 'ma1ma');
+  check('a toneless reading is unchanged', pinyinToNumbers('de'), 'de');
+  check('an empty reading is empty', pinyinToNumbers(''), '');
+
+  // `ü` is in the data — 绿 is `lǜ` — and a table of the five plain vowels leaves
+  // it alone, which renders the tone as a literal `ǜ` beside a digit-less vowel.
+  check('the ü vowel converts too', pinyinToNumbers('lǜ'), 'lv4');
+  check('and without a tone', pinyinToNumbers('lü'), 'lv');
+
+  // Kana has no tone marks, so the same function must pass it through — which is
+  // why the caller needs no language check.
+  check('kana is left alone', pinyinToNumbers('にほんご'), 'にほんご');
+  check('and romaji too', pinyinToNumbers('nihongo'), 'nihongo');
+}
+
+section('readings are the data the extension already ships');
+
+{
+  // Not a sample: EVERY entry, because the feature is worthless if it works for
+  // the words someone happened to test. A reading is either present in the bundle
+  // or it cannot be shown, and a gap that is one word in a hundred is invisible
+  // until a learner hits it.
+  const zh = indexDictionary(bundle);
+  const ja = indexDictionary(japanese);
+
+  const zhMissing = Object.keys(bundle.words).filter((word) => !readingOf(zh, word));
+  const jaMissing = Object.keys(japanese.words).filter((word) => !readingOf(ja, word));
+
+  check('every Chinese entry has a reading', zhMissing, []);
+  check('and every Japanese one', jaMissing, []);
+
+  // The traditional form is what the script conversion displays, so a gap there
+  // is a word that stays simplified while its neighbours change.
+  const noTraditional = Object.keys(bundle.words).filter((word) => !traditionalOf(zh, word));
+  check('every Chinese entry has a traditional form', noTraditional, []);
+}
+
+section('the syllable table covers every reading the dictionary ships');
+
+{
+  // Three examples prove the algorithm; they do not prove the TABLE. A missing
+  // syllable degrades to a single-character guess, so the output is still a
+  // string with digits in it — wrong, plausible, and invisible in any test that
+  // does not look at all of them.
+  //
+  // The check: marked and numbered readings must have the same LENGTH, because the
+  // conversion replaces one character with one letter and moves the tone into a
+  // digit. A syllable boundary found in the wrong place, or not found at all,
+  // changes the digit count.
+  const zh = indexDictionary(bundle);
+  const words = Object.keys(bundle.words);
+  const mismatched = [];
+  const syllableless = [];
+
+  for (const word of words) {
+    const marked = zh.words[word].p;
+    if (!marked) continue;
+    const numbered = pinyinToNumbers(marked);
+
+    // Every MARKED syllable must end with a digit, except the neutral tone — so
+    // count the tone marks in the source and the digits in the output.
+    const marks = [...marked].filter((c) => TONE_MARKED.test(c)).length;
+    const digits = (numbered.match(/[1-4]/g) ?? []).length;
+    if (marks !== digits) mismatched.push({ word, marked, numbered, marks, digits });
+
+    // **Every run of letters must be fully decomposable into table syllables.**
+    //
+    // Not "no run longer than six": numbered pinyin has no separator between
+    // syllables, so `bushang` is a legitimate seven-letter run of `bu` + `shang`.
+    // That version of this check failed on real data while the code was right,
+    // which is worth recording — a test that fails on correct output sends someone
+    // to fix the wrong thing.
+    //
+    // Consuming a run greedily and requiring nothing to be left over does catch a
+    // MISSING syllable, because the fallback takes one character and moves on.
+    for (const run of numbered.match(/[a-zü]+/gi) ?? []) {
+      let at = 0;
+      while (at < run.length) {
+        const rest = run.slice(at).toLowerCase();
+        const hit = [...rest].some((_, n) => PINYIN_SYLLABLES.has(rest.slice(0, n + 1)))
+          ? [...rest].reduce((best, _c, n) => {
+              const candidate = rest.slice(0, n + 1);
+              return PINYIN_SYLLABLES.has(candidate) ? n + 1 : best;
+            }, 0)
+          : 0;
+        if (!hit) {
+          syllableless.push({ word, marked, numbered, run, at });
+          break;
+        }
+        at += hit;
+      }
+    }
+  }
+
+  check('every tone mark becomes exactly one digit', mismatched.slice(0, 5), []);
+  check('and no un-splittable run of letters is left', syllableless.slice(0, 5), []);
+  // Stated as a count too, because an empty array from a loop that never ran is
+  // the failure a slice-to-five would hide.
+  check('across all 11,470 entries', words.length, 11470);
+}
+
+section('the conversion is reversible, which is why numbered pinyin exists');
+
+{
+  // Numbered pinyin is a form you can TYPE. The point of converting is to make a
+  // reading searchable and unambiguous, so a conversion that loses information is
+  // not doing the job — the tone has to be attached to the syllable it belongs to,
+  // and only that makes reading it back possible.
+  check('a reader can tell which syllable owns the tone', pinyinToNumbers('zhōngyú'), 'zhong1yu2');
+  check('and not by guessing', pinyinToNumbers('zhōngyú') !== 'zhongyu1', true);
+  // The trap: `zhongyu` has no space, so the boundary is invisible without the
+  // table. Both simpler implementations put the digit somewhere wrong.
+
+  // Casing is carried through from the source rather than normalised: the
+  // dictionary capitalises a proper noun (`Běijīng`) and not an ordinary word, and
+  // re-casing would be this function deciding something it was not asked to.
+  check('a capitalised proper noun keeps its capital', pinyinToNumbers('Běijīng'), 'Bei3jing1');
+  check('and an ordinary word stays lowercase', pinyinToNumbers('shénme'), 'shen2me');
+  check('an apostrophe is kept as written', pinyinToNumbers("Xī'ān"), "Xi1'an1");
 }
 
 // --- Result ------------------------------------------------------------------

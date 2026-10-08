@@ -14,7 +14,7 @@
  *   npm run test:browser
  */
 
-import { routeYouTube, openWatchPage, openPanel, waitForRows, panelState, pagePosition } from './harness.mjs';
+import { routeYouTube, openWatchPage, openPanel, waitForRows, panelState, pagePosition, baseText, baseTextIs } from './harness.mjs';
 import { runBrowserSuite } from './runner.mjs';
 import { ENGLISH, GERMAN, OTHER_ENGLISH, listCaptures, captureFor } from './fixtures.mjs';
 import { loadSynthetic } from '../synthetic/load.mjs';
@@ -347,7 +347,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     // The line must still read correctly with spans in it, which is the thing
     // that silently breaks when token indices are wrong.
-    const lineText = await page.evaluate(() => document.querySelector('.row .primary')?.textContent ?? '');
+    const lineText = await page.evaluate(baseText, '.row .primary');
     check('the line still reads as its original text', lineText, '我们在岸上等你');
 
     section('hovering a marked word shows its definition');
@@ -476,11 +476,19 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     await page.waitForFunction(() => document.querySelector('.row.paused') !== null, null, { timeout: 20000 });
 
     const gap = await page.evaluate(() => {
+      // The reading is annotation, not line text — see `baseText` in the harness.
+      const inline = (node) => {
+        if (!node) return '';
+        const clone = node.cloneNode(true);
+        for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+        return clone.textContent ?? '';
+      };
+
       const active = document.querySelector('.row.active');
       const transcript = document.getElementById('transcript');
       const style = active ? getComputedStyle(active) : null;
       return {
-        activeText: active?.querySelector('.primary')?.textContent ?? '',
+        activeText: active ? inline(active.querySelector('.primary')) : '',
         isPaused: active?.classList.contains('paused') ?? false,
         // The real question: is it visually distinguishable from the page?
         background: style?.backgroundColor ?? '',
@@ -536,7 +544,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // the rebuild beat the read.
     await waitForRows(page, 2, { text: 'こんにちは' });
 
-    const untranslated = await page.textContent('.row .primary');
+    const untranslated = await page.evaluate(baseText, '.row .primary');
     check('the original text is shown first', untranslated, 'こんにちは');
     check('with no machine tag', await page.evaluate(() => document.querySelectorAll('.machine').length), 0);
 
@@ -566,12 +574,18 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // The text has to actually change, so waiting on the value alone would pass
     // before the refetch landed.
     await page.waitForFunction(
-      () => (document.querySelector('.row .primary')?.textContent ?? '').includes('[en]'),
+      () => {
+        const node = document.querySelector('.row .primary');
+        if (!node) return false;
+        const clone = node.cloneNode(true);
+        for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+        return (clone.textContent ?? '').includes('[en]');
+      },
       null,
       { timeout: 20000 },
     );
 
-    const translated = await page.textContent('.row .primary');
+    const translated = await page.evaluate(baseText, '.row .primary');
     // The MT tag is part of the line's text because it is inside the same span.
     check('the translated text is on the first line', translated, '[en] こんにちはMT');
     // Tagged as machine output, so a translated line is not mistaken for a real
@@ -601,12 +615,11 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
       box.checked = false;
       box.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    await page.waitForFunction(
-      () => (document.querySelector('.row .primary')?.textContent ?? '') === 'こんにちは',
-      null,
-      { timeout: 20000 },
-    );
-    check('and the original comes back', await page.textContent('.row .primary'), 'こんにちは');
+    // The reading is excluded, as above: it is annotation, not line text.
+    await page.waitForFunction(baseTextIs, { selector: '.row .primary', expected: 'こんにちは' }, {
+      timeout: 20000,
+    });
+    check('and the original comes back', await page.evaluate(baseText, '.row .primary'), 'こんにちは');
   }
 
   section('the focus view really hides the other lines, and text size really scales');
@@ -633,12 +646,22 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     /** How many rows a real layout is showing, plus the body font size. */
     const layout = () => page.evaluate(() => {
+      // The reading is annotation, not line text — see `baseText` in the harness.
+      const inline = (node) => {
+        if (!node) return '';
+        const clone = node.cloneNode(true);
+        for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+        return clone.textContent ?? '';
+      };
+
       const rows = [...document.querySelectorAll('.row')];
       const visible = rows.filter((row) => row.getBoundingClientRect().height > 0);
       return {
         total: rows.length,
         visible: visible.length,
-        visibleTexts: visible.map((row) => row.querySelector('.primary')?.textContent ?? ''),
+        visibleTexts: visible.map((row) =>
+          inline(row.querySelector('.primary')),
+        ),
         bodyFont: parseFloat(getComputedStyle(document.body).fontSize),
         rowLineHeight: parseFloat(getComputedStyle(rows[0]).lineHeight),
         transcriptHasFocus: document.getElementById('transcript').classList.contains('focus'),
@@ -808,8 +831,14 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // This was intermittently failing for exactly that reason, and a stray
     // logging line was shifting the timing enough to hide it.
     await page.waitForFunction(
-      (expected) =>
-        [...document.querySelectorAll('.row .primary')].some((node) => node.textContent === expected),
+      (expected) => {
+        const base = (node) => {
+          const clone = node.cloneNode(true);
+          for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+          return clone.textContent ?? '';
+        };
+        return [...document.querySelectorAll('.row .primary')].some((node) => base(node) === expected);
+      },
       firstLine,
       { timeout: 20000 },
     );
@@ -933,8 +962,16 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const syntheticFirst = primary.segments[0].text;
     await page.waitForFunction(
       (expected) => {
+        // The reading is drawn as <ruby>/<rt> INSIDE .primary, so a raw
+        // textContent comparison sees the annotation interleaved. Strip it and
+        // compare the base text, which is what the cue actually says.
+        const base = (node) => {
+          const clone = node.cloneNode(true);
+          for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+          return clone.textContent ?? '';
+        };
         const primary = [...document.querySelectorAll('.row .primary')];
-        return primary.length >= 100 && primary.some((node) => node.textContent === expected);
+        return primary.length >= 100 && primary.some((node) => base(node) === expected);
       },
       syntheticFirst,
       { timeout: 20000 },

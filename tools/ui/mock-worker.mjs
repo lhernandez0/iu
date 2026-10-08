@@ -24,7 +24,7 @@
 import { MSG, TARGET } from '../../src/common/messages.js';
 import { alignSecondary } from '../../src/common/transcript.js';
 import { normalise } from '../../src/common/settings.js';
-import { loadDictionary, loadIndex, dictionaryPathFor, lookup, levelOf, INDEX_PATH } from '../../src/learn/wordlist.js';
+import { loadDictionary, loadIndex, dictionaryPathFor, lookup, levelOf, readingOf, traditionalOf, INDEX_PATH } from '../../src/learn/wordlist.js';
 import { segmentSegments } from '../../src/learn/segment.js';
 
 /**
@@ -41,16 +41,23 @@ import { segmentSegments } from '../../src/learn/segment.js';
  * @param {object} dictionary
  * @param {object} list
  * @param {number} threshold
+ * @param {boolean} withReading
  * @returns {object[]}
  */
-function markLine(text, dictionary, list, threshold) {
+function markLine(text, dictionary, list, threshold, withReading) {
   const [tokens] = segmentSegments([{ start: 0, text }], dictionary.headwords, dictionary.maxWordLength);
   return tokens.map((token) => {
     const defined = token.known && Boolean(lookup(dictionary, token.text));
-    if (!defined || !list) return { text: token.text, defined, level: null };
+    // Mirrors the worker: the reading is attached only when a placement asks for
+    // it, and only to a word we can define. A preview that always attached one
+    // would show the feature working on a setting that turns it off.
+    const extra = defined && withReading
+      ? { reading: readingOf(dictionary, token.text), traditional: traditionalOf(dictionary, token.text) }
+      : {};
+    if (!defined || !list) return { text: token.text, defined, level: null, ...extra };
     const level = levelOf(dictionary, list.id, token.text);
-    if (level === null || level < threshold) return { text: token.text, defined, level: null };
-    return { text: token.text, defined, level };
+    if (level === null || level < threshold) return { text: token.text, defined, level: null, ...extra };
+    return { text: token.text, defined, level, ...extra };
   });
 }
 
@@ -249,7 +256,10 @@ export function createMockWorker(scenario) {
   };
 
   /** Mark every token, with the real dictionary and segmenter. */
-  const markTokens = (text) => (dictionary && list ? markLine(text, dictionary, list, threshold()) : undefined);
+  const markTokens = (text) =>
+    dictionary && list
+      ? markLine(text, dictionary, list, threshold(), settings.romaji !== 'off')
+      : undefined;
 
   const buildRows = () => {
     const study = segmentsFor(settings.studyLanguage, effectiveTranslation('study')) ?? [];
@@ -304,6 +314,12 @@ export function createMockWorker(scenario) {
         // show the other treatment, and a missing value would look identical to a
         // deliberate one. The mock reports what the worker reports.
         markStyle: settings.markStyle,
+        // The reading placement and tone style, reported the way the worker
+        // reports them — the panel reads all three from `learning`, and a preview
+        // that omitted them would render no readings whatever was selected.
+        romaji: settings.romaji,
+        toneStyle: settings.toneStyle,
+        scriptConversion: settings.scriptConversion,
         listId: list?.id ?? null,
         threshold: threshold(),
         studyLanguage: settings.studyLanguage,

@@ -191,7 +191,16 @@ try {
       const rows = [...document.querySelectorAll('.row')];
       return {
         rows: rows.length,
-        first: rows[0]?.querySelector('.primary')?.textContent ?? '',
+        // The reading is <ruby>/<rt> INSIDE the line element, so raw
+        // `textContent` interleaves it (`wǒmen我们…`). Strip it: every
+        // assertion below is about what the line SAYS, not how it is annotated.
+        first: (() => {
+          const primary = rows[0]?.querySelector('.primary');
+          if (!primary) return '';
+          const clone = primary.cloneNode(true);
+          for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
+          return clone.textContent ?? '';
+        })(),
         gloss: rows[0]?.querySelector('.secondary')?.textContent ?? '',
         marks: document.querySelectorAll('.mark').length,
         targetHidden: document.getElementById('translate-target-row')?.hidden ?? null,

@@ -16,7 +16,7 @@
  *     clickable and does nothing.
  */
 
-import { levelColour } from '../learn/wordlist.js';
+import { levelColour, pinyinToNumbers } from '../learn/wordlist.js';
 
 /**
  * @typedef {Object} Token
@@ -71,6 +71,137 @@ export function renderTokens(tokens, levelCount, palette) {
   }
 
   return fragment;
+}
+
+/**
+ * Render tokens with their readings, according to the placement in force.
+ *
+ * Returns the same thing `renderTokens` does, so a caller can use either without
+ * knowing which it got. When no reading is being shown — the default — this IS
+ * `renderTokens`, and the extra work is one comparison per token.
+ *
+ * The placement is read from the LAST state the panel received rather than passed
+ * in, because it arrives on every state push and threading it through three call
+ * sites would be three places to forget it. That is the same arrangement
+ * `renderTokens` already uses for `levelCount` and `palette`.
+ *
+ * @param {Array<{text: string, defined?: boolean, level: number|null, reading?: string|null}>} tokens
+ * @param {number} levelCount
+ * @param {string[]} [palette]
+ * @returns {DocumentFragment}
+ */
+export function renderReading(tokens, levelCount, palette) {
+  const placement = readingPlacement();
+  if (placement === 'off' || placement === 'marked') {
+    // `marked` shares this path because the placement decides per TOKEN, below.
+    if (placement === 'off') return renderTokens(tokens, levelCount, palette);
+  }
+
+  if (placement === 'below') {
+    // The text, then one line of readings under it. Cheaper to draw than ruby and
+    // it reads as a conversion rather than as annotation.
+    const fragment = renderTokens(tokens, levelCount, palette);
+    const line = document.createElement('span');
+    line.className = 'reading-line';
+
+    // Separators are explicit text nodes rather than the strings `append` accepts,
+    // because a raw string is not a node: `textContent` on the parent cannot read
+    // it, so the spaces were invisible to the test while being present on screen.
+    // Writing them out is also what keeps the readings from running together,
+    // which matters here in a way it does not in ruby — ruby has one reading per
+    // word and this is a single run.
+    let first = true;
+    for (const token of tokens) {
+      if (!token.reading) continue;
+      if (!first) line.append(document.createTextNode(' '));
+      first = false;
+      const span = document.createElement('span');
+      span.textContent = formatReading(token.reading);
+      line.append(span);
+    }
+    fragment.append(line);
+    return fragment;
+  }
+
+  // `above` and `marked`: the reading sits over its own word, and `marked` skips
+  // the words the list does not place beyond the threshold — which are exactly the
+  // words with no mark, so the annotation lands where attention already is.
+  //
+  // **`<ruby>` and `<rt>`, not spans.** That is the element pair that MEANS
+  // "annotation over base text", so assistive technology reads the base and skips
+  // or separates the annotation. A generic span instead puts `wǒmen` inside the
+  // line's text content, and then anything reading `.textContent` — a screen
+  // reader, a copy, a test asserting the line still says what it said — sees the
+  // pinyin interleaved with the characters. The browser suite caught exactly that.
+  const fragment = document.createDocumentFragment();
+  for (const token of tokens) {
+    const wanted =
+      token.reading &&
+      (placement === 'above' || (token.level !== null && token.level !== undefined));
+
+    if (!wanted) {
+      fragment.append(renderTokens([token], levelCount, palette));
+      continue;
+    }
+
+    const ruby = document.createElement('ruby');
+    ruby.className = 'ruby';
+    const rt = document.createElement('rt');
+    rt.className = 'rt';
+    rt.textContent = formatReading(token.reading);
+    ruby.append(rt);
+    ruby.append(renderTokens([token], levelCount, palette));
+    fragment.append(ruby);
+  }
+  return fragment;
+}
+
+/**
+ * The reading settings in force, pushed in by the panel on every state.
+ *
+ * An explicit setter rather than the module reading the panel's own `view`,
+ * which would be a circular import — and rather than a global, which would be a
+ * second place for the truth to live.
+ *
+ * Two fields because they are independent: WHERE a reading goes and HOW it is
+ * written. Defaults match the settings' own defaults, so a render arriving before
+ * the first state push behaves the same as one arriving after.
+ *
+ * @type {{romaji: string, toneStyle: string}}
+ */
+let readingSettings = { romaji: 'off', toneStyle: 'marks' };
+
+/**
+ * @param {{romaji?: string, toneStyle?: string}|undefined} settings
+ */
+export function setReadingSettings(settings) {
+  readingSettings = {
+    romaji: settings?.romaji ?? 'off',
+    toneStyle: settings?.toneStyle ?? 'marks',
+  };
+}
+
+/**
+ * The reading placement in force.
+ *
+ * @returns {string}
+ */
+function readingPlacement() {
+  return readingSettings.romaji;
+}
+
+/**
+ * A reading as it should be written.
+ *
+ * Tone numbers are a Chinese convention with no Japanese equivalent, and the
+ * conversion leaves kana alone either way — so this needs no language check.
+ *
+ * @param {string} reading
+ * @returns {string}
+ */
+function formatReading(reading) {
+  if (!reading) return '';
+  return readingSettings.toneStyle === 'numbers' ? pinyinToNumbers(reading) : reading;
 }
 
 /** Where the hover panel sits, created once. */
