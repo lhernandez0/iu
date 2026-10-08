@@ -12,8 +12,8 @@
  * that does not exist, or at a file that is not the size it claims.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -176,6 +176,200 @@ section('shipped documents do not point at things a reader cannot have');
     }
   }
   check('and every relative link in them resolves', broken, []);
+}
+
+section('shipped source can only reach youtube.com, and only over fetch');
+
+{
+  // The README tells users the extension collects nothing and talks to one host.
+  // That is a claim about the code, so it has to be a check on the code.
+  //
+  // This is not hypothetical: an extension's privacy story never breaks in one
+  // commit. It breaks when a helpful error reporter, a remote word list, or a
+  // "check for updates" ping is added to one file at 1am and nothing objects.
+  // By the time it is noticed the store listing, the policy and the README have
+  // all been wrong for a release. ADR 0008 is the decision; this is enforcement.
+  //
+  // Deliberately narrow. It does not try to prove there is no way to make a
+  // request — it checks the three things that actually change the answer:
+  // which transport is used, which host appears, and how many call sites exist.
+
+  const OUTBOUND = 'fetch(';
+
+  /** Every `.js` under a directory, recursively. */
+  function walk(dir) {
+    const out = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) out.push(...walk(full));
+      else if (entry.name.endsWith('.js')) out.push(full);
+    }
+    return out;
+  }
+
+  const sources = walk(join(ROOT, 'src'));
+
+  /** Lines that are code, not prose about code. A comment naming `fetch` is not
+   *  a call, and counting one would make the inventory below drift for no reason
+   *  — but blanking comments properly means parsing strings, and every URL here
+   *  contains `//`, so a naive stripper would truncate the line it is on. */
+  function codeLines(text) {
+    return text
+      .split('\n')
+      .filter((line) => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith('//') && !trimmed.startsWith('*') && !trimmed.startsWith('/*');
+      });
+  }
+
+  // 1. No transport other than `fetch`. Each of these can carry data off the
+  //    machine, and none is used today, so any appearance is a new decision
+  //    rather than an accident.
+  const FORBIDDEN = /\bXMLHttpRequest\b|\bWebSocket\b|\bEventSource\b|\bsendBeacon\b|\bimportScripts\b|navigator\.send/;
+  const transports = [];
+  for (const file of sources) {
+    for (const line of codeLines(readFileSync(file, 'utf8'))) {
+      if (FORBIDDEN.test(line)) transports.push(`${relative(ROOT, file)}: ${line.trim()}`);
+    }
+  }
+  check('no transport but fetch appears in src/', transports, []);
+
+  // 2. Every absolute URL named in src/ resolves to youtube.com. A URL whose
+  //    host is computed cannot be checked, so it fails rather than passing
+  //    unexamined — that is the whole point of listing hosts.
+  const hosts = new Set();
+  const computed = [];
+  for (const file of sources) {
+    readFileSync(file, 'utf8')
+      .split('\n')
+      .forEach((line, index) => {
+        for (const match of line.matchAll(/https?:\/\/([A-Za-z0-9_.-]*)/g)) {
+          const host = match[1];
+          // An empty host means the next character was `$` or `{` — a host built
+          // from a variable at runtime, which this check cannot vouch for.
+          if (host) hosts.add(host);
+          else computed.push(`${relative(ROOT, file)}:${index + 1}`);
+        }
+      });
+  }
+  check('every absolute URL host in src/ is youtube.com', [...hosts].sort(), ['www.youtube.com']);
+  check('and no host is built at runtime', computed, []);
+
+  // 3. The call sites are a short, named list. Adding one changes a number here,
+  //    which fails this test and lands the author in this file, reading why.
+  //    A count is a blunt instrument and is chosen for that: it cannot be
+  //    accidentally satisfied, and it is honest about being a list rather than
+  //    pretending to be dataflow analysis.
+  //
+  //      wordlist.js        2 — bundled dictionary JSON, read through
+  //                            `runtime.getURL`. Local files, not the network.
+  //      youtube-content.js 1 — `fetchBounded()`, the caption track.
+  const expected = {
+    'content/youtube-content.js': 1,
+    'learn/wordlist.js': 2,
+  };
+  const found = {};
+  for (const file of sources) {
+    const count = codeLines(readFileSync(file, 'utf8')).filter((line) =>
+      line.includes(OUTBOUND),
+    ).length;
+    if (count) found[relative(join(ROOT, 'src'), file)] = count;
+  }
+  // Rebuilt in sorted key order: `check` compares serialised values, and object
+  // key order follows readdir order, which is not guaranteed to be stable.
+  const ordered = Object.fromEntries(Object.entries(found).sort(([a], [b]) => (a < b ? -1 : 1)));
+  check('the fetch call sites are the ones we know about', ordered, expected);
+
+  // 4. Settings do not leave the machine. `storage.sync` would put them in a
+  //    Google account — the user's own, but still not "your browser".
+  const sync = [];
+  for (const file of sources) {
+    if (/\bstorage\.sync\b/.test(readFileSync(file, 'utf8'))) sync.push(relative(ROOT, file));
+  }
+  check('nothing uses storage.sync', sync, []);
+}
+
+section('the permission list is exactly what the privacy claim describes');
+
+{
+  // The check above scans `src/` for requests. It says nothing about what the
+  // extension is ALLOWED to do, which lives in the manifest — and the privacy
+  // section makes claims about both. So the permission list needs its own check,
+  // because without one it can grow silently: expanding `host_permissions` to
+  // `https://*.example.com/*` and `file:///*` left this suite at 33/33.
+  //
+  // `file:///*` is the one that matters. It is how an extension reads files off
+  // someone's disk without them picking a file, and it would make the privacy
+  // section false while every scan of `src/` still passed.
+  //
+  // **Adding a provider means editing this list on purpose.** That is the
+  // feature, not friction: "we read one host" is a promise, and a promise you
+  // can widen by accident is not one. If you are here to add a second site, the
+  // edit is one line plus a note in README.md's privacy section — and the test
+  // failing is what tells you to write it down.
+  check('host_permissions is exactly the YouTube pattern', manifest.host_permissions, [
+    'https://*.youtube.com/*',
+  ]);
+
+  // The README also says no page can reach into the extension, which is a
+  // statement about `web_accessible_resources` — the only thing that changes it.
+  // There is no need for one: the panel and any future reader are opened by the
+  // extension, and `tabs.create(runtime.getURL(...))` does not require it.
+  check('nothing is web_accessible', Boolean(manifest.web_accessible_resources), false);
+
+  // Each of these widens what the extension can do on its own initiative, and
+  // none is used. `tabs` would expose `url`/`title` on every tab; without it the
+  // worker sees a tab's URL only because it already holds host permission for
+  // that host, which is the narrower arrangement.
+  const WIDENING = ['activeTab', 'tabs', 'unlimitedStorage'];
+  const requested = WIDENING.filter((name) => (manifest.permissions ?? []).includes(name));
+  check('no permission is requested that widens reach', requested, []);
+
+  // The whole list, pinned. This is the guard that would have caught the
+  // `contextMenus` mistake: the design claimed the action menu cost no
+  // permission, the claim was wrong, and nothing here was asserting the list —
+  // so the only symptom was a menu item that was silently absent.
+  //
+  // A new permission now has to be added HERE, deliberately, which is the point.
+  // `contextMenus` is included because the toolbar icon's menu is how a source is
+  // opened; it adds no host access and no tab visibility.
+  check('the permission list is exactly what we have justified', manifest.permissions, [
+    'storage',
+    'sidePanel',
+    'scripting',
+    'webNavigation',
+    'contextMenus',
+  ]);
+}
+
+section('every provider script is declared in the manifest, or it is never injected');
+
+{
+  // `src/common/providers.js` is the list of sites we can read. The manifest is
+  // the list of sites we are allowed to read, and nothing compares them.
+  //
+  // There is a fourth copy of that knowledge, which is the risk: a provider's
+  // scripts are ALSO named here, in `content_scripts[].js`. So adding a site
+  // means editing two files, and forgetting the second gives a provider that
+  // resolves, injects nothing on a fresh load, and reports "no captions" — the
+  // same silent failure shape ADR 0003 was written to remove.
+  //
+  // Read from the source text rather than imported: `providers.js` is an ES
+  // module with a regex in it, and the question is only which paths it names.
+  const source = readFileSync(join(ROOT, 'src', 'common', 'providers.js'), 'utf8');
+  const declared = source
+    .split('\n')
+    .flatMap((line) => [...line.matchAll(/'(src\/content\/[^']+)'/g)].map((match) => match[1]));
+  const injected = (manifest.content_scripts ?? []).flatMap((entry) => entry.js ?? []);
+  const missing = declared.filter((file) => !injected.includes(file));
+  check('every provider script appears in content_scripts', missing, []);
+
+  // The reverse direction, and the one that catches a real mistake: a script
+  // injected into a site that no provider claims. It would run on every matching
+  // page and report nothing, which is a provider's job done by nobody.
+  const claimed = new Set(declared);
+  const orphaned = injected.filter((file) => !claimed.has(file));
+  check('and no script is injected for a site no provider claims', orphaned, []);
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

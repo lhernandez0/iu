@@ -29,6 +29,9 @@ const here = dirname(fileURLToPath(import.meta.url));
  * @param {any} [options.trackPayload]     What it returns for FETCH_TRACK.
  * @param {object} [options.storage]       Pre-existing chrome.storage.local contents.
  * @param {number} [options.storageDelay]  Milliseconds the storage read takes.
+ * @param {object[]} [options.contexts]    The extension's own open contexts — a
+ *   reader page in a tab, the offscreen document. Empty by default, because a
+ *   fresh worker has none.
  * @returns {{listeners: object, calls: object, storage: object}}
  */
 export function installChromeStub(options = {}) {
@@ -40,6 +43,7 @@ export function installChromeStub(options = {}) {
     trackPayload = null,
     storage = {},
     storageDelay = 0,
+    contexts = [],
   } = options;
 
   /** Registrations, so a test can fire the events the browser would. */
@@ -50,10 +54,19 @@ export function installChromeStub(options = {}) {
     tabRemoved: [],
     actionClicked: [],
     navigationCommitted: [],
+    installed: [],
+    menuClicked: [],
   };
 
   /** Everything the worker asked the browser to do. */
-  const calls = { executeScript: [], sendMessage: [], sidePanelOpen: [], offscreen: [] };
+  const calls = {
+    executeScript: [],
+    sendMessage: [],
+    sidePanelOpen: [],
+    offscreen: [],
+    menusCreated: [],
+    menusRemoved: 0,
+  };
 
   const addListener = (bucket) => (fn) => listeners[bucket].push(fn);
 
@@ -83,15 +96,44 @@ export function installChromeStub(options = {}) {
     runtime: {
       onMessage: { addListener: addListener('message') },
       onConnect: { addListener: addListener('connect') },
-      onInstalled: { addListener: () => {} },
+      onInstalled: { addListener: addListener('installed') },
       getURL: (path) => `chrome-extension://test/${path}`,
-      getContexts: async () => [],
+      // The extension's own open contexts — the reader page in a tab, and the
+      // offscreen document.
+      //
+      // Configurable because it is load-bearing twice over: it is how the worker
+      // identifies a reader tab at all (our pages report no `url`, so there is no
+      // other way), and it is how the offscreen document is found. A stub that
+      // always returned `[]` would leave the reader path untested and pass.
+      getContexts: async (filter) => {
+        const all = options.contexts ?? [];
+        if (!filter?.contextTypes) return all;
+        return all.filter((context) => filter.contextTypes.includes(context.contextType));
+      },
+      // The worker reads this after `contextMenus.create` to suppress the
+      // "unchecked runtime.lastError" warning on a duplicate id. Always clear
+      // here, because there is no real menu for an id to collide with.
+      lastError: undefined,
       // The worker broadcasts to the offscreen document over this; nothing
       // is listening in a test, so a resolved promise is the honest answer.
       sendMessage: async (message) => {
         calls.sendMessage.push(message);
         return { ok: true };
       },
+    },
+    // The toolbar icon's menu, which is how a source is opened. Present so the
+    // registration path actually runs rather than being skipped by the worker's
+    // feature detection — a stub that omits this would let a broken menu pass.
+    contextMenus: {
+      create: (properties, callback) => {
+        calls.menusCreated.push(properties);
+        callback?.();
+      },
+      removeAll: (callback) => {
+        calls.menusRemoved++;
+        callback?.();
+      },
+      onClicked: { addListener: addListener('menuClicked') },
     },
     tabs: {
       onActivated: { addListener: addListener('tabActivated') },

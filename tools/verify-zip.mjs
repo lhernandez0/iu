@@ -110,6 +110,51 @@ check('and the archive has exactly one of it', manifestEntry >= 0 && names.filte
 const version = JSON.parse(readFileSync('manifest.json', 'utf8')).version;
 check('the filename carries the manifest version', zipFile.includes(version), true);
 
+// --- The archive's own structure -----------------------------------------------
+//
+// Every check above reads the zip's CENTRAL DIRECTORY, which is a list of names
+// and sizes. That list can be perfectly well-formed while the archive is not
+// readable at all — and it was.
+//
+// `tools/pack.mjs` was writing central records with no local-header offset (byte
+// 42), so every entry claimed to start at position 0. The central directory read
+// as a normal 38-file archive, this script passed 7/7, and `unzip` refused the
+// file outright with "invalid zip file with overlapped components (possible zip
+// bomb)". Both stores would have rejected it. The one thing that would have caught
+// it is asking a real ZIP reader to read it.
+//
+// So the last check shells out. `unzip` is not required to BUILD the package —
+// that is why pack.mjs exists — but a workspace that cannot test the artifact it
+// produces is not verifying anything, and this is the only test that reads the
+// bytes the way a store will.
+{
+  // The SIGNAL IS THE EXIT CODE, not the text. Grepping the output for "error"
+  // looks equivalent and is not: a healthy archive makes `unzip -t` print "No
+  // errors detected in compressed data of …", so a text match fails the check for
+  // passing. The first version of this did exactly that.
+  let broken = null;
+  try {
+    execFileSync('unzip', ['-t', zipFile], { encoding: 'utf8', stdio: 'pipe' });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      // `unzip` is not installed. That is why `pack.mjs` exists, so this is a skip
+      // rather than a failure — and it says so, because a silent pass would be
+      // worse than no check at all.
+      console.log('  skip  a real zip reader can read every entry (no `unzip` on PATH)');
+      broken = undefined;
+    } else {
+      // Non-zero exit: the archive is unreadable. Keep the last lines, which name
+      // the reason instead of leaving a bare "it failed".
+      broken = `${String(error.stdout ?? '')}${String(error.stderr ?? '')}`.trim().split('\n').slice(-3).join(' | ');
+    }
+  }
+
+  if (broken !== undefined) {
+    check('a real zip reader can read every entry', broken, null);
+    if (broken) console.log(`          ${broken}`);
+  }
+}
+
 // --- Size, as a sanity bound ---------------------------------------------------
 //
 // Not a budget: a bound that catches a whole directory arriving without being

@@ -191,3 +191,28 @@ keys, with our own sentences. It contains no third-party text.
 `test/fixtures/` holds the real captures. It is **gitignored and never committed**:
 a capture contains a signed caption URL and the real video's own title, neither of
 which belongs in a repository.
+
+`test/fixtures/*.mkv` is generated locally by `npm run fixtures` from an `ffmpeg`
+test pattern — no third-party media at all, and nothing to attribute.
+
+## Conformance suite — CC BY, and this attribution is required
+
+`test/conformance/` holds the [IETF CELLAR working group's Matroska test
+files](https://github.com/ietf-wg-cellar/matroska-test-files), a development
+dependency downloaded by `npm run conformance:fetch`. **Not committed, not
+packaged, and not part of the extension** — nothing in `src/` reads them.
+
+They contain real film samples, both **CC BY**, which obliges attribution:
+
+| Source | Licence | Required attribution |
+| --- | --- | --- |
+| Big Buck Bunny (test1, test4, test6) | CC BY 3.0 | `(c) copyright 2008, Blender Foundation / www.bigbuckbunny.org` |
+| Elephants Dream (test2, test3, test5, test7, test8) | CC BY 2.5 | `(c) copyright 2006, Blender Foundation / Netherlands Media Art Institute / www.elephantsdream.org` |
+
+The suite itself is authored by the mkvmerge and libmatroska maintainers and
+exists to check a parser against files written by the people who define the
+format. It found two real parser bugs on its first run — a missing `TimecodeScale`
+read, and an absent `Language` element being treated as unknown rather than as the
+specification's English default. Both are the kind of mistake a single fixture
+generator cannot see.
+

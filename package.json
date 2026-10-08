@@ -7,13 +7,16 @@
   "license": "MIT",
   "scripts": {
     "capture": "node tools/capture.mjs",
+    "conformance:fetch": "node tools/fetch-conformance.mjs",
     "derive-synthetic": "node tools/derive-synthetic.mjs",
+    "fixtures": "node tools/make-fixtures.mjs",
     "icons": "node tools/make-icons.mjs",
     "ui": "vite --config tools/ui/vite.config.mjs",
     "package": "make release",
     "test": "node test/run.mjs",
     "test:all": "npm test && npm run test:browser",
     "test:browser": "node test/browser/run-browser.mjs",
+    "test:conformance": "node test/conformance/run.mjs",
     "test:panel": "node test/sidepanel.test.mjs",
     "test:sw": "node test/service-worker.test.mjs",
     "test:unit": "node test/unit.test.mjs"

@@ -39,7 +39,24 @@ function walk(dir) {
 }
 
 /**
- * One ZIP entry: local header + deflated data.
+ * DOS-format date and time for the archive entries.
+ *
+ * A fixed value, so two builds of the same source are byte-identical — that is
+ * deliberate and worth keeping.
+ *
+ * **The value matters, and the original was wrong.** DOS packs the date as
+ * `year-1980` in the top 7 bits, month in the next 4, day in the low 5 — so
+ * `0x2100` decodes to 1996, month 8, **day 0**, which is not a date at all.
+ * `unzip -l` printed `1996-08-00` and every entry carried it.
+ *
+ * `0x5021` is 2020-01-01: `(40 << 9) | (1 << 5) | 1`. The time is midnight.
+ */
+const FIXED_TIME = 0x0000;
+const FIXED_DATE = 0x5021;
+
+/**
+ * One ZIP entry: local header + payload, and the matching central directory
+ * record.
  *
  * A stored (uncompressed) entry is used for anything that does not shrink, because
  * deflate can make small or already-compressed files larger and there is no reason
@@ -47,9 +64,10 @@ function walk(dir) {
  *
  * @param {string} name Path inside the archive, forward slashes.
  * @param {Buffer} data
+ * @param {number} offset Byte offset of this entry's local header from the file start.
  * @returns {{local: Buffer, central: Buffer, size: number}}
  */
-function entry(name, data) {
+function entry(name, data, offset) {
   const nameBytes = Buffer.from(name, 'utf8');
   const crc = crc32(data) >>> 0;
 
@@ -63,8 +81,8 @@ function entry(name, data) {
   local.writeUInt16LE(20, 4); // version needed
   local.writeUInt16LE(0, 6); // flags
   local.writeUInt16LE(method, 8);
-  local.writeUInt16LE(0, 10); // mod time
-  local.writeUInt16LE(0x2100, 12); // mod date — a fixed date, so builds are reproducible
+  local.writeUInt16LE(FIXED_TIME, 10); // mod time
+  local.writeUInt16LE(FIXED_DATE, 12); // mod date
   local.writeUInt32LE(crc, 14);
   local.writeUInt32LE(payload.length, 18);
   local.writeUInt32LE(data.length, 22);
@@ -77,8 +95,8 @@ function entry(name, data) {
   central.writeUInt16LE(20, 6); // version needed
   central.writeUInt16LE(0, 8);
   central.writeUInt16LE(method, 10);
-  central.writeUInt16LE(0, 12);
-  central.writeUInt16LE(0x2100, 14);
+  central.writeUInt16LE(FIXED_TIME, 12);
+  central.writeUInt16LE(FIXED_DATE, 14);
   central.writeUInt32LE(crc, 16);
   central.writeUInt32LE(payload.length, 20);
   central.writeUInt32LE(data.length, 24);
@@ -90,8 +108,15 @@ function entry(name, data) {
   // `>>> 0` because JS bitwise operators are 32-bit SIGNED, so `0o100644 << 16`
   // overflows to a negative number and `writeUInt32LE` rejects it. The value is
   // the regular-file mode in the high bits, which is what unzip and both stores
-  // read to decide a entry is a file rather than a directory.
+  // read to decide an entry is a file rather than a directory.
   central.writeUInt32LE((0o100644 << 16) >>> 0, 38);
+  // **The field that was missing.** Byte 42 is the offset of this entry's LOCAL
+  // header from the start of the file. Omitted, every record claimed offset 0 —
+  // so the archive described every file as starting at the same place. `unzip`
+  // rejected the result outright ("overlapped components (possible zip bomb)")
+  // and refused to extract anything, while a naive reader that walks the central
+  // directory by name saw a perfectly ordinary list of 38 entries.
+  central.writeUInt32LE(offset, 42);
 
   return {
     local: Buffer.concat([local, nameBytes, payload]),
@@ -109,16 +134,22 @@ if (!files.length) {
 const locals = [];
 const centrals = [];
 let uncompressed = 0;
+/** Running offset, which is what each central record has to point back at. */
+let offset = 0;
 
 for (const file of files) {
   // Forward slashes regardless of platform: the archive format requires them, and
   // a Windows build would otherwise produce a ZIP neither store can read.
   const name = relative(sourceDir, file).split(sep).join('/');
   const data = readFileSync(file);
-  const built = entry(name, data);
+  const built = entry(name, data, offset);
   locals.push(built.local);
   centrals.push(built.central);
   uncompressed += built.size;
+  // Advanced by the LOCAL header's real length, which includes the name and the
+  // payload — not by the payload alone, or every offset after the first is short
+  // by the size of the headers before it.
+  offset += built.local.length;
 }
 
 // The manifest has to be at the archive root. Both stores reject a package where

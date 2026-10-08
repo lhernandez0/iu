@@ -1,17 +1,17 @@
 # Testing
 
-There are three tiers, ordered by how expensive they are and how often they
-should run. **Only the first is in the default loop.** The others are opt-in, and
-the one that reaches the network needs an explicit flag.
+There are three tiers. **Only the first is in the default loop**, and neither of the
+others reaches anything unless it is named.
 
 | Tier | Command | Touches | Time | When to run |
 | --- | --- | --- | --- | --- |
 | Hermetic | `npm test` | nothing external | ~1s | Every change |
-| Browser (offline) | `npm run test:browser` | a real Chromium, fixture YouTube | ~10s | Before a commit that changes wiring |
-| Browser (live) | `npm run test:browser:live` | real youtube.com | ~30s | Rarely, by hand |
+| Browser (offline) | `npm run test:browser` | a real Chromium, a fixture YouTube | ~30s | Before a commit that changes wiring |
+| Conformance | `npm run test:conformance` | the CELLAR Matroska files on disk | ~5s | After touching the container parser |
 
-`npm run test:all` runs the first two. Nothing runs the live tier unless it is
-named.
+`npm run test:all` runs the first two. The conformance tier needs
+`npm run conformance:fetch` once, and is a **development dependency** — a
+contributor without those files can still run everything else.
 
 ## Why the split exists
 
@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 568 checks)
+## Tier 1 — hermetic (`npm test`, 788 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies — plain Node scripts,
@@ -37,17 +37,25 @@ so they run with nothing installed.
 
 | Suite | Boots | Checks |
 | --- | --- | --- |
-| `unit.test.mjs` | nothing | 48 |
-| `manifest.test.mjs` | nothing | 23 |
-| `service-worker.test.mjs` | worker + `chrome` stub | 199 |
-| `sidepanel.test.mjs` | panel + DOM stub | 106 |
+| `manifest.test.mjs` | nothing | 39 |
+| `unit.test.mjs` | nothing | 52 |
+| `errors.test.mjs` | the error registry | 20 |
+| `learn.test.mjs` | segmenter + word list | 64 |
+| `licence.test.mjs` | the licence files on disk | 46 |
+| `providers.test.mjs` | the provider seam | 15 |
+| `matroska.test.mjs` | the container parser, on generated fixtures | 65 |
+| `reader.test.mjs` | subtitle parsing, encoding, the reader's messages | 71 |
+| `service-worker.test.mjs` | worker + `chrome` stub | 248 |
+| `sidepanel.test.mjs` | panel + DOM stub | 117 |
 | `page-bridge.test.mjs` | bridge + page stub | 50 |
-| `content.test.mjs` | content script | 98 |
-| `learn.test.mjs` | segmenter + word list | 44 |
+| `content.test.mjs` | content script | 106 |
+| `history.test.mjs` | the transcript cache | 9 |
 
 Each file is spawned as its own process, because they all grab the same globals
 (`chrome`, `document`, the module cache) and a shared process lets one suite's
 stubs leak into another's — which has already produced a misleading result once.
+The counts above are the runner's own per-suite lines; 788 is their sum, kept here
+so a suite quietly losing cases is visible in the diff of this file.
 
 **A stub that ignores its request cannot test behaviour that depends on it.**
 The content-script stub used to return a fixed payload whatever `languageCode`
@@ -69,12 +77,78 @@ The content stub models an **orphaned extension context**: `id` absent, and
 that quietly resolved would not exercise the path at all, and the bug being
 pinned is precisely that the throw escaped.
 
+## The privacy claim is a check, not a paragraph
+
+The README says the extension collects nothing and talks to one host. That is a
+statement about the code, so `manifest.test.mjs` verifies it against the code
+rather than trusting the prose to stay accurate:
+
+- **No transport but `fetch`** — `XMLHttpRequest`, `WebSocket`, `EventSource`,
+  `sendBeacon`, `importScripts` and `navigator.send` all fail the suite. None is
+  used, so an appearance is a new decision rather than a slip.
+- **Every absolute URL host in `src/` is `youtube.com`** — and a host built at
+  runtime fails too, because a URL assembled from parts cannot be vouched for.
+- **The `fetch` call sites are a named list.** Two in `wordlist.js`, reading
+  bundled dictionary JSON through `runtime.getURL`; one in `youtube-content.js`,
+  the caption track. Adding a third changes a count and fails the test.
+- **Nothing uses `storage.sync`** — settings stay on the machine, not in an
+  account.
+
+Why this exists: an extension's privacy story never breaks in one commit. It
+breaks when a helpful error reporter or a remote word list is added to one file
+and nothing objects, and by then the store listing, the policy and the README
+have all been wrong for a release. Enforcement is the difference between a
+constraint and a policy that expires.
+
+**Teeth-checked**, because a guard that cannot fail is decoration: adding an
+`XMLHttpRequest`, a `WebSocket`, a computed host and a `storage.sync` call to a
+file in `src/` fails all four checks, and deleting the file returns the suite to
+green.
+
+### The permission list is checked too, and that half was missing
+
+The scan above reads `src/`. It says nothing about what the extension is
+**allowed** to do, which lives in `manifest.json` — and the privacy section makes
+claims about both. There is now a second group of checks for it:
+
+- **`host_permissions` is exactly `['https://*.youtube.com/*']`.**
+- **Nothing is in `web_accessible_resources`**, which is what "no page can reach
+  into the extension" actually means.
+- **No `activeTab`, `tabs` or `unlimitedStorage`** — each widens what the
+  extension can do on its own initiative.
+- **Every script a provider names is declared in `content_scripts`**, and no
+  script is injected for a site no provider claims. This is the fourth copy of
+  "which sites we read" and the one that silently rots.
+
+**The gap these close was real and measured.** Before them, expanding
+`host_permissions` to `https://*.example.com/*` **and `file:///*`** left the suite
+at 33/33. `file:///*` is how an extension reads files off someone's disk without
+them picking a file — precisely the thing the privacy section promises does not
+happen. It now fails, along with `web_accessible_resources` and an orphaned
+content script.
+
+Pinning the host list means **adding a provider is a deliberate edit to this
+file**. That is the feature rather than friction: "we read one host" is a promise,
+and a promise that can be widened by accident is not one.
+
 ## Tier 2 — browser, offline (`npm run test:browser`, 179 checks)
 
-Three suites. `iu.browser.test.mjs` (108) loads the real extension; `ui-preview.test.mjs`
-(67) and `ui-hmr.test.mjs` (4) check the design preview server, which is a
-development tool rather than a test of the extension — see
+Four suites, and the count is the runner's own. `iu.browser.test.mjs` (108) loads the
+real extension; `ui-preview.test.mjs` and `ui-hmr.test.mjs` check the design preview
+server, which is a development tool rather than a test of the extension — see
 [Designing the panel](#designing-the-panel) for why it is checked in at all.
+`ui-layout.test.mjs` checks the preview's layout.
+
+**`reader.test.mjs` drives the reader page over `chrome-extension://`** — the real
+page, the real worker, the real panel — and it exists because of a gap nothing else
+covered. `matroska.test.mjs` proves the container parser reads real files, and
+`service-worker.test.mjs` proves the worker resolves a reader tab, but **nothing
+proved those two connected, and they did not**: `settings.studyLanguage` defaults to
+`null`, so the first request for any video is `PROVIDE { languageCode: null }`, and
+the reader answered "no such track". A file with three parsed subtitle tracks
+produced no transcript at all, with both suites green, because neither ever asked
+the reader for a track. The YouTube path had always handled it, which is exactly why
+the gap was invisible.
 
 The real extension in real Chromium. The only thing faked is the network, and it
 is intercepted at the transport layer with `context.route`, so the content script
@@ -243,6 +317,65 @@ something if its shape traces to something real.
 The loader falls back to a tiny self-contained fixture when nothing has been
 derived, so a fresh clone can still run `npm test`. Do not assert on the fallback:
 it is a bootstrapping aid, not a second source of truth.
+
+### The MKV fixtures are generated, not committed
+
+`test/fixtures/*.mkv` is produced by `npm run fixtures`, which drives `ffmpeg` over
+a synthesised test pattern. No third-party media, nothing to attribute, and two
+seconds to rebuild — which is why they are generated rather than checked in as
+opaque binaries.
+
+There are five, and each exists for a case a simpler file cannot reach: three text
+subtitle tracks with real language metadata, a genuine `S_TEXT/ASS` track (whose
+events are stored differently from SRT's), one with no subtitle tracks at all, one
+with `language=und`, and one with **no `Language` element whatever** — which is not
+the same thing, and the difference turned out to matter.
+
+## Tier 3 — conformance (`npm run test:conformance`, 22 checks)
+
+**Optional, and a development dependency.** The files are the [IETF CELLAR working
+group's Matroska conformance
+suite](https://github.com/ietf-wg-cellar/matroska-test-files) — eight files, each
+probing one feature, written by the people who maintain mkvmerge and libmatroska.
+They are downloaded, never committed:
+
+```sh
+npm run conformance:fetch     # once, ~190 MB
+npm run test:conformance
+```
+
+This is **not** the live tier that was deliberately deleted. That one reached a
+website and was a second thing that could break; these are static files fetched
+once, and nothing runs them unless they are named. `test/conformance/` sits in a
+subdirectory `test/run.mjs` does not scan, so a contributor without the files can
+still run `npm test`.
+
+**Why they are worth 190 MB, given we already have fixtures.** Every generated
+fixture comes from one muxer with default settings, and that was a real blind spot
+rather than a theoretical one. The suite found two parser bugs on its first run,
+neither of which any fixture in this repository could have caught:
+
+- **`TimecodeScale` was never read.** Block timestamps are integer ticks and the
+  scale says how long one is. The parser divided by 1000, which is correct only for
+  the default of one millisecond — so `test2.mkv`, which sets 100,000, had **every
+  timestamp ten times too large**: a two-minute film's subtitles landing at twenty
+  minutes, with no error and a complete-looking transcript. `ffmpeg` cannot write a
+  non-default scale, so no fixture here could have reached it.
+- **An absent `Language` element was treated as unknown.** Matroska defines the
+  element as defaulting to English, and the suite's many-language file relies on
+  that — its English track carries no language tag at all. We were reporting it as
+  undetermined, so the English subtitles were offered in the panel and **never
+  marked**, because no word list matches `null`.
+
+Both were the same shape: correct-looking output that was quietly wrong. That is
+what a conformance suite is for, and it is a different job from our fixtures — which
+test *our* features (ASS-in-container, image-codec refusal, language metadata) that
+a container-conformance suite has no reason to include.
+
+A file we knowingly cannot fully read is asserted as a named limitation rather than
+skipped, so the day the parser improves the assertion has to change and somebody
+notices.
+
 
 ## The real XML body, and what it settled
 

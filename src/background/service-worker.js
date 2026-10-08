@@ -451,6 +451,27 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   switch (message.type) {
     // --- From content scripts ------------------------------------------------
+    case MSG.READER_READY:
+      // One of our own sources announcing itself, so the panel resolves it
+      // immediately rather than on the next tab switch.
+      //
+      // The id is taken from `sender.tab` when it is there, and otherwise looked
+      // up via `registerOpenReaderTabs()`. **Announcing is not sufficient on its
+      // own**: this arrives from a PAGE rather than a content script, and
+      // `sender.tab` is not guaranteed for one — so relying on it left the tab
+      // unregistered and the panel reporting "no supported video" while the film
+      // played.
+      if (sender?.tab?.id !== undefined) registeredSources.add(sender.tab.id);
+      // NOT awaited, and the listener is NOT async: this callback returns
+      // `false`/`true` to control the response channel, and an `async` listener
+      // always returns a promise — which Chrome reads as "the response is coming
+      // by promise" and would break every other case in this switch.
+      //
+      // Resolve now, so opening the reader with the panel already open shows the
+      // video without the user having to click back and forth.
+      void registerOpenReaderTabs().then(() => refresh());
+      return false;
+
     case MSG.CONTENT_POSITION:
       // Only trusted from the tab the panel is actually showing. A background
       // YouTube tab also reports playback, and its cues are meaningless for the
@@ -475,6 +496,18 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     case MSG.CONTENT_VIDEO_CHANGED:
       void onContentVideoChanged(sender?.tab?.id ?? null);
+      return false;
+
+    case MSG.READER_CHANGED:
+      // A reader's content changed — a file was chosen, or a subtitle track was
+      // added. No tab id is needed or sent: `refresh()` resolves the active tab,
+      // and a reader whose video matters is by definition the one being looked at.
+      //
+      // This is what makes the reader work when the panel was already open. Without
+      // it, `READER_READY` — which fires once, on an empty page — was the only
+      // notification the worker ever got, so the panel stayed empty no matter what
+      // was loaded afterwards.
+      void refresh();
       return false;
 
     // --- Parked capture control ----------------------------------------------
@@ -568,11 +601,94 @@ function broadcastError(message) {
 
 // --- Tab tracking -----------------------------------------------------------
 
+/**
+ * Tab ids that announced themselves as one of OUR OWN sources.
+ *
+ * The local video reader is a source, but it cannot be FOUND the way a website is
+ * found. `providerFor(tab.url)` is how a site is resolved, and `tab.url` is empty
+ * for a `chrome-extension://` document without the `tabs` permission — which this
+ * extension deliberately does not request, because it would expose the url of
+ * every tab the user has open. So the reader announces itself on load, and the id
+ * comes from `sender.tab.id`, which needs no permission.
+ *
+ * Kept here rather than as a flag on a provider: `providers.js` is URL-match-and
+ * inject, and our own page has neither a matchable URL nor anything to inject
+ * into. Teaching it about a kind of provider it cannot describe would be worse
+ * than a small set in the one place that needs it.
+ *
+ * @type {Set<number>}
+ */
+const registeredSources = new Set();
+
+/** The reader page, as the worker addresses it. */
+const READER_PATH = 'src/reader/reader.html';
+
+/**
+ * Find open reader tabs and register them.
+ *
+ * **This exists because relying on the reader announcing itself is not enough.**
+ * The announcement arrives as a `runtime.sendMessage` from a PAGE, not a content
+ * script — and `sender.tab` is not guaranteed for an extension page, so the
+ * announcement can arrive with nothing to identify the tab. When that happened the
+ * tab never registered, so `isReadable` said no, and the panel showed
+ * "no supported video is open in the active tab" **while the film played perfectly
+ * in the next tab**. Silent, and exactly backwards.
+ *
+ * `runtime.getContexts({ contextTypes: ['TAB'] })` is the reliable answer, and it
+ * needs no permission: it lists the extension's own contexts, and each carries a
+ * `tabId`. Filtering on `documentUrl` keeps it to OUR reader, so another extension
+ * page in a tab is not mistaken for a source.
+ *
+ * It also covers the case the announcement cannot: **reloading the extension
+ * restarts the worker with an empty set, while the reader tab stays open**. Calling
+ * this before concluding "nothing is readable" means a reader tab is found again
+ * without the user reopening it.
+ *
+ * @returns {Promise<number>} How many tabs are registered, for the caller to log
+ *   or assert on.
+ */
+async function registerOpenReaderTabs() {
+  if (!api.runtime.getContexts) return registeredSources.size;
+
+  const contexts = await api.runtime
+    .getContexts({ contextTypes: ['TAB'] })
+    .catch(() => []);
+
+  for (const context of contexts) {
+    // `tabId` is -1 when a context is not in a tab, which we cannot address.
+    if (typeof context?.tabId !== 'number' || context.tabId < 0) continue;
+    const url = context.documentUrl ?? '';
+    if (url.endsWith(READER_PATH)) registeredSources.add(context.tabId);
+  }
+
+  return registeredSources.size;
+}
+
+/**
+ * Whether the worker can read this tab: a known site, or one of our own sources.
+ *
+ * **This exists so the two questions cannot drift apart.** Five places used to ask
+ * `providerFor(tab.url)` directly, and every one of them would have answered "no"
+ * for the reader — silently, and in a way that looks correct in the code. A
+ * single predicate is what makes "is this tab readable" one decision.
+ *
+ * @param {{id?: number, url?: string}|null|undefined} tab
+ * @returns {boolean}
+ */
+function isReadable(tab) {
+  if (!tab?.id) return false;
+  return registeredSources.has(tab.id) || Boolean(providerFor(tab.url));
+}
+
 api.tabs.onActivated.addListener(({ tabId }) => {
   void onTabActivated(tabId);
 });
 
 api.tabs.onRemoved.addListener((tabId) => {
+  // A closed reader must stop counting as a source, or the set grows for the
+  // life of the worker and a later tab reusing the id is wrongly considered
+  // readable — which resolves to "no transcript" rather than to "no video".
+  registeredSources.delete(tabId);
   if (trackedTabId === tabId) trackedTabId = null;
   if (session?.tabId === tabId) void stopCapture();
 });
@@ -585,7 +701,12 @@ api.tabs.onRemoved.addListener((tabId) => {
  */
 async function onTabActivated(tabId) {
   const tab = await api.tabs.get(tabId).catch(() => null);
-  if (!tab || !providerFor(tab.url)) return;
+  // Our own pages report no usable `url`, so `tabs.get` cannot identify one. Ask
+  // the runtime which of our contexts are open before deciding this tab is
+  // unreadable — otherwise switching TO the reader tab does nothing at all, which
+  // is exactly what it did.
+  if (tab?.id !== undefined && !registeredSources.has(tabId)) await registerOpenReaderTabs();
+  if (!isReadable(tab)) return;
   trackedTabId = tabId;
   await refresh();
 }
@@ -658,6 +779,13 @@ api.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
  * @returns {Promise<number|null>} frameId, or null if there is no such frame.
  */
 async function ensureContentScript(tabId) {
+  // One of our own pages is never injected into. It is a single document that
+  // answers `runtime.onMessage` directly, so `scripting.executeScript` would throw
+  // and `webNavigation.getAllFrames` would report no recognised frame for it.
+  // `undefined` is the sentinel `sendToContent` reads as "no frame — address the
+  // tab itself".
+  if (registeredSources.has(tabId)) return undefined;
+
   const frames = await api.webNavigation.getAllFrames({ tabId }).catch(() => null);
   if (!frames?.length) return null;
 
@@ -730,6 +858,9 @@ function contentTimeoutFor(message) {
  * @returns {Promise<any>}
  */
 async function sendToContent(tabId, message) {
+  // Our own page needs no injection and has no frame. `undefined` says "send to
+  // the tab"; `null` would mean "no readable frame here", which is a different
+  // and fatal answer.
   const frameId = await ensureContentScript(tabId);
   if (frameId === null) throw new Error(errorText('CONN001'));
 
@@ -737,7 +868,11 @@ async function sendToContent(tabId, message) {
   let timer = 0;
   try {
     return await Promise.race([
-      api.tabs.sendMessage(tabId, { ...message, target: TARGET.CONTENT }, { frameId }),
+      api.tabs.sendMessage(
+        tabId,
+        { ...message, target: TARGET.CONTENT },
+        frameId === undefined ? {} : { frameId },
+      ),
       new Promise((_, reject) => {
         timer = setTimeout(
           () => reject(new Error(errorText('CONN002', `${message.type} did not answer within ${timeoutMs}ms`))),
@@ -774,15 +909,25 @@ async function refresh() {
 
 /** @returns {Promise<void>} */
 async function refreshInner() {
+  // Before deciding anything: which of our own pages are open. This is the
+  // authority on whether a reader tab is readable, because our own pages report no
+  // usable `url` — and it also recovers a reader tab that was open across an
+  // extension reload, when the worker restarts with an empty set.
+  await registerOpenReaderTabs();
+
   if (trackedTabId !== null) {
-    // A tracked tab can be closed or navigated away since we last looked.
+    // A tracked tab can be closed or navigated away since we last looked. Note
+    // that a reader tab reports NO url, so this test has to go through
+    // `isReadable` — asking `providerFor(alive.url)` here would drop the reader
+    // on every single refresh, and the panel would say "no video" while the film
+    // was playing in the next tab.
     const alive = await api.tabs.get(trackedTabId).catch(() => null);
-    if (!alive || !providerFor(alive.url)) trackedTabId = null;
+    if (!alive || !isReadable(alive)) trackedTabId = null;
   }
 
   if (trackedTabId === null) {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id || !providerFor(tab.url)) {
+    if (!tab?.id || !isReadable(tab)) {
       pendingError = errorText('CONN005', providerNames());
       broadcastState();
       return;
@@ -1886,6 +2031,94 @@ api.action.onClicked.addListener((tab) => {
     void api.sidebarAction.toggle();
   }
 });
+
+// --- The action menu: how every source is reached ----------------------------
+
+/**
+ * The toolbar icon's own context menu.
+ *
+ * This is the entry point for sources, not the panel, and that is the point: the
+ * panel reads whatever tab is active and knows nothing about where a source came
+ * from. A source you open from here is exactly as first-class as one you navigate
+ * to, which is what stops local files from being something you discover by
+ * failing to find a video.
+ *
+ * **This costs one permission: `contextMenus`.** An earlier draft of this design
+ * claimed it cost none, on the reasoning that `contexts: ['action']` is the
+ * action's menu rather than the page context menu. That reasoning is about WHERE
+ * the item appears and says nothing about whether the API is available at all —
+ * which it is not, without the permission. The claim was wrong, it was approved on
+ * that basis, and the item was silently absent until it was fixed.
+ *
+ * The items are static labels, and that is forced rather than chosen: reading the
+ * tab's url or title to say "Use this YouTube video" would need the `tabs`
+ * permission, which would expose every tab the user has open. Naming the source
+ * generically is the price of not taking that one.
+ */
+const READER_MENU_ID = 'open-reader';
+
+/**
+ * Create the menu item if it is not already there.
+ *
+ * Called at module scope rather than only on `onInstalled`, because an unpacked
+ * extension reloaded from `chrome://extensions` does not reliably fire that event
+ * — and the failure is silent and confusing: the menu is simply absent, with
+ * nothing to explain why. A service worker is re-created on every event, so
+ * module scope is the one place guaranteed to run.
+ *
+ * `create` with an id that already exists sets `lastError`. Reading it is what
+ * suppresses Chrome's "unchecked runtime.lastError" warning, and the duplicate is
+ * expected rather than a fault: the item survives a worker restart, so the second
+ * and later wakes find it already present.
+ */
+function ensureActionMenu() {
+  // Feature-detected, not assumed. This runs at module scope, where a throw is
+  // fatal to the whole worker — the panel would then get no reply to anything,
+  // which looks exactly like the extension not being installed. A browser or an
+  // older version without `contextMenus` should lose the menu item, not the
+  // entire extension.
+  if (!api.contextMenus?.create) return;
+
+  api.contextMenus.create(
+    {
+      id: READER_MENU_ID,
+      title: 'Open video files…',
+      // The ACTION's menu — right-clicking the toolbar icon — not the page
+      // context menu. The `contextMenus` permission is needed either way; this
+      // only decides WHERE the item appears.
+      contexts: ['action'],
+    },
+    () => {
+      void api.runtime.lastError;
+    },
+  );
+}
+
+ensureActionMenu();
+
+/**
+ * A clean slate on install and update.
+ *
+ * `removeAll` first makes this idempotent, and matters for a genuine update:
+ * without it an item whose title changed between versions would keep the old
+ * title, since `create` on an existing id does nothing.
+ */
+api.runtime.onInstalled.addListener(() => {
+  if (!api.contextMenus?.removeAll) return;
+  api.contextMenus.removeAll(() => {
+    void api.runtime.lastError;
+    ensureActionMenu();
+  });
+});
+
+if (api.contextMenus?.onClicked) {
+  api.contextMenus.onClicked.addListener((info) => {
+    if (info.menuItemId !== READER_MENU_ID) return;
+    // `tabs.create` needs no permission, and the URL is ours. The reader then
+    // announces itself, so the worker never has to match it by url.
+    void api.tabs.create({ url: api.runtime.getURL('src/reader/reader.html') });
+  });
+}
 
 // --- Parked: tab capture ------------------------------------------------------
 // Unchanged from the capture phase. Reachable by flipping USE_AUDIO_CAPTURE in

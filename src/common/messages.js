@@ -110,4 +110,43 @@ export const MSG = Object.freeze({
   ENGINE_EVENT: 'engine-event',
   /** panel -> background -> offscreen. Payload: { muted } — local playback only. */
   SET_MONITOR_MUTED: 'set-monitor-muted',
+
+  // --- The local video reader, which is a source we host ---------------------
+  /**
+   * reader -> background — "I am a source, and I am this tab". Carries nothing.
+   *
+   * Exists because our own page cannot be FOUND the way a site is found. The
+   * worker resolves a site with `providerFor(tab.url)`, and `tab.url` is empty
+   * for a `chrome-extension://` document without the `tabs` permission — which
+   * this extension deliberately does not request. So the reader announces
+   * itself instead, and the worker keys off `sender.tab.id`, which is available
+   * without any permission.
+   *
+   * There is deliberately NO `OPEN_READER` message and no `TARGET.READER`: the
+   * side panel neither opens the reader nor knows it exists. The action menu's
+   * `contextMenus` handler calls `tabs.create` directly. A panel -> background
+   * message here would re-introduce exactly the coupling that design removed.
+   *
+   * Nor is there a `READER_TRACK`: the reader does not push segments. The worker
+   * asks for them with `PROVIDE`, the same as it does for a website, so there is
+   * one code path for getting segments and the reader is not a special case.
+   */
+  READER_READY: 'reader-ready',
+
+  /**
+   * reader -> background — "my content changed, look again". Carries nothing.
+   *
+   * **Without this the reader only worked if it was opened BEFORE the side
+   * panel.** `READER_READY` fires once, on load, when a freshly opened reader has
+   * no video at all — so the worker resolved an empty source and the panel stayed
+   * empty forever after a file was chosen. The file, not the page, is what makes a
+   * reader worth reading.
+   *
+   * The handler does not need a tab id, which is why nothing is sent: it calls
+   * `refresh()`, and `refresh()` resolves whatever the ACTIVE tab is. If the reader
+   * is the tab the user is looking at — which it must be for its video to be the
+   * one on screen — then refresh finds it. That sidesteps `sender.tab` entirely,
+   * which is not reliably present for an extension page.
+   */
+  READER_CHANGED: 'reader-changed',
 });

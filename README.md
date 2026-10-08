@@ -183,10 +183,36 @@ for that browser; the rest is the same source.
 | `storage`          | Remember your language and level choices.                |
 | `scripting`        | Inject the content scripts on demand.                    |
 | `webNavigation`    | Track which video the tab is on.                         |
+| `contextMenus`     | Put **Open video files…** on the extension's own toolbar menu. Adds nothing to the page right-click menu, and grants no access to any page. |
 | `host_permissions` | `https://*.youtube.com/*` — read captions from the page. |
 
-Nothing else is requested. The extension makes no request to any server of ours,
-collects no analytics, and has no account.
+That is the whole list, and it is pinned by a test, so a new one has to be added
+on purpose. There is no `activeTab`, no `tabs`, and no `web_accessible_resources`
+— the last of which means no page can reach into the extension.
+
+## Privacy
+
+**This extension collects nothing about you.** Not "we handle it responsibly",
+not "we only collect what we need" — nothing. That is a design constraint rather
+than a policy, and it is enforced rather than promised:
+
+- **No account, no server of ours, no analytics, no telemetry, no crash
+  reporting.** There is nothing to sign into and nothing to leak.
+- **Your settings stay in your browser**, in `chrome.storage.local`. They are not
+  synced anywhere, not even to your own other devices.
+- **No browsing history, no tab contents beyond the caption data**, no
+  identifiers.
+- **One external host: `youtube.com`.** The extension reads the caption track of
+  the video in the tab you have open, using that page's own session — the same
+  request the page's own subtitle button makes. The dictionaries are bundled, so
+  looking a word up makes no request at all.
+
+That caption fetch is the only request the extension makes to anything outside
+itself, and it is not a promise — it is checked. The test suite scans shipped
+source and fails if a request to any host other than `youtube.com` appears, if a
+transport other than `fetch` is used, or if `storage.sync` is reached for. Adding
+one is a deliberate decision, not a slip. See
+[`TESTING.md`](TESTING.md#the-privacy-claim-is-a-check-not-a-paragraph).
 
 ## Known limitations
 

@@ -46,7 +46,8 @@
     "storage",
     "sidePanel",
     "scripting",
-    "webNavigation"
+    "webNavigation",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://*.youtube.com/*"

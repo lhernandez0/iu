@@ -35,6 +35,18 @@ test/fixtures/
 # open still yields evidence, never as a fixture — derive-synthetic refuses them.
 test/fixtures/*.partial/
 
+# The Matroska conformance suite — a DEVELOPMENT dependency, not a test fixture.
+# Real films (Big Buck Bunny, Elephants Dream), CC-BY, hundreds of megabytes, so
+# they are downloaded rather than committed: `npm run conformance:fetch`.
+#
+# Separated from test/fixtures/ on purpose. `npm run fixtures` regenerates the
+# fixtures locally from ffmpeg and is deterministic; these are fetched over the
+# network and cannot be. Nothing in `src/` reads them and they are never packaged.
+#
+# The runner lives in test/conformance/ so the top-level runner does not scan it —
+# a contributor without the files must still be able to run `npm test`.
+test/conformance/*.mkv
+
 # ============================================================================
 # Node.gitignore — https://github.com/github/gitignore/blob/main/Node.gitignore
 # ============================================================================

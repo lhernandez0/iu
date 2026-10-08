@@ -1981,6 +1981,119 @@ section('a slow caption download is not timed out like a local question');
   check('the timeout names its own budget', source.includes('did not answer within ${timeoutMs}ms'), true);
 }
 
+section('the action menu is registered, because a missing item is invisible');
+
+{
+  // The bug this pins: the toolbar icon's menu is how a source is opened, and
+  // when it is absent there is NOTHING to see — no error, no placeholder, just a
+  // menu that does not list the item. It was shipped absent twice: first because
+  // the `contextMenus` permission was missing entirely (the API does not exist
+  // without it), and the design had claimed it cost no permission.
+  //
+  // So this asserts the registration reaches the browser, rather than trusting
+  // that it does.
+  const { calls } = await boot(TRACK(GERMAN));
+
+  const readerItem = calls.menusCreated.find((item) => item.id === 'open-reader');
+  check('an item is created for the reader', Boolean(readerItem), true);
+  check('it has a title a user can read', typeof readerItem?.title, 'string');
+  // `action` and NOT `page`: the item belongs on the toolbar icon's menu, so it
+  // does not clutter the right-click menu of every web page the user visits.
+  check('and it is on the action menu, not the page menu', readerItem?.contexts, ['action']);
+}
+
+{
+  // A module-scope throw is fatal, and this registration happens at module scope
+  // on purpose: an unpacked extension reloaded from chrome://extensions does not
+  // reliably fire `onInstalled`, and a menu created only there is silently absent
+  // on reload — which is exactly how it looked to the person testing it.
+  const source = readFileSync(new URL('../src/background/service-worker.js', import.meta.url), 'utf8');
+  const atTopLevel = /^ensureActionMenu\(\);/m.test(source);
+  check('the menu is created at module scope, not only on install', atTopLevel, true);
+  check('and the same call is repeated on install and update', /onInstalled[\s\S]{0,200}ensureActionMenu\(\)/.test(source), true);
+}
+
+section('a reader tab is resolvable even when its announcement never arrives');
+
+{
+  // THE BUG THIS PINS. The reader announces itself with `runtime.sendMessage`,
+  // and `sender.tab` is not guaranteed for an extension PAGE (as opposed to a
+  // content script). When it was absent the tab never registered, `isReadable`
+  // said no, and the panel reported "no supported video is open in the active tab"
+  // **while the film was playing in the next tab** — a failure that is both silent
+  // and exactly backwards.
+  //
+  // So registration must not depend on the announcement. `runtime.getContexts` is
+  // the authority: it lists the extension's own open contexts and each carries a
+  // `tabId`, with no permission needed.
+  const READER_TAB = { id: 7, active: true, url: '' }; // no url, as Chrome reports ours
+  const { received } = await boot({
+    tabs: [READER_TAB],
+    // The reader is open in tab 7 — and NO READER_READY message is sent, which is
+    // the whole point.
+    contexts: [
+      { contextType: 'TAB', tabId: 7, documentUrl: 'chrome-extension://test/src/reader/reader.html' },
+    ],
+    describePayload: {
+      ok: true,
+      video: {
+        videoId: 'local:film.mkv:100:1',
+        title: 'film.mkv',
+        isLive: false,
+        trackList: [{ languageCode: 'zh', name: 'Chinese', isTranslatable: false }],
+        translationLanguages: [],
+      },
+    },
+    providePayload: {
+      ok: true,
+      requested: 'zh',
+      fetched: {
+        languageCode: 'zh',
+        translateTo: null,
+        segments: [{ start: 0, duration: 2, text: '你好世界' }],
+      },
+    },
+    trackPayload: null,
+  });
+
+  // The panel asked for state on connect; it must resolve the reader, not refuse.
+  const state = received.find((m) => m.type === 'state')?.state;
+  check('the reader tab resolves without any announcement', Boolean(state), true);
+  // The specific regression: this used to say no video was open.
+  check('and it is NOT reported as no-video', String(state?.error ?? '').includes('CONN005'), false);
+  // A reader tab has no url, so if resolution worked it was via getContexts.
+  check('it resolved despite having no tab url', READER_TAB.url, '');
+  check('and its track list reached the panel', state?.trackList?.length, 1);
+}
+
+{
+  // A DIFFERENT extension page in a tab must not be mistaken for a source. Only
+  // our reader produces content, and treating another page as a source would
+  // report an empty transcript for a page that is not a video at all.
+  const { received } = await boot({
+    tabs: [{ id: 9, active: true, url: '' }],
+    contexts: [
+      { contextType: 'TAB', tabId: 9, documentUrl: 'chrome-extension://test/src/sidepanel/sidepanel.html' },
+    ],
+  });
+
+  const state = received.find((m) => m.type === 'state')?.state;
+  check('another extension page is not treated as a source', String(state?.error ?? '').includes('CONN005'), true);
+}
+
+{
+  // A context with `tabId: -1` is not in a tab and cannot be addressed. It must be
+  // skipped rather than registered as tab -1, which would then never match a real
+  // tab and would silently pollute the set.
+  const { received } = await boot({
+    tabs: [{ id: 3, active: true, url: '' }],
+    contexts: [{ contextType: 'TAB', tabId: -1, documentUrl: 'chrome-extension://test/src/reader/reader.html' }],
+  });
+
+  const state = received.find((m) => m.type === 'state')?.state;
+  check('a context with no tab is skipped', String(state?.error ?? '').includes('CONN005'), true);
+}
+
 // --- Result -----------------------------------------------------------------
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

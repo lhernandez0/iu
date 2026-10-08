@@ -1,0 +1,160 @@
+/**
+ * Styles for the video reader.
+ *
+ * Deliberately plain and dark, matching the side panel so the two read as one
+ * product. The video is the point of the page: it takes every pixel the controls
+ * do not need, and nothing here competes with it for attention.
+ */
+
+:root {
+  --bg: #12141a;
+  --fg: #e6e8ee;
+  --muted: #8b93a7;
+  --accent: #7aa2f7;
+  --danger: #f7768e;
+  --bar: #1a1d26;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* --- The video ----------------------------------------------------------- */
+
+.stage {
+  position: relative;
+  flex: 1;
+  /* `min-height: 0` is what lets a flex child actually shrink; without it the
+     video's intrinsic height wins and the footer is pushed off screen. */
+  min-height: 0;
+  display: flex;
+  background: #000;
+}
+
+#video {
+  width: 100%;
+  height: 100%;
+  /* `object-fit: contain` keeps the aspect ratio rather than stretching, and
+     `max-height` on the element stops a tall video forcing the page to scroll. */
+  max-height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+/* The drag target is the whole stage, so a drop anywhere on the video area works.
+   A highlight is the only feedback needed and it is applied by the `dragging`
+   class rather than by `:hover`, because drag state is not hover state. */
+.stage.dragging {
+  outline: 2px dashed var(--accent);
+  outline-offset: -8px;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  /* Not `display: none` — the element is toggled by hiding this attribute, so
+     screen readers and layout both keep it until a video is actually loaded. */
+  pointer-events: none;
+  text-align: center;
+}
+
+.placeholder[hidden] {
+  display: none;
+}
+
+.placeholder-title {
+  margin: 0;
+  font-size: 18px;
+  color: var(--fg);
+}
+
+.placeholder-hint {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* --- The control bar ----------------------------------------------------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bar);
+  border-top: 1px solid #262b38;
+  flex-wrap: wrap;
+}
+
+.button {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #0b0d12;
+  font-weight: 600;
+  cursor: pointer;
+  /* The label is the focusable-looking thing, but the INPUT holds focus — see
+     the `:focus-visible` rule below, which is why this one has no outline. */
+  user-select: none;
+}
+
+.button:hover {
+  filter: brightness(1.08);
+}
+
+/* Focus lands on the hidden input, so the visible label needs to show it. */
+#pick-files:focus-visible + .button {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+
+.chosen {
+  margin: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.status {
+  margin: 0 0 0 auto;
+  color: var(--muted);
+}
+
+.status.error {
+  color: var(--danger);
+}
+
+/* Hidden from sight but not from assistive technology or the tab order.
+   `display: none` would remove it from both, which is what breaks the label. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

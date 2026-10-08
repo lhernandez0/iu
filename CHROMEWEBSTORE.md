@@ -145,6 +145,7 @@ claim is that it works on a real video, and a reviewer can tell.
 | `sidePanel` | permissions | The transcript is displayed in the browser's side panel, beside the video. This is the entire user interface. |
 | `scripting` | permissions | Injects the small script that reads a video page's player data, so the extension knows which subtitle tracks the video offers and where playback is. Injected only into a video page you have open, and only when the panel asks for it. |
 | `webNavigation` | permissions | Detects when a video page navigates to a different video, so the transcript is re-read for the video now on screen rather than continuing to show the previous one's. Without it the panel would show stale subtitles after switching videos. |
+| `contextMenus` | permissions | Adds **Open video files…** to the extension's own toolbar menu, which is how a local video is opened. It adds one item to the menu on the extension's icon and nothing anywhere else — the page right-click menu is untouched, and it grants no access to any page or tab. |
 | `https://*.youtube.com/*` | host_permissions | Reads the subtitle tracks the page has already loaded. The extension does not access any other site, and only reads caption and player data — never your Google account, your viewing history, or your browsing. |
 
 <!-- NOT REQUESTED, and why, because the store asks about this:
@@ -160,7 +161,15 @@ claim is that it works on a real video, and a reviewer can tell.
 
      `tabs` is absent. `chrome.tabs.query` returns the tab's `id` without it; only
      `url` and `title` are redacted, and those are read through the content script
-     instead. -->
+     instead. A consequence worth stating: the toolbar menu's item reads "Open
+     video files…" rather than naming the video, because naming it would need this
+     permission.
+
+     `contextMenus` IS requested, and IS needed — the API does not exist without
+     it, for an action-context item exactly as much as for a page-context one. This
+     was originally believed to be free and that was wrong: the menu item was
+     silently absent until the permission was added. `test/manifest.test.mjs` now
+     pins the whole permission list so a future change has to be deliberate. -->
 
 ## Privacy & Data Use
 
@@ -168,12 +177,14 @@ claim is that it works on a real video, and a reviewer can tell.
 
 **Does the extension collect user data?** No
 
-<!-- Verified by reading the code rather than by intent. The only network requests
+<!-- Verified by a test on the shipped source, not by intent: `npm test` fails if a
+     request to any host other than youtube.com appears, if a transport other than
+     fetch is used, or if storage.sync is reached for. The only network requests
      the extension makes are (a) to its own bundled dictionary files inside the
      extension, and (b) to YouTube's caption endpoint, on the video page's own
      origin and with the page's own session — the same request the page's subtitle
      button makes. There is no analytics, no telemetry, no remote configuration,
-     and no server of ours. -->
+     and no server of ours. See the privacy section of TESTING.md. -->
 
 | Data Type | Collected? | Transmitted Off-Device? | Purpose | Shared with Third Parties? |
 |-----------|-----------|------------------------|---------|---------------------------|

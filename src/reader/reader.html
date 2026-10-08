@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU — video</title>
+    <link rel="stylesheet" href="reader.css" />
+  </head>
+  <body>
+    <!--
+      The reader is an APPLICATION, not a dialog the side panel owns.
+
+      It is a source, in exactly the sense a website is a source: it produces
+      `{ start, duration, text }` segments on request and reports which one is
+      playing. Its entire interface to the rest of the extension is the content
+      message contract, and the side panel has no reference to this page at all —
+      no button, no link, no name. That is what keeps every source first-class,
+      and it is why this page can be opened by a menu item rather than by the
+      panel.
+
+      The picker lives here rather than in the panel for the same reason: it is
+      this page's files, this page's video, this page's subtitle tracks. The panel
+      has no business knowing how they were chosen.
+    -->
+    <main class="stage">
+      <!-- The media element IS the source. Everything else on this page exists to
+           fill it in and describe it. -->
+      <video id="video" controls playsinline></video>
+
+      <!-- Shown until a video is loaded, over the empty video element, because
+           an empty black rectangle with no explanation reads as broken. -->
+      <div id="placeholder" class="placeholder">
+        <p class="placeholder-title">Drop a video here</p>
+        <p class="placeholder-hint">or use <strong>Choose files…</strong> below</p>
+      </div>
+    </main>
+
+    <footer class="bar">
+      <!--
+        ONE picker, not two.
+
+        A `multiple` input accepting video and subtitle types together, sorted by
+        extension afterwards. One trip to the file dialog, it still works when
+        only the video is to hand, and an MKV plus its sidecar can be chosen in a
+        single gesture.
+
+        A `<label>` wrapping the input, not a `<button>` plus `.click()`. It is the
+        native way to open a picker, it is keyboard-reachable and announced for
+        free, and it needs no script. The input itself is visually hidden but NOT
+        `display:none`, so it stays focusable and keeps its accessible name.
+      -->
+      <input
+        id="pick-files"
+        class="visually-hidden"
+        type="file"
+        multiple
+        accept="video/*,.mkv,.srt,.vtt,.ass,.ssa"
+      />
+      <label id="pick-label" class="button" for="pick-files">Choose files…</label>
+
+      <p id="chosen" class="chosen">No files chosen</p>
+      <p id="status" class="status" role="status"></p>
+    </footer>
+
+    <script type="module" src="reader.js"></script>
+  </body>
+</html>

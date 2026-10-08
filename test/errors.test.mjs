@@ -69,7 +69,11 @@ section('every code is well formed, unique and explained');
   // The category is a documented slug, and a new one is a deliberate act rather
   // than a typo that quietly creates a `CONM001`. Extracted as everything before
   // the three digits, so a 4-letter slug like CONN is read correctly.
-  const known = new Set(['CONN', 'VIDEO', 'TRACK', 'DICT', 'PAGE']);
+  //
+  // READER is the local video page — a source we host rather than a site we read,
+  // which is why its faults get their own slug: they are about the user's files,
+  // where the honest answer names the file type rather than suggesting a retry.
+  const known = new Set(['CONN', 'VIDEO', 'TRACK', 'DICT', 'PAGE', 'READER']);
   const unknown = codes.filter((code) => !known.has(code.replace(/\d{3}$/, '')));
   check('every code uses a documented category', unknown, []);
 }
