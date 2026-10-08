@@ -43,7 +43,7 @@ so they run with nothing installed.
 | `learn.test.mjs` | segmenter + word list | 64 |
 | `licence.test.mjs` | the licence files on disk | 46 |
 | `providers.test.mjs` | the provider seam | 15 |
-| `matroska.test.mjs` | the container parser, on generated fixtures | 65 |
+| `mkv-container.test.mjs` | the container parser, on generated fixtures | 65 |
 | `reader.test.mjs` | subtitle parsing, encoding, the reader's messages | 71 |
 | `service-worker.test.mjs` | worker + `chrome` stub | 248 |
 | `sidepanel.test.mjs` | panel + DOM stub | 117 |
@@ -141,7 +141,7 @@ server, which is a development tool rather than a test of the extension — see
 
 **`reader.test.mjs` drives the reader page over `chrome-extension://`** — the real
 page, the real worker, the real panel — and it exists because of a gap nothing else
-covered. `matroska.test.mjs` proves the container parser reads real files, and
+covered. `mkv-container.test.mjs` proves the container parser reads real files, and
 `service-worker.test.mjs` proves the worker resolves a reader tab, but **nothing
 proved those two connected, and they did not**: `settings.studyLanguage` defaults to
 `null`, so the first request for any video is `PROVIDE { languageCode: null }`, and
@@ -320,10 +320,22 @@ it is a bootstrapping aid, not a second source of truth.
 
 ### The MKV fixtures are generated, not committed
 
-`test/fixtures/*.mkv` is produced by `npm run fixtures`, which drives `ffmpeg` over
-a synthesised test pattern. No third-party media, nothing to attribute, and two
+`test/mkv/*.mkv` is produced by `npm run fixtures`, which drives `ffmpeg` over a
+synthesised test pattern. No third-party media, nothing to attribute, and two
 seconds to rebuild — which is why they are generated rather than checked in as
 opaque binaries.
+
+They live in their own directory rather than in `test/fixtures/` because the two
+are gitignored for **different reasons** and only one is reproducible:
+
+| Directory | Holds | Ignored because |
+| --- | --- | --- |
+| `test/fixtures/` | real caption captures | a capture carries a signed URL and a real title |
+| `test/mkv/` | generated MKV containers | regenerating is cheaper than storing |
+| `test/conformance/` | the fetched CELLAR suite | 190 MB of CC-BY film |
+
+All three are local-only. Collapsing them into one directory would hide that only
+the first is irreplaceable.
 
 There are five, and each exists for a case a simpler file cannot reach: three text
 subtitle tracks with real language metadata, a genuine `S_TEXT/ASS` track (whose

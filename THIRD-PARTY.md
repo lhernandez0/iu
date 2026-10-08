@@ -192,8 +192,8 @@ keys, with our own sentences. It contains no third-party text.
 a capture contains a signed caption URL and the real video's own title, neither of
 which belongs in a repository.
 
-`test/fixtures/*.mkv` is generated locally by `npm run fixtures` from an `ffmpeg`
-test pattern — no third-party media at all, and nothing to attribute.
+`test/mkv/*.mkv` is generated locally by `npm run fixtures` from an `ffmpeg` test
+pattern — no third-party media at all, and nothing to attribute.
 
 ## Conformance suite — CC BY, and this attribution is required
 

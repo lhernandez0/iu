@@ -2,13 +2,14 @@
 /**
  * Generate the MKV test fixtures.
  *
- * `test/fixtures/` is gitignored, so these files do not exist on a fresh clone —
- * which means `matroska.test.mjs` would SKIP rather than fail, and a skipped parser
- * test is worse than no parser test: it reports green while proving nothing.
+ * `test/mkv/` is gitignored and GENERATED rather than committed, so these files
+ * do not exist on a fresh clone — which means `mkv-container.test.mjs` would SKIP
+ * rather than fail, and a skipped parser test is worse than no parser test: it
+ * reports green while proving nothing.
  *
- * So the files are generated rather than committed, and this is the generator.
- * `ffmpeg` is the only requirement. Everything is a synthesised test pattern, so
- * no third-party media is involved.
+ * Being generated is why they are not in `test/fixtures/` with the real captures:
+ * that directory holds files which cannot be reproduced, and these can be rebuilt
+ * in two seconds by anyone with `ffmpeg`.
  *
  * **Why generated files and not hand-written bytes:** a parser proven only against
  * fixtures its own author wrote has been proven against its author. A muxer writes
@@ -16,7 +17,7 @@
  * accommodating witness.
  *
  * Usage:  npm run fixtures
- *         node tools/make-fixtures.mjs [--force]
+ *         node tools/mkv-fixtures.mjs [--force]
  */
 
 import { execFileSync } from 'node:child_process';
@@ -25,7 +26,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(ROOT, 'test', 'fixtures');
+const OUT = join(ROOT, 'test', 'mkv');
 const force = process.argv.includes('--force');
 
 if (!force && existsSync(join(OUT, 'three-tracks.mkv'))) {
@@ -167,15 +168,18 @@ ffmpeg([
   'notag.mkv',
 ]);
 
-console.log('unnamed.mkv — no Language element at all, which is not the same as und');
-ffmpeg([
-  ...SHORT_VIDEO,
-  '-i', 'en.srt',
-  '-map', '0:v', '-map', '1',
-  '-c:v', 'libx264', '-preset', 'ultrafast',
-  '-c:s', 'copy',
-  'unnamed.mkv',
-]);
+// **There is no `unnamed.mkv`, and that is deliberate.**
+//
+// The case worth testing is a track with NO `Language` element at all, which
+// Matroska defines as English — and `ffmpeg` cannot produce it. Omitting the
+// metadata does not omit the element; it writes `und` instead, so an "unnamed"
+// fixture built this way is byte-for-byte a duplicate of `notag.mkv`. That was the
+// case until this comment existed, and the two were reported as separate coverage
+// while testing exactly the same bytes.
+//
+// So the absent case is reached by editing a real file instead: `Void` (0xEC) is
+// the element the format provides for exactly this, and one of the same length
+// replaces the language without shifting a single byte — see the test.
 
 // The source subtitle files are inputs, not fixtures — every one of them is
 // embedded in a container above, so leaving them loose would put four stray files
@@ -184,4 +188,4 @@ for (const temp of ['en.srt', 'zh.srt', 'ja.ass', 'untagged.srt']) {
   rmSync(join(OUT, temp), { force: true });
 }
 
-console.log('\nfixtures written to test/fixtures/');
+console.log('\nfixtures written to test/mkv/');

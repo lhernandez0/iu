@@ -1,5 +1,5 @@
 /**
- * Matroska subtitle extraction, against REAL files.
+ * The Matroska container parser, against REAL files.
  *
  * The fixtures are not hand-written byte sequences — they are produced by
  * `ffmpeg`, so they are files a real muxer wrote, with real EBML framing, real
@@ -8,11 +8,13 @@
  * the author also wrote proves very little, and a muxer is more honest about the
  * format than either of us.
  *
- * `test/fixtures/` is gitignored, as the caption fixtures are and for the same
- * reason — they came from real tooling. `test/fixtures/README.md` records the
- * `ffmpeg` command that regenerates each one.
+ * `test/mkv/` is gitignored because the files are GENERATED, not committed — they
+ * are rebuilt in two seconds by `npm run fixtures`. That is a different reason from
+ * `test/fixtures/`, which holds real captures and is ignored because a capture
+ * contains a signed URL. Both are gitignored; only one is reproducible, which is
+ * why they are separate directories.
  *
- * Run: node test/matroska.test.mjs
+ * Run: node test/mkv-container.test.mjs
  */
 
 import { readFileSync, existsSync } from 'node:fs';
@@ -28,7 +30,7 @@ import {
 } from '../src/reader/matroska.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const FIXTURES = join(ROOT, 'test', 'fixtures');
+const FIXTURES = join(ROOT, 'test', 'mkv');
 
 let failures = 0;
 let checks = 0;
@@ -188,6 +190,71 @@ section('track discovery on a real three-track file');
   // it as a language code it would then look up a word list for.
   const tracks = await readMatroskaTracks(readerFor('notag.mkv'));
   check('an undetermined language is null, not "und"', tracks.map((t) => t.language), [null]);
+  // And it is NOT treated as the English default, because the file SAID it does
+  // not know. `und` is knowledge; absence is not. Conflating them is what left the
+  // CELLAR suite's English subtitles offered but unmarked.
+  check('and it is not defaulted to English', tracks.map((t) => t.languageDefaulted), [false]);
+}
+
+section('an ABSENT Language element is English, per the specification');
+
+{
+  // **The case `ffmpeg` cannot produce.** Omitting the metadata does not omit the
+  // element — it writes `und` — so this is reached by editing a real file instead.
+  //
+  // `Void` (0xEC) is the element Matroska provides for padding without meaning,
+  // and a six-byte Void replaces `22 B5 9C 83 75 6E 64` (`Language`, 3 bytes,
+  // "und") exactly. Nothing shifts, so every ancestor size and offset stays
+  // correct and the container remains valid — which is what makes this a real file
+  // with one field removed rather than a hand-built byte sequence.
+  const original = readFileSync(join(FIXTURES, 'notag.mkv'));
+  const language = Buffer.from([0x22, 0xb5, 0x9c, 0x83, 0x75, 0x6e, 0x64]);
+  const at = original.indexOf(language);
+  check('the fixture has a Language element to remove', at > 0, true);
+
+  const patched = Buffer.from(original);
+  // **The replacement must be exactly seven bytes**, or every offset after it
+  // shifts and the container stops being valid — which the first attempt at this
+  // did, by one byte, and the symptom was a file that parsed to no tracks at all.
+  //
+  // `Language` is 3 (id) + 1 (size) + 3 (\"und\") = 7. `Void` is 1 (id `EC`) + 1
+  // (size `85`) + 5 (payload), which is the same seven. `Void` is the element the
+  // format provides for padding with no meaning, so this is a legal edit rather
+  // than a corruption.
+  const VOID_OF_SEVEN = Buffer.from([0xec, 0x85, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+  // EVERY occurrence, not the first. The file has a video track and a subtitle
+  // track and both carry `und`, so replacing only the first would strip the video
+  // track's language and leave the one under test intact — which is exactly what
+  // happened, and the test reported `null` while appearing to have patched.
+  let patchedCount = 0;
+  for (let i = 0; i < patched.length; ) {
+    const found = patched.indexOf(language, i);
+    if (found < 0) break;
+    VOID_OF_SEVEN.copy(patched, found);
+    patchedCount++;
+    i = found + VOID_OF_SEVEN.length;
+  }
+  check('both language elements were replaced', patchedCount, 2);
+  // A byte-for-byte length match is the property that keeps the container valid,
+  // so it is asserted rather than assumed.
+  check('and the file is the same length afterwards', patched.length, original.length);
+
+  const { size, read } = {
+    size: patched.length,
+    read: async (offset, length) => new Uint8Array(patched.subarray(offset, offset + length)),
+  };
+  const tracks = await readMatroskaTracks({ size, read });
+
+  // Matroska defines the default as `eng`, so a file that omits it means English.
+  // Reporting null here is what made the CELLAR suite's English subtitles
+  // unmarkable: the panel offered the track, the user chose it, and no word list
+  // matched because there was no language code.
+  check('the track is present', tracks.length > 0, true);
+  check('its language is English', tracks.map((t) => t.language), ['en']);
+  // Flagged as an inference rather than a certainty, so a caller can tell the two
+  // apart — the CELLAR file relies on this default, and a file might not.
+  check('and it is flagged as defaulted, not read', tracks.map((t) => t.languageDefaulted), [true]);
 }
 
 section('cue extraction from a real file');

@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const FIXTURES = join(ROOT, 'test', 'fixtures');
+const FIXTURES = join(ROOT, 'test', 'mkv');
 const EXTENSION_ROOT = ROOT;
 
 let failures = 0;
@@ -104,6 +104,13 @@ try {
   panel = await context.newPage();
   await panel.goto(`chrome-extension://${extensionId}/src/sidepanel/sidepanel.html`);
 
+  // **Bring the reader back to the front, and this is not incidental.** The worker
+  // resolves the ACTIVE tab, so a file chosen in a background tab is a file the
+  // panel never hears about. That is correct behaviour — a real user picks a file
+  // while looking at the reader — but it makes the test order-dependent, which is
+  // how this suite failed intermittently with the panel opened last.
+  await reader.bringToFront();
+
   await panel.waitForTimeout(1500);
 
   check('the reader page loaded', await reader.title(), 'IU — video');
@@ -125,11 +132,16 @@ section('a real MKV produces subtitles in the panel');
   // and the row model.
   const before = await panel.textContent('#transcript');
 
+  // The reader is the tab the user is looking at, so the worker can resolve it.
+  // See the note at the top of this file about why the order is load-bearing.
+  await reader.bringToFront();
   // `setInputFiles` on the real hidden input, which is what the label opens.
   await reader.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
-  // Discovery reads the container and the panel refetches; give it room, because
-  // reading a film's cues is the slow path.
-  await panel.waitForTimeout(4000);
+
+  // Wait for the CONDITION rather than for a duration: extraction walks the media,
+  // and a fixed sleep is either slower than necessary or occasionally too short —
+  // the latter producing a flaky failure that reads as a code bug.
+  await panel.waitForFunction(() => document.querySelectorAll('.row').length > 0, null, { timeout: 15000 });
 
   const status = await reader.textContent('#status');
   const after = await panel.textContent('#transcript');
@@ -151,13 +163,43 @@ section('a real MKV produces subtitles in the panel');
   check('and the English gloss line', values.some((v) => v === 'en'), true);
 }
 
+section('machine translation is refused for a local file, visibly');
+
+{
+  // A local file cannot be machine-translated: it would mean a network request,
+  // which the extension does not make outside the video's own captions. So the
+  // reader reports every track as untranslatable and the panel DISABLES the two
+  // `MT` checkboxes rather than leaving them live.
+  //
+  // Asserted in the browser rather than in the panel's own suite because that is
+  // where the two halves meet: the panel already had the disable logic (`a track
+  // that cannot be translated disables its own box`), and it was only useful here
+  // if the reader actually reports the flag. A unit test on either side passes
+  // while the pair is broken — which is the exact shape of the bug that made the
+  // reader produce no transcript at all.
+  //
+  // Without this the checkboxes appear to work and change nothing, which is the
+  // failure mode this codebase designs against everywhere else.
+  const studyBox = panel.locator('#study-translated');
+  const glossBox = panel.locator('#gloss-translated');
+
+  check('the study MT box is disabled', await studyBox.isDisabled(), true);
+  check('and says why', (await studyBox.getAttribute('title')) ?? '', 'This caption track cannot be auto-translated');
+
+  // The gloss line may have no track selected, in which case the box is disabled
+  // for that reason instead. Either way it must not be tickable.
+  check('the gloss MT box is disabled', await glossBox.isDisabled(), true);
+  check('and it is not checked', await glossBox.isChecked(), false);
+}
+
 section('rows seek the real video element');
 
 {
   const rows = panel.locator('.row');
   if ((await rows.count()) > 1) {
+    await reader.bringToFront();
     await rows.nth(1).click();
-    await panel.waitForTimeout(600);
+    await panel.waitForFunction(() => document.getElementById('video') !== null, null, { timeout: 5000 }).catch(() => {});
     const time = await reader.evaluate(() => document.getElementById('video').currentTime);
     // Clicking a row must move the real <video>, not just the highlight.
     check('clicking a row seeks the video', time > 0, true);
@@ -173,8 +215,14 @@ section('the panel shows what is missing rather than an empty transcript');
   // transcript with no message is the failure shape the codebase designs against.
   const plain = await context.newPage();
   await plain.goto(`chrome-extension://${extensionId}/src/reader/reader.html`);
+  await plain.bringToFront();
   await plain.setInputFiles('#pick-files', join(FIXTURES, 'no-subtitles.mkv'));
-  await plain.waitForTimeout(3000);
+  // Same rule as above: wait for the message, not for a duration.
+  await plain.waitForFunction(
+    () => /READER005|no subtitles/i.test(document.getElementById('status')?.textContent ?? ''),
+    null,
+    { timeout: 15000 },
+  );
 
   const status = await plain.textContent('#status');
   check('a file with no subtitles says so', /READER005|no subtitles/i.test(status ?? ''), true);

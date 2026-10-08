@@ -1,0 +1,144 @@
+name: test
+
+# Three jobs rather than one, because they have genuinely different prerequisites
+# and a single job would make the cheapest signal wait on the slowest.
+#
+# The whole file exists because of a specific hazard: **the browser tier SKIPS
+# when it cannot find a browser, and a skip reports green.** Run locally that is
+# convenient; in CI it would mean the most valuable tests quietly did not run. So
+# the browser job installs a browser deliberately and then asserts the tier did not
+# skip. Without that assertion this workflow would be worse than nothing, because
+# it would claim coverage it does not have.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  hermetic:
+    name: hermetic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` needs the lockfile and installs exactly what it pins, which is
+      # what makes this job reproducible. It also fails loudly if `package.json`
+      # and `package-lock.json` have drifted apart, which is the failure worth
+      # catching early.
+      - run: npm ci
+
+      # The MKV fixtures are GENERATED, not committed, so a fresh checkout has
+      # none — and `mkv-container.test.mjs` fails rather than skipping without
+      # them, deliberately. Generating takes two seconds.
+      #
+      # Installed explicitly rather than assumed. It happens to be preinstalled on
+      # these runners, but a generator that is missing makes the fixture step fail
+      # confusingly, and the install is a no-op when it is already there.
+      - run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          fi
+          ffmpeg -version | head -1
+      - run: npm run fixtures
+
+      - run: npm test
+
+  browser:
+    name: browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: |
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          fi
+      - run: npm run fixtures
+
+      # A FULL Chromium, not the default. The bundled headless shell cannot load
+      # extensions at all, so `npx playwright install chromium` would download
+      # something the harness would then refuse. `--with-deps` also installs the
+      # shared libraries Chromium needs, which is the part that is easy to forget
+      # and produces a launch failure that reads like a code bug.
+      - run: npx playwright install --with-deps chromium
+
+      # Run ONCE, capturing the output, then assert on what was captured. The
+      # obvious version of this runs the whole tier a second time inside the check,
+      # which doubles the slowest job in the file to answer a question the first
+      # run already answered.
+      #
+      # `continue-on-error` is deliberately NOT used, and neither is a `|| true`. A
+      # red job here is the point: these tests found the bug that made the reader
+      # produce no transcript at all, and a tier that can be made green by accident
+      # is not a tier.
+      - name: run the browser tier, and fail if it skipped
+        run: |
+          set -o pipefail
+          npm run test:browser 2>&1 | tee /tmp/browser.log
+          # `findChrome` returning null makes every suite SKIP and the runner exit
+          # 0, so without this the job would pass while testing nothing — which is
+          # the exact failure this workflow exists to prevent.
+          if grep -q 'Skipped: no browser' /tmp/browser.log; then
+            echo "::error::the browser tier skipped — no Chromium was found, so nothing was tested"
+            exit 1
+          fi
+
+  conformance:
+    name: conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+
+      # ~190 MB of CC-BY film, downloaded rather than committed. Cached because it
+      # is static: the upstream suite has not changed in five years, and re-fetching
+      # it on every push would be 190 MB of nothing.
+      #
+      # **`*.mkv`, not the directory.** Caching `test/conformance` would also cache
+      # `run.mjs`, and a cache restore happens AFTER checkout — so a stale copy from
+      # a previous run would overwrite the freshly checked-out test file, and the
+      # suite would run last week's assertions against this week's parser. The
+      # narrower path is the difference between caching data and caching code.
+      - uses: actions/cache@v4
+        with:
+          path: test/conformance/*.mkv
+          key: cellar-matroska-test-files-wave1
+
+      - run: npm run conformance:fetch
+      - run: npm run test:conformance
+
+  # The store package, because the ZIP has been corrupt before and every check we
+  # had read the archive's central directory rather than its bytes. `make release`
+  # now shells out to `unzip -t`, so this job is what would have caught it.
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: make release
+
+      # Uploaded so a reviewer can download exactly what would be submitted
+      # without building it, which is the difference between reviewing a listing
+      # and reviewing a listing plus a build.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-zip
+          path: build/*.zip
+          if-no-files-found: error
