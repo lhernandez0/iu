@@ -43,6 +43,7 @@ import { indexDictionary, loadIndex, dictionaryPathFor, lookup, levelOf, levelCo
 import { markLine, listCoversLanguage, listForLanguage } from '../learn/marking.js';
 import { SETTINGS_AREA, storageKey as SETTINGS_KEY } from '../common/settings.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
+import { audioTracksSupported, listAudioTracks, remuxToTrack } from './audio-tracks.js';
 
 /**
  * The extension API namespace — `browser` where it exists (Chrome 148+ and always
@@ -77,6 +78,10 @@ const els = {
   muteButton: /** @type {HTMLButtonElement} */ (document.getElementById('mute')),
   volumeSlider: /** @type {HTMLInputElement} */ (document.getElementById('volume')),
   difficultyButton: /** @type {HTMLButtonElement} */ (document.getElementById('difficulty')),
+  audioButton: /** @type {HTMLButtonElement} */ (document.getElementById('audio')),
+  audioField: /** @type {HTMLElement} */ (document.getElementById('audio-field')),
+  audioSelect: /** @type {HTMLSelectElement} */ (document.getElementById('audio-track')),
+  audioNote: /** @type {HTMLElement} */ (document.getElementById('audio-note')),
 };
 
 // --- Settings ----------------------------------------------------------------
@@ -567,6 +572,11 @@ async function loadVideo(file) {
     // there are no embedded tracks we can offer, which is a normal state.
     setStatus(`Could not read subtitle tracks from this video (${String(error?.message ?? error)}). Use a .srt file.`, true);
   }
+
+  // Listed after playback starts, so the control never delays the video. The choice
+  // resets per file: a track index means nothing across two different files.
+  audioChoice = 0;
+  void describeAudio(file);
 
   // Load a track for the CAPTIONS, without waiting for the worker to ask.
   //
@@ -1251,6 +1261,173 @@ els.scrubber.addEventListener('change', () => {
 els.scrubber.addEventListener('keyup', () => {
   const seconds = Number(els.scrubber.value);
   if (Number.isFinite(seconds)) els.video.currentTime = seconds;
+});
+
+// --- Audio tracks ------------------------------------------------------------
+//
+// Which stream you HEAR, as opposed to which subtitle you read. The two are separate
+// controls because they are separate choices: a learner wants the original audio AND
+// the subtitle for it, not either one.
+//
+// ## The two paths, and why both
+//
+// `HTMLMediaElement.audioTracks` is the right way and is **not available in any
+// released browser** — measured 2026-10-09 on Chrome 148 and Firefox 155. It exists in
+// Blink behind `--enable-blink-features=AudioVideoTracks` (or the user-facing
+// `--enable-experimental-web-platform-features`), where it works correctly, and was
+// held back for years because switching froze playback. Fixed in M138.
+//
+// So: use the API when the browser has it, and fall back to remuxing the file into a
+// copy that contains only the chosen track when it does not. `audio-tracks.js` owns
+// both and explains the trade; this section owns the UI.
+//
+// **A third state is real and must be shown**: a file whose audio is AC-3, E-AC-3 or
+// DTS. The browser can neither decode those nor play them, so no amount of remuxing
+// helps, and the failure mode is SILENCE — no error, nothing to catch. The selector
+// says so instead.
+
+/** The file's audio tracks, as last listed. @type {Array<object>} */
+let audioTracks = [];
+/** The index of the track we want playing. */
+let audioChoice = 0;
+/** The file backing the current playback, which is what a remux would read. */
+let audioSourceFile = null;
+/** Whether a remux is in flight, so the control can say so rather than appear frozen. */
+let audioBusy = false;
+
+/**
+ * Build the selector from the file's own track list.
+ *
+ * Hidden when there is no choice, which is the overwhelmingly common case — a control
+ * over a single option is noise, and a one-track file has nothing to select.
+ *
+ * Shown but UNAVAILABLE when the capability is missing, rather than hidden: a missing
+ * button raises "where is it?", and a disabled control that explains itself answers it.
+ */
+function renderAudio() {
+  const choice = audioTracks.length > 1;
+  els.audioButton.hidden = !choice;
+  els.audioField.hidden = !choice;
+  if (!choice) {
+    els.audioSelect.replaceChildren();
+    els.audioNote.textContent = '';
+    return;
+  }
+
+  els.audioSelect.replaceChildren();
+  audioTracks.forEach((track) => {
+    const option = document.createElement('option');
+    option.value = String(track.index);
+    option.textContent = track.label;
+    option.selected = track.index === audioChoice;
+    els.audioSelect.append(option);
+  });
+
+  // A codec the browser cannot play is the one case where switching will not help,
+  // and it has to be said before the user waits for a remux that cannot succeed.
+  const chosen = audioTracks[audioChoice];
+  const unplayable = chosen && !chosen.playable;
+  els.audioNote.textContent = audioBusy
+    ? 'Preparing the selected audio\u2026'
+    : unplayable
+      ? `This file\u2019s audio (${chosen.codec.toUpperCase()}) is not supported by this browser.`
+      : audioTracksSupported()
+        ? 'The file\u2019s own audio tracks.'
+        : 'Switching a track rebuilds a copy of the file, which takes a moment.';
+  els.audioNote.classList.toggle('error', Boolean(unplayable));
+  els.audioSelect.disabled = audioBusy;
+}
+
+/**
+ * List the file's audio tracks and offer the selector if there is a choice.
+ *
+ * Runs AFTER playback starts and never blocks it: listing reads the container, and a
+ * viewer should not wait on a control they may not use.
+ *
+ * @param {File} file
+ */
+async function describeAudio(file) {
+  audioSourceFile = file;
+  audioTracks = [];
+  audioChoice = 0;
+  els.audioButton.hidden = true;
+  try {
+    const declared = await listAudioTracks(file);
+    // The file may have been replaced while this was reading.
+    if (file !== audioSourceFile) return;
+    audioTracks = declared;
+    renderAudio();
+  } catch {
+    // An unreadable container is not a failure: it means there is nothing to offer,
+    // which is a normal state for a format we do not parse.
+  }
+}
+
+/**
+ * Switch to a track, by whichever route the browser allows.
+ *
+ * @param {number} index
+ */
+async function selectAudioTrack(index) {
+  const track = audioTracks[index];
+  if (!track || audioBusy) return;
+  audioChoice = index;
+
+  // Path 1: the browser can do it. Preferred, because the browser then handles every
+  // codec it can play — including the ones we cannot decode at any price we would pay.
+  if (audioTracksSupported()) {
+    const list = [...els.video.audioTracks];
+    if (list.length > audioTracks.length) {
+      list.forEach((entry, at) => {
+        entry.enabled = at === index;
+      });
+      renderAudio();
+      return;
+    }
+  }
+
+  // Path 2: remux a copy containing only this track.
+  if (!audioSourceFile) {
+    renderAudio();
+    return;
+  }
+
+  audioBusy = true;
+  renderAudio();
+  const resumeAt = els.video.currentTime;
+  const wasPlaying = !els.video.paused;
+  try {
+    const remuxed = await remuxToTrack(audioSourceFile, index);
+    if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+    videoObjectUrl = URL.createObjectURL(remuxed);
+    els.video.src = videoObjectUrl;
+    els.video.load();
+    // Back to where they were: the blob is a different resource, so playback restarts
+    // from zero and a viewer who switched mid-film would lose their place.
+    els.video.addEventListener(
+      'loadedmetadata',
+      () => {
+        els.video.currentTime = Math.min(resumeAt, els.video.duration || resumeAt);
+        if (wasPlaying) void els.video.play().catch(() => {});
+      },
+      { once: true },
+    );
+  } catch (error) {
+    setStatus(`Could not switch audio track (${String(error?.message ?? error)}).`, true);
+  } finally {
+    audioBusy = false;
+    renderAudio();
+  }
+}
+
+els.audioButton.addEventListener('click', () => {
+  // Hidden means there is nothing to choose, so activating it must be a no-op.
+  if (els.audioButton.hidden) return;
+  els.audioSelect.focus();
+});
+
+els.audioSelect.addEventListener('change', (event) => {
+  void selectAudioTrack(Number(event.target.value));
 });
 
 // --- Volume ------------------------------------------------------------------

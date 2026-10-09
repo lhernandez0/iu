@@ -19,9 +19,22 @@
  * ## Where the video comes from
  *
  * `tools/ui/assets/preview.mp4` — a STREAM COPY (not a re-encode) of
- * `test/conformance/test5.mkv`, CELLAR's subtitle test file, which contains Big
- * Buck Bunny (Blender Foundation, CC BY 3.0). Built by `make-preview-video.mjs`,
- * which also extracts the file's own subtitle track for the captions.
+ * `test/conformance/test5.mkv`, CELLAR's subtitle test file. The film is **Elephants
+ * Dream** (Blender Foundation / Netherlands Media Art Institute, CC BY 2.5). Built by
+ * `make-preview-video.mjs`, which also extracts the file's own subtitle track for the
+ * captions.
+ *
+ * **The film is Elephants Dream even though the file's own `TITLE` tag says `Big Buck
+ * Bunny - test 8`.** That tag is wrong on this particular master, and reading it as
+ * fact is how the preview shipped claiming the wrong film under the wrong licence. The
+ * evidence that settles it is in the sample's OWN SUBTITLES: they name **Proog** and
+ * **Emo**, the two characters of Elephants Dream. Nothing in Big Buck Bunny says
+ * either name. The picture agrees — this file is dark, warm and saturated
+ * (`mean_rgb=(120,80,36)`, saturation 70%), where the actual Big Buck Bunny files
+ * (test1, test6) are bright and near-desaturated (`(180,179,161)`, 10%).
+ *
+ * A metadata field is a claim, not a fact. This is the same mistake as the filename
+ * label below, one file further in.
  *
  * The remux exists because **the VS Code integrated browser cannot play the
  * Matroska container at all** — measured: H.264 in MP4 plays, H.264 in MKV does not,
@@ -34,6 +47,37 @@ import { levelColour } from '/src/learn/wordlist.js';
 
 const params = new URLSearchParams(location.search);
 const SOURCE = params.get('src') ?? '/tools/ui/assets/preview.mp4';
+
+/**
+ * The file the user picked, if they have picked one.
+ *
+ * The bar shows this or, failing that, `SOURCE` — never a typed-in string. The label
+ * WAS a literal `Big Buck Bunny — test5.mkv` in the markup, which was wrong three
+ * times over: it kept claiming that after another file was opened, it was not the name
+ * of the file being loaded, and it named the wrong FILM. A label that is written
+ * rather than derived goes stale without anyone noticing, which is exactly what
+ * happened.
+ *
+ * @type {File|null}
+ */
+let pickedFile = null;
+
+/**
+ * CC BY attribution for the bundled sample, shown as the label's `title`.
+ *
+ * Required by the licence rather than decorative, and set in SCRIPT so it applies to
+ * the sample alone. A picked file gets its own name and no attribution, because we
+ * have no idea what it is.
+ *
+ * **Elephants Dream, and CC BY 2.5** — not Big Buck Bunny and 3.0. `THIRD-PARTY.md`
+ * had this right. The file's `TITLE` tag says Big Buck Bunny and is wrong; the
+ * subtitles name Proog and Emo, who exist only in Elephants Dream. The licence turns
+ * on this: CC BY 2.5 and 3.0 are different instruments, so naming the wrong one in an
+ * attribution is a licence defect, not a typo.
+ */
+const SAMPLE_TITLE =
+  'Elephants Dream (c) copyright 2006, Blender Foundation / Netherlands Media Art ' +
+  'Institute / www.elephantsdream.org — CC BY 2.5, remuxed from the CELLAR suite\u2019s test5.mkv';
 
 /**
  * The file's own subtitle track, extracted by `make-preview-video.mjs`.
@@ -85,6 +129,7 @@ const els = {
   audioBadge: document.querySelector('#pp-audio .pp-audio-badge'),
   muteButton: document.getElementById('pp-mute'),
   volumeSlider: /** @type {HTMLInputElement} */ (document.getElementById('pp-volume')),
+  filename: /** @type {HTMLElement} */ (document.getElementById('pp-filename')),
 };
 
 // --- Settings ----------------------------------------------------------------
@@ -575,7 +620,7 @@ function describeAudioTrack(track, index) {
  * common case, and a control over a single option is noise — the same reason the row
  * of caption settings appears only while captions are on.
  *
- * Filenames are never used to name a track. `Big Buck Bunny — test5.mkv` says nothing
+ * Filenames are never used to name a track. `preview.mp4` says nothing
  * about which stream is which; the file's own metadata does, or nothing does.
  */
 function renderAudioTracks() {
@@ -656,6 +701,24 @@ function selectAudioTrack(index) {
     track.enabled = at === index;
   });
   renderAudioTracks();
+}
+
+/**
+ * Write the bar's filename from whatever is ACTUALLY loaded.
+ *
+ * Two sources and no third: a file the user picked, whose base name is all the web
+ * platform will give us (`file.name` has no path — verified), or the bundled sample's
+ * own file name. Never a literal — see `pickedFile`.
+ */
+function paintFilename() {
+  if (pickedFile) {
+    els.filename.textContent = pickedFile.name;
+    els.filename.title = '';
+    return;
+  }
+  els.filename.textContent = SOURCE.split('/').pop();
+  // The attribution belongs to the bundled sample and to nothing else.
+  els.filename.title = SOURCE.includes('preview.') ? SAMPLE_TITLE : SOURCE;
 }
 
 // --- The time bar ------------------------------------------------------------
@@ -976,6 +1039,8 @@ document.getElementById('pp-open').addEventListener('click', () => {
     if (!file) return;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = URL.createObjectURL(file);
+    pickedFile = file;
+    paintFilename();
     els.placeholder.hidden = true;
     els.resume.hidden = true;
     els.video.src = objectUrl;
@@ -1227,6 +1292,7 @@ applyDifficulty();
 // Before the file loads, so the stored level is in force from the first frame rather
 // than arriving a moment in.
 applyVolume();
+paintFilename();
 setBarState();
 showBar();
 els.video.src = SOURCE;

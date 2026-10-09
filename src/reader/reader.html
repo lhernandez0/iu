@@ -123,6 +123,29 @@
               button in the transport row. The reader's row is fuller, and the reason
               above is the reader's.
             -->
+            <span class="divider" aria-hidden="true"></span>
+
+            <!--
+              WHICH audio track.
+
+              A waveform, not a speaker: the speaker is volume, which is a different
+              question asked right next to this one. The count says how many there are,
+              which is the thing a waveform cannot show.
+            -->
+            <button type="button" class="button icon-button" id="audio" aria-label="Audio track" title="Audio track" hidden>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 9.5v5M8 6.5v11M12 9v6M16 6.5v11M20 9.5v5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              </svg>
+            </button>
+
+            <label class="field" id="audio-field" hidden>
+              <span class="visually-hidden">Audio track</span>
+              <select id="audio-track" aria-label="Audio track"></select>
+            </label>
+            <!-- Why a track cannot be used, as a sentence. Not a `title` on the
+                 disabled select: that is the one place a browser will not show it. -->
+            <span class="audio-note" id="audio-note"></span>
+
             <button type="button" class="button icon-button" id="difficulty" aria-label="Hide difficulty band" aria-pressed="true" title="Hide difficulty band">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <rect x="2.5" y="9" width="19" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />

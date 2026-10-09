@@ -500,6 +500,20 @@ body {
   text-align: center;
 }
 
+/* --- Audio tracks ---------------------------------------------------------- */
+
+/* The reason a track cannot be used, inline in the row. Not a `title`: a disabled
+   select does not show one, so the explanation would exist and be unreachable. */
+.audio-note {
+  color: var(--muted);
+  font-size: 11px;
+  max-width: 34ch;
+}
+
+.audio-note.error {
+  color: var(--danger);
+}
+
 /* --- Volume --------------------------------------------------------------- */
 
 /*

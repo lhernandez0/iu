@@ -12,7 +12,10 @@
       changes applied, so they can be USED rather than described.
 
       It plays a REAL file: `tools/ui/assets/preview.mp4`, a stream copy of CELLAR's
-      `test5.mkv`, which contains Big Buck Bunny (Blender Foundation, CC BY 3.0).
+      `test5.mkv`. The film is **Elephants Dream** (Blender Foundation / Netherlands
+      Media Art Institute, CC BY 2.5) — the file's own `TITLE` tag says "Big Buck
+      Bunny", which is wrong on this master, and the sample's subtitles name Proog and
+      Emo, who exist only in Elephants Dream.
 
       This is the review artifact for the reader UI: what behaves wrongly here
       behaves wrongly in the reader. What it does NOT carry is the content-message
@@ -58,7 +61,7 @@
              as broken. -->
         <div class="pp-placeholder" id="pp-placeholder">
           <p class="pp-placeholder-title">Loading a real sample…</p>
-          <p class="pp-placeholder-hint">Big Buck Bunny (Blender Foundation, CC BY 3.0) — remuxed from CELLAR test5.mkv</p>
+          <p class="pp-placeholder-hint">Elephants Dream (Blender Foundation / Netherlands Media Art Institute, CC BY 2.5) — remuxed from CELLAR test5.mkv</p>
           <p class="pp-placeholder-error" id="pp-placeholder-error"></p>
         </div>
 
@@ -149,7 +152,20 @@
                 <path d="M3 11h18" fill="none" stroke="currentColor" stroke-width="1.8" />
               </svg>
             </button>
-            <span class="pp-filename" title="Big Buck Bunny (CC BY 3.0, Blender Foundation) — CELLAR Matroska test file">Big Buck Bunny — test5.mkv</span>
+            <!--
+              The filename, written by the script from whatever is ACTUALLY playing.
+
+              It was hardcoded to `Big Buck Bunny — test5.mkv`, which was wrong twice:
+              it kept saying that after another file was opened, and even for the
+              bundled sample the name shown was not the name of the file being loaded.
+              A label that is typed rather than derived goes stale silently, which is
+              exactly what happened. It also named the wrong FILM — see the note at the
+              top of the file.
+
+              The `title` carries the CC BY attribution because the bundled sample is
+              Elephants Dream. It is set in script too, so only the sample names it.
+            -->
+            <span class="pp-filename" id="pp-filename"></span>
 
             <span class="pp-spacer"></span>
 

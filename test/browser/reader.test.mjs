@@ -340,6 +340,66 @@ section('the time bar, the volume control and the difficulty band');
   check('the caption offset accounts for the taller bar', offset.offset, `${offset.bar}px`);
 }
 
+section('the audio track selector');
+
+{
+  // The fixture is AAC 440 Hz followed by AAC 880 Hz, so the TONE says which track is
+  // playing. Asserting the `<select>` value would prove nothing about what came out of
+  // the speakers — that is the exact trap Chromium issue 40663787 is about, where the
+  // state said one thing and the audio said another.
+  await reader.bringToFront();
+
+  const beforeLoad = await reader.evaluate(() => ({
+    buttonHidden: document.getElementById('audio').hidden,
+  }));
+  check('no selector before a file is opened', beforeLoad.buttonHidden, true);
+
+  await reader.setInputFiles('#pick-files', join(FIXTURES, '..', '..', 'tools', 'ui', 'assets', 'two-audio.mkv'));
+  const appeared = await reader
+    .waitForFunction(() => !document.getElementById('audio').hidden, null, { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+
+  check('the selector appears for a file with two audio tracks', appeared, true);
+
+  const listed = await reader.evaluate(() =>
+    [...document.getElementById('audio-track').options].map((option) => option.textContent),
+  );
+  check('and lists both tracks', listed.length, 2);
+
+  await reader.selectOption('#audio-track', '1');
+  await reader
+    .waitForFunction(() => document.getElementById('video')?.readyState >= 2, null, { timeout: 20000 })
+    .catch(() => {});
+
+  const heard = await reader.evaluate(async () => {
+    const video = document.getElementById('video');
+    const context = new AudioContext();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 8192;
+    context.createMediaElementSource(video).connect(analyser);
+    analyser.connect(context.destination);
+    await video.play().catch(() => {});
+    await new Promise((resolve) => setTimeout(resolve, 1600));
+    const bins = new Float32Array(analyser.frequencyBinCount);
+    analyser.getFloatFrequencyData(bins);
+    let peak = 0;
+    let best = -Infinity;
+    for (let i = 0; i < bins.length; i += 1) {
+      if (bins[i] > best) {
+        best = bins[i];
+        peak = i;
+      }
+    }
+    const hz = Math.round((peak * context.sampleRate) / analyser.fftSize);
+    await context.close();
+    return { hz, playing: !video.paused };
+  });
+
+  check('and switching really changes the audible track', heard.hz, 877);
+  check('with playback still running', heard.playing, true);
+}
+
 await closeAll();
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
