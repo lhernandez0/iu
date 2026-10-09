@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU — progress bar options</title>
+    <link rel="icon" href="/icons/icon-32.png" />
+    <style>
+      /*
+       * A COMPARISON SHEET for the video progress bar. Not part of the extension:
+       * nothing here ships, and the page exists to pick a design by looking at it.
+       *
+       * Every option draws the SAME timeline — the same cue boundaries and the same
+       * marked-word positions — so the only thing that differs between the cards is
+       * how that information is presented. A sheet where each option had its own made
+       * up data would be comparing the data, not the design.
+       *
+       * All of them are driven by one shared position, so the playhead can be moved
+       * and every option moves with it. That is what makes them comparable rather
+       * than just adjacent.
+       */
+      :root {
+        --bg: #12141a;
+        --fg: #e6e8ee;
+        --muted: #8b93a7;
+        --accent: #7aa2f7;
+        --surface: #1b1e25;
+        --edge: #262b38;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        padding: 20px 22px 40px;
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+
+      h1 { margin: 0 0 4px; font-size: 17px; }
+
+      .sub {
+        margin: 0 0 18px;
+        color: var(--muted);
+        font-size: 12.5px;
+        max-width: 82ch;
+        line-height: 1.55;
+      }
+
+      /* The shared controls: one position and one hover simulation. */
+      .controls {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: 10px 14px;
+        margin-bottom: 18px;
+        border: 1px solid var(--edge);
+        border-radius: 8px;
+        background: #111318;
+      }
+
+      .controls label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+
+      .controls input[type='range'] { width: 260px; accent-color: var(--accent); }
+
+      .controls .readout {
+        min-width: 9ch;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+      }
+
+      .card {
+        border: 1px solid var(--edge);
+        border-radius: 10px;
+        background: #14161c;
+        overflow: hidden;
+      }
+
+      .card-head { padding: 10px 14px 8px; }
+      .card h2 { margin: 0 0 3px; font-size: 13.5px; }
+
+      .card p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 11.5px;
+        line-height: 1.5;
+      }
+
+      /* The picture area. Dark, because a progress bar lives over video. */
+      .screen {
+        position: relative;
+        height: 116px;
+        background:
+          radial-gradient(120% 80% at 20% 10%, #2a3040 0%, #0b0d12 70%),
+          #0b0d12;
+        display: flex;
+        align-items: flex-end;
+      }
+
+      /* Each option draws inside this, so the bar's geometry is identical and only
+         its treatment differs. */
+      .stage {
+        width: 100%;
+        padding: 0 12px 10px;
+      }
+
+      .verdict { padding: 9px 14px 12px; font-size: 11.5px; color: var(--muted); }
+      .verdict b { color: var(--fg); font-weight: 600; }
+
+      /* ---- shared pieces ---------------------------------------------------- */
+
+      /* The timeline every option is built on. `--p` is the playhead position, as a
+         percentage, set once by the shared control. */
+      .track {
+        position: relative;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.16);
+        border-radius: 999px;
+      }
+
+      .played {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: var(--p, 32%);
+        background: var(--accent);
+        border-radius: 999px;
+      }
+
+      /* Marked-word density: a warm overlay showing where the hard words are. Drawn
+         from the same fake data in every option that uses it. */
+      .density {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        overflow: hidden;
+        opacity: 0.85;
+      }
+
+      .density i {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        background: #e0b33c;
+        opacity: 0.55;
+      }
+
+      .cue {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      .head {
+        position: absolute;
+        top: 50%;
+        left: var(--p, 32%);
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background: var(--fg);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ---- 1. flat ---------------------------------------------------------- */
+
+      #flat .track { height: 4px; }
+      #flat .head { width: 0; height: 0; opacity: 0; }
+      #flat .track:hover .head { width: 13px; height: 13px; opacity: 1; }
+      #flat .track { transition: height 120ms ease; }
+      #flat .track:hover { height: 6px; }
+
+      /* ---- 2. pill with a permanent thumb ----------------------------------- */
+
+      #pill .track { height: 6px; }
+      #pill .head { width: 13px; height: 13px; }
+
+      /* ---- 3. expand on hover ---------------------------------------------- */
+      /* The whole bar grows and the thumb appears, so the resting state is a hairline
+         you barely notice and the active state is easy to grab. */
+
+      #grow .track { height: 3px; transition: height 140ms ease; }
+      #grow .track:hover { height: 9px; }
+      #grow .head { width: 0; height: 0; opacity: 0; transition: all 140ms ease; }
+      #grow .track:hover .head { width: 0; height: 0; }
+      #grow .track:hover .played::after {
+        content: '';
+        position: absolute;
+        right: -7px;
+        top: 50%;
+        width: 14px;
+        height: 14px;
+        transform: translateY(-50%);
+        border-radius: 50%;
+        background: var(--fg);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ---- 4. difficulty heat ------------------------------------------------ */
+      /* One bar that encodes BOTH position and difficulty: the played/unplayed
+         colouring is under, and the marks are drawn as a warm band above it. Reads
+         as "the hard part starts about 60% in". */
+
+      #heat .stack { display: flex; flex-direction: column; gap: 3px; }
+      #heat .difficulty { position: relative; height: 6px; border-radius: 999px; }
+      #heat .track { height: 6px; }
+      #heat .head { width: 13px; height: 13px; top: 50%; }
+
+      /* ---- 5. cue ticks ------------------------------------------------------ */
+
+      #ticks .track { height: 6px; overflow: visible; }
+      #ticks .head { width: 13px; height: 13px; }
+      #ticks .cue { top: -3px; bottom: -3px; }
+
+      /* ---- 6. chapters / spans ---------------------------------------------- */
+      /* Cue spans drawn as segments rather than ticks, so short cues are visible as
+         gaps — which is where the silence is. */
+
+      #spans .spans { position: relative; height: 8px; }
+      #spans .spans i {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.3);
+      }
+      #spans .spans i.done { background: var(--accent); }
+      #spans .head { width: 11px; height: 11px; }
+
+      /* ---- 7. thumb with a preview pip --------------------------------------- */
+      /* The most "modern player" shape: a fat thumb, and a small bubble above it
+         showing the time — which is what makes scrubbing precise without looking at
+         the counter at the far end of the bar. */
+
+      #pip .track { height: 5px; }
+      #pip .head { width: 15px; height: 15px; }
+      #pip .bubble {
+        position: absolute;
+        bottom: 16px;
+        left: var(--p, 32%);
+        transform: translateX(-50%);
+        padding: 2px 7px;
+        border-radius: 5px;
+        background: #23262f;
+        border: 1px solid var(--edge);
+        color: var(--fg);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      #pip .bubble::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        bottom: -4px;
+        width: 7px;
+        height: 7px;
+        transform: translateX(-50%) rotate(45deg);
+        background: #23262f;
+        border-right: 1px solid var(--edge);
+        border-bottom: 1px solid var(--edge);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Progress bar options</h1>
+    <p class="sub">
+      Every card draws the <b>same timeline</b> — the same cue boundaries, the same
+      marked-word density — so what differs is only how it is presented. The accent
+      colour is the played region; the amber is where the <b>unknown words</b> cluster,
+      which is information a generic player cannot show and this one can. Move the
+      shared playhead and hover a bar to compare the resting and active states.
+    </p>
+
+    <div class="controls">
+      <label>
+        Position
+        <input id="pos" type="range" min="0" max="100" step="0.1" value="32" />
+        <span class="readout" id="pos-out">0:15 / 0:46</span>
+      </label>
+      <label>
+        <input type="checkbox" id="show-density" checked />
+        Show the difficulty band
+      </label>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <script type="module">
+      // --- The shared data ------------------------------------------------------
+      //
+      // Fixed, hand-written, and identical for every option. A real cue list would be
+      // better data and a worse comparison: the point here is the DESIGN, and the
+      // density pattern has to be legible in a screenshot.
+
+      const DURATION = 46;
+
+      // Where the marked words sit, as spans of the timeline. Deliberately lumpy —
+      // an evenly spread density would make every option look equally informative.
+      const DENSE = [
+        [4, 8], [9, 12], [18, 21], [19.5, 23], [22, 25], [30, 33],
+        [31, 34.5], [33, 36], [40, 42], [41, 44],
+      ];
+
+      // Cue starts, roughly every 3-4s, ending at the run time. Two clusters with a
+      // long quiet stretch between them, because that is what a real transcript does.
+      const CUES = [
+        0, 3.4, 6.2, 9.1, 12.5, 15.2, 18.4, 21.0, 24.3, 27.6,
+        30.2, 33.5, 36.1, 38.8, 41.3, 44.0,
+      ];
+
+      const pct = (seconds) => `${(seconds / DURATION) * 100}%`;
+
+      /** The amber density band, shared by the options that use one. */
+      function densitySpans(className = '') {
+        return DENSE.map(
+          ([from, to]) =>
+            `<i class="${className}" style="left:${pct(from)};width:${pct(to - from)}"></i>`,
+        ).join('');
+      }
+
+      const cueTicks = () => CUES.map((t) => `<span class="cue" style="left:${pct(t)}"></span>`).join('');
+
+      /**
+       * The options.
+       *
+       * `screen` is the markup inside the picture area; `note` is why the option
+       * exists or what it costs, written to be argued with rather than sold.
+       */
+      const OPTIONS = [
+        {
+          id: 'flat',
+          name: '1. Hairline, grows on hover',
+          note: 'Resting state is a 3px line with no thumb, so nothing competes with the picture. On hover it thickens to 6px and a thumb appears to grab.',
+          why: 'The most common modern shape (YouTube, Vimeo). <b>Cost:</b> no thumb at rest means the position is only readable as a colour boundary, which is fine for watching and worse for scrubbing precisely.',
+          screen: `<div class="track"><div class="played"></div><div class="head"></div></div>`,
+        },
+        {
+          id: 'pill',
+          name: '2. Pill with a always-visible thumb',
+          note: 'A 6px rounded track and a permanent thumb. Nothing hides, nothing moves on hover.',
+          why: 'Predictable and easy to grab, and the position is unambiguous. <b>Cost:</b> the thumb is chrome sitting on the picture the whole time, and it is the least interesting of the shapes.',
+          screen: `<div class="track"><div class="played"></div><div class="head"></div></div>`,
+        },
+        {
+          id: 'grow',
+          name: '3. Grows, thumb appears on hover',
+          note: 'A 3px resting track that grows to 9px and sprouts a thumb only under the pointer.',
+          why: 'Quiet when you are watching and precise when you are not. <b>Cost:</b> a moving target is harder to hit deliberately — you have to aim, let it grow, then grab.',
+          screen: `<div class="track"><div class="played"></div><div class="head"></div></div>`,
+        },
+        {
+          id: 'heat',
+          name: '4. Position + difficulty band',
+          note: 'Two stacked strips: the scrubber on top, an amber density band beneath showing where the unknown words cluster.',
+          why: '<b>The one that is specific to this product.</b> You can see that the hard stretch starts about 60% in and lasts to the end, before you get there. <b>Cost:</b> twice the height, and two bars means the eye has to learn which one is interactive.',
+          screen: `<div class="stack">
+            <div class="track"><div class="played"></div><div class="head"></div></div>
+            <div class="difficulty"><div class="density">${densitySpans()}</div></div>
+          </div>`,
+        },
+        {
+          id: 'ticks',
+          name: '5. Cue ticks on the bar',
+          note: 'One bar, with a hairline tick at every cue boundary. Positions are exact; the ticks tell you how far a line is.',
+          why: 'Cheap and precise, and cue stepping suddenly has a visual anchor. <b>Cost:</b> a dense transcript becomes a grey smear — 400 ticks on a 900px bar is not information.',
+          screen: `<div class="track"><div class="played"></div>${cueTicks()}<div class="head"></div></div>`,
+        },
+        {
+          id: 'spans',
+          name: '6. Cue spans (gaps visible)',
+          note: 'Each cue drawn as a segment, so the GAPS between them show up as breaks in the bar.',
+          why: 'Shows the shape of the speech — where it is dense and where there is silence — which is genuinely useful for finding a passage again. <b>Cost:</b> short cues on a long film are sub-pixel; it works here because this file is 46s, and would not on a 2-hour film.',
+          screen: `<div class="spans" id="span-row"></div><div class="head" style="bottom:-8px;top:auto"></div>`,
+        },
+        {
+          id: 'pip',
+          name: '7. Thumb with a time bubble',
+          note: 'A larger thumb, with a bubble above it showing the time under the pointer.',
+          why: 'Makes scrubbing precise without looking away to the counter at the far end — which is the thing that actually slows down "go back to that bit". <b>Cost:</b> the bubble is in the way when you are watching, so it should only appear while dragging.',
+          screen: `<div class="bubble">0:15</div><div class="track"><div class="played"></div><div class="head"></div></div>`,
+        },
+      ];
+
+      const grid = document.getElementById('grid');
+      grid.innerHTML = OPTIONS.map(
+        (option) => `
+        <div class="card" id="${option.id}">
+          <div class="card-head">
+            <h2>${option.name}</h2>
+            <p>${option.note}</p>
+          </div>
+          <div class="screen"><div class="stage">${option.screen}</div></div>
+          <div class="verdict">${option.why}</div>
+        </div>`,
+      ).join('');
+
+      // The cue spans for option 6, built from the same cue list.
+      const spanRow = document.getElementById('span-row');
+      spanRow.innerHTML = CUES.map((start, index) => {
+        const end = CUES[index + 1] ?? DURATION;
+        const width = Math.max(0.4, ((end - start) / DURATION) * 100 - 0.4);
+        return `<i style="left:${pct(start)};width:${width}%" data-start="${start}" data-end="${end}"></i>`;
+      }).join('');
+
+      // --- The shared position -------------------------------------------------
+
+      const pos = document.getElementById('pos');
+      const out = document.getElementById('pos-out');
+
+      /** `0:15`-style. */
+      const timecode = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+
+      function paint() {
+        const percent = Number(pos.value);
+        const at = (percent / 100) * DURATION;
+        document.documentElement.style.setProperty('--p', `${percent}%`);
+        out.textContent = `${timecode(at)} / ${timecode(DURATION)}`;
+
+        // The bubble in option 7 follows the thumb, and the cue spans fill in behind
+        // the playhead — the two bits of state that live in the DOM rather than in a
+        // custom property.
+        const bubble = document.querySelector('#pip .bubble');
+        if (bubble) bubble.textContent = timecode(at);
+        for (const span of spanRow.children) {
+          const start = Number(span.dataset.start);
+          const end = Number(span.dataset.end);
+          span.classList.toggle('done', at >= end);
+        }
+      }
+
+      pos.addEventListener('input', paint);
+
+      // The density band can be turned off, so each option can be judged with and
+      // without the extra information.
+      document.getElementById('show-density').addEventListener('change', (event) => {
+        for (const band of document.querySelectorAll('#heat .difficulty')) {
+          band.style.visibility = event.target.checked ? 'visible' : 'hidden';
+        }
+      });
+
+      paint();
+    </script>
+  </body>
+</html>

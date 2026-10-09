@@ -1,0 +1,572 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU — what to show on the progress bar</title>
+    <link rel="icon" href="/icons/icon-32.png" />
+    <style>
+      /*
+       * A COMPARISON SHEET: option 3 (the growing hairline) as the base, with
+       * different things drawn on it.
+       *
+       * Not part of the extension. Nothing here ships.
+       *
+       * ## Why the cards are grouped the way they are
+       *
+       * The base bar is 3px at rest and 9px on hover, deliberately almost invisible.
+       * So the real question for any overlay is not "is this information useful" but
+       * **what does it cost the resting state** — and that splits the options three
+       * ways, which is the grouping below:
+       *
+       *   - costs NOTHING   — encoded into the bar's own colour or texture
+       *   - costs a HOVER   — appears only when the pointer is there
+       *   - costs HEIGHT    — a permanent second strip, which is what the difficulty
+       *                       band did and what this page is looking for alternatives to
+       *
+       * Every card draws the SAME transcript data — one synthetic cue list, one set of
+       * marked-word levels — so what differs is only the presentation. A shared
+       * playhead drives all of them, so they can be compared at one position rather
+       * than side by side at different ones.
+       */
+      :root {
+        --bg: #12141a;
+        --fg: #e6e8ee;
+        --muted: #8b93a7;
+        --accent: #7aa2f7;
+        --edge: #262b38;
+        --p: 28%;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        padding: 20px 22px 48px;
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+
+      h1 { margin: 0 0 4px; font-size: 17px; }
+
+      .sub {
+        margin: 0 0 18px;
+        color: var(--muted);
+        font-size: 12.5px;
+        max-width: 84ch;
+        line-height: 1.55;
+      }
+
+      .controls {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        padding: 10px 14px;
+        margin-bottom: 20px;
+        border: 1px solid var(--edge);
+        border-radius: 8px;
+        background: #111318;
+      }
+
+      .controls label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+      .controls input[type='range'] { width: 300px; accent-color: var(--accent); }
+      .readout { min-width: 11ch; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+      h2.group {
+        margin: 26px 0 4px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #7d838f;
+      }
+
+      .group-note {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 12px;
+        max-width: 84ch;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+      }
+
+      .card {
+        border: 1px solid var(--edge);
+        border-radius: 10px;
+        background: #14161c;
+        overflow: hidden;
+      }
+
+      .card-head { padding: 10px 14px 6px; }
+      .card h3 { margin: 0 0 3px; font-size: 13.5px; }
+      .card p { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+
+      /* Dark, because a progress bar lives over video. */
+      .screen {
+        position: relative;
+        height: 128px;
+        background: radial-gradient(120% 80% at 22% 8%, #2a3040 0%, #0b0d12 72%), #0b0d12;
+        display: flex;
+        align-items: flex-end;
+      }
+
+      .stage { width: 100%; padding: 0 14px 16px; }
+
+      .verdict { padding: 9px 14px 12px; font-size: 11.5px; color: var(--muted); }
+      .verdict b { color: var(--fg); font-weight: 600; }
+
+      /* ---- the base bar (option 3) ------------------------------------------- */
+
+      /*
+       * A 3px hairline that grows to 9px under the pointer and sprouts a thumb. This
+       * is the base every card shares; only the overlays differ.
+       *
+       * The `.base` wrapper is what the hover tests against, so a card whose overlay
+       * needs its own hover target does not fight this one.
+       */
+      .base { position: relative; padding: 6px 0; }
+
+      .track {
+        position: relative;
+        height: 3px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.16);
+        transition: height 140ms ease;
+      }
+
+      .base:hover .track { height: 9px; }
+
+      .played {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: var(--p);
+        background: var(--accent);
+        border-radius: 999px;
+        z-index: 2;
+      }
+
+      /* The thumb, only under the pointer. */
+      .thumb {
+        position: absolute;
+        left: var(--p);
+        top: 50%;
+        width: 0;
+        height: 0;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background: var(--fg);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+        opacity: 0;
+        transition: width 140ms ease, height 140ms ease, opacity 140ms ease;
+        z-index: 3;
+      }
+
+      .base:hover .thumb { width: 14px; height: 14px; opacity: 1; }
+
+      /* The current line, shown as a segment on the bar. Used by a couple of cards. */
+      .line-span {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.34);
+        z-index: 1;
+      }
+
+      /* Density, drawn INSIDE the track so it adds no height. Only the unplayed part
+         is visible, because `.played` draws over it at z-index 2 — which is the right
+         way round: the interesting part is always ahead. */
+      .density {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        overflow: hidden;
+        z-index: 0;
+      }
+
+      .density i { position: absolute; top: 0; bottom: 0; }
+
+      /* ---- height-costing overlays -------------------------------------------- */
+
+      .band { position: relative; height: 5px; margin-top: 3px; border-radius: 999px; }
+      .band i { position: absolute; top: 0; bottom: 0; border-radius: 1px; }
+      .band.soft { background: rgba(255, 255, 255, 0.06); }
+
+      /* ---- hover-only overlays ------------------------------------------------ */
+
+      .hover-only { opacity: 0; transition: opacity 150ms ease; }
+      .base:hover .hover-only { opacity: 1; }
+
+      .guttermark {
+        position: absolute;
+        top: -2px;
+        width: 1px;
+        height: 13px;
+        background: rgba(255, 255, 255, 0.55);
+        z-index: 4;
+      }
+
+      .bubble {
+        position: absolute;
+        left: var(--p);
+        bottom: 22px;
+        transform: translateX(-50%);
+        padding: 3px 8px;
+        border-radius: 6px;
+        background: #23262f;
+        border: 1px solid var(--edge);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        z-index: 5;
+      }
+
+      .bubble b { color: var(--fg); font-weight: 600; }
+      .bubble span { color: var(--muted); }
+
+      /* The wall: one marker at the hardest stretch. */
+      .wall {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #c94f4f;
+        box-shadow: 0 0 0 2px rgba(11, 13, 18, 0.7);
+        z-index: 4;
+      }
+
+      /* A legend for the level ramp. */
+      .ramp { display: flex; gap: 4px; align-items: center; }
+      .ramp i { width: 14px; height: 8px; border-radius: 2px; }
+      .ramp span { color: var(--muted); font-size: 10.5px; margin-left: 4px; }
+    </style>
+  </head>
+  <body>
+    <h1>What to show on the bar</h1>
+    <p class="sub">
+      The base is option 3 — a 3px hairline that grows on hover — in every card. What
+      differs is what is drawn on it. The cards are grouped by the thing that actually
+      matters for a bar this thin: <b>what the overlay costs when you are just
+      watching</b>. One shared playhead drives all of them, so they can be compared at
+      the same position.
+    </p>
+
+    <div class="controls">
+      <label>
+        Position
+        <input id="pos" type="range" min="0" max="100" step="0.1" value="28" />
+        <span class="readout" id="pos-out"></span>
+      </label>
+      <label class="ramp">
+        <i style="background:#4f9d69"></i>
+        <i style="background:#8fbf4f"></i>
+        <i style="background:#e0b33c"></i>
+        <i style="background:#e07f3c"></i>
+        <i style="background:#c94f4f"></i>
+        <span>level 1 → 5, the real ramp</span>
+      </label>
+    </div>
+
+    <div id="groups"></div>
+
+    <script type="module">
+      import { levelColour } from '/src/learn/wordlist.js';
+
+      // --- One synthetic transcript, shared by every card ----------------------
+      //
+      // Hand-shaped rather than random, because random density makes every option look
+      // equally informative. The shape is deliberate: an easy opening, a dense middle
+      // where new vocabulary lands, a quiet stretch, then a hard run to the end — which
+      // is what a real episode looks like.
+
+      const DURATION = 182;
+
+      /**
+       * The cues. `hard` is the highest level marked, `n` how many words.
+       *
+       * A real transcript would give this from the dictionary; the SHAPE is what the
+       * overlays are being judged on, and a real one would be no more legible.
+       */
+      const cues = (() => {
+        const out = [];
+        let t = 0.4;
+        // Taken from what the ramp is for: easier at the start, harder later.
+        const shape = [
+          0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1,
+          2, 2, 2, 3, 3, 2, 2, 2, 1, 1, 2, 2,
+          0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1,
+          2, 3, 3, 4, 4, 4, 4, 5, 5, 5, 4, 4,
+          3, 3, 4, 4, 4, 5,
+        ];
+        for (const level of shape) {
+          const duration = 1.4 + (level % 3) * 0.8 + (out.length % 4) * 0.35;
+          out.push({
+            start: t,
+            end: t + duration,
+            level,
+            n: level === 0 ? 0 : 1 + (level % 3),
+          });
+          // A gap after some cues — real subtitles do not tile the timeline, and the
+          // silence overlays need somewhere to point at.
+          t += duration + (out.length % 5 === 3 ? 2.4 : out.length % 7 === 5 ? 4.1 : 0.35);
+          if (t > DURATION - 1) break;
+        }
+        return out;
+      })();
+
+      const pct = (seconds) => `${(seconds / DURATION) * 100}%`;
+
+      const activeCue = (at) =>
+        cues.find((cue) => at >= cue.start && at < cue.end) ?? null;
+
+      /**
+       * A run of cues with the same level, as one span.
+       *
+       * Runs rather than a span per cue: adjacent cues of the same level drawn
+       * separately leave hairline gaps from rounding, and the band then looks striped
+       * rather than continuous.
+       */
+      function runs(levelOf) {
+        const out = [];
+        let current = null;
+        for (const cue of cues) {
+          const level = levelOf(cue);
+          if (!level) {
+            if (current) out.push(current);
+            current = null;
+            continue;
+          }
+          if (current && current.level === level && cue.start - current.end < 1.2) {
+            current.end = cue.end;
+            continue;
+          }
+          if (current) out.push(current);
+          current = { level, start: cue.start, end: cue.end };
+        }
+        if (current) out.push(current);
+        return out;
+      }
+
+      // The stretches with NO marks at all — the parts you can coast through.
+      const quietRuns = () => {
+        const out = [];
+        let current = null;
+        for (const cue of cues) {
+          if (cue.level === 0) {
+            if (current && cue.start - current.end < 2.6) {
+              current.end = cue.end;
+              continue;
+            }
+            if (current) out.push(current);
+            current = { start: cue.start, end: cue.end };
+            continue;
+          }
+          if (current) out.push(current);
+          current = null;
+        }
+        if (current) out.push(current);
+        return out;
+      };
+
+      const markedRuns = runs((cue) => cue.level || null);
+      const quiet = quietRuns();
+
+      // The single hardest stretch: the run whose cues carry the highest level.
+      const wall = markedRuns.reduce(
+        (best, run) => (run.level > (best?.level ?? 0) ? run : best),
+        null,
+      );
+
+      const totalMarked = cues.reduce((sum, cue) => sum + cue.n, 0);
+
+      /** The amber band, shared. */
+      const densityMarkup = (colourFor) =>
+        markedRuns
+          .map(
+            (run) =>
+              `<i style="left:${pct(run.start)};width:${pct(run.end - run.start)};background:${colourFor(run)}"></i>`,
+          )
+          .join('');
+
+      // --- The cards -----------------------------------------------------------
+
+      const CARDS = {
+        nothing: {
+          name: 'Baseline — nothing',
+          note: 'The plain bar, for reference. Nothing is encoded and nothing is added.',
+          why: '<b>The control case.</b> Everything below is judged against how much this asks of you and how much it gives back.',
+          screen: '',
+        },
+
+        tint: {
+          name: 'Density tinted into the bar',
+          note: 'The marked-word density is drawn INSIDE the track, under the played region, so it costs no height at all.',
+          why: '<b>Free.</b> The same information the difficulty band carried, at zero vertical cost — the hairline simply has a warm cast where the hard words are. <b>Risk:</b> at 3px resting height a tint is nearly invisible, so this really only reads on hover, when the bar is 9px.',
+          screen: `<div class="density">${densityMarkup(() => 'rgba(224,179,60,0.5)')}</div>`,
+        },
+
+        levelTint: {
+          name: 'Level-tinted bar',
+          note: 'The same idea, but the tint is coloured by the LEVEL of the words there — so it says how hard, not merely that something is.',
+          why: '<b>Strictly more information than one amber band</b>, for the same zero cost. You can see the difficulty ramp across the film: green early, red at the end. Uses the real level ramp, so the colours mean the same here as on a word.',
+          screen: `<div class="density">${densityMarkup((run) => `color-mix(in srgb, ${levelColour(run.level, 5)} 60%, transparent)`)}</div>`,
+        },
+
+        currentLine: {
+          name: 'Current line, extended',
+          note: 'The cue being spoken is drawn as a segment on the bar, so you can see how long the line runs and where it starts.',
+          why: '<b>The cheapest genuinely new thing.</b> Cue stepping and replay both get a visual target, and you can see whether you are near the start or the end of a long sentence — which nothing else on the screen tells you. <b>Cost:</b> one more thing moving on the bar.',
+          screen: `<div class="line-span" data-span></div>`,
+        },
+
+        hoverCues: {
+          name: 'Cue boundaries, on hover only',
+          note: 'Hairline ticks at every cue, appearing only while the pointer is on the bar.',
+          why: 'Keeps the resting bar clean and answers "how far is the next line" when you are actually scrubbing. <b>Cost:</b> hover-only means it never helps you decide WHERE to scrub, only where to stop once you have started.',
+          screen: `<div class="hover-only" data-ticks></div>`,
+        },
+
+        hoverBubble: {
+          name: 'Time under the pointer',
+          note: 'A bubble above the thumb, and the time the pointer is over — appearing only on hover.',
+          why: 'Fixes the real friction in "go back to that bit": right now you drag, look away to the counter, and drag again. <b>Cost:</b> none at rest. <b>Note:</b> the honest version shows the time under the POINTER, not the playhead — otherwise it just repeats the counter.',
+          screen: `<div class="bubble"><b data-bubble>0:00</b> <span data-bubble-rest>· 24 marked</span></div>`,
+        },
+
+        quiet: {
+          name: 'Quiet stretches',
+          note: 'The parts with NO marked words drawn as faint spans — the opposite of the density band.',
+          why: '<b>A different question, and a useful one.</b> Density says where it is hard; this says where you can relax, or where to park the review and come back later. Arguably the more actionable of the two — "skip to the easy bit" is a thing you do.',
+          screen: `<div class="density">${densityMarkup(() => 'rgba(255,255,255,0.13)')}</div>`,
+        },
+
+        wall: {
+          name: 'The wall — one marker',
+          note: 'A single dot at the hardest run in the whole film. Nothing else.',
+          why: '<b>The lowest-cost version of "where is the hard part".</b> One pixel of information that survives at 3px, does not smear on a two-hour film, and is the thing you actually want from a scrubber before you start: how bad does it get, and when.',
+          screen: `<div class="wall" data-wall></div>`,
+        },
+      };
+
+      const GROUPS = [
+        {
+          title: 'Costs nothing — encoded in the bar',
+          note: 'No extra height and no hover needed. The only cost is legibility at 3px, which is why two of these really only read on hover.',
+          ids: ['nothing', 'tint', 'levelTint'],
+        },
+        {
+          title: 'Costs a hover',
+          note: 'Invisible until the pointer arrives, so the resting bar stays a hairline. The trade is that none of it helps you decide where to scrub, only where to stop.',
+          ids: ['hoverCues', 'hoverBubble'],
+        },
+        {
+          title: 'Shows something the bar normally cannot',
+          note: 'Still no extra height, but these need a real reading of the transcript — where the unknown words are, how long a line runs — rather than the geometry of the bar.',
+          ids: ['currentLine', 'quiet', 'wall'],
+        },
+      ];
+
+      const groups = document.getElementById('groups');
+      groups.innerHTML = GROUPS.map(
+        (group) => `
+        <h2 class="group">${group.title}</h2>
+        <p class="group-note">${group.note}</p>
+        <div class="grid">
+          ${group.ids
+            .map((id) => {
+              const card = CARDS[id];
+              return `
+                <div class="card" data-id="${id}">
+                  <div class="card-head">
+                    <h3>${card.name}</h3>
+                    <p>${card.note}</p>
+                  </div>
+                  <div class="screen">
+                    <div class="stage">
+                      <div class="base">
+                        <div class="track">
+                          ${card.screen}
+                          <div class="played"></div>
+                          <div class="thumb"></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="verdict">${card.why}</div>
+                </div>`;
+            })
+            .join('')}
+        </div>`,
+      ).join('');
+
+      // --- The bits that need real geometry -----------------------------------
+
+      // Cue ticks for the hover-only card. Built once, hidden until hover.
+      const tickHost = document.querySelector('[data-ticks]');
+      tickHost.innerHTML = cues
+        .map((cue) => `<span class="guttermark" style="left:${pct(cue.start)}"></span>`)
+        .join('');
+
+      const spanEl = document.querySelector('[data-span]');
+      const bubbleEl = document.querySelector('[data-bubble]');
+      const wallEl = document.querySelector('[data-wall]');
+      if (wallEl) {
+        wallEl.style.left = `calc(${pct(wall.start)} - 3.5px)`;
+        wallEl.title = `hardest stretch: level ${wall.level}`;
+      }
+
+      const base = document.querySelector('.base');
+
+      /**
+       * Where the pointer is over the bar, as seconds.
+       *
+       * The bubble shows THIS rather than the playhead: a bubble that repeats the
+       * playhead's time is just the counter moved, and the thing that makes scrubbing
+       * precise is knowing what is under the cursor before you let go.
+       */
+      base.addEventListener('pointermove', (event) => {
+        const track = base.querySelector('.track');
+        const box = track.getBoundingClientRect();
+        const ratio = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+        if (bubbleEl) bubbleEl.textContent = timecode(ratio * DURATION);
+      });
+
+      // --- The shared playhead --------------------------------------------------
+
+      const pos = document.getElementById('pos');
+      const out = document.getElementById('pos-out');
+
+      const timecode = (seconds) =>
+        `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
+
+      function paint() {
+        const percent = Number(pos.value);
+        const at = (percent / 100) * DURATION;
+        document.documentElement.style.setProperty('--p', `${percent}%`);
+        out.textContent = `${timecode(at)} / ${timecode(DURATION)}`;
+
+        // The current line's extent, so the segment card shows a real cue rather than
+        // a decoration.
+        const cue = activeCue(at) ?? cues[cues.length - 1];
+        if (spanEl) {
+          spanEl.style.left = pct(cue.start);
+          spanEl.style.width = pct(Math.max(0.6, cue.end - cue.start));
+        }
+      }
+
+      pos.addEventListener('input', paint);
+      paint();
+    </script>
+  </body>
+</html>

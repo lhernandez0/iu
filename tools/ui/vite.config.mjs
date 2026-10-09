@@ -62,9 +62,53 @@ function scenariosPlugin() {
   };
 }
 
+/**
+ * Give media files the content type their extension implies.
+ *
+ * **Vite's static server does not know `.mkv`, and serves it with an EMPTY
+ * `Content-Type`.** Chromium then refuses to decode it and reports `media error 4`
+ * (`SRC_NOT_SUPPORTED`) with `net::ERR_ABORTED` — a failure that reads as a codec
+ * problem and is not one. `canPlayType('video/x-matroska; codecs="avc1..."')`
+ * answers "probably" throughout, which makes the wrong diagnosis very convincing.
+ *
+ * The player preview plays a real 31MB sample from `test/conformance/`, so this
+ * has to be right or the preview cannot start at all.
+ *
+ * @returns {import('vite').Plugin}
+ */
+function mediaTypesPlugin() {
+  const TYPES = new Map([
+    ['.mkv', 'video/x-matroska'],
+    ['.mp4', 'video/mp4'],
+    ['.m4v', 'video/mp4'],
+    ['.webm', 'video/webm'],
+    ['.mov', 'video/quicktime'],
+    ['.ogv', 'video/ogg'],
+    ['.srt', 'text/plain; charset=utf-8'],
+    ['.vtt', 'text/vtt; charset=utf-8'],
+    ['.ass', 'text/plain; charset=utf-8'],
+    ['.ssa', 'text/plain; charset=utf-8'],
+  ]);
+
+  return {
+    name: 'iu-media-types',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url ?? '').split('?')[0];
+        const dot = path.lastIndexOf('.');
+        const type = dot === -1 ? undefined : TYPES.get(path.slice(dot).toLowerCase());
+        // Set only, never override: an extension that IS known to Vite already has
+        // a correct type, and this must not second-guess it.
+        if (type && !res.getHeader('Content-Type')) res.setHeader('Content-Type', type);
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
   root: ROOT,
-  plugins: [scenariosPlugin()],
+  plugins: [scenariosPlugin(), mediaTypesPlugin()],
   server: {
     port: PORT,
     // Loopback only. This serves the repository with no authentication, so it

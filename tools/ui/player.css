@@ -1,0 +1,896 @@
+/*
+ * Styles for the video-reader player mock ONLY.
+ *
+ * The NEW part is the overlay bar, its single lifecycle, the two-row layout and
+ * the caption strip in both placements. There is no shipped stylesheet to sit on
+ * top of: `src/reader/reader.css` is a couple of hundred lines for one page, and
+ * the point of this mock is to change that page's layout, so borrowing its rules
+ * would mean borrowing the thing under discussion.
+ *
+ * The colours are the reader's, so it looks like the page it is mocking.
+ */
+
+:root {
+  --pp-bg: #12141a;
+  --pp-fg: #e6e8ee;
+  --pp-muted: #8b93a7;
+  --pp-accent: #7aa2f7;
+  --pp-danger: #f7768e;
+  --pp-edge: #262b38;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body.player-preview {
+  background: var(--pp-bg);
+  color: var(--pp-fg);
+  font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * The caption text scale, separate from the mock's own chrome.
+ *
+ * INHERITED into the caption lines rather than set on them, which is what lets the
+ * size control move both placements from one value — a rule setting a size on each
+ * element would need two of every change.
+ */
+body.player-preview {
+  --caption-size: 20px;
+}
+
+/* --- The mock's own strip (not part of the player) ------------------------ */
+
+.pp-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 10px 14px;
+  background: #111318;
+  border-bottom: 1px solid var(--pp-edge);
+}
+
+.pp-controls h1 {
+  margin: 0 8px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.pp-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pp-label {
+  margin-right: 2px;
+  color: #7d838f;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.pp-chip {
+  padding: 4px 11px;
+  border: 1px solid #333844;
+  border-radius: 999px;
+  background: #1b1e25;
+  color: var(--pp-fg);
+  font: 12px/1.4 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.pp-chip:hover {
+  border-color: var(--pp-accent);
+}
+
+.pp-chip[aria-pressed='true'] {
+  border-color: var(--pp-accent);
+  background: #24304a;
+}
+
+.pp-note {
+  margin: 0 0 0 auto;
+  color: var(--pp-muted);
+  font-size: 12px;
+}
+
+/* --- The stage ------------------------------------------------------------ */
+
+.pp-stage {
+  position: relative;
+  flex: 1 1 auto;
+  /* A floor, so the player cannot be squeezed to nothing by the chrome around it.
+     `flex: 1` alone let the breakdown take whatever it wanted and left a sliver of
+     video — which is the opposite of the point of a player preview. */
+  min-height: 320px;
+  /* `min-height: 0` so this flex child can actually shrink — without it the
+     video's intrinsic height wins and the caption strip is pushed off the bottom
+     instead of shrinking the picture, which is the difference between a strip that
+     is pinned and one that overflows. */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  overflow: hidden;
+}
+
+.pp-picture {
+  position: relative;
+  flex: 1;
+  /* The same trick one level down, for the picture above the `below` strip. */
+  min-height: 0;
+  display: flex;
+}
+
+#pp-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  /* The video is NOT the fullscreen target — `.pp-stage` is. See the fullscreen
+     handler in player.mjs: fullscreening the media element would make an overlay
+     bar impossible, because only the fullscreened element and its descendants are
+     rendered. */
+}
+
+.pp-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+  text-align: center;
+}
+
+.pp-placeholder[hidden] {
+  display: none;
+}
+
+.pp-placeholder-title {
+  margin: 0;
+  font-size: 17px;
+}
+
+.pp-placeholder-hint {
+  margin: 0;
+  color: var(--pp-muted);
+  font-size: 12px;
+}
+
+.pp-placeholder-error {
+  margin: 8px 0 0;
+  max-width: 60ch;
+  color: var(--pp-danger);
+  font-size: 12px;
+}
+
+/* --- Captions, both placements ------------------------------------------- */
+
+.pp-captions {
+  text-align: center;
+}
+
+.pp-captions[hidden] {
+  display: none;
+}
+
+.pp-caption-line {
+  margin: 0;
+}
+
+.pp-caption-primary {
+  font-size: var(--caption-size);
+  line-height: 1.35;
+}
+
+.pp-caption-secondary {
+  margin-top: 4px;
+  font-size: calc(var(--caption-size) * 0.75);
+  color: var(--pp-muted);
+}
+
+/* An empty gloss takes no space, rather than leaving a blank row the height of a
+   line. `:empty` is why the gloss is written as an empty text node rather than a
+   non-breaking space. */
+.pp-caption-secondary:empty {
+  display: none;
+}
+
+/*
+ * OVERLAY — floats over the bottom of the picture.
+ *
+ * **ONE card with the lines stacked inside it, not a card per line.** The first
+ * version made each line its own `inline-block` with its own background and a margin
+ * between them, so two lines drew as two separate boxes — "a second caption" beside
+ * the first rather than two lines of one subtitle. Real subtitles are one block: a
+ * background behind the whole thing, with the lines left to stack inside it.
+ *
+ * So the CONTAINER is the card and the lines are plain blocks within it, and the card
+ * is `inline-block` so it shrink-wraps to its widest line — which is what gives the
+ * background its tight edges instead of a full-width gradient's hard seam.
+ *
+ * `--bar-offset` keeps the card clear of the control bar when that is showing. It is
+ * measured from the bar's real height rather than hardcoded, because the bar grows
+ * when the caption row appears.
+ */
+.pp-captions-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--bar-offset, 44px) + 10px);
+  padding: 0 18px;
+  text-align: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* The card. `inline-block` so it is only as wide as its content, and a `ch`
+   max-width so a long line wraps rather than spanning the picture. */
+.pp-captions-overlay .pp-caption-card {
+  display: inline-block;
+  max-width: min(46ch, 92%);
+  padding: 4px 14px;
+  border-radius: 6px;
+  background: rgba(8, 10, 14, 0.74);
+  text-align: center;
+}
+
+.pp-captions-overlay .pp-caption-line {
+  margin: 0;
+  /* A text shadow rather than a darker fill, so the text stays readable over a
+     bright frame without a slab of near-black behind it. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+/* The gloss sits just under the line being learned — closer than a paragraph gap,
+   because the two are one subtitle rather than two. */
+.pp-captions-overlay .pp-caption-secondary {
+  margin-top: 1px;
+}
+
+/*
+ * BELOW — its own row, and the picture shrinks above it.
+ *
+ * Deliberately not an overlay: an overlay covers the picture, and "I just want to
+ * see the subs" is exactly the case where covering it is wrong. It also lives
+ * outside `.pp-bar`, so the bar's auto-hide cannot take the captions with it.
+ */
+.pp-captions-below {
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  background: #14161c;
+  border-top: 1px solid var(--pp-edge);
+  /* A long cue wraps and the strip scrolls rather than growing without bound — it
+     is pinned, so unbounded growth would eat the picture. */
+  max-height: 22vh;
+  overflow-y: auto;
+}
+
+.pp-captions-below .pp-caption-primary,
+.pp-captions-below .pp-caption-secondary {
+  max-width: min(52ch, 100%);
+  margin-inline: auto;
+}
+
+/* --- The resume banner ---------------------------------------------------- */
+
+.pp-resume {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid #33405c;
+  border-radius: 8px;
+  background: rgba(22, 27, 40, 0.94);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+}
+
+.pp-resume[hidden] {
+  display: none;
+}
+
+.pp-resume-text {
+  font-size: 13px;
+}
+
+.pp-resume-go {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--pp-accent);
+  color: #0b0d12;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pp-resume-skip {
+  padding: 5px 10px;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pp-muted);
+  cursor: pointer;
+}
+
+/* --- The bar ------------------------------------------------------------- */
+
+.pp-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* Extra top padding is the FADE, not spacing: the gradient needs room to reach
+     full transparency before the element ends, or its top edge is a visible
+     horizontal seam over a bright frame — which is the artefact that shows up in
+     fullscreen once the browser chrome is out of the way. */
+  padding: 26px 10px 6px;
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 12, 17, 0) 0,
+    rgba(10, 12, 17, 0.55) 22px,
+    rgba(10, 12, 17, 0.88) 100%
+  );
+  transition: opacity 200ms ease;
+}
+
+/*
+ * Hidden because the pointer is idle, NOT because anything collapsed.
+ *
+ * `opacity` plus `pointer-events` rather than `display: none`, so the controls keep
+ * their place in the tab order — hiding them outright would break the `focusin`
+ * rule that exists to get them back.
+ */
+.pp-bar[data-hidden='true'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-bar {
+    transition: none;
+  }
+}
+
+.pp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pp-row-captions {
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/*
+ * The second row disappears when the captions are off.
+ *
+ * `[hidden]` rather than a class, so the state is in the DOM where a test can read
+ * it and a screen reader honours it, not only in a stylesheet.
+ */
+.pp-row-captions[hidden] {
+  display: none;
+}
+
+.pp-spacer {
+  flex: 1 1 auto;
+}
+
+.pp-row-label,
+.pp-field-label {
+  color: #808999;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.pp-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/*
+ * The audio track panel.
+ *
+ * Its own block INSIDE the caption row rather than a fourth row, because an audio
+ * track is not a caption setting and should not look like one — but it is also not
+ * worth a row of its own, which would be a whole strip of the bar for one select.
+ * The border-left is what says "this is a different thing" without spending height.
+ */
+.pp-audio-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 10px;
+  border-left: 1px solid #333844;
+  align-self: stretch;
+  justify-content: center;
+  min-width: 0;
+}
+
+.pp-audio-panel[hidden] {
+  display: none;
+}
+
+.pp-audio-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+/* The select's options are file-supplied text and can be long; the control should
+   not stretch the row to fit the longest one in the list. */
+.pp-audio-head select {
+  max-width: 180px;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The count, on the button.
+ *
+ * An audio selector has no visible state of its own — unlike the caption toggle,
+ * "audio is on" is not a thing. What a reader wants to know is whether a choice
+ * EXISTS, and a bare speaker icon says nothing. A superscript count says it at a
+ * glance without opening the panel.
+ */
+.pp-audio-badge {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 1px 2px;
+  border-radius: 3px;
+  background: var(--pp-accent);
+  color: #0b0d12;
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-audio-badge:empty,
+.pp-audio-badge[hidden] {
+  display: none;
+}
+
+/*
+ * Volume: the mute button and its slider, as one unit.
+ *
+ * The slider is narrow on purpose. It shares the transport row with the transport,
+ * the cue stepping, the speed select and five toggles, and a full-width slide would
+ * push the row into wrapping on a modest window — a wrapped transport row is a worse
+ * outcome than a short slider. It is a set-and-forget control; the mute button is the
+ * one that gets used mid-playback.
+ */
+.pp-volume {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pp-volume-slider {
+  /* `accent-color` themes the native control, which keeps keyboard support and the
+     correct announcements for free. The modern guidance is explicit that this beats
+     reimplementing a range as a div, which loses the states the native one has. */
+  accent-color: var(--pp-accent);
+  width: 72px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  /* A wide slider's minimum sits above the row's own, which would stop the row from
+     ever shrinking. */
+  min-width: 0;
+}
+
+/*
+ * The mute icon's two states.
+ *
+ * Driven by the BUTTON's `aria-pressed` rather than by `[hidden]` on the <g>. Two
+ * reasons, and the first is a bug this fixed: `hidden` is an HTML attribute whose UA
+ * style is `display: none`, and SVG elements do not inherit the HTML UA stylesheet, so
+ * both glyphs drew on top of each other. The second is that `aria-pressed` is already
+ * the state the button announces, so keying the picture off it means the icon and the
+ * label cannot disagree.
+ */
+#pp-mute[aria-pressed='true'] #pp-volume-cross,
+#pp-mute:not([aria-pressed='true']) #pp-volume-waves {
+  display: inline;
+}
+
+#pp-mute[aria-pressed='true'] #pp-volume-waves,
+#pp-mute:not([aria-pressed='true']) #pp-volume-cross {
+  display: none;
+}
+
+.pp-status {
+  margin: 0;
+  color: var(--pp-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An error is the one thing in the bar that must be readable, so it takes the
+   danger colour and keeps the bar open (the pinning is in script). */
+.pp-status.error {
+  color: var(--pp-danger);
+}
+
+/*
+ * The time bar.
+ *
+ * A row of its own above the transport, because that is where a player puts it and
+ * because it wants the full width. `gap` is small: a scrubber that spans the row is
+ * easier to hit than one squeezed by generous spacing.
+ */
+.pp-row-time {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.pp-scrub {
+  position: relative;
+  flex: 1 1 auto;
+  /* The cue strip is absolutely positioned against this, so it has to be a
+     positioning context. */
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The cue marks. Absolutely positioned BEHIND the range, so the range's own track
+   and thumb draw over them and the control stays a real input. */
+.pp-cues {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Taller than the range's track and vertically centred on it, so a mark reads as a
+     tick on the timeline rather than a stripe across it. */
+  top: 50%;
+  height: 8px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.pp-cues span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* The colour is set per run in JS from the level ramp, so a colour here means the
+     same thing it means on a word in the transcript. This is only the fallback for a
+     span the script has not coloured. */
+  background: color-mix(in srgb, var(--pp-accent) 60%, transparent);
+  border-radius: 1px;
+}
+
+/*
+ * The scrubber itself.
+ *
+ * `appearance: none` plus explicit pseudo-element rules, because the default range is
+ * a different control in every browser and none of them match the bar. The pieces are
+ * styled separately — track, then thumb — which is the only way to size them
+ * independently.
+ */
+.pp-scrubber {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.pp-scrubber::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  /* The played region is drawn by the thumb's position, so the track is the unplayed
+     colour and `--played` is layered over it from the left. Using a background
+     gradient keyed to `--played` avoids a second element to keep in step. */
+  background: linear-gradient(
+    to right,
+    var(--pp-accent) 0%,
+    var(--pp-accent) var(--played, 0%),
+    rgba(255, 255, 255, 0.18) var(--played, 0%),
+    rgba(255, 255, 255, 0.18) 100%
+  );
+}
+
+.pp-scrubber::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.pp-scrubber::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--pp-accent);
+}
+
+.pp-scrubber::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pp-fg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.pp-scrubber::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pp-fg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.pp-scrubber:focus-visible {
+  outline: 2px solid var(--pp-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Tabular figures, so the counter does not jitter as the seconds tick — a
+   proportional font changes width every time `1` becomes `8`. */
+.pp-time {
+  color: var(--pp-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  /* A fixed width, so the two ends do not push the scrubber around as the numbers
+     grow from `0:09` to `0:10` to `1:00:00`. */
+  min-width: 4.5ch;
+  text-align: center;
+}
+
+/* --- Controls ------------------------------------------------------------ */
+
+.pp-button {
+  /* The audio button carries a count badge, which is positioned against it. */
+  position: relative;
+  padding: 5px 10px;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  background: rgba(27, 30, 37, 0.92);
+  color: var(--pp-fg);
+  font: 12px/1.4 system-ui, sans-serif;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.pp-button:hover {
+  border-color: var(--pp-accent);
+}
+
+/*
+ * Icon buttons: a square target around an SVG.
+ *
+ * `display: grid; place-items: center` rather than padding, so every icon is the
+ * same size regardless of how much of its 24x24 viewBox it uses — padding would
+ * make a narrow glyph look like a narrower button.
+ */
+.pp-icon-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+}
+
+.pp-icon {
+  width: 18px;
+  height: 18px;
+  /* Icons take the button's colour, so hover, focus and the pressed state all work
+     without repeating the colour per-svg. Every path uses `currentColor`. */
+  color: inherit;
+  display: block;
+}
+
+.pp-primary {
+  background: var(--pp-accent);
+  color: #0b0d12;
+  font-weight: 600;
+}
+
+.pp-primary .pp-icon {
+  color: #0b0d12;
+}
+
+.pp-button[aria-pressed='true'] {
+  border-color: var(--pp-accent);
+  background: #24304a;
+}
+
+.pp-divider {
+  width: 1px;
+  height: 18px;
+  background: #333844;
+}
+
+.pp-speed select,
+.pp-field select,
+.pp-field input {
+  padding: 4px 6px;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  background: rgba(27, 30, 37, 0.92);
+  color: var(--pp-fg);
+  font: 12px/1.4 system-ui, sans-serif;
+}
+
+.pp-field input {
+  width: 54px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The segmented control for caption placement: one binary choice, so a switch is
+   clearer than a select — the current value is visible without opening anything. */
+.pp-seg {
+  display: inline-flex;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.pp-seg-button {
+  padding: 4px 10px;
+  border: 0;
+  border-right: 1px solid #333844;
+  background: rgba(27, 30, 37, 0.92);
+  color: var(--pp-muted);
+  font: 12px/1.4 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.pp-seg-button:last-child {
+  border-right: 0;
+}
+
+.pp-seg-button[aria-pressed='true'] {
+  background: #24304a;
+  color: var(--pp-fg);
+}
+
+.pp-filename {
+  color: var(--pp-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 30ch;
+}
+
+/* Focus must be visible even when the bar is faded — the rule the `focusin`
+   listener exists to honour. */
+.pp-button:focus-visible,
+.pp-seg-button:focus-visible,
+.pp-speed select:focus-visible,
+.pp-field select:focus-visible,
+.pp-field input:focus-visible,
+.pp-volume-slider:focus-visible,
+.pp-link:focus-visible {
+  outline: 2px solid var(--pp-accent);
+  outline-offset: 2px;
+}
+
+/* --- The breakdown below the stage --------------------------------------- */
+
+/*
+ * The explanation, as a collapsed disclosure.
+ *
+ * It was a full section always on screen, and at preview size it took most of the
+ * page — the review artifact was eating the thing being reviewed. A `<details>`
+ * takes one row collapsed and none of the layout pretends otherwise.
+ */
+.pp-breakdown {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--pp-edge);
+  background: #0f1116;
+}
+
+.pp-breakdown > summary {
+  padding: 8px 16px;
+  color: #7d838f;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  /* The default marker sits outside the padding and shifts the text when it opens;
+     a small inline one keeps the row still. */
+  list-style-position: inside;
+}
+
+.pp-breakdown > summary:hover {
+  color: var(--pp-fg);
+}
+
+.pp-list {
+  padding: 0 16px 18px;
+}
+
+.pp-list {
+  margin: 0;
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) 1fr;
+  gap: 6px 18px;
+  max-width: 110ch;
+}
+
+.pp-list dt {
+  color: var(--pp-fg);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.pp-list dd {
+  margin: 0 0 8px;
+  color: var(--pp-muted);
+  font-size: 13px;
+}
+
+.pp-list code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #1b1e25;
+  color: #b9c2d6;
+  font-size: 12px;
+}
+
+.pp-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pp-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Hidden from sight but not from assistive technology. The reader has its own copy
+   of this for the same reason: the panel's stylesheet is not loaded here. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

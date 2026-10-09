@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU — video reader player</title>
+    <link rel="icon" href="/icons/icon-32.png" />
+    <link rel="stylesheet" href="/tools/ui/player.css" />
+  </head>
+  <body class="player-preview">
+    <!--
+      A mock of the READER's player — `src/reader/reader.html` — with the decided
+      changes applied, so they can be USED rather than described.
+
+      It plays a REAL file: `tools/ui/assets/preview.mp4`, a stream copy of CELLAR's
+      `test5.mkv`, which contains Big Buck Bunny (Blender Foundation, CC BY 3.0).
+
+      This is the review artifact for the reader UI: what behaves wrongly here
+      behaves wrongly in the reader. What it does NOT carry is the content-message
+      contract, the Matroska reading and the track resolution — none of which is on
+      trial.
+    -->
+    <header class="pp-controls">
+      <h1>Video reader</h1>
+
+      <div class="pp-group" role="group" aria-label="Idle behaviour">
+        <span class="pp-label">Idle hide</span>
+        <button type="button" class="pp-chip" id="pp-idle" aria-pressed="true">on</button>
+      </div>
+
+      <div class="pp-group" role="group" aria-label="Native controls">
+        <span class="pp-label">Native</span>
+        <button type="button" class="pp-chip" id="pp-native" aria-pressed="false">off</button>
+      </div>
+
+      <div class="pp-group" role="group" aria-label="Failure">
+        <span class="pp-label">Error</span>
+        <button type="button" class="pp-chip" id="pp-error">show one</button>
+      </div>
+
+      <div class="pp-group">
+        <span class="pp-label">Demo</span>
+        <button type="button" class="pp-chip" id="pp-reload">Simulate reload</button>
+      </div>
+
+      <p class="pp-note" id="pp-note"></p>
+    </header>
+
+    <!--
+      The stage: the picture, then optionally the caption strip BELOW it. A column,
+      so the `below` placement can take its own row and the picture shrinks above
+      it.
+    -->
+    <main class="pp-stage" id="pp-stage">
+      <div class="pp-picture" id="pp-picture">
+        <video id="pp-video" playsinline preload="metadata"></video>
+
+        <!-- Shown until the video has metadata, so an empty rectangle does not read
+             as broken. -->
+        <div class="pp-placeholder" id="pp-placeholder">
+          <p class="pp-placeholder-title">Loading a real sample…</p>
+          <p class="pp-placeholder-hint">Big Buck Bunny (Blender Foundation, CC BY 3.0) — remuxed from CELLAR test5.mkv</p>
+          <p class="pp-placeholder-error" id="pp-placeholder-error"></p>
+        </div>
+
+        <!--
+          THE OVERLAY PLACEMENT. Floats over the bottom of the picture inside a
+          scrim: standard subtitle position, and it costs no picture height. This is
+          the DEFAULT, because "I just want to see the subs" is this shape.
+
+          Stacking order matters: the captions sit above the video but BELOW the bar,
+          so a bar appearing does not cover the last line.
+        -->
+        <div class="pp-captions pp-captions-overlay" id="pp-captions-overlay" hidden>
+          <!-- ONE card, both lines inside it. Two inline-block cards drew as two
+               separate boxes rather than as two lines of one subtitle. -->
+          <div class="pp-caption-card">
+            <p class="pp-caption-line pp-caption-primary" id="pp-caption-primary"></p>
+            <p class="pp-caption-line pp-caption-secondary" id="pp-caption-secondary"></p>
+          </div>
+        </div>
+
+        <!--
+          THE RESUME BANNER. On load, offer to resume.
+
+          A prompt rather than an automatic seek, because the file cannot be reopened
+          by itself — you re-pick it — and a jump with no explanation is disorienting.
+          The banner is what makes the re-pick feel like resuming.
+        -->
+        <div class="pp-resume" id="pp-resume" hidden>
+          <span class="pp-resume-text" id="pp-resume-text"></span>
+          <button type="button" class="pp-resume-go" id="pp-resume-go">Resume</button>
+          <button type="button" class="pp-resume-skip" id="pp-resume-skip">Start over</button>
+        </div>
+
+        <!--
+          THE CONTROL BAR.
+
+          ONE lifecycle, not two: it auto-hides when the pointer is idle and returns
+          on movement or on focus. There is NO collapse chevron — a manual collapse
+          plus an automatic hide is three states where every player has two, and the
+          chevron was what made the bar's behaviour hard to predict.
+
+          An ERROR pins it open, because a red line that fades after 2.5s over a black
+          video is worse than no message at all.
+        -->
+        <div class="pp-bar" id="pp-bar" data-hidden="false">
+          <!--
+            THE TIME BAR. Above the controls, because that is where a player puts
+            it: the scrubber is where the eye goes, and the buttons below are what
+            you do about where you are.
+
+            Three parts, each with a job:
+              - a CUE STRIP, which is the reason this product has its own time bar
+                at all. A generic player draws buffered ranges; we can draw where the
+                marked (unknown) words are, so the hard part of the film is visible on
+                the timeline before you reach it.
+              - the SCRUBBER, a real `range` input so keyboard seeking works and the
+                browser owns the drag.
+              - a TIME COUNTER in tabular figures, so it does not jitter as the
+                seconds tick.
+          -->
+          <div class="pp-row pp-row-time">
+            <span class="pp-time" id="pp-time-current">0:00</span>
+            <div class="pp-scrub">
+              <!-- Cue marks, drawn behind the range so the range's own track shows
+                   through where there is nothing to mark. -->
+              <div class="pp-cues" id="pp-cues" aria-hidden="true"></div>
+              <input
+                id="pp-scrubber"
+                class="pp-scrubber"
+                type="range"
+                min="0"
+                max="1"
+                step="0.001"
+                value="0"
+                aria-label="Seek"
+              />
+            </div>
+            <span class="pp-time" id="pp-time-duration">0:00</span>
+          </div>
+
+          <!--
+            ROW 1 — transport. Always present, because it is what the bar IS.
+          -->
+          <div class="pp-row pp-row-transport">
+            <button type="button" class="pp-button pp-icon-button" id="pp-open" aria-label="Open another file" title="Open another file">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M3 7a2 2 0 0 1 2-2h3.6l1.7 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+                <path d="M3 11h18" fill="none" stroke="currentColor" stroke-width="1.8" />
+              </svg>
+            </button>
+            <span class="pp-filename" title="Big Buck Bunny (CC BY 3.0, Blender Foundation) — CELLAR Matroska test file">Big Buck Bunny — test5.mkv</span>
+
+            <span class="pp-spacer"></span>
+
+            <button type="button" class="pp-button pp-icon-button" id="pp-back" aria-label="Back 5 seconds" title="Back 5 seconds">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M11.5 6.5 6 12l5.5 5.5M19 6.5 13.5 12 19 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <button type="button" class="pp-button pp-icon-button pp-primary" id="pp-play" aria-label="Play" title="Play">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path id="pp-play-path" d="M8 5.5v13l11-6.5z" fill="currentColor" />
+              </svg>
+            </button>
+            <button type="button" class="pp-button pp-icon-button" id="pp-fwd" aria-label="Forward 5 seconds" title="Forward 5 seconds">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12.5 6.5 18 12l-5.5 5.5M5 6.5 10.5 12 5 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+
+            <span class="pp-divider" aria-hidden="true"></span>
+
+            <!-- Cue stepping and replay: the controls a generic player CANNOT have,
+                 because it does not know where the cues are. Up/down rather than
+                 left/right — the transcript is a vertical list. -->
+            <button type="button" class="pp-button pp-icon-button" id="pp-prev-cue" aria-label="Previous line" title="Previous line">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 15.5 12 9.5l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M6 6h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button type="button" class="pp-button pp-icon-button" id="pp-replay-cue" aria-label="Replay this line" title="Replay this line">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M20 12a8 8 0 1 1-2.4-5.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                <path d="M20 4.5V10h-5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <button type="button" class="pp-button pp-icon-button" id="pp-next-cue" aria-label="Next line" title="Next line">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 8.5 12 14.5l6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M6 18h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+
+            <span class="pp-divider" aria-hidden="true"></span>
+
+            <!-- Speed keeps a select: four discrete values, and the current one should
+                 be readable without opening a menu. -->
+            <label class="pp-speed">
+              <span class="sr-only">Playback speed</span>
+              <select id="pp-speed" aria-label="Playback speed">
+                <option value="0.5">0.5×</option>
+                <option value="0.75">0.75×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.25">1.25×</option>
+              </select>
+            </label>
+
+            <span class="pp-divider" aria-hidden="true"></span>
+
+            <!--
+              Volume: a mute button AND a slider, in one group.
+
+              Both, because each answers a question the other cannot. A slider alone
+              has no way back to a known level once it has been dragged to zero — you
+              would have to guess where it was. A toggle alone has no "quiet but not
+              silent". Players ship the pair for that reason.
+
+              A native range with `accent-color`, not a hand-built slider. The platform
+              control is keyboard-operable and announced correctly for free, and the
+              modern guidance is explicit that theming a native control beats
+              reimplementing one, which tends to lose the states the original had.
+
+              Sitting next to the speed select rather than at the far right, because
+              the right-hand group is the toggles. Volume is a continuous playback
+              control, like speed.
+            -->
+            <div class="pp-volume">
+              <button type="button" class="pp-button pp-icon-button" id="pp-mute" aria-label="Mute" aria-pressed="false" title="Mute">
+                <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                  <!-- Swapped by CSS from the button's own `aria-pressed`, so the icon
+                       and the announced state cannot disagree. NOT `hidden`: that is an
+                       HTML attribute and an SVG <g> ignores it — both glyphs rendered
+                       on top of each other when they were toggled that way. -->
+                  <g id="pp-volume-waves">
+                    <path d="M15 9a4.4 4.4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                    <path d="M17.6 6.6a8 8 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                  </g>
+                  <g id="pp-volume-cross">
+                    <path d="M15.5 9.5l5 5M20.5 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                  </g>
+                </svg>
+              </button>
+              <input
+                id="pp-volume"
+                class="pp-volume-slider"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value="100"
+                aria-label="Volume"
+              />
+            </div>
+
+            <button type="button" class="pp-button pp-icon-button" id="pp-captions" aria-label="Hide captions" aria-pressed="true" title="Hide captions">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.8" />
+                <path d="M10.5 10.3a2.2 2.2 0 1 0 0 3.4M17 10.3a2.2 2.2 0 1 0 0 3.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+
+            <!--
+              WHICH audio track.
+
+              The icon is a waveform, NOT a speaker. The speaker belongs to volume —
+              they were the same glyph for one revision, which made two adjacent
+              buttons mean different things with the same picture. A waveform is the
+              other half of the pair: the speaker is how LOUD, this is WHICH. It is
+              also the only waveform on the bar, so it cannot be confused with
+              anything else here.
+
+              The count badge carries the part the glyph cannot: that there is a
+              choice to make at all. Only shown when there is one.
+            -->
+            <button type="button" class="pp-button pp-icon-button" id="pp-audio" aria-label="Audio track" aria-pressed="false" aria-haspopup="true" aria-expanded="false" title="Audio track" hidden>
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 9.5v5M8 6.5v11M12 9v6M16 6.5v11M20 9.5v5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              </svg>
+              <span class="pp-audio-badge" aria-hidden="true"></span>
+            </button>
+
+            <!--
+              The difficulty band. One button, because the band is one thing — it is
+              not a sub-option of captions or of anything else, and it is the only
+              control here that a generic player could not offer.
+
+              The icon is the band itself: a track with three runs along it, filled at
+              the same opacities the ramp uses, so the button shows what it toggles.
+            -->
+            <button type="button" class="pp-button pp-icon-button" id="pp-difficulty" aria-label="Hide difficulty band" aria-pressed="true" title="Hide difficulty band">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="2.5" y="9" width="19" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <rect x="5" y="10.5" width="3.5" height="3" rx="1" fill="currentColor" opacity="0.45" />
+                <rect x="9.5" y="10.5" width="5" height="3" rx="1" fill="currentColor" opacity="0.7" />
+                <rect x="15.5" y="10.5" width="3.5" height="3" rx="1" fill="currentColor" />
+              </svg>
+            </button>
+
+            <button type="button" class="pp-button pp-icon-button" id="pp-pip" aria-label="Picture in picture" title="Picture in picture">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8" />
+                <rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" />
+              </svg>
+            </button>
+            <button type="button" class="pp-button pp-icon-button" id="pp-full" aria-label="Fullscreen" title="Fullscreen">
+              <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+
+          <!--
+            ROW 2 — the caption settings. Present ONLY while captions are on.
+
+            The resolution to a real tension: there is no settings VIEW in the reader,
+            yet everything the captions need is still reachable. The row appears
+            exactly when it is relevant, instead of being fifteen controls in one line.
+          -->
+          <div class="pp-row pp-row-captions" id="pp-caption-row">
+            <span class="pp-row-label">Captions</span>
+
+            <div class="pp-seg" role="group" aria-label="Caption position">
+              <button type="button" class="pp-seg-button" id="pp-place-overlay" data-placement="overlay" aria-pressed="true">Over picture</button>
+              <button type="button" class="pp-seg-button" id="pp-place-below" data-placement="below" aria-pressed="false">Below</button>
+            </div>
+
+            <label class="pp-field">
+              <span class="pp-field-label">Reading</span>
+              <select id="pp-reading" aria-label="Reading placement">
+                <option value="off">Off</option>
+                <option value="above" selected>Above</option>
+                <option value="below">Below</option>
+                <option value="marked">Marked</option>
+              </select>
+            </label>
+
+            <label class="pp-field">
+              <span class="pp-field-label">Marks</span>
+              <select id="pp-marks" aria-label="Mark style">
+                <option value="underline" selected>Underline</option>
+                <option value="highlight">Highlight</option>
+              </select>
+            </label>
+
+            <label class="pp-field">
+              <span class="pp-field-label">Size</span>
+              <input id="pp-caption-size" type="number" min="12" max="34" step="1" value="20" aria-label="Caption text size" />
+            </label>
+
+            <!--
+              WHICH AUDIO, listed separately from the subtitle picks above.
+
+              A subtitle track is what you READ; an audio track is what you HEAR, and
+              the two are not alternatives — you want the original audio AND the
+              subtitle for it. Lumping them into one "Track" control would be wrong even
+              though both are tracks in the same file.
+
+              The select and its note are built in script and the note is kept separate
+              from the select's own title, because the reason a control is unavailable
+              is a sentence, and a title attribute on a disabled element is the one
+              place a browser will not show it.
+            -->
+            <div class="pp-audio-panel" id="pp-audio-panel" hidden>
+              <div class="pp-audio-head">
+                <span class="pp-row-label">Audio</span>
+                <label class="pp-field">
+                  <span class="sr-only">Audio track</span>
+                  <select id="pp-audio-track" aria-label="Audio track"></select>
+                </label>
+              </div>
+              <p class="pp-note" id="pp-audio-note"></p>
+            </div>
+          </div>
+
+          <!--
+            The status line: STATUS AND ERRORS ONLY.
+
+            It used to show the current cue, which is what made the caption toggle
+            look broken — the same sentence was already on screen in the bar, so
+            turning captions on changed nothing visible. A cue belongs to the
+            captions and nowhere else.
+          -->
+          <p class="pp-status" id="pp-status" role="status">Ready</p>
+        </div>
+      </div>
+
+      <!--
+        THE BELOW PLACEMENT. Its own row under the picture; the picture shrinks above
+        it. Nothing is ever covered — for someone who does not want the image
+        obstructed at all, where the overlay costs no height but does sit over the
+        bottom of the frame.
+      -->
+      <div class="pp-captions pp-captions-below" id="pp-captions-below" hidden>
+        <p class="pp-caption-line pp-caption-primary" id="pp-caption-primary-below"></p>
+        <p class="pp-caption-line pp-caption-secondary" id="pp-caption-secondary-below"></p>
+      </div>
+    </main>
+
+    <!--
+      The explanation, which is reference material rather than part of the player.
+
+      A `<details>` rather than a hand-rolled toggle: it is the native disclosure
+      element, so it is keyboard-reachable and announced without a line of script, and
+      it REMEMBERS nothing — which is right, because this is a note you read once and
+      then want out of the way. Collapsed by default, because it was eating the whole
+      preview.
+    -->
+    <details class="pp-breakdown" id="pp-breakdown">
+      <summary>What this is showing</summary>
+      <dl class="pp-list">
+        <dt>One lifecycle — auto-hide, no chevron</dt>
+        <dd>
+          The bar fades after ~2.5s without pointer movement and returns on movement
+          <strong>or on focus</strong> — tab into the faded bar and it comes back,
+          which is the trap pointer-only hiding walks into. It does <strong>not</strong>
+          hide while paused: pausing is what people do right before reaching for a
+          control.
+        </dd>
+
+        <dt>An error is shown, and the bar still fades</dt>
+        <dd>
+          <button type="button" class="pp-link" id="pp-error2">Show an error</button>.
+          The status line turns red and names the problem. It does NOT pin the bar
+          open — a bar that refuses to get out of the way is its own annoyance, and
+          the message stays in the DOM rather than being lost with the fade.
+        </dd>
+
+        <dt>The cue is not in the bar</dt>
+        <dd>
+          Status and errors only. The cue lives in the captions — having it in both
+          places is exactly what made the toggle look inert.
+        </dd>
+
+        <dt>Two rows, the second conditional</dt>
+        <dd>
+          Transport always; the caption settings only while captions are on.
+          Everything the reader needs, without a settings view and without a
+          fifteen-button row.
+        </dd>
+
+        <dt>Captions: over the picture or below it</dt>
+        <dd>
+          Overlay is the default — standard subtitle position, costs no picture
+          height. <strong>Below</strong> gives the strip its own row and the picture
+          shrinks above it. Both are wanted, so it is a choice, and the switch is
+          independent of the control bar: hide the controls and the captions stay.
+        </dd>
+
+        <dt>Resume</dt>
+        <dd>
+          <button type="button" class="pp-link" id="pp-reload2">Simulate a reload</button>
+          shows the prompt. The position is stored against the file's identity; the
+          file itself is re-picked, and the resume is checked against the stored
+          descriptor so it cannot land in the wrong film.
+        </dd>
+      </dl>
+    </details>
+
+    <script type="module" src="/tools/ui/player.mjs"></script>
+  </body>
+</html>
