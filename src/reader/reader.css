@@ -179,11 +179,22 @@ body {
   z-index: 1;
 }
 
-/* The card. `inline-block` so it is only as wide as its content, and a `ch`
-   max-width so a long line wraps rather than spanning the picture. */
+/*
+ * The card. `inline-block` so it is only as wide as its content.
+ *
+ * The width cap is a VIEWPORT-RELATIVE band, not a fixed character count. It was
+ * `min(46ch, 92%)`, and 46ch is about 460px at the default caption size — so on a
+ * 1440px window a subtitle wrapped at a third of the width it had, which reads as the
+ * text spilling for no reason.
+ *
+ * `clamp(28ch, 72vw, 84ch)` says: never narrower than 28 characters (so a narrow window
+ * still gets a sane block), grow with the window, and never wider than 84 characters —
+ * beyond that a line becomes hard to track back to its start. Both bounds matter, which
+ * is why it is a clamp rather than a single value.
+ */
 .caption-card {
   display: inline-block;
-  max-width: min(46ch, 92%);
+  max-width: min(clamp(28ch, 72vw, 84ch), 94%);
   padding: 4px 14px;
   border-radius: 6px;
   background: rgba(8, 10, 14, 0.74);
@@ -620,6 +631,16 @@ body {
   min-width: 0;
   max-width: 6.5rem;
   text-overflow: ellipsis;
+}
+
+/*
+ * Errors only, and collapsed when there is nothing to say.
+ *
+ * `[hidden]` rather than relying on an empty string, because an empty paragraph still
+ * takes a line box and the bar would carry a blank row for every healthy file.
+ */
+.status-text[hidden] {
+  display: none;
 }
 
 .status-text {

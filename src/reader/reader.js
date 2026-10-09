@@ -78,7 +78,7 @@ const els = {
   muteButton: /** @type {HTMLButtonElement} */ (document.getElementById('mute')),
   volumeSlider: /** @type {HTMLInputElement} */ (document.getElementById('volume')),
   difficultyButton: /** @type {HTMLButtonElement} */ (document.getElementById('difficulty')),
-  audioButton: /** @type {HTMLButtonElement} */ (document.getElementById('audio')),
+  fullscreenButton: /** @type {HTMLButtonElement} */ (document.getElementById('fullscreen')),
   audioField: /** @type {HTMLElement} */ (document.getElementById('audio-field')),
   audioSelect: /** @type {HTMLSelectElement} */ (document.getElementById('audio-track')),
   audioNote: /** @type {HTMLElement} */ (document.getElementById('audio-note')),
@@ -398,23 +398,26 @@ let lastPaused = false;
 
 /** @param {string} text @param {boolean} [isError] */
 function setStatus(text, isError = false) {
-  els.status.textContent = text;
+  // A healthy file has nothing to say. "Ready." and "3 subtitle tracks in this video"
+  // were the bar narrating what the viewer can already see, which is what the status
+  // line spent most of its life doing. It is an ERROR channel now: visible when
+  // something is wrong, empty and collapsed otherwise.
+  const message = isError ? text : '';
+  els.status.textContent = message;
+  els.status.hidden = !message;
   els.status.classList.toggle('error', isError);
-  const code = /^([A-Z]{2,6}\d{3})/.exec(text);
-  if (code) els.status.dataset.code = code[1];
-  else delete els.status.dataset.code;
-}
-
-/** @param {File} file */
-function isSubtitleFile(file) {
-  const name = file.name.toLowerCase();
-  return SUBTITLE_EXTENSIONS.some((ext) => name.endsWith(ext));
 }
 
 /** @param {File} file */
 function isVideoFile(file) {
   const name = file.name.toLowerCase();
   return file.type.startsWith('video/') || name.endsWith('.mkv') || name.endsWith('.mp4') || name.endsWith('.webm');
+}
+
+/** @param {File} file */
+function isSubtitleFile(file) {
+  const name = file.name.toLowerCase();
+  return SUBTITLE_EXTENSIONS.some((ext) => name.endsWith(ext));
 }
 
 /**
@@ -813,6 +816,53 @@ function activeIndex() {
 }
 
 /**
+ * How long a finished cue stays on screen.
+ *
+ * A subtitle whose cue has ENDED is not the current line, and leaving it up made a long
+ * silent stretch show the last thing said — wrong for a film in a way it is not wrong
+ * for a side panel, where the row stays highlighted so it can be found again.
+ *
+ * The hold covers consecutive cues with a fraction of a second between them, so an
+ * ordinary dialogue run does not blink. Measured against the fixtures: cues sit 1.5-2.5s
+ * apart with sub-100ms gaps, so a second is far longer than any gap a real track leaves.
+ */
+const CAPTION_HOLD_MS = 1000;
+
+/** Pending clears, keyed by the primary element they would empty. */
+const captionTimers = new Map();
+
+/** @param {HTMLElement} primary */
+function cancelClear(primary) {
+  const pending = captionTimers.get(primary);
+  if (pending) {
+    clearTimeout(pending);
+    captionTimers.delete(primary);
+  }
+}
+
+/**
+ * Empty a placement's caption after `delayMs`.
+ *
+ * Keyed by the primary element so a later cue cancels the clear a previous one
+ * scheduled — without that, a line would vanish a second after it appeared.
+ *
+ * @param {HTMLElement} primary
+ * @param {HTMLElement} secondary
+ * @param {number} delayMs
+ */
+function scheduleClear(primary, secondary, delayMs) {
+  cancelClear(primary);
+  captionTimers.set(
+    primary,
+    setTimeout(() => {
+      captionTimers.delete(primary);
+      primary.replaceChildren();
+      secondary.replaceChildren();
+    }, delayMs),
+  );
+}
+
+/**
  * Draw the current cue into BOTH placements.
  *
  * Both are written together so switching placement never shows a stale line — a
@@ -830,9 +880,25 @@ function renderCaptions(index) {
   const cue = index >= 0 ? segments[index] : null;
   const levelCount = listLevelCount();
 
+  // `findActiveIndex` answers "which cue started most recently" — the right question
+  // for a transcript and the wrong one for a subtitle. A cue that STARTED is not a cue
+  // that is still PLAYING, and without this check the last line of a scene stayed on
+  // screen through every silent stretch that followed it, indefinitely.
+  const stillPlaying = Boolean(cue) && els.video.currentTime < cue.start + cue.duration;
+
+  if (!stillPlaying) {
+    scheduleClear(els.overlayPrimary, els.overlaySecondary, CAPTION_HOLD_MS);
+    scheduleClear(els.belowPrimary, els.belowSecondary, CAPTION_HOLD_MS);
+    return;
+  }
+
+  // A cue IS playing, so any pending clear is called off — otherwise the line would
+  // disappear a second after it appeared.
+  cancelClear(els.overlayPrimary);
+  cancelClear(els.belowPrimary);
+
   for (const element of [els.overlayPrimary, els.belowPrimary]) {
     element.replaceChildren();
-    if (!cue) continue;
     if (cue.marked) element.append(renderReading(cue.marked, levelCount));
     // No marks yet: the plain text, which is a perfectly good subtitle. The
     // annotations arrive when the dictionary does.
@@ -1318,12 +1384,10 @@ let audioBusy = false;
 /**
  * Whether the track select is showing.
  *
- * Collapsed by default and opened by the waveform button. A select that is always
- * visible is one more control competing for a row that already has the subtitle picks,
- * the list and the threshold — for a preference most viewers set once per film, if at
- * all.
+ * Shown whenever the file actually has more than one, in the transport row. The row is
+ * full, so this only appears when it has something to offer — a select over a single
+ * option is noise.
  */
-let audioOpen = false;
 
 /**
  * Build the selector from the file's own track list.
@@ -1333,15 +1397,11 @@ let audioOpen = false;
  */
 function renderAudio() {
   const choice = audioTracks.length > 1;
-  els.audioButton.hidden = !choice;
-  // The button and the field are siblings in the TRANSPORT row, which is never hidden
-  // for a loaded file. Placing the field in the caption row was the bug: that row
-  // disappears when the captions are turned off, so the button appeared to do nothing
-  // but highlight itself.
-  els.audioField.hidden = !choice || !audioOpen;
-  els.audioButton.setAttribute('aria-pressed', String(choice && audioOpen));
-  // Once open, the icon must not sit there looking active while the select is
-  // somewhere else on the row. Keep them adjacent by asking the DOM where it landed.
+  // Shown whenever there is a choice, in the transport row — which is never hidden for
+  // a loaded file. It lived in the caption row once, and the caption row disappears when
+  // the captions are off, so the control was unreachable for a viewer who wants the
+  // original audio without subtitles — the case this feature exists for.
+  els.audioField.hidden = !choice;
 
   if (!choice) {
     els.audioSelect.replaceChildren();
@@ -1386,10 +1446,8 @@ async function describeAudio(file) {
   audioSourceFile = file;
   audioTracks = [];
   audioChoice = 0;
-  // Closed for a new file: the panel was opened to answer a question about the PREVIOUS
-  // film, and leaving it open would put a stale-looking select in the row.
-  audioOpen = false;
-  els.audioButton.hidden = true;
+  // Cleared for a new file: showing the previous film's tracks while the new one is
+  // still being read would offer a choice that means nothing.
   els.audioField.hidden = true;
   try {
     const declared = await listAudioTracks(file);
@@ -1487,16 +1545,6 @@ async function selectAudioTrack(index) {
     renderAudio();
   }
 }
-
-els.audioButton.addEventListener('click', () => {
-  // Hidden means there is nothing to choose, so activating it must be a no-op.
-  if (els.audioButton.hidden) return;
-  audioOpen = !audioOpen;
-  renderAudio();
-  // Focus follows the reveal, so the control is reachable by keyboard without a second
-  // tab stop — the button opened something, and what it opened should take focus.
-  if (audioOpen) els.audioSelect.focus();
-});
 
 els.audioSelect.addEventListener('change', (event) => {
   void selectAudioTrack(Number(event.target.value));
@@ -1999,20 +2047,68 @@ click('pip', () => {
 // the fullscreened element; `video.requestFullscreen()` takes the media element alone
 // and only that element and its descendants are rendered, so no overlay bar could
 // ever appear over it.
+/**
+ * Whether this page currently believes it is fullscreen.
+ *
+ * **The Fullscreen API cannot see the window manager.** When the user presses F11, or
+ * maximises a window, or the browser is already fullscreen, `document.fullscreenElement`
+ * stays `null` — the page is not ASKED, it is simply displayed larger. So the button was
+ * in the state "not fullscreen" while the screen was full, and pressing it requested
+ * fullscreen from an already-fullscreen window. That nesting is why leaving took two
+ * Escapes.
+ *
+ * `window.innerHeight` is the honest signal: in a normal window it is noticeably less
+ * than the screen, and in a fullscreen one it is the screen. So the page tracks that too
+ * and ORs it with the API's own state, which is the only way the two can agree.
+ */
+let windowIsFullscreen = false;
+
+function detectWindowFullscreen() {
+  // A small tolerance: browser chrome is tens of pixels, and some window managers report
+  // an inner height a pixel or two under the screen. 4px will not mistake a real window
+  // for a fullscreen one, and 1px could.
+  windowIsFullscreen = window.innerHeight >= window.screen.height - 4;
+  syncFullscreenButton();
+}
+
+/** Put the button in the state the screen is actually in, not just the document. */
+function syncFullscreenButton() {
+  const on = Boolean(document.fullscreenElement) || windowIsFullscreen;
+  const label = on ? 'Exit fullscreen' : 'Fullscreen';
+  els.fullscreenButton.setAttribute('aria-pressed', String(on));
+  els.fullscreenButton.setAttribute('aria-label', label);
+  els.fullscreenButton.title = label;
+}
+
 click('fullscreen', () => {
-  // `document.fullscreenElement` is null when the FULLSCREEN is held by the browser
-  // chrome rather than by this document — a tab the user fullscreened with F11, or a
-  // fullscreen window. In that state the button used to request fullscreen AGAIN, and
-  // the resulting nesting is why leaving took two Escapes. Asking to exit is correct
-  // whether or not we are the ones holding it.
-  if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
-  else void els.picture.requestFullscreen().catch(() => {});
+  // Already full, by either definition: LEAVE. `exitFullscreen` is attempted even when
+  // the document is not the fullscreen element, because that is the case where the user
+  // pressed F11 and the only thing that can undo it is the browser's own shortcut —
+  // which the API call does not drive, so the message is the honest fallback.
+  if (document.fullscreenElement) {
+    void document.exitFullscreen().catch(() => {});
+    return;
+  }
+  if (windowIsFullscreen) {
+    // The window is full because of the browser or the OS, not us. There is no API to
+    // undo that, so say so rather than silently doing nothing.
+    setStatus('This window is fullscreen — press F11 to leave it.', true);
+    void document.exitFullscreen().catch(() => {});
+    return;
+  }
+  void els.picture.requestFullscreen().catch(() => {});
 });
 
 document.addEventListener('fullscreenchange', () => {
+  syncFullscreenButton();
   showBar();
   measureBar();
   scheduleHide();
+});
+
+window.addEventListener('resize', () => {
+  detectWindowFullscreen();
+  measureBar();
 });
 
 /**
@@ -2119,6 +2215,7 @@ els.stage.addEventListener('mouseleave', hidePopover);
 
 applySettings();
 applyVolume();
+detectWindowFullscreen();
 render();
 setStatus('Ready.');
 

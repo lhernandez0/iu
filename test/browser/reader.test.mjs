@@ -143,11 +143,10 @@ section('a real MKV produces subtitles in the panel');
   // the latter producing a flaky failure that reads as a code bug.
   await panel.waitForFunction(() => document.querySelectorAll('.row').length > 0, null, { timeout: 15000 });
 
-  const status = await reader.textContent('#status');
   const after = await panel.textContent('#transcript');
   const rows = await panel.locator('.row').count();
 
-  check('the reader found the embedded tracks', /track/i.test(status ?? ''), true);
+  check('the reader found the embedded tracks', rows > 0, true);
   // The regression, stated directly: rows must appear with NO language chosen.
   check('the panel shows transcript rows', rows > 0, true);
   check('and the transcript actually changed', after !== before, true);
@@ -226,6 +225,13 @@ section('the panel shows what is missing rather than an empty transcript');
 
   const status = await plain.textContent('#status');
   check('a file with no subtitles says so', /READER005|no subtitles/i.test(status ?? ''), true);
+  // And it is VISIBLE, which is the point of keeping the element at all: a healthy file
+  // shows nothing, but an error must still reach the screen.
+  check(
+    'and the error is not hidden',
+    await plain.evaluate(() => !document.getElementById('status').hidden),
+    true,
+  );
   await plain.close();
 }
 
@@ -350,13 +356,15 @@ section('the audio track selector');
   await reader.bringToFront();
 
   const beforeLoad = await reader.evaluate(() => ({
-    buttonHidden: document.getElementById('audio').hidden,
+    fieldHidden: document.getElementById('audio-field').hidden,
+    hasButton: document.getElementById('audio') !== null,
   }));
-  check('no selector before a file is opened', beforeLoad.buttonHidden, true);
+  check('no selector before a file is opened', beforeLoad.fieldHidden, true);
+  check('and no button to reveal it either', beforeLoad.hasButton, false);
 
   await reader.setInputFiles('#pick-files', join(FIXTURES, '..', '..', 'tools', 'ui', 'assets', 'two-audio.mkv'));
   const appeared = await reader
-    .waitForFunction(() => !document.getElementById('audio').hidden, null, { timeout: 15000 })
+    .waitForFunction(() => !document.getElementById('audio-field').hidden, null, { timeout: 15000 })
     .then(() => true)
     .catch(() => false);
 
@@ -433,16 +441,15 @@ section('the audio track selector');
   check('and the stream is playable before the file is complete', streaming.readyState >= 2, true);
   check('with the buffer ahead of the playhead', streaming.buffered > 0, true);
 
-  // Switching away and back exercises the teardown path, which is where the first
-  // version leaked and double-revoked: the rebuild owns an object URL, and so does the
+  // Switching away and BACK exercises the teardown path, which is where the first
+  // version leaked and double-revoked: the rebuild owns an object URL and so does the
   // raw file, and confusing the two detaches a source the element is still reading.
+  // It also restores `selected` to the first track, making the assertion below meaningful
+  // rather than trivially true.
   await reader.selectOption('#audio-track', '0');
   await reader
     .waitForFunction(() => document.getElementById('video')?.readyState >= 2, null, { timeout: 20000 })
     .catch(() => {});
-  // Does the SAME measurement see the third track after switching back? This is the
-  // path that leaked in the first implementation: the rebuild owns an object URL and so
-  // does the raw file, and confusing the two detaches a source the element is reading.
   const switchedBack = await measureTone();
 
   check('switching back returns to the first track', switchedBack.hz, 441);
@@ -459,48 +466,82 @@ section('the audio track selector');
   check('and reports no stale error', /not supported/i.test(settled.note), false);
   check('and shows the track that is playing', settled.selected, '0');
 
-  // Three UI properties that were got wrong first, each asserted because each was a
-  // real complaint rather than a preference.
-  const collapsed = await reader.evaluate(() => ({
+}
+
+{
+  // The control is SHOWN, not hidden behind a reveal, and it sits in the transport row —
+  // which is never hidden for a loaded file. There was a button here, and it toggled the
+  // select beside it; a control whose whole job is to reveal the thing next to it is a
+  // click tax, not a feature.
+  //
+  // The placement matters for a reason beyond tidiness: it lived in the caption row
+  // once, and that row disappears when captions are off — so the control was unreachable
+  // for a viewer who wants the original audio WITHOUT subtitles, which is the case this
+  // feature exists for.
+  const placement = await reader.evaluate(() => ({
     fieldHidden: document.getElementById('audio-field').hidden,
+    hasButton: document.getElementById('audio') !== null,
+    inTransport: Boolean(document.getElementById('audio-track').closest('.row-transport')),
+    inCaptionRow: Boolean(document.getElementById('audio-track').closest('.row-captions')),
+    inTimeRow: Boolean(document.getElementById('audio-track').closest('.row-time')),
     note: document.getElementById('audio-note').textContent,
     noteDisplay: getComputedStyle(document.getElementById('audio-note')).display,
-    // The control must not be inside the time row: that row is about WHERE you are.
-    inTimeRow: Boolean(document.getElementById('audio').closest('.row-time')),
-    inTransport: Boolean(document.getElementById('audio').closest('.row-transport')),
-    // And the select must NOT be in the caption row: that row disappears when the
-    // captions are off, so a select living there is unreachable for a viewer who wants
-    // the original audio without subtitles — the case this feature exists for.
-    selectInCaptionRow: Boolean(document.getElementById('audio-track').closest('.row-captions')),
-    selectInTransport: Boolean(document.getElementById('audio-track').closest('.row-transport')),
-    captionsOff: document.getElementById('captions').getAttribute('aria-pressed'),
   }));
 
-  check('the track select starts collapsed', collapsed.fieldHidden, true);
-  check('the audio button is not in the time row', collapsed.inTimeRow, false);
-  check('it is in the transport row instead', collapsed.inTransport, true);
-  check('and the select opens beside it, so it is reachable', collapsed.selectInCaptionRow, false);
-  check('with nothing said when there is nothing wrong', collapsed.note, '');
-  check('and the note takes no space when empty', collapsed.noteDisplay, 'none');
-  check('the select is in the transport row too', collapsed.selectInTransport, true);
+  check('the select is shown, not hidden behind a button', placement.fieldHidden, false);
+  check('and there is no button to reveal it', placement.hasButton, false);
+  check('it is in the transport row', placement.inTransport, true);
+  check('not in the caption row', placement.inCaptionRow, false);
+  check('and not in the time row', placement.inTimeRow, false);
+  check('with nothing said when there is nothing wrong', placement.note, '');
+  check('and the note takes no space when empty', placement.noteDisplay, 'none');
+}
 
-  // The button must actually open the select rather than merely focus it.
-  await reader.click('#audio');
-  const opened = await reader.evaluate(() => ({
-    fieldHidden: document.getElementById('audio-field').hidden,
-    pressed: document.getElementById('audio').getAttribute('aria-pressed'),
-    focused: document.activeElement?.id,
-  }));
-  check('the button opens the track select', opened.fieldHidden, false);
-  check('and says it is open', opened.pressed, 'true');
-  check('and moves focus into it', opened.focused, 'audio-track');
+section('A finished subtitle clears instead of staying on screen');
 
-  await reader.click('#audio');
+{
+  // Its own page and its own file. This ran inside the audio section at first and
+  // failed — not because the caption was wrong but because that section has already
+  // replaced the source with a rebuilt MSE stream, whose timeline is not guaranteed to
+  // line up with the cues read from the original file. A test that depends on two
+  // timelines agreeing is testing the wrong thing.
+  const page3 = await context.newPage();
+  await page3.goto(`chrome-extension://${extensionId}/src/reader/reader.html`);
+  await page3.waitForTimeout(1200);
+  await page3.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await page3.waitForFunction(() => document.getElementById('video')?.readyState >= 2, null, {
+    timeout: 15000,
+  });
+  await page3.waitForTimeout(600);
+  await page3.evaluate(() => document.getElementById('video').pause());
+
+  const captionAt = async (seconds) => {
+    await page3.evaluate((at) => {
+      document.getElementById('video').currentTime = at;
+    }, seconds);
+    await page3.waitForTimeout(400);
+    return page3.evaluate(() => document.getElementById('caption-primary').textContent.trim());
+  };
+
+  // Inside a cue: shown.
+  check('a caption is shown while its cue plays', (await captionAt(1.0)).length > 0, true);
+
+  // The fixture spaces cues about two seconds apart, so 4.0s is in the silence after
+  // one and before the next.
+  const duringHold = await captionAt(4.0);
+
+  // Still up immediately after the cue ended — this is the hold that keeps an ordinary
+  // dialogue run from blinking through the fraction-of-a-second gaps between its cues.
+  check('a finished cue holds briefly rather than vanishing at once', duringHold.length > 0, true);
+
+  await page3.waitForTimeout(1000);
   check(
-    'and pressing it again closes the select',
-    await reader.evaluate(() => document.getElementById('audio-field').hidden),
-    true,
+    'and then clears rather than staying on screen forever',
+    await page3.evaluate(() => document.getElementById('caption-primary').textContent.trim()),
+    '',
   );
+
+  await page3.close();
 }
 
 section('Resume continues rather than sitting paused');
