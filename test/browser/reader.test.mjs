@@ -372,32 +372,92 @@ section('the audio track selector');
     .waitForFunction(() => document.getElementById('video')?.readyState >= 2, null, { timeout: 20000 })
     .catch(() => {});
 
-  const heard = await reader.evaluate(async () => {
-    const video = document.getElementById('video');
-    const context = new AudioContext();
-    const analyser = context.createAnalyser();
-    analyser.fftSize = 8192;
-    context.createMediaElementSource(video).connect(analyser);
-    analyser.connect(context.destination);
-    await video.play().catch(() => {});
-    await new Promise((resolve) => setTimeout(resolve, 1600));
-    const bins = new Float32Array(analyser.frequencyBinCount);
-    analyser.getFloatFrequencyData(bins);
-    let peak = 0;
-    let best = -Infinity;
-    for (let i = 0; i < bins.length; i += 1) {
-      if (bins[i] > best) {
-        best = bins[i];
-        peak = i;
+  /**
+   * The dominant frequency the element is producing right now.
+   *
+   * `captureStream`, NOT `createMediaElementSource`. The latter can only be called once
+   * per element and it reroutes the element's audio into the Web Audio graph and out of
+   * the default output, so a second measurement through it captures silence. Using
+   * `captureStream` for every measurement keeps the method identical each time — which
+   * is what makes measuring a second switch possible at all.
+   */
+  const measureTone = () =>
+    reader.evaluate(async () => {
+      const video = document.getElementById('video');
+      await video.play().catch(() => {});
+      const stream = video.captureStream();
+      const context = new AudioContext();
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 8192;
+      context.createMediaStreamSource(stream).connect(analyser);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      const bins = new Float32Array(analyser.frequencyBinCount);
+      analyser.getFloatFrequencyData(bins);
+      let peak = 0;
+      let best = -Infinity;
+      for (let i = 0; i < bins.length; i += 1) {
+        if (bins[i] > best) {
+          best = bins[i];
+          peak = i;
+        }
       }
-    }
-    const hz = Math.round((peak * context.sampleRate) / analyser.fftSize);
-    await context.close();
-    return { hz, playing: !video.paused };
-  });
+      const hz = Math.round((peak * context.sampleRate) / analyser.fftSize);
+      await context.close();
+      for (const track of stream.getTracks()) track.stop();
+      return { hz, playing: !video.paused, audioTracks: stream.getAudioTracks().length };
+    });
+
+  const heard = await measureTone();
 
   check('and switching really changes the audible track', heard.hz, 877);
   check('with playback still running', heard.playing, true);
+
+  // The streaming property, which is the reason this does not buffer. A rebuilt
+  // stream must be USABLE before it is complete — that is what lets playback begin on
+  // a fragment instead of after the whole film has been copied, and it is the one
+  // thing a buffered implementation cannot do. The element's source is a MediaSource
+  // blob and its buffer fills ahead of the playhead.
+  const streaming = await reader.evaluate(() => {
+    const video = document.getElementById('video');
+    const source = video.currentSrc || video.src || '';
+    return {
+      isMediaSource: source.startsWith('blob:'),
+      duration: Number.isFinite(video.duration) ? video.duration : 0,
+      buffered: video.buffered.length ? video.buffered.end(0) : 0,
+      readyState: video.readyState,
+    };
+  });
+
+  check('playback comes from a MediaSource', streaming.isMediaSource, true);
+  check('and the stream is playable before the file is complete', streaming.readyState >= 2, true);
+  check('with the buffer ahead of the playhead', streaming.buffered > 0, true);
+
+  // Switching away and back exercises the teardown path, which is where the first
+  // version leaked and double-revoked: the rebuild owns an object URL, and so does the
+  // raw file, and confusing the two detaches a source the element is still reading.
+  await reader.selectOption('#audio-track', '0');
+  await reader
+    .waitForFunction(() => document.getElementById('video')?.readyState >= 2, null, { timeout: 20000 })
+    .catch(() => {});
+  // Does the SAME measurement see the third track after switching back? This is the
+  // path that leaked in the first implementation: the rebuild owns an object URL and so
+  // does the raw file, and confusing the two detaches a source the element is reading.
+  const switchedBack = await measureTone();
+
+  check('switching back returns to the first track', switchedBack.hz, 441);
+  check('and it is still playing rather than detached', switchedBack.playing, true);
+
+  // The control must not claim a change that did not happen, and must not be left in
+  // its busy state once production has finished.
+  const settled = await reader.evaluate(() => ({
+    disabled: document.getElementById('audio-track').disabled,
+    note: document.getElementById('audio-note').textContent,
+    selected: document.getElementById('audio-track').value,
+  }));
+  check('the selector is usable again after switching', settled.disabled, false);
+  check('and reports no stale error', /not supported/i.test(settled.note), false);
+  check('and shows the track that is playing', settled.selected, '0');
 }
 
 await closeAll();

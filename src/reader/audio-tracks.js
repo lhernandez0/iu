@@ -27,21 +27,21 @@
  *
  * ## What this does NOT do
  *
- * It does not decode anything. `decode-eac3` and friends exist and are LGPL, and are
- * deliberately not used here: remuxing a codec the browser cannot decode produces a
- * file that plays **silence**. That is a worse failure than an error, because there is
- * nothing to catch — so `canPlayCodec` is checked first and the caller is told.
+ * It does not decode anything. Remuxing hands the element the same codec it already
+ * refused, so a file whose audio the browser cannot decode plays **silence** with no
+ * `MediaError` to catch — which is why `listAudioTracks` reports `playable` per track
+ * and the reader says so in words rather than letting a learner find out by ear.
  */
 
 import {
   Input,
   Output,
   Conversion,
-  BufferTarget,
   BlobSource,
   MATROSKA,
   MP4,
-  Mp4OutputFormat,
+  CmafOutputFormat,
+  StreamTarget,
 } from '../vendor/mediabunny.js';
 
 /**
@@ -105,49 +105,227 @@ export async function listAudioTracks(file) {
 }
 
 /**
- * A copy of the file containing only the chosen audio track.
+ * Play the chosen audio track by STREAMING a rebuild into the media element.
  *
- * ## The one thing that is easy to get wrong
+ * ## Why this exists rather than buffering
  *
- * The per-track callback returns `undefined` to mean **"no opinion — use the
- * defaults"**, which KEEPS the track. Writing `n === 2 ? {} : undefined` therefore
- * keeps everything and silently produces a file still playing track 1. `{ discard:
- * true }` is the only thing that removes a track, and getting this wrong looks exactly
- * like success until you listen.
+ * Collecting the whole rebuilt file and then playing it peaks near twice the file size
+ * in memory and cannot start until the entire film has been copied. Measured: about
+ * 6 ms per MB, so a 2 GB film is ~12 seconds of waiting and ~2 GB of RAM. Fine for a
+ * 30 MB test file, unusable for the thing a learner actually opens.
  *
- * ## Cost, measured
+ * This feeds the element as the media is produced, so playback begins after the first
+ * fragment. It is what every browser-based player does, because the browser will not
+ * select audio tracks itself.
  *
- * `BufferTarget` holds the whole output in memory, so this peaks at roughly twice the
- * file size and returns a Blob. Measured 2026-10-09 on this machine: 20 ms for a
- * 120 KB file, 175 ms for a 30 MB one — about 6 ms per MB. So a 2 GB film is ~12
- * seconds and a 2 GB memory peak, which is why the caller must show progress and why
- * streaming into MSE is the next step if this is kept.
+ * ## The shape of it, and the two ways it is easy to get wrong
+ *
+ * Media Source Extensions wants an INITIALISATION segment before any media, then
+ * fragments to append. So:
+ *
+ *   - `StreamTarget` hands us bytes as they are produced. **Not `chunked: true`** —
+ *     that option accumulates up to 16 MiB before writing, which is the opposite of
+ *     what is wanted here and turns a stream back into a buffer.
+ *   - `CmafOutputFormat` produces exactly the init-plus-fragments pair, via
+ *     `initTarget`, which is why it is used rather than plain MP4.
+ *   - Initialisation and media are appended through ONE ordered queue. MSE rejects
+ *     media appended before the init segment, and a single queue makes that impossible
+ *     by construction rather than by remembering to check — mediabunny writes the init
+ *     segment first, so it is naturally at the head.
+ *
+ * ## The contract, which is the part a caller must get right
+ *
+ * This does NOT wait for the element to attach. Waiting would deadlock: `sourceopen`
+ * only fires once a `MediaSource` is attached to an element, and the caller cannot
+ * attach it until this function has returned the URL. So production starts here, the
+ * URL comes back immediately, and the queue drains whenever the element is ready.
  *
  * @param {File|Blob} file
  * @param {number} index Which track to KEEP.
- * @param {{signal?: AbortSignal, onProgress?: (fraction: number) => void}} [options]
- * @returns {Promise<Blob>}
+ * @param {{onProgress?: (fraction: number) => void}} [options]
+ * @returns {Promise<{url: string, done: Promise<void>, revoke: () => void}>}
  */
-export async function remuxToTrack(file, index, options = {}) {
+export async function streamTrack(file, index, options = {}) {
   const input = new Input({ source: new BlobSource(file), formats: INPUT_FORMATS });
-  const target = new BufferTarget();
-  const output = new Output({ format: new Mp4OutputFormat(), target });
 
-  // `n` is 1-based; `index` is not.
-  const conversion = await Conversion.init({
-    input,
-    output,
-    audio: (track, n) => (n - 1 === index ? {} : { discard: true }),
-  });
+  const videoTracks = await input.getVideoTracks();
+  const audioTracks = await input.getAudioTracks();
+  if (!videoTracks.length) throw new Error('This file has no video track.');
+  if (!audioTracks[index]) throw new Error('That audio track is not in this file.');
 
-  if (options.onProgress) {
-    conversion.onProgress = (progress) => options.onProgress(progress);
-  }
+  // The mime type is built from the tracks themselves, so the SourceBuffer is told the
+  // truth about the codecs instead of us guessing. A wrong string here fails at
+  // `addSourceBuffer` with a bare `NotSupportedError`.
+  const videoCodec = await videoTracks[0].getCodecParameterString();
+  const audioCodec = await audioTracks[index].getCodecParameterString();
+  const mime = `video/mp4; codecs="${videoCodec},${audioCodec}"`;
 
-  if (options.signal) options.signal.addEventListener('abort', () => void conversion.cancel(), { once: true });
+  const mediaSource = new MediaSource();
+  const url = URL.createObjectURL(mediaSource);
 
-  await conversion.execute();
+  /**
+   * One ordered queue for init and media alike, each chunk tagged.
+   *
+   * The tag exists so the ONE rule MSE imposes can be enforced here rather than
+   * remembered: media may not be appended before the initialisation segment. A single
+   * queue makes the ORDER right; the tag makes it checkable.
+   *
+   * @type {Array<{bytes: Uint8Array, init: boolean}>}
+   */
+  const queue = [];
+  let sourceBuffer = null;
+  let produced = false;
+  /** @type {unknown} */
+  let failure = null;
+  /** Whether an initialisation chunk has been APPENDED. Media waits until it has. */
+  let sawInit = false;
 
-  if (!target.buffer) throw new Error('The remux produced no data.');
-  return new Blob([target.buffer], { type: 'video/mp4' });
+  /**
+   * Whether production ever DELIVERED an init chunk.
+   *
+   * Deliberately separate from `sawInit`. This is the production-side fact and the only
+   * one `done` can honestly check: if the element has not attached yet, nothing has
+   * been appended and `sawInit` is false while the stream is perfectly healthy. The
+   * first version of this check conflated the two and declared a working stream broken,
+   * because in testing production often finishes before the element attaches.
+   */
+  let producedInit = false;
+
+  /**
+   * Set when chunks are arriving but nothing can be appended.
+   *
+   * The `sawInit` gate below is an assumption about library internals — that init is
+   * always written first. If that ever stopped being true the gate would hold every
+   * chunk forever, `done` would resolve cleanly, and the result would be a black
+   * element with a healthy-looking UI. This is what turns that invisible hang into a
+   * reported error instead.
+   *
+   * @type {unknown}
+   */
+  let stalled = null;
+
+  const pump = () => {
+    if (!sourceBuffer || sourceBuffer.updating || !queue.length) {
+      // Nothing left to do. `endOfStream` is only valid once production has stopped and
+      // the buffer has drained, or it throws `InvalidStateError`.
+      if (produced && sourceBuffer && !sourceBuffer.updating && !queue.length) {
+        try {
+          if (mediaSource.readyState === 'open') mediaSource.endOfStream();
+        } catch {
+          // Already ended, or the element detached. Not worth surfacing.
+        }
+      }
+      return;
+    }
+    const head = queue[0];
+    // The rule, enforced instead of assumed: nothing may be appended until the
+    // initialisation segment has been. mediabunny writes init first, so in practice
+    // this never blocks — but if it ever does, the chunk count says so rather than
+    // waiting forever in silence.
+    if (!head.init && !sawInit) {
+      if (queue.length > 1) {
+        stalled = new Error('The stream produced media before its initialisation segment.');
+      }
+      return;
+    }
+
+    try {
+      sourceBuffer.appendBuffer(head.bytes);
+      if (head.init) sawInit = true;
+      queue.shift();
+    } catch (error) {
+      // A full buffer is not a failure: the element has not played far enough to make
+      // room. Leave the chunk queued and retry when `updateend` next fires.
+      if (error?.name === 'QuotaExceededError') {
+        setTimeout(pump, 100);
+        return;
+      }
+      failure = error;
+    }
+  };
+
+  const onChunk = (bytes, init) => {
+    queue.push({ bytes, init });
+    pump();
+  };
+
+  const initTarget = new StreamTarget(
+    new WritableStream({
+      write(chunk) {
+        producedInit = true;
+        onChunk(chunk.data, true);
+      },
+    }),
+  );
+
+  // Deliberately NOT `chunked`: chunking accumulates 16 MiB before it writes anything,
+  // which would mean no playback until a large fraction of the film was copied.
+  const mediaTarget = new StreamTarget(
+    new WritableStream({
+      write(chunk) {
+        onChunk(chunk.data, false);
+      },
+    }),
+  );
+
+  mediaSource.addEventListener(
+    'sourceopen',
+    () => {
+      try {
+        sourceBuffer = mediaSource.addSourceBuffer(mime);
+        // `segments` is the correct mode for a fragmented stream and the default; set
+        // explicitly so a change of default cannot silently alter behaviour.
+        sourceBuffer.mode = 'segments';
+        sourceBuffer.addEventListener('updateend', () => pump());
+        pump();
+      } catch (error) {
+        // Thrown here for a codec the browser will not take — the one case where the
+        // failure is worth naming, because the alternative is silence.
+        failure = error;
+      }
+    },
+    { once: true },
+  );
+
+  // Production starts now and is NOT awaited before returning: see the contract above.
+  const done = (async () => {
+    const output = new Output({
+      format: new CmafOutputFormat({ fastStart: 'fragmented', minimumFragmentDuration: 1 }),
+      target: mediaTarget,
+      initTarget,
+    });
+
+    const conversion = await Conversion.init({
+      input,
+      output,
+      audio: (track, n) => (n - 1 === index ? {} : { discard: true }),
+    });
+    // Progress is reported from the conversion, which is what knows how far along the
+    // input is. The SourceBuffer's own buffered range says how much has been APPENDED,
+    // which is the same thing only when nothing is queued.
+    conversion.onProgress = (progress) => options.onProgress?.(Math.min(1, progress));
+    await conversion.execute();
+    produced = true;
+    pump();
+    // Both are checked here, and `stalled` is checked as well as `failure`: a stream
+    // that never drained is a failure whether or not anything threw.
+    if (failure) throw failure;
+    if (stalled) throw stalled;
+    // The production-side fact, not `sawInit`: the element may not have attached yet.
+    if (!producedInit) throw new Error('The stream produced no initialisation segment.');
+  })();
+
+  return {
+    url,
+    done,
+    revoke: () => {
+      try {
+        if (mediaSource.readyState === 'open') mediaSource.endOfStream();
+      } catch {
+        // Already ended, or never opened.
+      }
+      URL.revokeObjectURL(url);
+    },
+  };
 }
+
