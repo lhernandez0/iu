@@ -357,3 +357,7 @@ $RECYCLE.BIN/
 
 # Build output: the staged set and the store ZIP. Reproducible from source.
 build/
+
+# Screenshots written by the preview capture scripts, for visual review. They are
+# regenerated on demand and are large; the review itself is not a source artifact.
+tools/ui/assets/

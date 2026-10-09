@@ -152,6 +152,22 @@ export class FakeElement {
     return this.attributes.get(name) ?? null;
   }
 
+  /**
+   * Focus, recorded rather than performed.
+   *
+   * There is no focus model here, so the only thing worth modelling is WHICH
+   * element the panel asked to focus — which is a real assertion: closing the
+   * settings view must put focus back on the gear, or a keyboard user is left in
+   * chrome that has just been hidden.
+   */
+  focus() {
+    document.activeElement = this;
+  }
+
+  blur() {
+    if (document.activeElement === this) document.activeElement = null;
+  }
+
   /** @param {object} [options] */
   scrollIntoView() {
     // Layout is meaningless here.
@@ -245,7 +261,31 @@ export function installDomStub(ids = [], { hidden = [] } = {}) {
 
   const document = {
     documentElement,
+    /**
+     * What currently has focus.
+     *
+     * A property rather than something computed, because the panel's use of focus
+     * is a DECISION it makes (put focus back on the gear) rather than a behaviour
+     * the DOM enforces — so recording it is enough to assert the decision.
+     */
+    activeElement: null,
     getElementById: (id) => byId.get(id) ?? null,
+    /**
+     * A class lookup, which the panel uses for the two REGIONS it hides as a unit
+     * — the reading bar and the footer — because neither has an id.
+     *
+     * Handles only the simple `.class` form, and returns the first match. That is
+     * deliberately narrow: a stub that pretended to be a selector engine would
+     * pass tests for selectors the real one resolves differently, and the failures
+     * that hides are exactly the ones a stub cannot catch.
+     *
+     * @param {string} selector
+     */
+    querySelector: (selector) => {
+      const match = /^\.([\w-]+)$/.exec(selector);
+      if (!match) return null;
+      return created.find((el) => el instanceof FakeElement && el.classList?.contains(match[1])) ?? null;
+    },
     createElement: (tag) => {
       const element = new FakeElement(tag);
       created.push(element);

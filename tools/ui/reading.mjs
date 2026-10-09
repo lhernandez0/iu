@@ -21,7 +21,7 @@
  * Run: npm run ui  →  http://127.0.0.1:8099/tools/ui/reading.html
  */
 
-import { renderTokens } from '/src/sidepanel/marks.js';
+import { renderTokens } from '/src/common/marks.js';
 // The real conversion, not a copy. The mock had its own and the two would have drifted:
 // the real one needed a syllable table and backtracking to be correct, which a
 // nine-line version here would have silently got wrong while looking fine.

@@ -264,9 +264,15 @@ section('shipped source can only reach youtube.com, and only over fetch');
   //      wordlist.js        2 — bundled dictionary JSON, read through
   //                            `runtime.getURL`. Local files, not the network.
   //      youtube-content.js 1 — `fetchBounded()`, the caption track.
+  //      reader/reader.js   1 — the same bundled dictionary JSON. The reader marks
+  //                            its own captions with the shared marking rules, so
+  //                            it needs the dictionary too — and it fetches it from
+  //                            `runtime.getURL`, i.e. from the extension's own
+  //                            package, never the network.
   const expected = {
     'content/youtube-content.js': 1,
     'learn/wordlist.js': 2,
+    'reader/reader.js': 1,
   };
   const found = {};
   for (const file of sources) {

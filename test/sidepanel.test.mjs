@@ -64,6 +64,9 @@ const PANEL_IDS = [
   'copy',
   'format',
   'save',
+  'settings-toggle',
+  'settings-view',
+  'settings-body',
 ];
 
 /** Ids the real sidepanel.html starts hidden. */
@@ -910,6 +913,80 @@ section('tone style changes how a reading is written, not where');
     dom.created.filter((el) => el.classList.contains('rt')).at(-1)?.textContent,
     'zhong1yu2',
   );
+}
+
+// --- The settings view -------------------------------------------------------
+
+section('the settings view replaces the transcript and comes back');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  lastPort().emit({
+    type: 'state',
+    state: stateWithSettings({ markStyle: 'highlight' }),
+  });
+  await settle();
+
+  const view = byId.get('settings-view');
+  const transcript = byId.get('transcript');
+  const toggle = byId.get('settings-toggle');
+  const body = byId.get('settings-body');
+
+  check('both views exist', Boolean(view && transcript), true);
+  check('the transcript starts on screen', transcript.hidden, false);
+
+  // The toggle is the ONLY way in and out — there is no back button, which was
+  // redundant once the gear stays on screen and still says what it does.
+  toggle.dispatch('click');
+  check('opening hides the transcript', transcript.hidden, true);
+  check('and shows the settings view', view.hidden, false);
+  check('with the gear marked pressed', toggle.getAttribute('aria-pressed'), 'true');
+  check('and its label says what pressing it now does', toggle.getAttribute('aria-label'), 'Back to the transcript');
+
+  toggle.dispatch('click');
+  check('pressing it again brings the transcript back', transcript.hidden, false);
+  check('and hides the settings view', view.hidden, true);
+  check('with the gear unpressed', toggle.getAttribute('aria-pressed'), 'false');
+
+  // Built from the registry, so a setting with no control in the bar still appears.
+  const labels = body.find((el) => el.classList.contains('settings-label')).map((el) => el.textContent);
+  check('the view rendered rows', labels.length > 0, true);
+  // `markStyle` is one of the two that were parked behind `hidden` until this view
+  // existed; if the view stops rendering it, this is where that shows up.
+  check('and includes the settings that only it renders', labels.includes('Marks'), true);
+  check('and the tone style too', labels.includes('Pinyin tones'), true);
+
+  // A group heading per group, so the list is navigable rather than flat.
+  const groups = body.find((el) => el.classList.contains('settings-group-title')).map((el) => el.textContent);
+  check('grouped rather than one flat list', groups.length > 1, true);
+}
+
+{
+  // Changing a control in the view must go through the SAME message a bar control
+  // uses, or "does this apply immediately" would depend on which view it was
+  // changed in.
+  const { lastPort, byId, dom } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings({ markStyle: 'underline' }) });
+  await settle();
+  byId.get('settings-toggle').dispatch('click');
+
+  const body = byId.get('settings-body');
+  const selects = body.find((el) => el.tagName === 'SELECT');
+  // Found by VALUE, because the stub's `Option` stores the label on `.text` while
+  // `textContent` reads children — the same arrangement as the real DOM, where an
+  // option's accessible text and its value are separate things.
+  const marksSelect = selects.find((select) =>
+    select.children.some((option) => option.value === 'highlight'),
+  );
+  check('the marks select rendered with its options', Boolean(marksSelect), true);
+
+  marksSelect.value = 'highlight';
+  marksSelect.dispatch('change');
+  const sent = lastPort().sent.filter((m) => m.type === 'set-setting');
+  check('changing it sent a set-setting message', sent.length > 0, true);
+  check('for the right setting', sent.at(-1)?.id, 'markStyle');
+  check('with the chosen value', sent.at(-1)?.value, 'highlight');
+  void dom;
 }
 
 // --- Result ------------------------------------------------------------------

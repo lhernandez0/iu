@@ -13,9 +13,9 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
-import { definition } from '../common/settings.js';
+import { definition, forSettingsView } from '../common/settings.js';
 import { providerNames } from '../common/providers.js';
-import { attachHover, showEntry, hide as hidePopover, renderTokens, renderReading, setReadingSettings } from './marks.js';
+import { attachHover, showEntry, hide as hidePopover, renderTokens, renderReading, setReadingSettings } from '../common/marks.js';
 
 /**
  * The extension API namespace — `browser` where it exists (Chrome 148+, and
@@ -74,6 +74,11 @@ const els = {
   copy: /** @type {HTMLButtonElement} */ (document.getElementById('copy')),
   format: /** @type {HTMLSelectElement} */ (document.getElementById('format')),
   save: /** @type {HTMLButtonElement} */ (document.getElementById('save')),
+  settingsToggle: /** @type {HTMLButtonElement} */ (document.getElementById('settings-toggle')),
+  settingsView: /** @type {HTMLElement} */ (document.getElementById('settings-view')),
+  settingsBody: /** @type {HTMLElement} */ (document.getElementById('settings-body')),
+  learningBar: /** @type {HTMLElement} */ (document.querySelector('.bar.learning')),
+  footer: /** @type {HTMLElement} */ (document.querySelector('footer.bar')),
 };
 
 /** Bookkeeping only — the transcript itself lives in the service worker. */
@@ -101,6 +106,8 @@ const view = {
   glossTranslation: null,
   /** The last state received, so a row tag can name the target language. */
   state: null,
+  /** Whether the panel is showing the settings view instead of the transcript. */
+  settingsOpen: false,
   /**
    * The last cue the worker reported, kept across a row rebuild.
    *
@@ -529,6 +536,258 @@ function renderLearning(state) {
   applyFontSize(learning.fontSize);
   applyView(learning.view);
   applyMarkStyle(learning.markStyle);
+
+  renderSettingsView(learning, state);
+}
+
+/**
+ * The settings view: everything panel-side that is NOT changed while reading.
+ *
+ * **Built from the registry, not from a hand-written list.** `forSettingsView()`
+ * filters `SETTINGS` to the panel-side entries with no `quick` control, so adding a
+ * setting is one object in `src/common/settings.js` and it appears here — no second
+ * edit, and no chance of the view and the transcript bar disagreeing about which
+ * settings exist.
+ *
+ * Grouped by `group`, which is presentation grouping and is what a person scanning
+ * the page expects. The order inside a group is declaration order, which is the
+ * order the file lists them, so it is deliberate and stable.
+ *
+ * Rebuilt only when something it renders has changed. A state push arrives on every
+ * cue change, and rebuilding the whole view then would reset focus and scroll while
+ * the user is using it — the same reason the transcript bar's selects carry a
+ * signature.
+ *
+ * @param {object} learning
+ * @param {object} state The whole state, because the dynamic settings' OPTIONS live
+ *   there rather than in the registry: the word lists and their levels come from
+ *   the loaded dictionary, and the subtitle languages come from the video.
+ */
+function renderSettingsView(learning, state) {
+  if (!els.settingsBody) return;
+
+  const definitions = forSettingsView();
+  const signature = definitions
+    .map((setting) => `${setting.id}:${String(learning[setting.id])}:${optionSignature(setting, state)}`)
+    .join('|');
+  if (els.settingsBody.dataset.signature === signature) return;
+  els.settingsBody.dataset.signature = signature;
+
+  els.settingsBody.replaceChildren();
+
+  const groups = new Map();
+  for (const setting of definitions) {
+    const group = setting.group ?? 'other';
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(setting);
+  }
+
+  for (const [group, settings] of groups) {
+    const section = document.createElement('section');
+    section.className = 'settings-group';
+
+    const heading = document.createElement('h3');
+    heading.className = 'settings-group-title';
+    heading.textContent = group;
+    section.append(heading);
+
+    for (const setting of settings) {
+      section.append(buildSettingControl(setting, learning[setting.id], state));
+    }
+
+    els.settingsBody.append(section);
+  }
+}
+
+/**
+ * The options a dynamic setting would offer, folded into the rebuild signature.
+ *
+ * A word list's levels are supplied per state, so the options for `threshold`
+ * change when the list does. Without them in the signature the view would keep the
+ * old levels after a list switch, which is a wrong control that looks right.
+ *
+ * @param {object} setting
+ * @param {object} state
+ */
+function optionSignature(setting, state) {
+  if (!setting.dynamic) return '';
+  const options = dynamicOptions(setting.id, state);
+  return options.map((option) => `${option.value}:${option.label}`).join(',');
+}
+
+/**
+ * The options for a dynamic setting, from the state.
+ *
+ * The registry cannot declare these: which word lists exist is a property of the
+ * loaded dictionary and which subtitle languages exist is a property of the video.
+ * The transcript bar reads them from the same fields, so the two views cannot offer
+ * different choices.
+ *
+ * @param {string} id
+ * @param {object} state
+ * @returns {Array<{value: any, label: string}>}
+ */
+function dynamicOptions(id, state) {
+  const learning = state?.learning ?? {};
+  switch (id) {
+    case 'listId':
+      return (learning.listOptions ?? []).map((option) => ({ value: option.value, label: option.label }));
+    case 'threshold':
+      return learning.thresholdOptions ?? [];
+    case 'studyLanguage':
+    case 'glossLanguage':
+      return (state?.trackList ?? []).map((track) => ({ value: track.languageCode, label: track.name }));
+    case 'translateInto':
+      return (state?.translationLanguages ?? []).map((language) => ({
+        value: language.languageCode,
+        label: language.name,
+      }));
+    default:
+      return [];
+  }
+}
+
+/**
+ * One control, from its definition.
+ *
+ * A `select`, a `toggle` or a `number`, which are the types the registry uses. A
+ * dynamic setting's options come from the state rather than the definition, so both
+ * are accepted here — that is the whole difference between `listId` (options per
+ * state) and `markStyle` (options fixed in the registry).
+ *
+ * @param {object} setting
+ * @param {any} value
+ * @param {object} state
+ * @returns {HTMLElement}
+ */
+function buildSettingControl(setting, value, state) {
+  const row = document.createElement('label');
+  row.className = 'settings-row';
+
+  const label = document.createElement('span');
+  label.className = 'settings-label';
+  label.textContent = setting.label;
+  row.append(label);
+
+  if (setting.type === 'toggle') {
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = Boolean(value);
+    input.setAttribute('aria-label', setting.label);
+    input.addEventListener('change', () => sendSetting(setting.id, input.checked));
+    // The checkbox itself, not a styled switch: a switch built from a `<div>` and a
+    // click handler is a control a keyboard cannot reach.
+    row.classList.add('settings-row-single');
+    row.append(input);
+    return row;
+  }
+
+  if (setting.type === 'number') {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.value = String(value ?? '');
+    if (setting.min !== undefined) input.min = String(setting.min);
+    if (setting.max !== undefined) input.max = String(setting.max);
+    if (setting.step !== undefined) input.step = String(setting.step);
+    input.setAttribute('aria-label', setting.label);
+    // `change`, not `input`: a number field fires on every keystroke, and sending
+    // "1" while someone is typing "18" would apply a size they did not choose.
+    input.addEventListener('change', () => sendSetting(setting.id, Number(input.value)));
+    row.classList.add('settings-row-single');
+    row.append(input);
+    return row;
+  }
+
+  const options = setting.dynamic ? dynamicOptions(setting.id, state) : (setting.options ?? []);
+  const select = document.createElement('select');
+  select.setAttribute('aria-label', setting.label);
+
+  if (!options.length) {
+    // Nothing to choose from yet — a word list that has not loaded, a video with no
+    // subtitles. A placeholder rather than an empty picker, which reads as broken.
+    select.append(new Option('—', ''));
+    select.disabled = true;
+    row.append(select);
+    return row;
+  }
+
+  for (const option of options) {
+    const element = new Option(option.label, String(option.value));
+    element.selected = String(option.value) === String(value ?? '');
+    select.append(element);
+  }
+  select.addEventListener('change', () => {
+    // Sent through the same path a transcript-bar control uses, so a setting behaves
+    // identically wherever it is changed. Routing it separately would make "does
+    // this apply immediately" depend on which view you changed it in.
+    sendSetting(setting.id, coerceFor(setting, select.value));
+  });
+  row.append(select);
+  return row;
+}
+
+/**
+ * Turn a control's string value back into what the setting stores.
+ *
+ * A `<select>` value is always a string; a threshold is a number and a toggle is a
+ * boolean. The registry's own `coerce` is the authority on what shape a setting
+ * wants, so this defers to it rather than guessing — guessing is how `"4"` reaches
+ * a comparison written for `4`.
+ *
+ * @param {object} setting
+ * @param {string} raw
+ */
+function coerceFor(setting, raw) {
+  if (setting.type === 'select' && (setting.options ?? []).some((o) => typeof o.value === 'number')) {
+    const number = Number(raw);
+    if (Number.isFinite(number)) return number;
+  }
+  return raw;
+}
+
+/** @param {string} id @param {any} value */
+function sendSetting(id, value) {
+  send({ type: MSG.SET_SETTING, id, value });
+}
+
+/**
+ * Show or hide the settings view.
+ *
+ * The transcript is REPLACED, not covered: at panel height there is not room for
+ * both, and a settings sheet over the transcript would hide the thing you are
+ * tuning. The status line hides with it, because its message ("4 lines · Chinese")
+ * is about a transcript that is not on screen — the same reasoning the collapse
+ * already uses for that line.
+ *
+ * **The gear is the only way in and out.** There was a back arrow too, and it was
+ * redundant: the control that opened the view is still on screen and still says
+ * what it does, so a second exit is one more thing in a header with no room for
+ * it. That is the standard shape for a settings panel behind a gear.
+ *
+ * Focus moves back to the gear when the view closes, so a keyboard user is not
+ * left in chrome that has just been hidden.
+ *
+ * @param {boolean} open
+ */
+function setSettingsOpen(open) {
+  view.settingsOpen = open;
+  if (els.settingsView) els.settingsView.hidden = !open;
+  if (els.transcript) els.transcript.hidden = open;
+  if (els.status) els.status.hidden = open;
+  if (els.footer) els.footer.hidden = open;
+  if (els.settingsToggle) {
+    els.settingsToggle.setAttribute('aria-pressed', String(open));
+    els.settingsToggle.title = open ? 'Back to the transcript' : 'Settings';
+    els.settingsToggle.setAttribute('aria-label', open ? 'Back to the transcript' : 'Settings');
+    if (!open) els.settingsToggle.focus();
+  }
+  // The reading controls are about the transcript, so they hide with it rather
+  // than sitting above a list of settings they do not affect.
+  if (els.learningBar) els.learningBar.hidden = open;
+}
+
+if (els.settingsToggle) {
+  els.settingsToggle.addEventListener('click', () => setSettingsOpen(!view.settingsOpen));
 }
 
 /**

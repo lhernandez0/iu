@@ -9,6 +9,9 @@
       is styled by the file that ships, so a change here is a change to the real
       panel — which is the whole point of a preview.
     -->
+    <!-- The shared mark rules, which the panel and the reader both draw
+         from. Loaded before the panel sheet so the panel can override. -->
+    <link rel="stylesheet" href="/src/common/marks.css" />
     <link rel="stylesheet" href="/src/sidepanel/sidepanel.css" />
     <link rel="stylesheet" href="/tools/ui/preview.css" />
   </head>
@@ -46,6 +49,12 @@
         </label>
       </div>
       <button id="layout" type="button" class="layout-toggle" aria-pressed="false" title="Hide the reading controls">&#9650;</button>
+      <button id="settings-toggle" type="button" class="settings-toggle" aria-pressed="false" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="17" height="17">
+          <path d="M10.09 2.80 L13.91 2.80 L13.31 5.12 L15.93 6.21 L17.16 4.14 L19.86 6.84 L17.79 8.07 L18.88 10.69 L21.20 10.09 L21.20 13.91 L18.88 13.31 L17.79 15.93 L19.86 17.16 L17.16 19.86 L15.93 17.79 L13.31 18.88 L13.91 21.20 L10.09 21.20 L10.69 18.88 L8.07 17.79 L6.84 19.86 L4.14 17.16 L6.21 15.93 L5.12 13.31 L2.80 13.91 L2.80 10.09 L5.12 10.69 L6.21 8.07 L4.14 6.84 L6.84 4.14 L8.07 6.21 L10.69 5.12 Z" fill="currentColor" />
+          <circle cx="12" cy="12" r="3.4" fill="var(--bg)" />
+        </svg>
+      </button>
     </header>
 
     <div id="translate-target-row" class="translate-target-row" hidden>
@@ -67,6 +76,13 @@
     </header>
 
     <p id="status" class="status" role="status">Looking for a video…</p>
+
+    <section id="settings-view" class="settings-view" hidden aria-label="Settings">
+      <header class="settings-head">
+        <h2 class="settings-title">Settings</h2>
+      </header>
+      <div id="settings-body" class="settings-body"></div>
+    </section>
 
     <main id="transcript" class="transcript" aria-label="Transcript">
       <p class="empty">No transcript loaded.</p>

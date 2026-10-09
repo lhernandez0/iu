@@ -8,6 +8,9 @@
          test treats any console error as a failure, which is right — it is the
          only signal that a page is broken in a way that still looks fine. -->
     <link rel="icon" href="/icons/icon-32.png" />
+    <!-- The shared mark rules, which the panel and the reader both draw
+         from. Loaded before the panel sheet so the panel can override. -->
+    <link rel="stylesheet" href="/src/common/marks.css" />
     <link rel="stylesheet" href="/src/sidepanel/sidepanel.css" />
     <style>
       /* A comparison sheet, not the panel. The SAME text under each treatment, so

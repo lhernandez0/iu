@@ -1,19 +1,28 @@
 /**
- * Rendering the learning layer into transcript lines.
+ * Rendering the learning layer into transcript lines and captions.
  *
- * Kept apart from the panel's own state machine because it is self-contained:
- * given a line's tokens it produces a node, and it is the only place that knows
- * how a mark looks. The panel does not need to understand levels.
+ * **Shared by the side panel and the video reader.** Both draw the same thing — a
+ * line of `.mark` / `.word` spans with optional `.ruby` annotations and a definition
+ * on hover — so the rendering lives in one place and both import it. A second
+ * implementation in the reader would drift, and the symptom would be captions whose
+ * marks or popover behaved differently from the transcript's for no stated reason.
+ *
+ * It lives in `common/` rather than under `sidepanel/` for exactly that reason.
  *
  * Two decisions worth knowing:
  *
- *   - **Hover is delegated, not per-token.** A 5,000-character transcript is
- *     some 3,400 tokens, and attaching a listener to each would cost more in
- *     memory than the whole transcript. One listener on the container reads
- *     `event.target` instead.
- *   - **Only marked tokens are interactive.** An unmarked word has nothing to
- *     show, so it stays inert text rather than becoming a span that looks
- *     clickable and does nothing.
+ *   - **Hover is delegated, not per-token.** A 5,000-character transcript is some
+ *     3,400 tokens, and attaching a listener to each would cost more in memory than
+ *     the whole transcript. One listener on the container reads `event.target`.
+ *   - **Only definable tokens are interactive.** An unknown word has nothing to
+ *     show, so it stays inert text rather than becoming a span that looks clickable
+ *     and does nothing.
+ *
+ * It does NOT fetch definitions. A caller supplies the `{word, entry, levels}` for
+ * a hovered token — the panel asks the worker, the reader looks it up in the
+ * dictionary it already holds — and this module only decides how that is drawn. That
+ * is what lets the same code serve a surface that talks to the worker and one that
+ * deliberately does not.
  */
 
 import { levelColour, pinyinToNumbers } from '../learn/wordlist.js';
@@ -146,11 +155,17 @@ export function renderReading(tokens, levelCount, palette) {
 
     const ruby = document.createElement('ruby');
     ruby.className = 'ruby';
+    // ORDER MATTERS, and it is the spec's order: the base text comes FIRST and the
+    // annotation after it, `<ruby>base<rt>annotation</rt></ruby>`. Appending the
+    // `<rt>` first is invalid and Chrome lays it out wrong — the reading ends up
+    // offset well to the left of the character it annotates, which reads as a layout
+    // bug in our CSS and is really malformed markup. Measured: the reading sat 16px
+    // left of its base's centre.
+    ruby.append(renderTokens([token], levelCount, palette));
     const rt = document.createElement('rt');
     rt.className = 'rt';
     rt.textContent = formatReading(token.reading);
     ruby.append(rt);
-    ruby.append(renderTokens([token], levelCount, palette));
     fragment.append(ruby);
   }
   return fragment;

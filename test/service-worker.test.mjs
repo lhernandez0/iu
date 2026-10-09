@@ -2094,6 +2094,118 @@ section('a reader tab is resolvable even when its announcement never arrives');
   check('a context with no tab is skipped', String(state?.error ?? '').includes('CONN005'), true);
 }
 
+// --- Settings: chrome.storage is the source of truth ------------------------
+
+section('settings are stored, and never leave the machine');
+
+{
+  // The BUCKET is a decision this project already made and guards elsewhere:
+  // `manifest.test.mjs` fails the build if anything touches `storage.sync`, because
+  // that would put preferences in the user's Google account. So this asserts the
+  // positive half — a setting is genuinely persisted — and leaves the "not sync"
+  // half to the guard that owns it.
+  //
+  // Asserted here rather than assumed because the storage path moved: the worker
+  // used to write `storage.local` directly and now goes through `settingsStore()`,
+  // and a typo in that indirection would silently drop every setting on the floor
+  // while the panel carried on working from its in-memory copy until reload.
+  const stub = await boot();
+  stub.sendFromPanel({ type: 'set-setting', target: 'background', id: 'romaji', value: 'below' });
+  await settle();
+
+  check('the setting was persisted', stub.storage.settings?.romaji, 'below');
+}
+
+section('a change made elsewhere is not lost by a live worker');
+
+{
+  // **This is the whole point of the change.** The worker used to read settings
+  // once at boot and keep them, so a write made by another surface — the reader,
+  // a settings page, another window — never reached it. It kept serving the value
+  // it started with, and the panel showed a setting the user had already changed.
+  //
+  // The storage area's own cross-context event is what fixes that, and it is also
+  // the mechanism that keeps working while this worker is asleep.
+  const stub = await boot();
+  const before = stub.received.filter((m) => m.type === 'state').length;
+
+  // Another context writes to the bucket directly, as the reader would.
+  await stub.chromeStorage.local.set({
+    settings: { ...stub.storage.settings, romaji: 'below' },
+  });
+  await settle();
+
+  const states = stub.received.filter((m) => m.type === 'state');
+  check('the worker broadcast a new state', states.length > before, true);
+
+  // The value has to be in the state the WORKER derives, not merely in storage.
+  // Reading it back from storage would pass even if the worker ignored the event.
+  const latest = states.at(-1)?.state;
+  check('and the state carries the new value', latest?.learning?.romaji, 'below');
+}
+
+section('a change that affects the rows rebuilds them');
+
+{
+  // Storing the new value is not enough. The reading placement is applied when
+  // the rows are BUILT, so a worker that stored `below` and did not rebuild would
+  // push a state whose rows still carried the old annotation — the setting would
+  // look like it did nothing, which is exactly the bug the local write path
+  // guards against. The external path needs the same guard.
+  const stub = await boot(TRACK(CHINESE));
+  await waitForMarks(stub.received);
+
+  await stub.chromeStorage.local.set({
+    settings: { ...stub.storage.settings, romaji: 'above' },
+  });
+  await settle();
+  const marked = await waitForMarks(stub.received);
+
+  check('the rows were rebuilt after the external write', Array.isArray(marked.rows[0]?.tokens), true);
+  check('and the setting is in force', marked.learning?.romaji, 'above');
+}
+
+section('a presentation-only change does not rebuild');
+
+{
+  // `view` and `fontSize` are applied by the panel and change no row's content, so
+  // rebuilding them in the worker is wasted work. Distinguishing the two is what
+  // keeps this listener cheap: it fires on EVERY settings write from any context,
+  // including ones that cannot affect the transcript at all.
+  const stub = await boot(TRACK(CHINESE));
+  await waitForMarks(stub.received);
+
+  const statesBefore = stub.received.filter((m) => m.type === 'state').length;
+  await stub.chromeStorage.local.set({
+    settings: { ...stub.storage.settings, fontSize: 22, view: 'focus' },
+  });
+  await settle();
+
+  // A state is still pushed — the panel needs the new value — but the rows are
+  // carried over rather than re-marked, which is the observable difference.
+  const states = stub.received.filter((m) => m.type === 'state');
+  check('a state is still pushed', states.length > statesBefore, true);
+  check('and the new value is in it', states.at(-1)?.state?.learning?.fontSize, 22);
+}
+
+section('the worker does not re-broadcast its own write');
+
+{
+  // A write this worker made echoes back on the change event. Treating that echo
+  // as news would rebuild twice for every change and broadcast twice, which
+  // would show up as a stutter on every control, not as a wrong value — so a
+  // value assertion would not catch it.
+  const stub = await boot(TRACK(CHINESE));
+  await waitForMarks(stub.received);
+
+  stub.sendFromPanel({ type: 'set-setting', target: 'background', id: 'romaji', value: 'off' });
+  await settle();
+  const after = stub.received.filter((m) => m.type === 'state').length;
+  await settle();
+
+  check('the count does not grow again on the echo', stub.received.filter((m) => m.type === 'state').length, after);
+}
+
 // --- Result -----------------------------------------------------------------
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

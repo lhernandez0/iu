@@ -158,18 +158,68 @@ export function installChromeStub(options = {}) {
         return [];
       },
     },
-    storage: {
-      local: {
+    storage: (() => {
+      // The `storage` option is the SETTINGS bucket — the one `SETTINGS_AREA`
+      // names, which is `local`. Kept by reference so `stub.storage.settings` is
+      // what a test reads to see what was persisted, which is the assertion most
+      // of these tests make.
+      //
+      // `sync` exists so it is present but stays EMPTY, and `manifest.test.mjs`
+      // fails the build if any source file mentions it. Nothing here seeds it,
+      // because nothing should write to it: preferences staying on the machine is
+      // a project decision, not an implementation preference.
+      const settingsBucket = storage;
+      const syncBucket = {};
+
+      const listeners = [];
+
+      /** Fire the cross-context event a real write fires, so subscribers run. */
+      const notify = (area, changes) => {
+        for (const handler of [...listeners]) handler(changes, area);
+      };
+
+      const areaFor = (bucket, source) => ({
         get: async (key) => {
           // A real storage read is not instant. Making it visibly slow is what
           // lets a test catch startup code that reads a stored value only after
           // it has already been used.
           if (storageDelay) await new Promise((done) => setTimeout(done, storageDelay));
-          return key in storage ? { [key]: storage[key] } : {};
+          return key in bucket ? { [key]: bucket[key] } : {};
         },
-        set: async (items) => Object.assign(storage, items),
-      },
-    },
+        set: async (items) => {
+          const changes = {};
+          for (const [key, value] of Object.entries(items)) {
+            changes[key] = { oldValue: bucket[key], newValue: value };
+            bucket[key] = value;
+          }
+          // A write with nothing in it does not fire in Chrome either, and firing
+          // here would make a listener-count assertion depend on how many times a
+          // value was redundantly re-persisted.
+          if (Object.keys(changes).length) notify(source, changes);
+        },
+        remove: async (key) => {
+          const keys = Array.isArray(key) ? key : [key];
+          const changes = {};
+          for (const k of keys) {
+            changes[k] = { oldValue: bucket[k] };
+            delete bucket[k];
+          }
+          if (Object.keys(changes).length) notify(source, changes);
+        },
+      });
+
+      return {
+        local: areaFor(settingsBucket, 'local'),
+        sync: areaFor(syncBucket, 'sync'),
+        onChanged: {
+          addListener: (fn) => listeners.push(fn),
+          removeListener: (fn) => {
+            const at = listeners.indexOf(fn);
+            if (at !== -1) listeners.splice(at, 1);
+          },
+        },
+      };
+    })(),
     action: { onClicked: { addListener: addListener('actionClicked') } },
     sidePanel: {
       open: async (arg) => {
@@ -212,6 +262,13 @@ export function installChromeStub(options = {}) {
     listeners,
     calls,
     storage,
+    /**
+     * The `chrome.storage` API itself, so a test can act as ANOTHER context —
+     * writing to the bucket directly and firing the cross-context change event,
+     * which is the only way to test that a live worker reacts to a change it did
+     * not make.
+     */
+    chromeStorage: globalThis.chrome.storage,
     answers,
     /** Change what the content script reports from now on. */
     setAnswer(key, value) {

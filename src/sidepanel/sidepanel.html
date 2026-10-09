@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <title>IU</title>
+    <link rel="stylesheet" href="../common/marks.css" />
     <link rel="stylesheet" href="sidepanel.css" />
   </head>
   <body>
@@ -37,6 +38,19 @@
         </label>
       </div>
       <button id="layout" type="button" class="layout-toggle" aria-pressed="false" title="Hide the reading controls">&#9650;</button>
+      <!--
+        The way into the settings view.
+
+        An icon rather than the word "Settings": the header is three controls and a
+        swap arrow already, and a word here would be the widest thing in the row.
+        The label is on `aria-label`, so it is still named for a screen reader.
+      -->
+      <button id="settings-toggle" type="button" class="settings-toggle" aria-pressed="false" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="17" height="17">
+          <path d="M10.09 2.80 L13.91 2.80 L13.31 5.12 L15.93 6.21 L17.16 4.14 L19.86 6.84 L17.79 8.07 L18.88 10.69 L21.20 10.09 L21.20 13.91 L18.88 13.31 L17.79 15.93 L19.86 17.16 L17.16 19.86 L15.93 17.79 L13.31 18.88 L13.91 21.20 L10.09 21.20 L10.69 18.88 L8.07 17.79 L6.84 19.86 L4.14 17.16 L6.21 15.93 L5.12 13.31 L2.80 13.91 L2.80 10.09 L5.12 10.69 L6.21 8.07 L4.14 6.84 L6.84 4.14 L8.07 6.21 L10.69 5.12 Z" fill="currentColor" />
+          <circle cx="12" cy="12" r="3.4" fill="var(--bg)" />
+        </svg>
+      </button>
     </header>
 
     <!--
@@ -71,6 +85,25 @@
     </header>
 
     <p id="status" class="status" role="status">Looking for a video…</p>
+
+    <!--
+      THE SETTINGS VIEW.
+
+      It REPLACES the transcript rather than sitting above it: a side panel is
+      roughly 600px tall, and a settings section plus a transcript in that height
+      gives neither enough room. One document, one thing on screen — the same
+      arrangement the panel already uses for its collapsed layout.
+
+      An empty container on purpose. The controls are built from the registry in
+      `src/common/settings.js`, filtered to what has no control in the transcript
+      bar, so adding a setting does not mean editing this file.
+    -->
+    <section id="settings-view" class="settings-view" hidden aria-label="Settings">
+      <header class="settings-head">
+        <h2 class="settings-title">Settings</h2>
+      </header>
+      <div id="settings-body" class="settings-body"></div>
+    </section>
 
     <main id="transcript" class="transcript" aria-label="Transcript">
       <p class="empty">No transcript loaded.</p>

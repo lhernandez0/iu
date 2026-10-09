@@ -19,7 +19,7 @@
 import { MSG, TARGET } from '../common/messages.js';
 import { errorText, codeError } from '../common/errors.js';
 import { alignSecondary } from '../common/transcript.js';
-import { defaults, normalise, toStorage, storageKey, definition } from '../common/settings.js';
+import { defaults, normalise, toStorage, storageKey, definition, SETTINGS_AREA } from '../common/settings.js';
 import { providerFor, providerNames } from '../common/providers.js';
 import {
   loadDictionary,
@@ -32,6 +32,7 @@ import {
   INDEX_PATH,
 } from '../learn/wordlist.js';
 import { segmentSegments } from '../learn/segment.js';
+import { markLine, listCoversLanguage } from '../learn/marking.js';
 
 /**
  * The extension API namespace.
@@ -1479,51 +1480,6 @@ function listsFor(entry) {
   return covering.length ? covering : availableLists;
 }
 
-/**
- * Whether a word list can mark text in this language.
- *
- * BCP-47 is language + optional script + optional region, so "does A cover B" is
- * not a string comparison:
- *
- *   list `zh`      covers `zh`, `zh-Hans`, `zh-Hant` — unspecified means either
- *   list `zh-Hans` covers `zh-Hans`, and `zh` (unknown, so we try)
- *   list `zh-Hans` does NOT cover `zh-Hant` — a stated script must match
- *
- * The asymmetry is deliberate: permissive when the LIST is vague, strict when both
- * sides declare. A stated mismatch is a real one, and marking it would colour text
- * with the wrong vocabulary list.
- *
- * This is the FALLBACK path. The primary fix is that the dictionary now indexes
- * both scripts, so a `zh-Hant` track is genuinely markable and the common case
- * never reaches here. This is for the case the index cannot cover at all — English
- * text against a Chinese list — where attempting it produces silent nothing.
- *
- * @param {object|undefined} list
- * @param {string|null|undefined} languageCode
- * @returns {boolean}
- */
-function listCoversLanguage(list, languageCode) {
-  if (!list?.language || !languageCode) return false;
-
-  const [langA, ...restA] = String(list.language).split('-');
-  const [langB, ...restB] = String(languageCode).split('-');
-
-  // Different languages: no coverage, whatever the scripts say.
-  if (langA.toLowerCase() !== langB.toLowerCase()) return false;
-
-  // A script subtag is four letters; a region is two or three digits.
-  const scriptA = restA.find((part) => part.length === 4);
-  const scriptB = restB.find((part) => part.length === 4);
-
-  // The list is vague about the script, so it covers any script — true here
-  // because the index holds both forms.
-  if (!scriptA) return true;
-  // The list states a script and the text does not: unknown, so try rather than
-  // refuse a line that may well be markable.
-  if (!scriptB) return true;
-
-  return scriptA.toLowerCase() === scriptB.toLowerCase();
-}
 
 /**
  * The language a line is actually DISPLAYING, which is not always its track's: a
@@ -1670,76 +1626,6 @@ async function applyMarks(entry) {
 
   reportTiming('segment+mark', `${entry.rows.length} lines`, segmentStarted);
   broadcastState();
-}
-
-/**
- * Turn tokens into renderable pieces: text, whether we can define it, a level when
- * the selected list places it at or beyond the threshold, and the reading.
- *
- * `defined` is separate from `level` on purpose, and the distinction is the
- * whole point of keeping the dictionary independent of the graded lists. A word
- * can be perfectly ordinary, absent from the list being used, and still be a
- * word the learner wants defined — 这样 has no HSK 2.0 level but is HSK 3.0
- * level 2, so on HSK 2.0 it is "definition yes, colour no", not invisible.
- *
- * Conflating the two is what made whole sentences look unmarked.
- *
- * The reading is attached HERE rather than looked up by the panel, for the same
- * reason the level is: the dictionary lives in the worker, and a second lookup
- * path in the panel would be a second place for `canonical` to be forgotten. It
- * is computed only when a reading will be shown, because it is a lookup per token
- * and a transcript is hundreds of them.
- *
- * @param {Array<{text: string, known: boolean}>} tokens
- * @param {object} dictionary
- * @param {object|undefined} list
- * @param {number} threshold
- * @param {boolean} [withReading] Attach `reading` and `traditional`.
- * @returns {Array<{text: string, defined: boolean, level: number|null,
- *   reading?: string|null, traditional?: string|null}>}
- */
-function markLine(tokens, dictionary, list, threshold, withReading = false) {
-  return tokens.map((token) => {
-    // Only words we hold a definition for are worth making interactive. An
-    // unknown token has nothing to show, so it stays plain text.
-    const defined = token.known && Boolean(lookup(dictionary, token.text));
-
-    if (!defined || !list) {
-      return { text: token.text, defined, level: null, ...annotations(defined, withReading, dictionary, token.text) };
-    }
-
-    const level = levelOf(dictionary, list.id, token.text);
-    const marked = level !== null && level >= threshold;
-    return {
-      text: token.text,
-      defined,
-      level: marked ? level : null,
-      ...annotations(defined, withReading, dictionary, token.text),
-    };
-  });
-}
-
-/**
- * The extra fields a token carries when readings are being shown.
- *
- * Empty when `withReading` is false, so the row payload is byte-identical to what
- * it was before readings existed when the setting is off — which is the default,
- * and means no reader who has not asked for this pays for it.
- *
- * @param {boolean} defined
- * @param {boolean} withReading
- * @param {object} dictionary
- * @param {string} text
- */
-function annotations(defined, withReading, dictionary, text) {
-  if (!withReading || !defined) return {};
-  return {
-    reading: readingOf(dictionary, text),
-    // The other script's form, used only by the script-conversion display. Kept
-    // alongside the reading because both come from the same entry and looking it
-    // up twice would be a second round trip for no reason.
-    traditional: traditionalOf(dictionary, text),
-  };
 }
 
 // --- Panel intents ----------------------------------------------------------
@@ -1954,7 +1840,7 @@ function learningState(entry = null) {
 
 async function restoreSettings() {
   try {
-    const stored = await api.storage.local.get(storageKey);
+    const stored = await settingsStore().get(storageKey);
     settings = normalise(stored?.[storageKey]);
   } catch {
     // Storage unavailable, or the worker is mid-shutdown. Defaults are a fine
@@ -1963,9 +1849,81 @@ async function restoreSettings() {
   }
 }
 
-function persistSettings() {
-  api.storage.local.set(toStorage(settings)).catch(() => {});
+/**
+ * Where settings live: the `local` storage bucket.
+ *
+ * NOT the cross-device bucket, which `manifest.test.mjs` fails the build over —
+ * preferences staying on the machine is a documented product promise, not a
+ * default that drifted.
+ *
+ * A function rather than a captured reference, because the area is a property of
+ * the environment: a browser that does not offer `sync` should degrade to `local`
+ * rather than throw, and reading it at call time is what allows that. The fallback
+ * is not expected to run — every target browser has `sync` — but a missing bucket
+ * would otherwise crash startup with a TypeError, which is a much worse failure
+ * than settings not following the user between machines.
+ */
+function settingsStore() {
+  return api.storage?.[SETTINGS_AREA] ?? api.storage.local;
 }
+
+function persistSettings() {
+  settingsStore().set(toStorage(settings)).catch(() => {});
+}
+
+/**
+ * Keep this worker's copy of the settings current when anyone else changes them.
+ *
+ * **This is what makes `chrome.storage` the source of truth rather than one
+ * writer and a cache.** The panel, a future settings page and the video reader all
+ * write to the same bucket, so a change made by one of them has to reach the
+ * others — the storage API's own cross-context change event is exactly that
+ * mechanism, and it keeps working while this worker is asleep, which a message
+ * could not.
+ *
+ * Without this the worker served its boot-time copy forever: a setting changed in
+ * the reader would be absent from every state push, and the panel would show the
+ * value it started the session with.
+ *
+ * Re-applying the derived side effects matters as much as storing the value. A
+ * reading placement changed in the reader has to rebuild the rows here, or the
+ * panel's own view keeps the old annotation despite holding the new setting —
+ * which is the same bug the local `applySetting` branch exists to prevent.
+ */
+api.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== SETTINGS_AREA || !changes?.[storageKey]) return;
+
+  const next = normalise(changes[storageKey].newValue);
+  // Our own write echoes back here. Rebuilding on it would double every rebuild,
+  // so identical values stop here.
+  if (JSON.stringify(next) === JSON.stringify(settings)) return;
+
+  const previous = settings;
+  settings = next;
+
+  // Rebuild only when something that affects the ROWS moved. A pure presentation
+  // change (text size, view mode) is applied by whichever surface made it, and
+  // rebuilding here would throw away work for no visible difference.
+  const affectsRows = previous.listId !== settings.listId
+    || previous.threshold !== settings.threshold
+    || previous.romaji !== settings.romaji
+    || previous.toneStyle !== settings.toneStyle;
+
+  if (affectsRows) {
+    if (previous.listId !== settings.listId) {
+      // A different list may be a different language, and `rebuildRows` reads the
+      // dictionary synchronously — so the words have to be in hand first or the
+      // transcript repaints unmarked and stays that way.
+      void ensureDictionaryFor(settings.listId).then(() => {
+        rebuildRows(currentEntry());
+        broadcastState();
+      });
+      return;
+    }
+    rebuildRows(currentEntry());
+  }
+  broadcastState();
+});
 
 /**
  * Apply one setting, doing whatever else that change implies.

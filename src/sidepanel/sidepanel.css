@@ -159,6 +159,149 @@ body.collapsed .status {
   display: none;
 }
 
+/* --- The settings view --------------------------------------------------- */
+
+/*
+ * Replaces the transcript rather than sitting above it.
+ *
+ * At panel height there is not room for both, and a settings sheet covering the
+ * transcript would hide the thing being tuned. `flex: 1` so it takes the space the
+ * transcript just gave up, and `min-height: 0` — the same trap as everywhere else
+ * in this file: without it the content's intrinsic height wins and the footer is
+ * pushed off screen instead of the view scrolling.
+ */
+.settings-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.settings-view[hidden] {
+  display: none;
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #2a2e37;
+  /* Pinned, so the heading stays put however far the list is scrolled. */
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.settings-title {
+  margin: 0;
+  font-size: calc(13px * var(--text-scale));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.settings-body {
+  padding: 10px 10px 20px;
+}
+
+/*
+ * A group is a card, not a heading over a run of rows.
+ *
+ * The first version was bare rows separated by hairlines, which at panel width
+ * reads as one undifferentiated list and makes the group headings look like
+ * another row. A surface behind each group is what separates them, and it costs
+ * two rules.
+ */
+.settings-group {
+  margin-bottom: 12px;
+  border: 1px solid #232833;
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.settings-group-title {
+  margin: 0;
+  padding: 7px 10px;
+  background: #1a1e26;
+  border-bottom: 1px solid #232833;
+  color: var(--muted);
+  font-size: calc(10px * var(--text-scale));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+}
+
+/*
+ * One setting per row: label left, control right.
+ *
+ * A grid rather than a flex row, so every control starts at the same x whatever
+ * its label's length — with flex the selects form a ragged column and the page
+ * reads as unaligned rather than as a list.
+ */
+.settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #1b2029;
+  font-size: calc(12px * var(--text-scale));
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-label {
+  color: var(--fg);
+  /* The label may wrap at panel width rather than pushing the control off. */
+  min-width: 0;
+}
+
+.settings-row select {
+  max-width: 15ch;
+  /* A select sized to its content makes the column ragged; a fixed cap makes the
+     controls line up, which is the point of the grid. */
+}
+
+.settings-row input[type='number'] {
+  width: 6ch;
+}
+
+.settings-row input[type='checkbox'] {
+  justify-self: end;
+  /* A real checkbox, sized up a little: the default 13px box is fiddly to hit at
+     panel scale. It stays a checkbox rather than a styled switch so it keeps its
+     native keyboard behaviour and its checked state for assistive technology. */
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.settings-toggle {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 5px 7px;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.settings-toggle svg {
+  display: block;
+}
+
+.settings-toggle[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .layout-toggle {
   flex: 0 0 auto;
   padding: 5px 8px;
@@ -420,131 +563,6 @@ select:disabled {
   line-height: var(--reading-line-height);
 }
 
-/* A marked word.
- *
- * TWO treatments, chosen by `markStyle` in the settings schema (no control
- * renders it yet). Both use `--mark`, the level's colour, so the ramp is
- * unchanged — only where that colour is put.
- *
- * Underline is the BASE rather than one of two equal branches. A rule that only
- * applied under `html.mark-underline` would leave marks completely undrawn until
- * the first state arrived, which is a flash of plain text on every panel open and
- * a blank transcript if the worker never answers. The base case has to be the
- * safe one.
- *
- * There is deliberately NO thickness variation between levels. It was tried: a
- * 1px→3.5px ramp encodes level a second time and is genuinely more readable
- * without colour. Rejected on sight — a row of words whose rules are all
- * different weights reads as inconsistent rather than informative, and a
- * transcript is read far more than it is scanned.
- */
-.mark {
-  /* A soft rounded underline rather than text-decoration, which cannot round its
-     ends. The padding keeps the rule clear of descenders. */
-  padding-bottom: 2px;
-  border-bottom: 2px solid var(--mark, transparent);
-  border-radius: 2px;
-  cursor: help;
-}
-
-/* Scoped to an ANCESTOR, not to `html` itself.
- *
- * The panel sets this class on the document root, which an ancestor selector
- * matches. Written as `html.mark-highlight` it would match only there — and the
- * mark comparison sheet (`tools/ui/marks.html`) puts the class on a column so both
- * treatments can be on screen at once, which the `html`-qualified form silently
- * ignored. The sheet rendered two identical columns and looked fine doing it.
- *
- * A test caught it ("the highlight draws one"), which is the only reason this is
- * correct now rather than after someone noticed the page compared nothing. */
-.mark-highlight .mark {
-  /* Colour behind the word instead of beneath it.
-   *
-   * A low alpha rather than a solid fill: at full strength a marked word becomes a
-   * coloured block fighting the text on top of it, and a dense line turns into a
-   * row of chips. This is a wash — enough to see the extent of a mark from across
-   * the line, light enough to read through.
-   *
-   * `color-mix` rather than a hand-picked rgba per level, so the wash is derived
-   * from the same level colour as everything else and cannot drift out of step
-   * with the palette.
-   *
-   * A hairline stays on the lower edge. A wash alone has no definite end, so a
-   * two-word mark and a three-word one read alike where neighbouring colours are
-   * close; the hairline gives the mark an edge without becoming a rule. */
-  border-bottom: 1px solid color-mix(in srgb, var(--mark) 55%, transparent);
-  background: color-mix(in srgb, var(--mark) 22%, transparent);
-  border-radius: 3px;
-}
-
-/* A word we can define but the current list does not place.
-   Deliberately looks like ordinary text rather than a subdued mark: it has no
-   level, so showing a colour would claim knowledge we do not have. It is still
-   hoverable, which is the point — the definition is available either way. */
-.word {
-  cursor: help;
-}
-
-.row:hover .mark {
-  /* Brighter on hover so the word under the pointer is unambiguous among
-     several marks. */
-  filter: brightness(1.35);
-}
-
-/* --- Readings (拼音 / Rōmaji) -------------------------------------------
- *
- * Present but unreachable: the setting that selects a placement is `hidden`, so
- * nothing renders these until a control exists. They live here rather than in the
- * preview so the day a control is added, the panel already draws it — the same
- * arrangement `markStyle` has.
- *
- * The sizes are `calc(Npx * var(--text-scale))` like every other size in this
- * file, so a reading grows with the text-size control. An earlier mock measured
- * 8px because it used `em` off the base instead, which is smaller than anything
- * else in the panel at the smallest size the panel offers. Print ruby runs about
- * 50% of the base, which is right at 10pt on paper and unreadable at 13px on a
- * screen: this is 0.85, past the 0.73 that still read as small, and it can come
- * back down if it competes with the characters.
- */
-
-/* Ruby: the reading above its own word, so every glyph keeps its horizontal
-   position and the line reads as one unit. */
-.ruby {
-  /* The element does its own annotation layout — `ruby-align` and `ruby-position`
-     are the browser's job now, not ours. The previous flex column existed only
-     because this was a span pair imitating native ruby. */
-  padding: 0 1px;
-  /* Ruby over base by default; stated so a future rule cannot silently move it. */
-  ruby-position: over;
-  ruby-align: center;
-}
-
-.rt {
-  font-size: calc(11px * var(--text-scale));
-  /* Tight, so the reading sits close to its own characters rather than floating
-     between two lines. */
-  line-height: 1.15;
-  /* Dimmer than the text it annotates. Annotation is secondary by definition —
-     the marks are the thing being pointed at, and they keep the strong colour. */
-  color: var(--muted);
-  /* Pinyin runs long, and a reading that wraps breaks the association it exists
-     to make. */
-  white-space: nowrap;
-}
-
-
-/* The reading under the text, as one line across the whole row. */
-.reading-line {
-  display: block;
-  margin-top: 2px;
-  font-size: calc(11px * var(--text-scale));
-  line-height: 1.35;
-  color: var(--muted);
-  /* Visible here in a way it is not in ruby, because the reading is one run
-     rather than a word at a time. */
-  word-spacing: 0.12em;
-}
-
 /* The learning controls, visually separate from the language pickers. */
 .learning {
   /* Tighter than a normal bar, in every dimension that costs height.
@@ -608,61 +626,6 @@ select:disabled {
 /* Room around the single line so it does not sit pinned to an edge. */
 .transcript.focus {
   padding-top: 12px;
-}
-
-/* Definition popover, anchored to the hovered token. */
-.popover {
-  position: fixed;
-  z-index: 10;
-  max-width: 260px;
-  padding: 8px 10px;
-  border: 1px solid #3a3f4b;
-  border-radius: 6px;
-  background: #1b1e26;
-  box-shadow: 0 6px 18px rgb(0 0 0 / 45%);
-  font-size: calc(12px * var(--text-scale));
-  line-height: 1.45;
-  pointer-events: none;
-}
-
-.popover-head {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  margin-bottom: 2px;
-}
-
-.popover-head strong {
-  font-size: calc(15px * var(--text-scale));
-}
-
-.popover-pinyin {
-  color: var(--accent);
-}
-
-.popover-meaning {
-  color: var(--fg);
-}
-
-.popover-missing {
-  color: var(--muted);
-  font-style: italic;
-}
-
-.popover-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
-}
-
-.badge {
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--mark) 25%, transparent);
-  border: 1px solid var(--mark);
-  font-size: calc(11px * var(--text-scale));
-  white-space: nowrap;
 }
 
 /* Marks a machine-translated line.

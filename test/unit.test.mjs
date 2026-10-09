@@ -9,7 +9,7 @@
  */
 
 import { formatTimestamp, formatSrtTime, toPlainText, toSrt, findActiveIndex, alignSecondary } from '../src/common/transcript.js';
-import { defaults, SETTINGS } from '../src/common/settings.js';
+import { defaults, SETTINGS, byAudience, audienceProblems, SURFACES, forSettingsView, forTranscriptBar } from '../src/common/settings.js';
 
 let failures = 0;
 let checks = 0;
@@ -184,6 +184,190 @@ section('settings defaults are copied, not shared');
   for (const key of objectKeys) first[key].__probe = true;
   const leaked = objectKeys.filter((key) => second[key].__probe !== undefined);
   check('writing to one copy does not reach another', leaked, []);
+}
+
+section('every setting declares which surfaces show it');
+
+{
+  // `audience` is what lets the side panel and the video reader render from ONE
+  // registry instead of keeping a list each. A setting with a wrong audience is
+  // invisible on a surface that needs it — which looks like a missing control in
+  // the renderer, so the failure is a long way from the cause. Hence a guard on
+  // the definitions themselves rather than only on a rendered screen.
+  check('no definition has a missing or unknown audience', audienceProblems(), []);
+  check('the known surfaces are the two applications', SURFACES, ['panel', 'reader']);
+
+  // The two properties `byAudience` promises: a surface never receives a setting
+  // it was not tagged for, and it does receive every one it was.
+  for (const surface of SURFACES) {
+    const shown = byAudience(surface);
+    const foreign = shown.filter((s) => !s.audience.includes(surface)).map((s) => s.id);
+    check(`nothing foreign reaches "${surface}"`, foreign, []);
+
+    const expected = SETTINGS.filter(
+      (s) => !s.hidden && s.audience.includes(surface),
+    ).map((s) => s.id);
+    check(`every ${surface} setting is offered to it`, shown.map((s) => s.id), expected);
+  }
+
+  // `hidden` means "no control yet", so a surface must never render one.
+  for (const surface of SURFACES) {
+    const hiddens = byAudience(surface).filter((s) => s.hidden).map((s) => s.id);
+    check(`no hidden setting is rendered on "${surface}"`, hiddens, []);
+  }
+
+  // Reading and marks apply BOTH places — the captions are drawn with the same
+  // renderer, so a reader that could not set the reading placement would be
+  // showing an annotation it had no control over.
+  //
+  // Checked on the DEFINITION rather than through `byAudience`, because
+  // `markStyle` is still `hidden` — it is tagged for both surfaces and will be
+  // rendered once the settings view exists, and `byAudience` filters hidden
+  // settings out by design. Asserting through `byAudience` here would be
+  // asserting the flag, not the audience.
+  for (const id of ['romaji', 'markStyle', 'toneStyle']) {
+    const definition = SETTINGS.find((s) => s.id === id);
+    check(`"${id}" is tagged for the reader`, definition.audience.includes('reader'), true);
+    check(`and for the panel`, definition.audience.includes('panel'), true);
+  }
+  check('"romaji" is live on the reader already (not hidden)', byAudience('reader').some((s) => s.id === 'romaji'), true);
+
+  // And the transcript-only settings must NOT leak into the reader.
+  for (const id of ['view', 'layout', 'studyTranslated']) {
+    check(`"${id}" stays out of the reader`, byAudience('reader').some((s) => s.id === id), false);
+  }
+}
+
+section('the video settings');
+
+{
+  const reader = byAudience('reader').map((s) => s.id).sort();
+  // The LIVE reader settings. `listId`, `threshold`, `studyLanguage` and
+  // `glossLanguage` are SHARED with the panel rather than duplicated: a learner
+  // studying HSK 2.0 with a Chinese track is studying HSK 2.0 with a Chinese track
+  // whether the text is beside the video or over it, so a second copy of those
+  // preferences would be a split nobody would think to check for.
+  check(
+    'the reader renders exactly its own live settings',
+    reader,
+    [
+      'captionPlacement',
+      'captionSize',
+      'captionsOn',
+      'defaultSpeed',
+      'difficulty',
+      'glossLanguage',
+      'listId',
+      'markStyle',
+      'rememberPosition',
+      'romaji',
+      'studyLanguage',
+      'threshold',
+      'toneStyle',
+    ].sort(),
+  );
+
+  // Captions ON by default is a product decision, not a detail: this is a
+  // learning tool, so the transcript should be working on first open. Asserted
+  // because flipping it back is a one-character change that would be easy to make
+  // without noticing it is a decision.
+  check('captions default ON', defaults().captionsOn, true);
+  check('placement defaults to overlay', defaults().captionPlacement, 'overlay');
+  check('position is remembered by default', defaults().rememberPosition, true);
+  check('speed defaults to 1x', defaults().defaultSpeed, '1');
+
+  // A stored value from a future or broken state coerces rather than throwing.
+  const placement = SETTINGS.find((s) => s.id === 'captionPlacement');
+  check('an unknown placement falls back to overlay', placement.coerce('sideways'), 'overlay');
+  check('a known placement survives', placement.coerce('below'), 'below');
+
+  const speed = SETTINGS.find((s) => s.id === 'defaultSpeed');
+  // A number, not a string, is the realistic wrong input — a control that stored
+  // `1.25` rather than `"1.25"` should not lose the choice.
+  check('a numeric speed is accepted and normalised', speed.coerce(1.25), '1.25');
+  check('an off-list speed falls back to 1x', speed.coerce('3'), '1');
+
+  // Toggles coerce truthily, so a stored 0 or "" does not become a live `true`.
+  const captions = SETTINGS.find((s) => s.id === 'captionsOn');
+  check('a falsy stored toggle is false', captions.coerce(0), false);
+  check('a truthy stored toggle is true', captions.coerce(1), true);
+
+  const size = SETTINGS.find((s) => s.id === 'captionSize');
+  check('caption size clamps to its range', size.coerce(999), 34);
+  check('and to the bottom of it', size.coerce(-5), 12);
+  check('and rejects nonsense', size.coerce('big'), 20);
+
+  // The four SHARED preferences must be readable by the reader, not only by the
+  // panel — the reader draws the same transcript, so a `panel`-only audience would
+  // have left its captions grading against a list nobody chose.
+  for (const id of ['listId', 'threshold', 'studyLanguage', 'glossLanguage']) {
+    const setting = SETTINGS.find((s) => s.id === id);
+    check(`"${id}" reaches the reader`, setting.audience.includes('reader'), true);
+    check(`and the panel still has it`, setting.audience.includes('panel'), true);
+  }
+
+  // And there is no SECOND copy of those preferences under a reader-specific name.
+  // That was the first attempt and it is the split this replaced.
+  for (const gone of ['readerListId', 'readerThreshold']) {
+    check(`"${gone}" no longer exists`, SETTINGS.some((s) => s.id === gone), false);
+  }
+
+  // The reader's caption settings are SEPARATE from the panel's text size. One
+  // control for both would mean changing the transcript size also changed the
+  // subtitles on the video, which is not what either is for.
+  check(
+    'caption size is a different setting from the panel text size',
+    SETTINGS.find((s) => s.id === 'captionSize') === SETTINGS.find((s) => s.id === 'fontSize'),
+    false,
+  );
+}
+
+section('the settings view and the transcript bar are two doors to one list');
+
+{
+  // The view renders EVERY panel-side setting, not only the ones without a bar
+  // control. The first attempt filtered `quick` out and produced a view with two
+  // rows in it, because the language and translation controls all live in the bar —
+  // a settings view that omits what you most often change is not a settings view.
+  const view = forSettingsView().map((s) => s.id);
+  // `map` is excluded on purpose: it is internal memory (the threshold remembered
+  // per list), not something a person edits — rendering it would offer a raw object
+  // as a control. So the expected set is the panel-side settings minus the maps.
+  const panel = byAudience('panel')
+    .filter((s) => s.type !== 'map')
+    .map((s) => s.id);
+  check('the view shows every renderable panel-side setting', view.sort(), panel.sort());
+
+  // And there is a map in the registry at all, so that exclusion is not theoretical.
+  check(
+    'there is at least one map setting for that filter to matter',
+    SETTINGS.some((s) => s.type === 'map'),
+    true,
+  );
+
+  // `quick` means "also has a control in the bar" — a shortcut, not an exclusive
+  // home. So the bar's set must be a SUBSET of the view's, never disjoint from it.
+  const bar = forTranscriptBar().map((s) => s.id);
+  const strays = bar.filter((id) => !view.includes(id));
+  check('nothing in the bar is missing from the view', strays, []);
+  check('and the bar really is a subset', bar.length > 0 && bar.length < view.length, true);
+
+  // The two parked settings are now live, which is what the view existing changed.
+  // Asserted because "hidden until there is a surface" was the recorded reason, and
+  // leaving the flag on would silently keep them invisible.
+  for (const id of ['toneStyle', 'markStyle']) {
+    check(`"${id}" is no longer hidden`, SETTINGS.find((s) => s.id === id).hidden, undefined);
+  }
+  // And the one that stays hidden stays hidden, deliberately.
+  check(
+    '"scriptConversion" is still hidden, on purpose',
+    SETTINGS.find((s) => s.id === 'scriptConversion').hidden,
+    true,
+  );
+
+  // Nothing hidden may reach either surface.
+  check('no hidden setting is in the view', view.filter((id) => SETTINGS.find((s) => s.id === id).hidden), []);
+  check('no hidden setting is in the bar', bar.filter((id) => SETTINGS.find((s) => s.id === id).hidden), []);
 }
 
 // --- Result ------------------------------------------------------------------
