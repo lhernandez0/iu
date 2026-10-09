@@ -502,16 +502,24 @@ body {
 
 /* --- Audio tracks ---------------------------------------------------------- */
 
-/* The reason a track cannot be used, inline in the row. Not a `title`: a disabled
-   select does not show one, so the explanation would exist and be unreachable. */
+/*
+ * The reason a track cannot be used, inline in the row.
+ *
+ * Only ever populated when there is something wrong — an unsupported codec, or a
+ * rebuild still running. Not a `title` on the select, because a disabled select does
+ * not show one and the explanation would exist and be unreachable.
+ *
+ * Empty by default and collapsed when empty, so it costs no layout on the files that
+ * have nothing to say — which is all of them, most of the time.
+ */
 .audio-note {
-  color: var(--muted);
+  color: var(--danger);
   font-size: 11px;
-  max-width: 34ch;
+  max-width: 40ch;
 }
 
-.audio-note.error {
-  color: var(--danger);
+.audio-note:empty {
+  display: none;
 }
 
 /* --- Volume --------------------------------------------------------------- */

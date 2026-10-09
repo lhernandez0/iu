@@ -458,6 +458,44 @@ section('the audio track selector');
   check('the selector is usable again after switching', settled.disabled, false);
   check('and reports no stale error', /not supported/i.test(settled.note), false);
   check('and shows the track that is playing', settled.selected, '0');
+
+  // Three UI properties that were got wrong first, each asserted because each was a
+  // real complaint rather than a preference.
+  const collapsed = await reader.evaluate(() => ({
+    fieldHidden: document.getElementById('audio-field').hidden,
+    note: document.getElementById('audio-note').textContent,
+    noteDisplay: getComputedStyle(document.getElementById('audio-note')).display,
+    // The control must not be inside the time row: that row is about WHERE you are.
+    inTimeRow: Boolean(document.getElementById('audio').closest('.row-time')),
+    inTransport: Boolean(document.getElementById('audio').closest('.row-transport')),
+    // And the select must live with the file's other per-track choices.
+    selectInCaptionRow: Boolean(document.getElementById('audio-track').closest('.row-captions')),
+  }));
+
+  check('the track select starts collapsed', collapsed.fieldHidden, true);
+  check('the audio button is not in the time row', collapsed.inTimeRow, false);
+  check('it is in the transport row instead', collapsed.inTransport, true);
+  check('and the select sits with the other per-track picks', collapsed.selectInCaptionRow, true);
+  check('with nothing said when there is nothing wrong', collapsed.note, '');
+  check('and the note takes no space when empty', collapsed.noteDisplay, 'none');
+
+  // The button must actually open the select rather than merely focus it.
+  await reader.click('#audio');
+  const opened = await reader.evaluate(() => ({
+    fieldHidden: document.getElementById('audio-field').hidden,
+    pressed: document.getElementById('audio').getAttribute('aria-pressed'),
+    focused: document.activeElement?.id,
+  }));
+  check('the button opens the track select', opened.fieldHidden, false);
+  check('and says it is open', opened.pressed, 'true');
+  check('and moves focus into it', opened.focused, 'audio-track');
+
+  await reader.click('#audio');
+  check(
+    'and pressing it again closes the select',
+    await reader.evaluate(() => document.getElementById('audio-field').hidden),
+    true,
+  );
 }
 
 await closeAll();

@@ -123,29 +123,6 @@
               button in the transport row. The reader's row is fuller, and the reason
               above is the reader's.
             -->
-            <span class="divider" aria-hidden="true"></span>
-
-            <!--
-              WHICH audio track.
-
-              A waveform, not a speaker: the speaker is volume, which is a different
-              question asked right next to this one. The count says how many there are,
-              which is the thing a waveform cannot show.
-            -->
-            <button type="button" class="button icon-button" id="audio" aria-label="Audio track" title="Audio track" hidden>
-              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M4 9.5v5M8 6.5v11M12 9v6M16 6.5v11M20 9.5v5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
-              </svg>
-            </button>
-
-            <label class="field" id="audio-field" hidden>
-              <span class="visually-hidden">Audio track</span>
-              <select id="audio-track" aria-label="Audio track"></select>
-            </label>
-            <!-- Why a track cannot be used, as a sentence. Not a `title` on the
-                 disabled select: that is the one place a browser will not show it. -->
-            <span class="audio-note" id="audio-note"></span>
-
             <button type="button" class="button icon-button" id="difficulty" aria-label="Hide difficulty band" aria-pressed="true" title="Hide difficulty band">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <rect x="2.5" y="9" width="19" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
@@ -219,6 +196,29 @@
             </button>
 
             <span class="divider" aria-hidden="true"></span>
+
+            <!--
+              WHICH audio track.
+
+              An ICON here and a select in the caption row, rather than a select in
+              both places. The select is a caption-row control because the caption row
+              is where the file's other per-track choices live (Line 1, Line 2), and
+              an audio track is the same kind of choice about the same file. It was
+              first put in the time row, next to the scrubber, which was wrong: a time
+              row is about WHERE you are, and this is not.
+
+              The button TOGGLES that select rather than focusing it, so the icon is
+              the thing you press and the row appears where the choice belongs.
+
+              The waveform is not a speaker: the speaker is volume, asked one control
+              away, and two glyphs a pixel apart meaning different things is how a
+              toolbar becomes unreadable.
+            -->
+            <button type="button" class="button icon-button" id="audio" aria-label="Choose audio track" aria-pressed="false" title="Choose audio track" hidden>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 9.5v5M8 6.5v11M12 9v6M16 6.5v11M20 9.5v5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+              </svg>
+            </button>
 
             <!-- A select, not an icon: four discrete values, and the current one
                  should be readable without opening anything. -->
@@ -346,6 +346,24 @@
               <span class="field-label">Line 2</span>
               <select id="gloss-track" aria-label="Subtitle track for the second line"></select>
             </label>
+
+            <!--
+              Which audio track plays — opened by the waveform button in the transport
+              row, and living here with the other per-track choices about this file.
+
+              Collapsed until asked for: it is one preference set once per film, and a
+              permanently visible select would push the list and threshold pickers off
+              the row for something a viewer rarely changes.
+            -->
+            <label class="field" id="audio-field" hidden>
+              <span class="field-label">Audio</span>
+              <select id="audio-track" aria-label="Audio track"></select>
+            </label>
+
+            <!-- Only ever a problem, never a description. The "this rebuilds the file"
+                 note was noise: it told a viewer about the implementation rather than
+                 about their film, and it appeared on every two-track file forever. -->
+            <span class="audio-note" id="audio-note"></span>
 
             <label class="field">
               <span class="field-label">Size</span>

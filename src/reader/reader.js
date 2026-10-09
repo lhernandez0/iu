@@ -1313,22 +1313,30 @@ let audioSourceFile = null;
  * @type {(() => void)|null}
  */
 let releaseStream = null;
-/** Whether a remux is in flight, so the control can say so rather than appear frozen. */
+/** Whether a rebuild is in flight, so the control can say so rather than appear frozen. */
 let audioBusy = false;
+/**
+ * Whether the track select is showing.
+ *
+ * Collapsed by default and opened by the waveform button. A select that is always
+ * visible is one more control competing for a row that already has the subtitle picks,
+ * the list and the threshold — for a preference most viewers set once per film, if at
+ * all.
+ */
+let audioOpen = false;
 
 /**
  * Build the selector from the file's own track list.
  *
  * Hidden when there is no choice, which is the overwhelmingly common case — a control
  * over a single option is noise, and a one-track file has nothing to select.
- *
- * Shown but UNAVAILABLE when the capability is missing, rather than hidden: a missing
- * button raises "where is it?", and a disabled control that explains itself answers it.
  */
 function renderAudio() {
   const choice = audioTracks.length > 1;
   els.audioButton.hidden = !choice;
-  els.audioField.hidden = !choice;
+  els.audioField.hidden = !choice || !audioOpen;
+  els.audioButton.setAttribute('aria-pressed', String(choice && audioOpen));
+
   if (!choice) {
     els.audioSelect.replaceChildren();
     els.audioNote.textContent = '';
@@ -1344,18 +1352,19 @@ function renderAudio() {
     els.audioSelect.append(option);
   });
 
-  // A codec the browser cannot play is the one case where switching will not help,
-  // and it has to be said before the user waits for a remux that cannot succeed.
+  // The note says only what a viewer could NOT work out by looking. Two cases qualify:
+  // a codec this browser cannot play, and a rebuild still running. The old third case
+  // — "switching rebuilds a copy of the file" — described the implementation rather
+  // than the film, and showed it on every two-track file for as long as the film
+  // played. The busy state is already visible in the disabled select, so the only
+  // thing left to say out loud is the thing that cannot be fixed by waiting.
   const chosen = audioTracks[audioChoice];
   const unplayable = chosen && !chosen.playable;
-  els.audioNote.textContent = audioBusy
-    ? 'Preparing the selected audio\u2026'
-    : unplayable
-      ? `This file\u2019s audio (${chosen.codec.toUpperCase()}) is not supported by this browser.`
-      : audioTracksSupported()
-        ? 'The file\u2019s own audio tracks.'
-        : 'Switching a track rebuilds a copy of the file, which takes a moment.';
-  els.audioNote.classList.toggle('error', Boolean(unplayable));
+  els.audioNote.textContent = unplayable
+    ? `This file\u2019s audio (${chosen.codec.toUpperCase()}) is not supported, so it will play silently.`
+    : audioBusy
+      ? 'Preparing\u2026'
+      : '';
   els.audioSelect.disabled = audioBusy;
 }
 
@@ -1371,7 +1380,11 @@ async function describeAudio(file) {
   audioSourceFile = file;
   audioTracks = [];
   audioChoice = 0;
+  // Closed for a new file: the panel was opened to answer a question about the PREVIOUS
+  // film, and leaving it open would put a stale-looking select in the row.
+  audioOpen = false;
   els.audioButton.hidden = true;
+  els.audioField.hidden = true;
   try {
     const declared = await listAudioTracks(file);
     // The file may have been replaced while this was reading.
@@ -1472,7 +1485,11 @@ async function selectAudioTrack(index) {
 els.audioButton.addEventListener('click', () => {
   // Hidden means there is nothing to choose, so activating it must be a no-op.
   if (els.audioButton.hidden) return;
-  els.audioSelect.focus();
+  audioOpen = !audioOpen;
+  renderAudio();
+  // Focus follows the reveal, so the control is reachable by keyboard without a second
+  // tab stop — the button opened something, and what it opened should take focus.
+  if (audioOpen) els.audioSelect.focus();
 });
 
 els.audioSelect.addEventListener('change', (event) => {
