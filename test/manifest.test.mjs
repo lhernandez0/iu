@@ -234,12 +234,20 @@ section('shipped source can only reach youtube.com, and only over fetch');
   }
   check('no transport but fetch appears in src/', transports, []);
 
-  // 2. Every absolute URL named in src/ resolves to youtube.com. A URL whose
+  // 2. Every absolute URL named in OUR src/ resolves to youtube.com. A URL whose
   //    host is computed cannot be checked, so it fails rather than passing
   //    unexamined — that is the whole point of listing hosts.
+  //
+  //    `src/vendor/` is EXEMPT, and only for this check. It is generated
+  //    third-party code, so its hostnames are not ours to police — mediabunny
+  //    cites the AV1 and WebCodecs specifications in its comments, and those
+  //    citations are the reason a `https://www.w3.org/...` string exists there at
+  //    all. The check above (no transport but `fetch`) still covers vendored code,
+  //    which is the one that would matter: a citation cannot send anything.
   const hosts = new Set();
   const computed = [];
   for (const file of sources) {
+    if (relative(ROOT, file).startsWith(join('src', 'vendor'))) continue;
     readFileSync(file, 'utf8')
       .split('\n')
       .forEach((line, index) => {

@@ -140,9 +140,18 @@ section('every installed dependency carries a licence we have accepted');
 section('the extension itself ships no dependencies');
 
 {
-  // The claim worth protecting: the shipped extension is our code and nothing
-  // else. If someone imports a library into src/, that stops being true and the
-  // licence obligations change with it.
+  // The claim worth protecting, corrected: the shipped extension is our code PLUS
+  // the one vendored bundle, and that bundle carries an obligation.
+  //
+  // It used to read "our code and nothing else", which was true when it was written.
+  // `src/vendor/mediabunny.js` makes it false — a tree-shaken MPL-2.0 bundle, committed
+  // because the release ZIP is built from `src/` alone and cannot resolve
+  // `node_modules`. So the guard changes with the fact rather than being deleted: it
+  // now checks that the vendored code is NAMED where the obligation says it must be.
+  //
+  // `dependencies` staying empty is still worth asserting. It is what keeps the
+  // shipped code from acquiring modules the packaging step would silently drop —
+  // anything the extension needs at runtime has to be committed, not resolved.
   const manifest = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8'));
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 
@@ -150,6 +159,19 @@ section('the extension itself ships no dependencies');
   // No `web_accessible_resources` means no bundled third-party asset is served.
   check('the manifest exposes no resources', manifest.web_accessible_resources ?? undefined, undefined);
   check('the extension declares no content security policy it cannot honour', typeof manifest.content_security_policy, 'undefined');
+
+  // Every vendored bundle must be attributed, or the licence obligation is unmet.
+  const vendorDir = join(ROOT, 'src', 'vendor');
+  if (existsSync(vendorDir)) {
+    const bundled = readdirSync(vendorDir).filter((name) => name.endsWith('.js'));
+    const notices = readFileSync(join(ROOT, 'THIRD-PARTY.md'), 'utf8');
+    check('there is a vendored bundle to account for', bundled.length > 0, true);
+    for (const name of bundled) {
+      // By name, because "some third-party code exists" is not attribution.
+      check(`${name} is named in THIRD-PARTY.md`, notices.includes(name), true);
+    }
+    check('and its licence is stated', /MPL-2\.0/.test(notices), true);
+  }
 }
 
 section('attribution is where a person would find it');
