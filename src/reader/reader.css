@@ -334,7 +334,11 @@ body {
 .row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  /* Tighter than it looks like it should be, because this row carries eleven controls:
+     the caption placement, four selects, two track picks, list, threshold, size. At 6px
+     the caption row overflowed from 1100px down; the difference between 6 and 4 is one
+     control's worth of width across the row. */
+  gap: 4px;
   flex-wrap: wrap;
 }
 
@@ -359,13 +363,20 @@ body {
   color: #808999;
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  /* Halved from 0.08em. Seven of these labels sit in the caption row and the tracking
+     is the only part of their width that can go without losing the words. */
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .field {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  /* 3px, not 5px: seven of these sit in the caption row, so the two pixels are worth
+     fourteen across it — which is the difference between fitting a 1024px window and
+     wrapping to a third line. */
+  gap: 3px;
+  min-width: 0;
 }
 
 /* --- The time bar --------------------------------------------------------- */
@@ -500,6 +511,24 @@ body {
   text-align: center;
 }
 
+/*
+ * The caption row's own label, dropped when the row is tight.
+ *
+ * "Captions" costs 54px to say what the seven labels beside it already say — Reading,
+ * Marks, Line 1, Line 2, Size, List, Mark from. On a roomy window it is a useful group
+ * marker; below about 1100px it is the difference between one row and two, and the
+ * controls do not become less clear without it.
+ *
+ * Measured: the row needs 1039px against 1004px available at 1024 without this, and
+ * fits with room to spare once the label, the option-driven select widths and the field
+ * gaps are dealt with.
+ */
+@media (max-width: 1140px) {
+  .row-captions > .row-label {
+    display: none;
+  }
+}
+
 /* --- Audio tracks ---------------------------------------------------------- */
 
 /*
@@ -571,6 +600,26 @@ body {
 #mute[aria-pressed='true'] #volume-waves,
 #mute:not([aria-pressed='true']) #volume-cross {
   display: none;
+}
+
+/*
+ * A select's width must not be decided by its longest option.
+ *
+ * Measured: the caption row needed 1039px in 1004px of space, and ONE control was the
+ * reason — the word-list picker at 157px, sized to fit the longest list name in its
+ * options rather than the one actually selected. Capping it and ellipsising brings the
+ * row inside a 1024px window, which is the common laptop case.
+ *
+ * The `title` on each select carries the full text, so nothing is hidden that cannot be
+ * read — see `renderTrackPickers`, which sets it.
+ */
+.row-captions select {
+  /* `min-width: 0` is what actually lets a flex item shrink below its content — without
+     it the select keeps its intrinsic width no matter what `max-width` says, which is
+     why the first attempt at this changed nothing. */
+  min-width: 0;
+  max-width: 6.5rem;
+  text-overflow: ellipsis;
 }
 
 .status-text {
@@ -715,7 +764,12 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 30ch;
+  /* 30ch is 210px measured, and it was the widest thing in the transport row by a
+     distance — twice the next largest control. A filename is reference information, not
+     the thing you are reading, so it is the right thing to give up first when the row is
+     tight. `title` carries the whole name. */
+  max-width: 18ch;
+  min-width: 0;
 }
 
 /* Hidden from sight but not from assistive technology or the tab order.

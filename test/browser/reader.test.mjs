@@ -468,16 +468,21 @@ section('the audio track selector');
     // The control must not be inside the time row: that row is about WHERE you are.
     inTimeRow: Boolean(document.getElementById('audio').closest('.row-time')),
     inTransport: Boolean(document.getElementById('audio').closest('.row-transport')),
-    // And the select must live with the file's other per-track choices.
+    // And the select must NOT be in the caption row: that row disappears when the
+    // captions are off, so a select living there is unreachable for a viewer who wants
+    // the original audio without subtitles — the case this feature exists for.
     selectInCaptionRow: Boolean(document.getElementById('audio-track').closest('.row-captions')),
+    selectInTransport: Boolean(document.getElementById('audio-track').closest('.row-transport')),
+    captionsOff: document.getElementById('captions').getAttribute('aria-pressed'),
   }));
 
   check('the track select starts collapsed', collapsed.fieldHidden, true);
   check('the audio button is not in the time row', collapsed.inTimeRow, false);
   check('it is in the transport row instead', collapsed.inTransport, true);
-  check('and the select sits with the other per-track picks', collapsed.selectInCaptionRow, true);
+  check('and the select opens beside it, so it is reachable', collapsed.selectInCaptionRow, false);
   check('with nothing said when there is nothing wrong', collapsed.note, '');
   check('and the note takes no space when empty', collapsed.noteDisplay, 'none');
+  check('the select is in the transport row too', collapsed.selectInTransport, true);
 
   // The button must actually open the select rather than merely focus it.
   await reader.click('#audio');
@@ -496,6 +501,49 @@ section('the audio track selector');
     await reader.evaluate(() => document.getElementById('audio-field').hidden),
     true,
   );
+}
+
+section('Resume continues rather than sitting paused');
+
+{
+  // Reported from use: clicking Resume moved the playhead and then left the film
+  // paused, which is the one thing "Resume" cannot mean. `currentTime` is not a resume.
+  const page2 = await context.newPage();
+  await page2.goto(`chrome-extension://${extensionId}/src/reader/reader.html`);
+  await page2.waitForTimeout(1000);
+
+  // Seed a saved position directly, which is what the banner reads.
+  await page2.evaluate(() => {
+    const file = new File([new Uint8Array(10)], 'resume-fixture.mp4', { type: 'video/mp4' });
+    localStorage.setItem('iu-test-file', 'x');
+    void file;
+  });
+  await page2.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await page2.waitForTimeout(2000);
+
+  // Drive the banner by hand: the element has no stored position, so the real offer
+  // would never appear. What is under test is the handler, not the offer.
+  await page2.evaluate(() => {
+    document.getElementById('video').pause();
+    const banner = document.getElementById('resume');
+    banner.dataset.seconds = '1';
+    banner.hidden = false;
+  });
+
+  // A REAL click, not `element.click()` from inside `evaluate`. Playwright's click is a
+  // trusted gesture, and autoplay without one is refused — which is exactly what the
+  // first version of this test failed on: the handler was correct and the test was
+  // measuring the autoplay policy.
+  await page2.click('#resume-go');
+  await page2.waitForTimeout(500);
+  const resumed = await page2.evaluate(() => {
+    const video = document.getElementById('video');
+    return { paused: video.paused, currentTime: Number(video.currentTime.toFixed(2)) };
+  });
+
+  check('Resume moves the playhead', resumed.currentTime > 0, true);
+  check('and it is PLAYING afterwards, not paused', resumed.paused, false);
+  await page2.close();
 }
 
 await closeAll();

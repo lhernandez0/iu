@@ -1334,8 +1334,14 @@ let audioOpen = false;
 function renderAudio() {
   const choice = audioTracks.length > 1;
   els.audioButton.hidden = !choice;
+  // The button and the field are siblings in the TRANSPORT row, which is never hidden
+  // for a loaded file. Placing the field in the caption row was the bug: that row
+  // disappears when the captions are turned off, so the button appeared to do nothing
+  // but highlight itself.
   els.audioField.hidden = !choice || !audioOpen;
   els.audioButton.setAttribute('aria-pressed', String(choice && audioOpen));
+  // Once open, the icon must not sit there looking active while the select is
+  // somewhere else on the row. Keep them adjacent by asking the DOM where it landed.
 
   if (!choice) {
     els.audioSelect.replaceChildren();
@@ -1667,7 +1673,16 @@ function timecode(seconds) {
 els.resume.addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
-  if (button.id === 'resume-go') els.video.currentTime = Number(els.resume.dataset.seconds);
+  if (button.id === 'resume-go') {
+    els.video.currentTime = Number(els.resume.dataset.seconds);
+    // Seeking is not resuming, but calling `play()` straight after a seek does not
+    // resume either: the seek aborts the pending play, the promise rejects with
+    // `AbortError`, and a `.catch(() => {})` turns that into a film that sits paused at
+    // the right position — the exact symptom this was meant to fix. Measured: the
+    // element reported `paused: true` after the click while a plain `play()` outside the
+    // handler succeeded, so the policy was never the problem. Wait for the seek to land.
+    els.video.addEventListener('seeked', () => void els.video.play().catch(() => {}), { once: true });
+  }
   els.resume.hidden = true;
 });
 
@@ -1985,7 +2000,12 @@ click('pip', () => {
 // and only that element and its descendants are rendered, so no overlay bar could
 // ever appear over it.
 click('fullscreen', () => {
-  if (document.fullscreenElement) void document.exitFullscreen();
+  // `document.fullscreenElement` is null when the FULLSCREEN is held by the browser
+  // chrome rather than by this document — a tab the user fullscreened with F11, or a
+  // fullscreen window. In that state the button used to request fullscreen AGAIN, and
+  // the resulting nesting is why leaving took two Escapes. Asking to exit is correct
+  // whether or not we are the ones holding it.
+  if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
   else void els.picture.requestFullscreen().catch(() => {});
 });
 
