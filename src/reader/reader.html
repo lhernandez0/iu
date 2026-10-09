@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <title>IU — video</title>
+    <link rel="stylesheet" href="../common/marks.css" />
     <link rel="stylesheet" href="reader.css" />
   </head>
   <body>
@@ -13,53 +14,361 @@
       `{ start, duration, text }` segments on request and reports which one is
       playing. Its entire interface to the rest of the extension is the content
       message contract, and the side panel has no reference to this page at all —
-      no button, no link, no name. That is what keeps every source first-class,
-      and it is why this page can be opened by a menu item rather than by the
-      panel.
+      no button, no link, no name. That is what keeps every source first-class, and
+      it is why this page can be opened by a menu item rather than by the panel.
 
-      The picker lives here rather than in the panel for the same reason: it is
-      this page's files, this page's video, this page's subtitle tracks. The panel
-      has no business knowing how they were chosen.
+      The picker lives here rather than in the panel for the same reason: it is this
+      page's files, this page's video, this page's subtitle tracks. The panel has no
+      business knowing how they were chosen.
+
+      ## The layout, and why it is a column
+
+      `.stage` holds the picture and, optionally, the caption strip BELOW it. A
+      column, so the `below` placement can take its own row and the picture shrinks
+      above it. The OVERLAY placement is absolutely positioned inside `.picture`
+      instead, and the control bar overlays the bottom of the picture in both cases.
     -->
-    <main class="stage">
-      <!-- The media element IS the source. Everything else on this page exists to
-           fill it in and describe it. -->
-      <video id="video" controls playsinline></video>
+    <main class="stage" id="stage">
+      <div class="picture" id="picture">
+        <!-- The media element IS the source. Everything else on this page exists to
+             fill it in, describe it, and annotate it. -->
+        <video id="video" playsinline preload="metadata"></video>
 
-      <!-- Shown until a video is loaded, over the empty video element, because
-           an empty black rectangle with no explanation reads as broken. -->
-      <div id="placeholder" class="placeholder">
-        <p class="placeholder-title">Drop a video here</p>
-        <p class="placeholder-hint">or use <strong>Choose files…</strong> below</p>
+        <!-- Shown until a video is loaded, over the empty element, because an empty
+             black rectangle with no explanation reads as broken. -->
+        <div id="placeholder" class="placeholder">
+          <p class="placeholder-title">Drop a video here</p>
+          <p class="placeholder-hint">or use <strong>Choose files…</strong> below</p>
+        </div>
+
+        <!--
+          The captions, floating over the bottom of the picture.
+
+          The DEFAULT placement: standard subtitle position, and it costs no picture
+          height. A card behind the text rather than a full-width gradient strip,
+          because a gradient has to end somewhere and over a bright frame that edge
+          is a visible seam — which is exactly what shows up once the browser chrome
+          is out of the way.
+        -->
+        <div class="captions captions-overlay" id="captions-overlay" hidden>
+          <!-- ONE card, both lines inside it. Two inline-block cards drew as two
+               separate boxes rather than as two lines of one subtitle. -->
+          <div class="caption-card">
+            <p class="caption-line caption-primary" id="caption-primary"></p>
+            <p class="caption-line caption-secondary" id="caption-secondary"></p>
+          </div>
+        </div>
+
+        <!--
+          The resume prompt.
+
+          A prompt rather than a silent seek: the file cannot be reopened by itself,
+          so the user re-picks it, and a jump with no explanation is disorienting.
+        -->
+        <div class="resume" id="resume" hidden>
+          <span class="resume-text" id="resume-text"></span>
+          <button type="button" class="resume-go" id="resume-go">Resume</button>
+          <button type="button" class="resume-skip" id="resume-skip">Start over</button>
+        </div>
+
+        <!--
+          The control bar.
+
+          ONE lifecycle, not two: it fades when the pointer is idle and returns on
+          movement or on focus. There is no collapse control — a manual collapse plus
+          an automatic hide is three states where every player has two.
+
+          `position: absolute` inside `.picture` so it overlays the picture rather
+          than costing it height, and `.picture` is what fullscreen targets — NOT the
+          `<video>`. Fullscreening the media element renders only that element and its
+          descendants, so the bar could never appear over it.
+        -->
+        <div class="bar" id="bar" data-hidden="false">
+          <!--
+            ROW 0 — the time bar.
+
+            Above the transport, because it is a readout of where you are rather than
+            a control you reach for. The cue strip is the part a generic player cannot
+            have: it draws where the marked words are, so the hard stretch of a file is
+            visible on the timeline before you reach it.
+          -->
+          <div class="row row-time">
+            <span class="time" id="time-current">0:00</span>
+            <div class="scrub">
+              <!-- The difficulty band, drawn BEHIND the range so the range's own track
+                   and thumb draw over it and the control stays a real input. -->
+              <div class="cues" id="cues" aria-hidden="true"></div>
+              <input
+                id="scrubber"
+                class="scrubber"
+                type="range"
+                min="0"
+                max="1"
+                step="0.001"
+                value="0"
+                aria-label="Seek"
+              />
+            </div>
+            <span class="time" id="time-duration">0:00</span>
+
+            <!--
+              The difficulty toggle, in the time row rather than the transport row.
+
+              It belongs next to the thing it controls — the band is part of the
+              scrubber — and the transport row is already carrying transport, cue
+              stepping, speed, volume and four toggles. The icon is the band itself: a
+              track with three runs along it, filled at the opacities the ramp uses.
+
+              This is where the reader DIVERGES from the preview, which has the same
+              button in the transport row. The reader's row is fuller, and the reason
+              above is the reader's.
+            -->
+            <button type="button" class="button icon-button" id="difficulty" aria-label="Hide difficulty band" aria-pressed="true" title="Hide difficulty band">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="2.5" y="9" width="19" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <rect x="5" y="10.5" width="3.5" height="3" rx="1" fill="currentColor" opacity="0.45" />
+                <rect x="9.5" y="10.5" width="5" height="3" rx="1" fill="currentColor" opacity="0.7" />
+                <rect x="15.5" y="10.5" width="3.5" height="3" rx="1" fill="currentColor" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- ROW 1 — transport. Always present: it is what the bar IS. -->
+          <div class="row row-transport">
+            <!-- The file controls. An icon and a name, not a wide button: the name is
+                 reference information and the icon is the action. Replacing the file
+                 while one is playing is a real thing to want, so this stays. -->
+            <input
+              id="pick-files"
+              class="visually-hidden"
+              type="file"
+              multiple
+              accept="video/*,.mkv,.mp4,.webm,.srt,.vtt,.ass,.ssa"
+            />
+            <label class="button icon-button" for="pick-files" title="Open a video or subtitle file" aria-label="Open a video or subtitle file">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M3 7a2 2 0 0 1 2-2h3.6l1.7 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+                <path d="M3 11h18" fill="none" stroke="currentColor" stroke-width="1.8" />
+              </svg>
+            </label>
+            <span id="chosen" class="filename" title="">No files chosen</span>
+
+            <span class="spacer"></span>
+
+            <button type="button" class="button icon-button" id="back" aria-label="Back 5 seconds" title="Back 5 seconds">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M11.5 6.5 6 12l5.5 5.5M19 6.5 13.5 12 19 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <button type="button" class="button icon-button primary" id="play" aria-label="Play" title="Play">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path id="play-path" d="M8 5.5v13l11-6.5z" fill="currentColor" />
+              </svg>
+            </button>
+            <button type="button" class="button icon-button" id="forward" aria-label="Forward 5 seconds" title="Forward 5 seconds">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12.5 6.5 18 12l-5.5 5.5M5 6.5 10.5 12 5 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+
+            <span class="divider" aria-hidden="true"></span>
+
+            <!-- Cue stepping and replay: the controls a generic player CANNOT have,
+                 because it does not know where the cues are. Up and down rather than
+                 left and right — the transcript is a vertical list. -->
+            <button type="button" class="button icon-button" id="prev-cue" aria-label="Previous line" title="Previous line">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 15.5 12 9.5l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M6 6h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button type="button" class="button icon-button" id="replay-cue" aria-label="Replay this line" title="Replay this line">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M20 12a8 8 0 1 1-2.4-5.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                <path d="M20 4.5V10h-5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <button type="button" class="button icon-button" id="next-cue" aria-label="Next line" title="Next line">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 8.5 12 14.5l6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M6 18h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+
+            <span class="divider" aria-hidden="true"></span>
+
+            <!-- A select, not an icon: four discrete values, and the current one
+                 should be readable without opening anything. -->
+            <label class="speed">
+              <span class="visually-hidden">Playback speed</span>
+              <select id="speed" aria-label="Playback speed">
+                <option value="0.5">0.5×</option>
+                <option value="0.75">0.75×</option>
+                <option value="1">1×</option>
+                <option value="1.25">1.25×</option>
+              </select>
+            </label>
+
+            <span class="divider" aria-hidden="true"></span>
+
+            <!--
+              Volume: a mute button AND a slider, in one group.
+
+              Both, because each answers a question the other cannot. A slider alone
+              has no way back to a known level once it has been dragged to zero — you
+              would have to guess where it was. A toggle alone has no "quiet but not
+              silent".
+
+              A native range with `accent-color`, not a hand-built slider: the platform
+              control is keyboard-operable and announced correctly for free.
+
+              NOT persisted. The element keeps its volume across a file change, and the
+              OS volume is the real preference — a second one stored here would fight
+              it.
+            -->
+            <div class="volume">
+              <button type="button" class="button icon-button" id="mute" aria-label="Mute" aria-pressed="false" title="Mute">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                  <!-- Swapped by CSS from the button's own `aria-pressed`, so the icon
+                       and the announced state cannot disagree. NOT `hidden`: that is an
+                       HTML attribute and an SVG <g> ignores it. -->
+                  <g id="volume-waves">
+                    <path d="M15 9a4.4 4.4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                    <path d="M17.6 6.6a8 8 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                  </g>
+                  <g id="volume-cross">
+                    <path d="M15.5 9.5l5 5M20.5 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                  </g>
+                </svg>
+              </button>
+              <input
+                id="volume"
+                class="volume-slider"
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value="100"
+                aria-label="Volume"
+              />
+            </div>
+
+            <button type="button" class="button icon-button" id="captions" aria-label="Show captions" aria-pressed="true" title="Show captions">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.8" />
+                <path d="M10.5 10.3a2.2 2.2 0 1 0 0 3.4M17 10.3a2.2 2.2 0 1 0 0 3.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+
+            <button type="button" class="button icon-button" id="pip" aria-label="Picture in picture" title="Picture in picture">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8" />
+                <rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" />
+              </svg>
+            </button>
+            <button type="button" class="button icon-button" id="fullscreen" aria-label="Fullscreen" title="Fullscreen">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </div>
+
+          <!--
+            ROW 2 — the caption settings. Present ONLY while captions are on.
+
+            The resolution to a real tension: there is no settings VIEW in the
+            reader, yet everything the captions need must still be reachable. The row
+            appears exactly when it is relevant, instead of being fifteen controls in
+            one line.
+          -->
+          <div class="row row-captions" id="caption-row">
+            <span class="row-label">Captions</span>
+
+            <div class="seg" role="group" aria-label="Caption position">
+              <button type="button" class="seg-button" id="place-overlay" data-placement="overlay" aria-pressed="true">Over picture</button>
+              <button type="button" class="seg-button" id="place-below" data-placement="below" aria-pressed="false">Below</button>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Reading</span>
+              <select id="reading" aria-label="Reading placement">
+                <option value="off">Off</option>
+                <option value="above">Above</option>
+                <option value="below">Below</option>
+                <option value="marked">Marked</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Marks</span>
+              <select id="marks" aria-label="Mark style">
+                <option value="underline">Underline</option>
+                <option value="highlight">Highlight</option>
+              </select>
+            </label>
+
+            <span class="divider" aria-hidden="true"></span>
+
+            <!-- Which track each line draws. A local file can carry several — the
+                 reader was showing only one and claiming a file has one track, which
+                 is false. These are the SAME preferences the panel's dropdowns set,
+                 so a track chosen in one surface is the one the other draws. -->
+            <label class="field">
+              <span class="field-label">Line 1</span>
+              <select id="study-track" aria-label="Subtitle track for the first line"></select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Line 2</span>
+              <select id="gloss-track" aria-label="Subtitle track for the second line"></select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Size</span>
+              <input id="caption-size" type="number" min="12" max="34" step="1" value="20" aria-label="Caption text size" />
+            </label>
+
+            <span class="divider" aria-hidden="true"></span>
+
+            <!-- Which list the captions are graded against, and from what level.
+                 The reader has no panel to set these in, and without them the reader
+                 had to guess from the track's language — which is a good default and
+                 a poor only option. -->
+            <label class="field">
+              <span class="field-label">List</span>
+              <select id="word-list" aria-label="Word list"></select>
+            </label>
+
+            <label class="field">
+              <span class="field-label">Mark from</span>
+              <select id="threshold" aria-label="Highlight from level"></select>
+            </label>
+          </div>
+
+          <!-- The status line: STATUS AND ERRORS ONLY.
+               It used to be where the cue was shown, which is what made the captions
+               look like they did nothing — the same sentence was already on screen in
+               the bar. A cue belongs to the captions and nowhere else. -->
+          <p id="status" class="status-text" role="status">Ready.</p>
+        </div>
+      </div>
+
+      <!--
+        The captions, pinned below the picture.
+
+        Its own row, and the picture shrinks above it. Nothing is ever covered —
+        which is the case for someone who does not want the image obstructed at all,
+        where the overlay costs no height but does sit over the bottom of the frame.
+
+        Outside `.bar` on purpose, so the bar's auto-hide cannot take the captions
+        with it.
+      -->
+      <div class="captions captions-below" id="captions-below" hidden>
+        <p class="caption-line caption-primary" id="caption-primary-below"></p>
+        <p class="caption-line caption-secondary" id="caption-secondary-below"></p>
       </div>
     </main>
-
-    <footer class="bar">
-      <!--
-        ONE picker, not two.
-
-        A `multiple` input accepting video and subtitle types together, sorted by
-        extension afterwards. One trip to the file dialog, it still works when
-        only the video is to hand, and an MKV plus its sidecar can be chosen in a
-        single gesture.
-
-        A `<label>` wrapping the input, not a `<button>` plus `.click()`. It is the
-        native way to open a picker, it is keyboard-reachable and announced for
-        free, and it needs no script. The input itself is visually hidden but NOT
-        `display:none`, so it stays focusable and keeps its accessible name.
-      -->
-      <input
-        id="pick-files"
-        class="visually-hidden"
-        type="file"
-        multiple
-        accept="video/*,.mkv,.srt,.vtt,.ass,.ssa"
-      />
-      <label id="pick-label" class="button" for="pick-files">Choose files…</label>
-
-      <p id="chosen" class="chosen">No files chosen</p>
-      <p id="status" class="status" role="status"></p>
-    </footer>
 
     <script type="module" src="reader.js"></script>
   </body>

@@ -229,6 +229,117 @@ section('the panel shows what is missing rather than an empty transcript');
   await plain.close();
 }
 
+section('the time bar, the volume control and the difficulty band');
+
+{
+  // Loaded here rather than in the section above so the state is the loaded one, and
+  // because this asserts the BAR, not the transcript the panel renders.
+  await reader.bringToFront();
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+
+  // The Chinese track, chosen EXPLICITLY. The reader honours the shared
+  // `studyLanguage`, and a previous section leaves it on English — where no word list
+  // exists, so nothing marks and the band is correctly empty. Depending on whatever
+  // that setting happens to hold would make this test assert the ambient state.
+  await reader.selectOption('#study-track', 'zh');
+
+  // The band is painted FROM the marks, and the marks need the dictionary — so wait
+  // for a span rather than assuming the paint happened with the file.
+  const bandAppeared = await reader
+    .waitForFunction(() => document.querySelectorAll('#cues span').length > 0, null, { timeout: 20000 })
+    .then(() => true)
+    .catch(() => false);
+
+  // The load-bearing check. The band first shipped with every span 0px wide, because
+  // the reader's cues carry `duration` where the preview's carried `end` — the width
+  // came out `NaN%`, which CSS silently drops. The band existed, was the right colour
+  // and painted nothing, which a DOM-presence check passes happily.
+  const band = await reader.evaluate(() => {
+    const spans = [...document.querySelectorAll('#cues span')];
+    return {
+      count: spans.length,
+      widths: spans.map((span) => span.getBoundingClientRect().width),
+      colours: [...new Set(spans.map((span) => getComputedStyle(span).backgroundColor))],
+    };
+  });
+
+  check('the band has a span', bandAppeared && band.count > 0, true);
+  // `every` on an empty array is `true`, so the count is asserted first — otherwise a
+  // band with no spans at all passes the width check it was written to catch.
+  check('and every span has real width', band.count > 0 && band.widths.every((width) => width > 1), true);
+
+  // The range's max is the duration. Left at a default of 1, the scrubber is a control
+  // that cannot seek anywhere, and the thumb sits at 0 for the whole film.
+  const times = await reader.evaluate(() => ({
+    max: Number(document.getElementById('scrubber').max),
+    duration: document.getElementById('video').duration,
+    counter: document.getElementById('time-duration').textContent,
+  }));
+  check('the scrubber spans the whole file', Math.abs(times.max - times.duration) < 0.5, true);
+  check('and the counter shows the duration', /^\d+:\d\d$/.test(times.counter ?? ''), true);
+
+  // Seeking, through the element itself.
+  await reader.evaluate(() => {
+    const scrubber = document.getElementById('scrubber');
+    scrubber.value = '5';
+    scrubber.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  const seeked = await reader.evaluate(() => document.getElementById('video').currentTime);
+  check('and it seeks the video', seeked > 4 && seeked < 6, true);
+
+  // The difficulty toggle owns its own state through the settings bucket.
+  await reader.click('#difficulty');
+  const off = await reader.evaluate(() => ({
+    pressed: document.getElementById('difficulty').getAttribute('aria-pressed'),
+    spans: document.querySelectorAll('#cues span').length,
+  }));
+  check('the difficulty toggle turns the band off', off.spans, 0);
+  check('and says so', off.pressed, 'false');
+
+  await reader.click('#difficulty');
+  const back = await reader.evaluate(() => ({
+    pressed: document.getElementById('difficulty').getAttribute('aria-pressed'),
+    spans: document.querySelectorAll('#cues span').length,
+  }));
+  check('and turning it back on restores the band', back.spans > 0, true);
+
+  // Volume: a real curve, and a mute that can be undone.
+  const curve = await reader.evaluate(() => {
+    const video = document.getElementById('video');
+    const slider = document.getElementById('volume');
+    const readings = [];
+    for (const value of [100, 50]) {
+      slider.value = String(value);
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      readings.push(Number(video.volume.toFixed(3)));
+    }
+    slider.value = '0';
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    const silent = { volume: video.volume, muted: video.muted };
+    return { readings, silent };
+  });
+  check('full volume is full', curve.readings[0], 1);
+  // Squared, not linear: 50 on the slider is 0.25 on the element.
+  check('half volume is a quarter, not a half', curve.readings[1], 0.25);
+  check('and zero is muted', curve.silent.muted, true);
+
+  await reader.click('#mute');
+  const afterUnmute = await reader.evaluate(() => ({
+    value: document.getElementById('volume').value,
+    volume: Number(document.getElementById('video').volume.toFixed(3)),
+  }));
+  check('unmuting restores the previous level rather than guessing', afterUnmute.value, '50');
+  check('and the element follows', afterUnmute.volume, 0.25);
+
+  // The bar is taller now, so the overlay captions must still clear it — the offset is
+  // measured rather than fixed, and a stale one puts the captions behind the bar.
+  const offset = await reader.evaluate(() => ({
+    offset: getComputedStyle(document.documentElement).getPropertyValue('--bar-offset').trim(),
+    bar: Math.round(document.getElementById('bar').getBoundingClientRect().height),
+  }));
+  check('the caption offset accounts for the taller bar', offset.offset, `${offset.bar}px`);
+}
+
 await closeAll();
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

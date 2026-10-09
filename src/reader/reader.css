@@ -1,9 +1,24 @@
-/**
+/*
  * Styles for the video reader.
  *
- * Deliberately plain and dark, matching the side panel so the two read as one
- * product. The video is the point of the page: it takes every pixel the controls
- * do not need, and nothing here competes with it for attention.
+ * Dark, and matching the side panel so the two read as one product. The video is
+ * the point of the page: it takes every pixel the controls do not need.
+ *
+ * ## The one structural idea
+ *
+ * A COLUMN. `.picture` holds the video and the overlaid bar; `.stage` holds
+ * `.picture` plus the optional `below` caption strip. Every `min-height: 0` in this
+ * file is load-bearing and has the same cause: a flex child will not shrink below
+ * its content's intrinsic size without it, so without those the video wins and the
+ * strip below is pushed off the bottom of the page instead of the picture being
+ * squeezed. That is the difference between a strip that is pinned and one that
+ * overflows, and it is the single most common way this layout breaks.
+ *
+ * ## Type scale
+ *
+ * `--caption-size` is set on the root and read by both caption placements, so the
+ * size control moves both from one value. The panel's `--text-scale` scheme is not
+ * used here because the reader has one text size to control, not nine.
  */
 
 :root {
@@ -12,7 +27,12 @@
   --muted: #8b93a7;
   --accent: #7aa2f7;
   --danger: #f7768e;
-  --bar: #1a1d26;
+  --surface: #1b1e25;
+  --edge: #262b38;
+  /* Written by the size control. In px rather than a ratio because it is a
+     subtitle size, and a subtitle size is a thing people think about in px. */
+  --caption-size: 20px;
+  color-scheme: dark;
 }
 
 * {
@@ -30,35 +50,47 @@ body {
   flex-direction: column;
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-/* --- The video ----------------------------------------------------------- */
+/* --- The stage ------------------------------------------------------------ */
 
 .stage {
   position: relative;
   flex: 1;
-  /* `min-height: 0` is what lets a flex child actually shrink; without it the
-     video's intrinsic height wins and the footer is pushed off screen. */
+  /* Lets `.picture` shrink so the `below` strip can take its own row. Without
+     this the video's intrinsic height wins and the strip is pushed off the
+     bottom of the page — the layout's one real trap. */
   min-height: 0;
   display: flex;
+  flex-direction: column;
   background: #000;
+  overflow: hidden;
+}
+
+.picture {
+  position: relative;
+  flex: 1;
+  /* The same trick one level down, for the picture above the `below` strip. */
+  min-height: 0;
+  display: flex;
 }
 
 #video {
   width: 100%;
   height: 100%;
-  /* `object-fit: contain` keeps the aspect ratio rather than stretching, and
-     `max-height` on the element stops a tall video forcing the page to scroll. */
   max-height: 100%;
   object-fit: contain;
   background: #000;
+  /* The video is NOT the fullscreen target — `.picture` is. Fullscreening the
+     media element renders only that element and its descendants, so the control
+     bar could never appear over it. */
 }
 
 /* The drag target is the whole stage, so a drop anywhere on the video area works.
-   A highlight is the only feedback needed and it is applied by the `dragging`
-   class rather than by `:hover`, because drag state is not hover state. */
-.stage.dragging {
+   The highlight is applied by the `dragging` class rather than by `:hover`, because
+   drag state is not hover state. */
+.stage.dragging .picture {
   outline: 2px dashed var(--accent);
   outline-offset: -8px;
 }
@@ -71,8 +103,8 @@ body {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  /* Not `display: none` — the element is toggled by hiding this attribute, so
-     screen readers and layout both keep it until a video is actually loaded. */
+  /* Not `display: none` — the element is toggled by hiding this attribute, so a
+     screen reader that has already seen it keeps it, and layout does not reflow. */
   pointer-events: none;
   text-align: center;
 }
@@ -84,7 +116,6 @@ body {
 .placeholder-title {
   margin: 0;
   font-size: 18px;
-  color: var(--fg);
 }
 
 .placeholder-hint {
@@ -92,57 +123,577 @@ body {
   color: var(--muted);
 }
 
-/* --- The control bar ----------------------------------------------------- */
+/* --- Captions ------------------------------------------------------------- */
 
-.bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: var(--bar);
-  border-top: 1px solid #262b38;
-  flex-wrap: wrap;
+.captions {
+  text-align: center;
 }
 
-.button {
+.captions[hidden] {
+  display: none;
+}
+
+.caption-line {
+  margin: 0;
+}
+
+.caption-primary {
+  font-size: var(--caption-size);
+  line-height: 1.35;
+  /* What a reading scales against. The shared ruby rules divide this, so the pinyin
+     grows with the caption instead of staying at a fixed small size — the reader's
+     base is the caption size, where the panel's is the text-size control. */
+  --reading-base: var(--caption-size);
+}
+
+.caption-secondary {
+  margin-top: 4px;
+  font-size: calc(var(--caption-size) * 0.75);
+  color: var(--muted);
+}
+
+/*
+ * OVERLAY — floats over the bottom of the picture.
+ *
+ * **ONE card with the lines stacked inside it, not a card per line.** The first
+ * version made each line its own `inline-block` with its own background and a margin
+ * between them, so two lines drew as two separate boxes — "a second caption" beside
+ * the first rather than two lines of one subtitle. Real subtitles are one block: a
+ * background behind the whole thing, with the lines left to stack inside it.
+ *
+ * So the CONTAINER is the card and the lines are plain blocks within it, and the card
+ * is `inline-block` so it shrink-wraps to its widest line — which is what gives the
+ * background its tight edges instead of a full-width gradient's hard seam.
+ *
+ * `--bar-offset` keeps the card clear of the control bar when that is showing. It is
+ * measured from the bar's real height rather than hardcoded, because the bar grows
+ * when the caption row appears.
+ */
+.captions-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--bar-offset, 44px) + 10px);
+  padding: 0 18px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* The card. `inline-block` so it is only as wide as its content, and a `ch`
+   max-width so a long line wraps rather than spanning the picture. */
+.caption-card {
   display: inline-block;
-  padding: 6px 14px;
+  max-width: min(46ch, 92%);
+  padding: 4px 14px;
+  border-radius: 6px;
+  background: rgba(8, 10, 14, 0.74);
+  text-align: center;
+  /* The one thing on the strip that wants the pointer, for a hovered word's
+     definition — the rest of the overlay must not swallow clicks meant for the
+     picture. */
+  pointer-events: auto;
+}
+
+.captions-overlay .caption-line {
+  margin: 0;
+  /* A text shadow rather than a darker fill, so the text stays readable over a
+     bright frame without a slab of near-black behind it. */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+}
+
+/* The gloss sits just under the line being learned — closer than a paragraph gap,
+   because the two are one subtitle rather than two. */
+.captions-overlay .caption-secondary {
+  margin-top: 1px;
+}
+
+/*
+ * BELOW — its own row, and the picture shrinks above it.
+ *
+ * Deliberately not an overlay: an overlay covers the picture, and "I just want to
+ * see the subs" is exactly the case where covering it is wrong. It lives outside
+ * `.bar`, so the bar's auto-hide cannot take the captions with it.
+ */
+.captions-below {
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  background: #14161c;
+  border-top: 1px solid var(--edge);
+  /* A long cue wraps and the strip scrolls rather than growing without bound — it
+     is pinned, so unbounded growth would eat the picture. */
+  max-height: 22vh;
+  overflow-y: auto;
+}
+
+.captions-below .caption-primary,
+.captions-below .caption-secondary {
+  max-width: min(52ch, 100%);
+  margin-inline: auto;
+}
+
+/*
+ * An empty gloss line takes no space at all.
+ *
+ * The element is EMPTIED rather than removed when a file has one subtitle track, so
+ * a caller cannot forget to put it back — but an empty `inline-block` still drew its
+ * padding, which showed as a second card beside every caption. That is what this
+ * removes, and it has to come AFTER both placement rules: at equal specificity the
+ * later one wins, so putting it earlier silently lost and the block stayed.
+ */
+.caption-secondary:empty {
+  display: none;
+}
+
+/* --- The resume prompt ---------------------------------------------------- */
+
+.resume {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 1px solid #33405c;
+  border-radius: 8px;
+  background: rgba(22, 27, 40, 0.94);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+}
+
+.resume[hidden] {
+  display: none;
+}
+
+.resume-text {
+  font-size: 13px;
+}
+
+.resume-go {
+  padding: 5px 12px;
+  border: 0;
   border-radius: 6px;
   background: var(--accent);
   color: #0b0d12;
   font-weight: 600;
   cursor: pointer;
-  /* The label is the focusable-looking thing, but the INPUT holds focus — see
-     the `:focus-visible` rule below, which is why this one has no outline. */
+}
+
+.resume-skip {
+  padding: 5px 10px;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+/* --- The control bar ------------------------------------------------------ */
+
+.bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* The extra top padding is the FADE, not spacing. The gradient needs room to
+     reach full transparency before the element ends, or its top edge is a visible
+     horizontal seam over a bright frame. */
+  padding: 24px 10px 6px;
+  background: linear-gradient(
+    to bottom,
+    rgba(10, 12, 17, 0) 0,
+    rgba(10, 12, 17, 0.55) 20px,
+    rgba(10, 12, 17, 0.9) 100%
+  );
+  transition: opacity 200ms ease;
+}
+
+/*
+ * Hidden because the pointer is idle, NOT because anything collapsed.
+ *
+ * `opacity` plus `pointer-events` rather than `display: none`, so the controls keep
+ * their place in the tab order — hiding them outright would break the `focusin`
+ * rule that exists to get them back.
+ */
+.bar[data-hidden='true'] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    transition: none;
+  }
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.row-captions {
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* The second row disappears when the captions are off. `[hidden]` rather than a
+   class, so the state is in the DOM where a test can read it and a screen reader
+   honours it, not only in a stylesheet. */
+.row-captions[hidden] {
+  display: none;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.row-label,
+.field-label {
+  color: #808999;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* --- The time bar --------------------------------------------------------- */
+
+.row-time {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.scrub {
+  position: relative;
+  flex: 1 1 auto;
+  /* The cue strip is absolutely positioned against this, so it has to be a positioning
+     context. */
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/*
+ * The difficulty band. Absolutely positioned BEHIND the range, so the range's own
+ * track and thumb draw over it and the control stays a real input.
+ */
+.cues {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Taller than the range's track and vertically centred on it, so a mark reads as a
+     tick on the timeline rather than a stripe across it. */
+  top: 50%;
+  height: 8px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cues span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* The colour is set per run in JS from the level ramp, so a colour here means the
+     same thing it means on a word in the transcript. This is only the fallback for a
+     span the script has not coloured. */
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 1px;
+}
+
+/*
+ * The scrubber.
+ *
+ * `appearance: none` plus explicit pseudo-element rules, because the default range is
+ * a different control in every browser and none of them match the bar. The pieces are
+ * styled separately — track, then thumb — which is the only way to size them
+ * independently.
+ */
+.scrubber {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.scrubber::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  /* The played region is drawn by the thumb's position, so the track is the unplayed
+     colour and `--played` is layered over it from the left. A background gradient keyed
+     to `--played` avoids a second element to keep in step. */
+  background: linear-gradient(
+    to right,
+    var(--accent) 0%,
+    var(--accent) var(--played, 0%),
+    rgba(255, 255, 255, 0.18) var(--played, 0%),
+    rgba(255, 255, 255, 0.18) 100%
+  );
+}
+
+.scrubber::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.scrubber::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.scrubber::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.scrubber::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.scrubber:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Tabular figures, so the counter does not jitter as the seconds tick — a
+   proportional font changes width every time `1` becomes `8`. */
+.time {
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  /* A fixed width, so the two ends do not push the scrubber around as the numbers grow
+     from `0:09` to `0:10` to `1:00:00`. */
+  min-width: 4.5ch;
+  text-align: center;
+}
+
+/* --- Volume --------------------------------------------------------------- */
+
+/*
+ * Volume: the mute button and its slider, as one unit.
+ *
+ * The slider is narrow on purpose. It shares the transport row with the transport, the
+ * cue stepping, the speed select and four toggles, and a full-width slider would push
+ * the row into wrapping on a modest window — a wrapped transport row is a worse outcome
+ * than a short slider. It is a set-and-forget control; the mute button is the one that
+ * gets used mid-playback.
+ */
+.volume {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.volume-slider {
+  /* `accent-color` themes the native control, which keeps keyboard support and the
+     correct announcements for free — unlike a range reimplemented as a div, which
+     loses the states the native one has. */
+  accent-color: var(--accent);
+  width: 72px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  /* A wide slider's minimum sits above the row's own, which would stop the row from ever
+     shrinking. */
+  min-width: 0;
+}
+
+/*
+ * The mute icon's two states.
+ *
+ * Driven by the BUTTON's `aria-pressed` rather than by `[hidden]` on the <g>. Two
+ * reasons, and the first is a bug this fixed: `hidden` is an HTML attribute whose UA
+ * style is `display: none`, and SVG elements do not inherit the HTML UA stylesheet, so
+ * both glyphs drew on top of each other. The second is that `aria-pressed` is already
+ * the state the button announces, so keying the picture off it means the icon and the
+ * label cannot disagree.
+ */
+#mute[aria-pressed='true'] #volume-cross,
+#mute:not([aria-pressed='true']) #volume-waves {
+  display: inline;
+}
+
+#mute[aria-pressed='true'] #volume-waves,
+#mute:not([aria-pressed='true']) #volume-cross {
+  display: none;
+}
+
+.status-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* An error is the one thing in the bar that must be readable, so it takes the
+   danger colour. It does NOT pin the bar open: a bar that refuses to get out of
+   the way is its own annoyance, and the message stays in the DOM either way. */
+.status-text.error {
+  color: var(--danger);
+}
+
+/* --- Buttons -------------------------------------------------------------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  background: rgba(27, 30, 37, 0.92);
+  color: var(--fg);
+  font: 12px/1.4 system-ui, sans-serif;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
   user-select: none;
 }
 
 .button:hover {
-  filter: brightness(1.08);
+  border-color: var(--accent);
 }
 
-/* Focus lands on the hidden input, so the visible label needs to show it. */
-#pick-files:focus-visible + .button {
-  outline: 2px solid var(--fg);
+/*
+ * Icon buttons: a square target around an SVG.
+ *
+ * `inline-flex` with both centring rather than padding, so every icon is the same
+ * size regardless of how much of its 24x24 viewBox it uses — padding would make a
+ * narrow glyph look like a narrower button.
+ */
+.icon-button {
+  width: 32px;
+  height: 28px;
+  padding: 0;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  /* Icons take the button's colour, so hover, focus and the pressed state all work
+     without repeating the colour per-svg. Every path uses `currentColor`. */
+  color: inherit;
+  display: block;
+}
+
+.primary {
+  background: var(--accent);
+  color: #0b0d12;
+  font-weight: 600;
+}
+
+.primary .icon {
+  color: #0b0d12;
+}
+
+.button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: #24304a;
+}
+
+/* The focus outline must show even when the bar is faded — the rule the `focusin`
+   listener exists to honour. */
+.button:focus-visible,
+.seg-button:focus-visible,
+.speed select:focus-visible,
+.field select:focus-visible,
+.field input:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.chosen {
-  margin: 0;
+.divider {
+  width: 1px;
+  height: 18px;
+  background: #333844;
+}
+
+.speed select,
+.field select,
+.field input {
+  padding: 4px 6px;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  background: rgba(27, 30, 37, 0.92);
+  color: var(--fg);
+  font: 12px/1.4 system-ui, sans-serif;
+}
+
+.field input {
+  width: 54px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The segmented control for caption placement: one binary choice, so a switch says
+   the current value without opening anything. */
+.seg {
+  display: inline-flex;
+  border: 1px solid #333844;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.seg-button {
+  padding: 4px 10px;
+  border: 0;
+  border-right: 1px solid #333844;
+  background: rgba(27, 30, 37, 0.92);
   color: var(--muted);
+  font: 12px/1.4 system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.seg-button:last-child {
+  border-right: 0;
+}
+
+.seg-button[aria-pressed='true'] {
+  background: #24304a;
+  color: var(--fg);
+}
+
+.filename {
+  color: var(--muted);
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
-}
-
-.status {
-  margin: 0 0 0 auto;
-  color: var(--muted);
-}
-
-.status.error {
-  color: var(--danger);
+  max-width: 30ch;
 }
 
 /* Hidden from sight but not from assistive technology or the tab order.
