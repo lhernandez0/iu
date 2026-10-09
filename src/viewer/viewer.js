@@ -554,6 +554,10 @@ async function loadVideo(file) {
   segments = [];
   glossLines = [];
   renderCaptions(-1);
+  // A real open, so the offer is wanted. Set explicitly rather than left to the flag's
+  // default, because a previous switch may have consumed it and a previous switch that
+  // did NOT fire metadata would leave it set.
+  resourcingInternally = false;
   offerResume();
 
   // A file the browser cannot decode is the one failure it will not tell us about
@@ -1519,6 +1523,10 @@ async function selectAudioTrack(index) {
     if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
     videoObjectUrl = url;
     releaseStream = revoke;
+    // Our own re-source, not a new file: the metadata handler must not offer to resume
+    // something the viewer is already watching. Cleared by the handler itself, or by the
+    // next real open.
+    resourcingInternally = true;
     els.video.src = url;
     els.video.load();
 
@@ -1702,6 +1710,19 @@ function forgetPosition() {
   delete positions[videoIdFor(videoFile)];
   api.storage[SETTINGS_AREA].set({ [POSITION_KEY]: positions }).catch(() => {});
 }
+
+/**
+ * Whether the next `loadedmetadata` is from OUR OWN source swap rather than a new file.
+ *
+ * Switching audio track replaces `els.video.src` with the rebuilt stream, and that fires
+ * `loadedmetadata` again — so the handler offered to resume a film the viewer is already
+ * watching, at a position they are already at. The offer is for a file being OPENED; an
+ * internal re-source is not that, and the switch restores its own position anyway.
+ *
+ * A flag rather than a comparison of `currentSrc`, because both callers know which one
+ * they are: `loadVideo` is opening a file, the switch is not.
+ */
+let resourcingInternally = false;
 
 /**
  * How long the resume offer waits before it retires itself.
@@ -2240,6 +2261,11 @@ els.video.addEventListener('loadedmetadata', () => {
   measureBar();
   paintTime();
   paintDifficulty();
+  // Not for our own re-source. See `resourcingInternally`.
+  if (resourcingInternally) {
+    resourcingInternally = false;
+    return;
+  }
   offerResume();
 });
 
