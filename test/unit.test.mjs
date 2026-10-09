@@ -189,13 +189,13 @@ section('settings defaults are copied, not shared');
 section('every setting declares which surfaces show it');
 
 {
-  // `audience` is what lets the side panel and the video reader render from ONE
+  // `audience` is what lets the side panel and the video viewer render from ONE
   // registry instead of keeping a list each. A setting with a wrong audience is
   // invisible on a surface that needs it — which looks like a missing control in
   // the renderer, so the failure is a long way from the cause. Hence a guard on
   // the definitions themselves rather than only on a rendered screen.
   check('no definition has a missing or unknown audience', audienceProblems(), []);
-  check('the known surfaces are the two applications', SURFACES, ['panel', 'reader']);
+  check('the known surfaces are the two applications', SURFACES, ['panel', 'viewer']);
 
   // The two properties `byAudience` promises: a surface never receives a setting
   // it was not tagged for, and it does receive every one it was.
@@ -217,7 +217,7 @@ section('every setting declares which surfaces show it');
   }
 
   // Reading and marks apply BOTH places — the captions are drawn with the same
-  // renderer, so a reader that could not set the reading placement would be
+  // renderer, so a viewer that could not set the reading placement would be
   // showing an annotation it had no control over.
   //
   // Checked on the DEFINITION rather than through `byAudience`, because
@@ -227,28 +227,28 @@ section('every setting declares which surfaces show it');
   // asserting the flag, not the audience.
   for (const id of ['romaji', 'markStyle', 'toneStyle']) {
     const definition = SETTINGS.find((s) => s.id === id);
-    check(`"${id}" is tagged for the reader`, definition.audience.includes('reader'), true);
+    check(`"${id}" is tagged for the viewer`, definition.audience.includes('viewer'), true);
     check(`and for the panel`, definition.audience.includes('panel'), true);
   }
-  check('"romaji" is live on the reader already (not hidden)', byAudience('reader').some((s) => s.id === 'romaji'), true);
+  check('"romaji" is live on the viewer already (not hidden)', byAudience('viewer').some((s) => s.id === 'romaji'), true);
 
-  // And the transcript-only settings must NOT leak into the reader.
+  // And the transcript-only settings must NOT leak into the viewer.
   for (const id of ['view', 'layout', 'studyTranslated']) {
-    check(`"${id}" stays out of the reader`, byAudience('reader').some((s) => s.id === id), false);
+    check(`"${id}" stays out of the viewer`, byAudience('viewer').some((s) => s.id === id), false);
   }
 }
 
 section('the video settings');
 
 {
-  const reader = byAudience('reader').map((s) => s.id).sort();
+  const reader = byAudience('viewer').map((s) => s.id).sort();
   // The LIVE reader settings. `listId`, `threshold`, `studyLanguage` and
   // `glossLanguage` are SHARED with the panel rather than duplicated: a learner
   // studying HSK 2.0 with a Chinese track is studying HSK 2.0 with a Chinese track
   // whether the text is beside the video or over it, so a second copy of those
   // preferences would be a split nobody would think to check for.
   check(
-    'the reader renders exactly its own live settings',
+    'the viewer renders exactly its own live settings',
     reader,
     [
       'captionPlacement',
@@ -297,22 +297,22 @@ section('the video settings');
   check('and to the bottom of it', size.coerce(-5), 12);
   check('and rejects nonsense', size.coerce('big'), 20);
 
-  // The four SHARED preferences must be readable by the reader, not only by the
-  // panel — the reader draws the same transcript, so a `panel`-only audience would
+  // The four SHARED preferences must be readable by the viewer, not only by the
+  // panel — the viewer draws the same transcript, so a `panel`-only audience would
   // have left its captions grading against a list nobody chose.
   for (const id of ['listId', 'threshold', 'studyLanguage', 'glossLanguage']) {
     const setting = SETTINGS.find((s) => s.id === id);
-    check(`"${id}" reaches the reader`, setting.audience.includes('reader'), true);
+    check(`"${id}" reaches the viewer`, setting.audience.includes('viewer'), true);
     check(`and the panel still has it`, setting.audience.includes('panel'), true);
   }
 
-  // And there is no SECOND copy of those preferences under a reader-specific name.
+  // And there is no SECOND copy of those preferences under a viewer-specific name.
   // That was the first attempt and it is the split this replaced.
   for (const gone of ['readerListId', 'readerThreshold']) {
     check(`"${gone}" no longer exists`, SETTINGS.some((s) => s.id === gone), false);
   }
 
-  // The reader's caption settings are SEPARATE from the panel's text size. One
+  // The viewer's caption settings are SEPARATE from the panel's text size. One
   // control for both would mean changing the transcript size also changed the
   // subtitles on the video, which is not what either is for.
   check(

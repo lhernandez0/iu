@@ -1200,7 +1200,7 @@ section('a level is shown by its own list\'s name, not its stored number');
 
 {
   // The reported bug: 私 — the simplest word in the language, JLPT N5 — was shown
-  // as "JLPT 1", which a reader takes for N1, the HARDEST level. The stored level
+  // as "JLPT 1", which a viewer takes for N1, the HARDEST level. The stored level
   // is an ordering (1 = easiest); JLPT names its levels backwards from there, so
   // printing the number as a name inverts the meaning.
   const JAPANESE_VIDEO = {
@@ -1994,8 +1994,8 @@ section('the action menu is registered, because a missing item is invisible');
   // that it does.
   const { calls } = await boot(TRACK(GERMAN));
 
-  const readerItem = calls.menusCreated.find((item) => item.id === 'open-reader');
-  check('an item is created for the reader', Boolean(readerItem), true);
+  const readerItem = calls.menusCreated.find((item) => item.id === 'open-viewer');
+  check('an item is created for the viewer', Boolean(readerItem), true);
   check('it has a title a user can read', typeof readerItem?.title, 'string');
   // `action` and NOT `page`: the item belongs on the toolbar icon's menu, so it
   // does not clutter the right-click menu of every web page the user visits.
@@ -2013,10 +2013,10 @@ section('the action menu is registered, because a missing item is invisible');
   check('and the same call is repeated on install and update', /onInstalled[\s\S]{0,200}ensureActionMenu\(\)/.test(source), true);
 }
 
-section('a reader tab is resolvable even when its announcement never arrives');
+section('a viewer tab is resolvable even when its announcement never arrives');
 
 {
-  // THE BUG THIS PINS. The reader announces itself with `runtime.sendMessage`,
+  // THE BUG THIS PINS. The viewer announces itself with `runtime.sendMessage`,
   // and `sender.tab` is not guaranteed for an extension PAGE (as opposed to a
   // content script). When it was absent the tab never registered, `isReadable`
   // said no, and the panel reported "no supported video is open in the active tab"
@@ -2029,10 +2029,10 @@ section('a reader tab is resolvable even when its announcement never arrives');
   const READER_TAB = { id: 7, active: true, url: '' }; // no url, as Chrome reports ours
   const { received } = await boot({
     tabs: [READER_TAB],
-    // The reader is open in tab 7 — and NO READER_READY message is sent, which is
+    // The viewer is open in tab 7 — and NO VIEWER_READY message is sent, which is
     // the whole point.
     contexts: [
-      { contextType: 'TAB', tabId: 7, documentUrl: 'chrome-extension://test/src/reader/reader.html' },
+      { contextType: 'TAB', tabId: 7, documentUrl: 'chrome-extension://test/src/viewer/viewer.html' },
     ],
     describePayload: {
       ok: true,
@@ -2056,12 +2056,12 @@ section('a reader tab is resolvable even when its announcement never arrives');
     trackPayload: null,
   });
 
-  // The panel asked for state on connect; it must resolve the reader, not refuse.
+  // The panel asked for state on connect; it must resolve the viewer, not refuse.
   const state = received.find((m) => m.type === 'state')?.state;
-  check('the reader tab resolves without any announcement', Boolean(state), true);
+  check('the viewer tab resolves without any announcement', Boolean(state), true);
   // The specific regression: this used to say no video was open.
   check('and it is NOT reported as no-video', String(state?.error ?? '').includes('CONN005'), false);
-  // A reader tab has no url, so if resolution worked it was via getContexts.
+  // A viewer tab has no url, so if resolution worked it was via getContexts.
   check('it resolved despite having no tab url', READER_TAB.url, '');
   check('and its track list reached the panel', state?.trackList?.length, 1);
 }
@@ -2087,7 +2087,7 @@ section('a reader tab is resolvable even when its announcement never arrives');
   // tab and would silently pollute the set.
   const { received } = await boot({
     tabs: [{ id: 3, active: true, url: '' }],
-    contexts: [{ contextType: 'TAB', tabId: -1, documentUrl: 'chrome-extension://test/src/reader/reader.html' }],
+    contexts: [{ contextType: 'TAB', tabId: -1, documentUrl: 'chrome-extension://test/src/viewer/viewer.html' }],
   });
 
   const state = received.find((m) => m.type === 'state')?.state;
@@ -2120,7 +2120,7 @@ section('a change made elsewhere is not lost by a live worker');
 
 {
   // **This is the whole point of the change.** The worker used to read settings
-  // once at boot and keep them, so a write made by another surface — the reader,
+  // once at boot and keep them, so a write made by another surface — the viewer,
   // a settings page, another window — never reached it. It kept serving the value
   // it started with, and the panel showed a setting the user had already changed.
   //
@@ -2129,7 +2129,7 @@ section('a change made elsewhere is not lost by a live worker');
   const stub = await boot();
   const before = stub.received.filter((m) => m.type === 'state').length;
 
-  // Another context writes to the bucket directly, as the reader would.
+  // Another context writes to the bucket directly, as the viewer would.
   await stub.chromeStorage.local.set({
     settings: { ...stub.storage.settings, romaji: 'below' },
   });

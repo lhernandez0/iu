@@ -27,7 +27,7 @@ import {
   imageCodecName,
   isTextCodec,
   normaliseLanguage,
-} from '../src/reader/matroska.js';
+} from '../src/viewer/matroska.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURES = join(ROOT, 'test', 'mkv');

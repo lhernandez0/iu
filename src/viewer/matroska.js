@@ -250,7 +250,7 @@ export function readVint(bytes, offset = 0, keepMarker = false) {
 /**
  * A sliding window over a byte source.
  *
- * Elements are walked by SIZE, so the reader jumps over anything it does not need
+ * Elements are walked by SIZE, so the viewer jumps over anything it does not need
  * — which is the whole reason a multi-gigabyte film is workable. The window is
  * re-read only when a requested range is not already inside it, and the walk only
  * ever moves forward, so one buffer is enough.
@@ -617,7 +617,7 @@ async function readTimecodeScale(window, segmentStart, segmentEnd) {
  *
  * @param {object} options
  * @param {(offset: number, length: number) => Promise<Uint8Array>} options.read
- *   Supplies bytes on demand. The reader page passes a `File.slice()` wrapper, so
+ *   Supplies bytes on demand. The viewer page passes a `File.slice()` wrapper, so
  *   a multi-gigabyte film is never held in memory.
  * @param {number} options.size Total file size in bytes.
  * @param {number[]} [options.trackNumbers] Only extract these tracks. Omitted
@@ -782,7 +782,7 @@ export async function readMatroska({ read, size, trackNumbers }) {
     lastGoodEnd = element.offset + cluster.length;
   }
 
-  // Reported so a caller can tell a wrong-scale file from a right one; the reader
+  // Reported so a caller can tell a wrong-scale file from a right one; the viewer
   // page does not use it, but a conformance test does.
   void lastGoodEnd;
 

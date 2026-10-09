@@ -31,7 +31,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readMatroska, readMatroskaTracks } from '../../src/reader/matroska.js';
+import { readMatroska, readMatroskaTracks } from '../../src/viewer/matroska.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 

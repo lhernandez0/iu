@@ -16,7 +16,7 @@ import { launchExtension } from './harness.mjs';
 const { context, extensionId, close } = await launchExtension();
 const page = await context.newPage();
 
-await page.goto(`chrome-extension://${extensionId}/src/reader/reader.html`);
+await page.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
 await page.waitForTimeout(1200);
 await page.setInputFiles('#pick-files', 'test/mkv/three-tracks.mkv');
 await page.waitForTimeout(2500);

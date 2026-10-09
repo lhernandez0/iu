@@ -1,14 +1,14 @@
 /**
  * Shared mark, word and reading styling.
  *
- * **Extracted so the panel's transcript and the reader's captions cannot disagree
+ * **Extracted so the panel's transcript and the viewer's captions cannot disagree
  * about what a mark looks like.** Both draw the same `markLine` output — a `.row`
  * of `.mark` / `.word` spans with an optional `.ruby` + `.rt` annotation — and a
  * second copy of these rules would drift the first time either changed, which is
  * the kind of divergence that shows up as "the captions look different from the
  * panel" and is nobody's intended behaviour.
  *
- * Loaded by `sidepanel.html` and `reader.html`. Nothing here is reader- or
+ * Loaded by `sidepanel.html` and `viewer.html`. Nothing here is viewer- or
  * panel-specific: no layout, no bars, no sizes for chrome. Only the marks.
  *
  * `--mark` is the level colour, set per element by `levelColour()` — it is not
@@ -86,9 +86,9 @@
  * position and the line reads as one unit.
  *
  * **The reading scales with whatever it annotates.** In the panel that is
- * `--text-scale`, the text-size control's ratio. In the reader the base is the
+ * `--text-scale`, the text-size control's ratio. In the viewer the base is the
  * caption size instead, so `--reading-base` is set there and this falls back to the
- * panel's scale. A FIXED size was the first version and it was wrong in the reader:
+ * panel's scale. A FIXED size was the first version and it was wrong in the viewer:
  * the readings stayed at 11px while the captions grew to 34, so a large caption had
  * tiny pinyin above it.
  *
@@ -141,7 +141,7 @@
 /* --- The definition popover ---------------------------------------------- */
 
 /*
- * Shared with the reader's captions, which offer the same definition on hover —
+ * Shared with the viewer's captions, which offer the same definition on hover —
  * built from their own dictionary rather than a worker round trip, but rendered by
  * the same code and so styled by the same rules.
  *

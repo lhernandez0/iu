@@ -423,7 +423,7 @@
     } catch (error) {
       // A REFUSAL passes through as itself. Wrapping it in TRACK003 would nest
       // one code inside another — "TRACK003 Could not load captions. (TRACK005 The
-      // request was refused)" — and bury the only part that tells the reader what
+      // request was refused)" — and bury the only part that tells the viewer what
       // to do about it. The worker applies the same rule for its own codes.
       const message = String(error?.message ?? error);
       return {
@@ -497,7 +497,7 @@
     } catch (error) {
       // A REFUSAL passes through as itself. Wrapping it in TRACK003 would nest
       // one code inside another — "TRACK003 Could not load captions. (TRACK005 The
-      // request was refused)" — and bury the only part that tells the reader what
+      // request was refused)" — and bury the only part that tells the viewer what
       // to do about it. The worker applies the same rule for its own codes.
       const message = String(error?.message ?? error);
       return {

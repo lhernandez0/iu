@@ -35,11 +35,11 @@
  *                                  property of the setting rather than a list
  *                                  maintained in the panel — a second list is a
  *                                  thing that drifts.
- * @property {Array<'panel'|'reader'>} audience  Which surfaces SHOW this setting.
+ * @property {Array<'panel'|'viewer'>} audience  Which surfaces SHOW this setting.
  *                                  Distinct from `group`: group says where it sits
  *                                  among its neighbours, audience says whether the
  *                                  surface has any business rendering it at all.
- *                                  The panel and the reader render the same registry
+ *                                  The panel and the viewer render the same registry
  *                                  filtered by this, so there is one list, not two.
  * @property {(value: any, context?: object) => any} [coerce] Normalise a stored value.
  * @property {boolean} [dynamic]    Options are supplied at render time, not here.
@@ -221,10 +221,10 @@ export const SETTINGS = [
     //
     // Defaults to `above` — ruby, the reading over its own word — because that is
     // the layout that keeps every glyph in place. `off` is still available and is
-    // the first option, so a reader who does not want it loses nothing.
+    // the first option, so a viewer who does not want it loses nothing.
     id: 'romaji',
     quick: true,
-    audience: ['panel', 'reader'],
+    audience: ['panel', 'viewer'],
     label: 'Reading',
     group: 'reading',
     type: 'select',
@@ -239,7 +239,7 @@ export const SETTINGS = [
     // because they are independent: tone numbers are a Chinese convention with no
     // Japanese equivalent, and both placements can show either form.
     id: 'toneStyle',
-    audience: ['panel', 'reader'],
+    audience: ['panel', 'viewer'],
     label: 'Pinyin tones',
     group: 'reading',
     type: 'select',
@@ -262,7 +262,7 @@ export const SETTINGS = [
     //
     // Kept settable so the decision can be made with the machinery visible.
     id: 'scriptConversion',
-    audience: ['panel', 'reader'],
+    audience: ['panel', 'viewer'],
     label: 'Chinese script',
     group: 'reading',
     type: 'select',
@@ -276,9 +276,9 @@ export const SETTINGS = [
     quick: true,
     // BOTH surfaces. The word list is one PREFERENCE, not one per surface: a learner
     // studying HSK 2.0 is studying HSK 2.0 whether they are reading the transcript or
-    // watching the video, and having the reader quietly grade against a different list
+    // watching the video, and having the viewer quietly grade against a different list
     // is the kind of split nobody would think to check for.
-    audience: ['panel', 'reader'],
+    audience: ['panel', 'viewer'],
     label: 'Word list',
     group: 'learning',
     type: 'select',
@@ -290,8 +290,8 @@ export const SETTINGS = [
     id: 'threshold',
     quick: true,
     // Shared for the same reason as `listId`. The panel remembers it per list; the
-    // reader reads whatever is remembered, so the two mark from the same level.
-    audience: ['panel', 'reader'],
+    // viewer reads whatever is remembered, so the two mark from the same level.
+    audience: ['panel', 'viewer'],
     label: 'Highlight from',
     group: 'learning',
     type: 'select',
@@ -354,7 +354,7 @@ export const SETTINGS = [
     // Still a full setting: persisted, coerced and broadcast on state like any
     // other, so exposing it later is a control and nothing else.
     id: 'markStyle',
-    audience: ['panel', 'reader'],
+    audience: ['panel', 'viewer'],
     label: 'Marks',
     group: 'reading',
     type: 'select',
@@ -365,9 +365,9 @@ export const SETTINGS = [
   {
     id: 'studyLanguage',
     quick: true,
-    // Shared: the track being learned is one choice. The reader draws it as captions,
+    // Shared: the track being learned is one choice. The viewer draws it as captions,
     // the panel as the first transcript line, and they must be the same track.
-    audience: ['panel', 'reader'],
+    audience: ['panel', 'viewer'],
     label: 'Subtitle',
     group: 'language',
     type: 'select',
@@ -385,10 +385,10 @@ export const SETTINGS = [
     // was indistinguishable from having chosen it twice by accident.
     id: 'glossLanguage',
     quick: true,
-    // Shared, and this is what gives the reader's second caption line something to
+    // Shared, and this is what gives the viewer's second caption line something to
     // show. A local file with two tracks (Chinese traditional + English, say) can
     // draw both, exactly as the panel does.
-    audience: ['panel', 'reader'],
+    audience: ['panel', 'viewer'],
     label: 'Second subtitle',
     group: 'language',
     type: 'select',
@@ -452,9 +452,9 @@ export const SETTINGS = [
 
   // --- Video ---------------------------------------------------------------
   //
-  // The reader's settings. `audience: ['reader']` on all four is what keeps them
-  // out of the panel, and the transcript's settings out of the reader. They live
-  // in this registry rather than inside the reader because the reader is a third
+  // The viewer's settings. `audience: ['viewer']` on all four is what keeps them
+  // out of the panel, and the transcript's settings out of the viewer. They live
+  // in this registry rather than inside the viewer because the viewer is a third
   // CONSUMER of settings, not a third place settings are defined.
 
   {
@@ -465,7 +465,7 @@ export const SETTINGS = [
     label: 'Captions',
     group: 'video',
     type: 'toggle',
-    audience: ['reader'],
+    audience: ['viewer'],
     default: true,
     coerce: (value) => Boolean(value),
   },
@@ -475,7 +475,7 @@ export const SETTINGS = [
     group: 'video',
     type: 'select',
     options: CAPTION_PLACEMENT_OPTIONS,
-    audience: ['reader'],
+    audience: ['viewer'],
     default: 'overlay',
     coerce: (value) =>
       CAPTION_PLACEMENT_OPTIONS.some((o) => o.value === value) ? value : 'overlay',
@@ -496,20 +496,20 @@ export const SETTINGS = [
     label: 'Remember position',
     group: 'video',
     type: 'toggle',
-    audience: ['reader'],
+    audience: ['viewer'],
     default: true,
     coerce: (value) => Boolean(value),
   },
   {
     // Strings, not numbers: a `<select>` value is a string, and coercing between
     // the two in two places is how `0.75` becomes `"0.75"` in one and not the
-    // other. The reader parses it once, where it sets `playbackRate`.
+    // other. The viewer parses it once, where it sets `playbackRate`.
     id: 'defaultSpeed',
     label: 'Speed',
     group: 'video',
     type: 'select',
     options: SPEED_OPTIONS,
-    audience: ['reader'],
+    audience: ['viewer'],
     default: '1',
     coerce: (value) => (SPEED_OPTIONS.some((o) => o.value === String(value)) ? String(value) : '1'),
   },  {
@@ -523,7 +523,7 @@ export const SETTINGS = [
     label: 'Caption size',
     group: 'video',
     type: 'number',
-    audience: ['reader'],
+    audience: ['viewer'],
     default: CAPTION_SIZE_DEFAULT,
     min: CAPTION_SIZE_MIN,
     max: CAPTION_SIZE_MAX,
@@ -542,13 +542,13 @@ export const SETTINGS = [
     // reach it. A toggle because a learner watching rather than studying may want a
     // clean bar, and the band is decoration to them.
     //
-    // `reader` only, like the other video settings: it annotates the scrubber, and
+    // `viewer` only, like the other video settings: it annotates the scrubber, and
     // the panel has no scrubber.
     id: 'difficulty',
     label: 'Difficulty band',
     group: 'video',
     type: 'toggle',
-    audience: ['reader'],
+    audience: ['viewer'],
     default: true,
     coerce: (value) => Boolean(value),
   },
@@ -715,21 +715,21 @@ export function byGroup(group) {
 }
 
 /** The surfaces that render settings. Named so a typo is a test failure. */
-export const SURFACES = ['panel', 'reader'];
+export const SURFACES = ['panel', 'viewer'];
 
 /**
  * The settings a given surface renders.
  *
- * The point of `audience`: the side panel and the video reader are different
+ * The point of `audience`: the side panel and the video viewer are different
  * applications with overlapping settings, and both render from THIS registry. A
- * surface calling `byAudience('reader')` gets the settings the reader has any
+ * surface calling `byAudience('viewer')` gets the settings the viewer has any
  * business showing, rather than keeping its own parallel list that drifts from
  * this one.
  *
  * `hidden` settings are excluded — they are real and persisted but have no control,
  * which is the flag a surface is meant to filter on.
  *
- * @param {'panel'|'reader'} surface
+ * @param {'panel'|'viewer'} surface
  * @returns {SettingDefinition[]}
  */
 export function byAudience(surface) {

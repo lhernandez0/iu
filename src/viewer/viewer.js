@@ -1,5 +1,5 @@
 /**
- * The video reader — a SOURCE, one we host.
+ * The video viewer — a SOURCE, one we host.
  *
  * It speaks the same five messages as the YouTube content script, with the same
  * shapes, and nothing else:
@@ -10,8 +10,8 @@
  *   SET_TRACK     here are segments the worker already holds, so report position
  *   CONTENT_SEEK  move playback to this many seconds
  *
- * and it reports CONTENT_POSITION as playback advances. READER_READY and
- * READER_CHANGED announce it on load and when a file is chosen.
+ * and it reports CONTENT_POSITION as playback advances. VIEWER_READY and
+ * VIEWER_CHANGED announce it on load and when a file is chosen.
  *
  * The service worker does not know this page exists. It finds it because the page
  * announces itself, because `tab.url` is empty for a `chrome-extension://` document
@@ -92,13 +92,13 @@ const els = {
 // the bucket and both reach every listener, including the worker's.
 //
 // The bucket and key come from `settings.js` so there is one definition of where
-// settings live. The reader does NOT import the registry's `defaults()` — it needs
+// settings live. The viewer does NOT import the registry's `defaults()` — it needs
 // six values and renders none of them as controls, and importing the whole thing
 // would pull in every option list for no use. The KEYS are the contract.
 //
-// **Every write is a MERGE, never a whole-object replace.** The reader knows about
+// **Every write is a MERGE, never a whole-object replace.** The viewer knows about
 // six settings; the panel has fourteen. Writing `settings` wholesale would delete
-// every one the reader had never heard of — the word list, the threshold, the text
+// every one the viewer had never heard of — the word list, the threshold, the text
 // size — the moment anyone touched a caption control. So the bucket is read, the one
 // key is set, and the rest is carried across untouched.
 
@@ -110,12 +110,12 @@ const DEFAULTS = {
   markStyle: 'underline',
   defaultSpeed: '1',
   captionSize: 20,
-  // Whether the difficulty band is drawn under the scrubber. Reader-only, and in the
+  // Whether the difficulty band is drawn under the scrubber. Viewer-only, and in the
   // registry because it is a preference that persists — unlike volume, which the
   // element keeps on its own and which the OS volume should really own.
   difficulty: true,
-  // SHARED with the panel, not reader-owned. The word list, the threshold and the two
-  // subtitle tracks are one preference each: the reader draws the same transcript the
+  // SHARED with the panel, not viewer-owned. The word list, the threshold and the two
+  // subtitle tracks are one preference each: the viewer draws the same transcript the
   // panel does, over the video instead of beside it, so a learner picking HSK 2.0 and
   // a Chinese track expects both surfaces to honour it.
   listId: null,
@@ -163,7 +163,7 @@ void api.storage[SETTINGS_AREA]
   .then((stored) => applyStoredSettings(stored?.[SETTINGS_KEY]))
   .catch(() => {});
 
-// **This is what makes the reader and the panel agree.** The panel writes a
+// **This is what makes the viewer and the panel agree.** The panel writes a
 // setting, the bucket changes, and this listener fires — because the storage API's
 // change event is cross-context. Without it a caption placement changed in the
 // panel would not reach the video, and the two would disagree until a reload.
@@ -208,8 +208,8 @@ async function setSetting(id, value) {
 //
 // The captions are marked with the SAME rules the panel's transcript uses
 // (`src/learn/marking.js`) over the same dictionary, so a word looks the same in
-// both places. This is the reader's own copy of the dictionary load — it does not
-// ask the worker, because the reader is a source, not a client of one, and a round
+// both places. This is the viewer's own copy of the dictionary load — it does not
+// ask the worker, because the viewer is a source, not a client of one, and a round
 // trip per caption would be a message per cue.
 
 /** @type {object|null} */
@@ -308,7 +308,7 @@ function markSegments() {
  * The level to mark from, for a list.
  *
  * The first level, matching the panel's own default when the learner has not
- * chosen: nothing is guessed about their ability. The reader has no threshold
+ * chosen: nothing is guessed about their ability. The viewer has no threshold
  * control — that is a panel-side setting — so it marks from the bottom, which
  * underlines the most and hides the least.
  *
@@ -325,7 +325,7 @@ function thresholdFor(list) {
 /**
  * The language of the track the captions are drawn from.
  *
- * A reader has one subtitle track on screen, unlike the panel which has two, so the
+ * A viewer has one subtitle track on screen, unlike the panel which has two, so the
  * list to grade against follows from this and nothing else. `und` means the file did
  * not tag the track, which is common and not a reason to refuse to mark.
  */
@@ -377,7 +377,7 @@ let segments = [];
  * The GLOSS line's text, aligned cue-for-cue to `segments`.
  *
  * A local file can carry more than one subtitle track — a Chinese traditional and an
- * English, say — so the reader draws both lines exactly as the panel does. Alignment
+ * English, say — so the viewer draws both lines exactly as the panel does. Alignment
  * is by START TIME with a drift tolerance, through the shared `alignSecondary`, so a
  * badly out-of-sync second track is left blank rather than paired with the wrong
  * line. That is the same guarantee the panel's dual subtitles have, and it comes from
@@ -442,7 +442,7 @@ function videoIdFor(file) {
  *
  * @param {File} file
  */
-function readerFor(file) {
+function viewerFor(file) {
   return {
     size: file.size,
     read: async (offset, length) => {
@@ -496,20 +496,20 @@ async function acceptFiles(files) {
   if (subs.length) await loadSubtitles(subs);
 
   if (!video && !subs.length) {
-    setStatus(errorText('READER002', 'no video or subtitle file in that selection'), true);
+    setStatus(errorText('VIEWER002', 'no video or subtitle file in that selection'), true);
     return;
   }
   render();
 
-  // Tell the worker there is something to read now. This is what makes the reader
-  // work when the side panel was ALREADY open: `READER_READY` fired once, on an
+  // Tell the worker there is something to read now. This is what makes the viewer
+  // work when the side panel was ALREADY open: `VIEWER_READY` fired once, on an
   // empty page, so without this the worker never learned a file had been chosen and
   // the panel stayed blank while the film played.
   notifyChanged();
 }
 
 /**
- * "Look again" — the reader's content changed.
+ * "Look again" — the viewer's content changed.
  *
  * Sent fire-and-forget: the worker resolves the active tab, so there is nothing to
  * retry against and nothing to report if it is missed. The next cue change or the
@@ -517,7 +517,7 @@ async function acceptFiles(files) {
  */
 function notifyChanged() {
   void api.runtime
-    .sendMessage({ type: MSG.READER_CHANGED, target: TARGET.BACKGROUND })
+    .sendMessage({ type: MSG.VIEWER_CHANGED, target: TARGET.BACKGROUND })
     .catch(() => {});
 }
 
@@ -566,7 +566,7 @@ async function loadVideo(file) {
     'error',
     () => {
       const code = els.video.error?.code;
-      setStatus(errorText('READER003', code ? `media error ${code}` : undefined), true);
+      setStatus(errorText('VIEWER003', code ? `media error ${code}` : undefined), true);
     },
     { once: true },
   );
@@ -595,7 +595,7 @@ async function loadVideo(file) {
   //
   // The worker asks for a track when the side panel needs the transcript, and on a
   // cache hit it hands the cues back with `SET_TRACK` rather than fetching — so the
-  // usual flow does give us cues. But the reader must also work with NO panel at
+  // usual flow does give us cues. But the viewer must also work with NO panel at
   // all, and then nothing ever asks, and the captions stayed blank while the film
   // played. So the default track is loaded here, and `SET_TRACK` later replaces it
   // with whatever the worker chose — which is the same list in the ordinary case.
@@ -605,7 +605,7 @@ async function loadVideo(file) {
 }
 
 /**
- * Load the track the reader would pick, so the captions work with no panel open.
+ * Load the track the viewer would pick, so the captions work with no panel open.
  *
  * The STUDY track first, then the gloss — the preference, or the next readable track
  * that is not the study one. Two lines when the file has two tracks, one when it has
@@ -616,7 +616,7 @@ async function loadVideo(file) {
  * why in its own status line.
  */
 async function loadDefaultTrack() {
-  // The learner's own choices win; otherwise the reader picks. This is the same
+  // The learner's own choices win; otherwise the viewer picks. This is the same
   // preference the panel reads, so a track chosen in the panel's dropdown is the one
   // the captions draw.
   const study = trackFor(settings.studyLanguage) ?? pickDefaultTrack();
@@ -643,7 +643,7 @@ async function loadDefaultTrack() {
 /**
  * Load the second subtitle track and align it to the first.
  *
- * **The reader can show two lines because a local file can carry two tracks** —
+ * **The viewer can show two lines because a local file can carry two tracks** —
  * Chinese traditional and English in the same MKV, for instance. That is the same
  * arrangement the panel already has, drawn over the video instead of beside it, so
  * the alignment comes from the shared `alignSecondary` rather than a second
@@ -699,7 +699,7 @@ async function loadSubtitles(files) {
   const usable = tracks.filter((track) => track.segments?.length);
   if (!usable.length) {
     const first = tracks[0];
-    setStatus(errorText('READER002', first?.error ?? 'no subtitle cues'), true);
+    setStatus(errorText('VIEWER002', first?.error ?? 'no subtitle cues'), true);
   } else if (usable.length === 1) {
     setStatus(`${usable[0].segments.length} cues · ${usable[0].format} · ${usable[0].encoding}`);
   } else {
@@ -718,7 +718,7 @@ async function loadSubtitles(files) {
  * @param {File} file
  */
 async function loadEmbeddedTracks(file) {
-  const found = await readMatroskaTracks(readerFor(file));
+  const found = await readMatroskaTracks(viewerFor(file));
   // Anything we already have from a sidecar wins, because the user chose it
   // explicitly and a file's own track is not more authoritative than that.
   const fromFiles = tracks.filter((track) => track.source === 'file');
@@ -747,7 +747,7 @@ async function loadEmbeddedTracks(file) {
         track.kind === 'text'
           ? null
           : track.kind === 'image'
-            ? errorText('READER004', imageCodecName(track.codec) ?? track.codec)
+            ? errorText('VIEWER004', imageCodecName(track.codec) ?? track.codec)
             : `unsupported subtitle format (${track.codec})`,
       format: track.codec,
       encoding: 'utf-8',
@@ -757,7 +757,7 @@ async function loadEmbeddedTracks(file) {
   tracks = [...fromFiles, ...embedded];
 
   if (!tracks.length) {
-    setStatus(errorText('READER005'), true);
+    setStatus(errorText('VIEWER005'), true);
     return;
   }
 
@@ -783,7 +783,7 @@ async function ensureSegments(track) {
   if (track.kind !== 'text') return [];
 
   const { cues, truncated } = await readMatroska({
-    ...readerFor(videoFile),
+    ...viewerFor(videoFile),
     trackNumbers: [track.trackNumber],
   });
 
@@ -918,7 +918,7 @@ function renderCaptions(index) {
 /**
  * The definition for a hovered caption word, from the dictionary in hand.
  *
- * Built here rather than asked of the worker: the reader holds the whole dictionary
+ * Built here rather than asked of the worker: the viewer holds the whole dictionary
  * already, and a message per hover would be a round trip for data this page can read
  * directly. The SHAPE is the one `showEntry` expects, so the popover code does not
  * know which surface it is drawing for — the panel supplies the same shape from a
@@ -934,8 +934,8 @@ function definitionFor(word) {
   showEntry({
     word,
     entry,
-    // One badge, for the single list a reader grades against. The panel shows every
-    // list's opinion because the learner is choosing between them; the reader has
+    // One badge, for the single list a viewer grades against. The panel shows every
+    // list's opinion because the learner is choosing between them; the viewer has
     // already chosen.
     levels:
       level === null || !list
@@ -1029,7 +1029,7 @@ function renderTrackPickers() {
     } else {
       listSelect.disabled = false;
       // "Match the track" is a real option, not the absence of one: a learner who
-      // has not chosen should see that the reader is choosing for them, rather than
+      // has not chosen should see that the viewer is choosing for them, rather than
       // a picker that looks unset.
       const auto = new Option('Match the track', '');
       auto.selected = !settings.listId;
@@ -1068,12 +1068,12 @@ function renderTrackPickers() {
 }
 
 /**
- * The list the reader grades against.
+ * The list the viewer grades against.
  *
  * An explicit choice wins; otherwise the list is matched to the track's language, and
- * the BROADEST one for it — a reader with no other information should mark as much as
+ * the BROADEST one for it — a viewer with no other information should mark as much as
  * it honestly can. Resolved through the shared `listForLanguage` so the panel and the
- * reader cannot disagree about which list covers a language.
+ * viewer cannot disagree about which list covers a language.
  */
 function resolvedList() {
   const lists = listIndex?.lists ?? [];
@@ -1193,7 +1193,7 @@ els.bar.addEventListener('focusout', (event) => {
 // visible on the timeline before you reach it.
 //
 // Moved here from the preview, where it was designed. The BAND is the one thing that
-// needed reworking: the preview read a synthetic `level` off each cue, while the reader
+// needed reworking: the preview read a synthetic `level` off each cue, while the viewer
 // marks real tokens — so the level comes off `cue.marked`, which `markSegments` fills
 // with the same `markLine` the panel uses. Nothing new is computed; the same marks that
 // underline the words decide the colour of the band.
@@ -1418,19 +1418,19 @@ function renderAudio() {
     els.audioSelect.append(option);
   });
 
-  // The note says only what a viewer could NOT work out by looking. Two cases qualify:
-  // a codec this browser cannot play, and a rebuild still running. The old third case
-  // — "switching rebuilds a copy of the file" — described the implementation rather
-  // than the film, and showed it on every two-track file for as long as the film
-  // played. The busy state is already visible in the disabled select, so the only
-  // thing left to say out loud is the thing that cannot be fixed by waiting.
+  // The note says only what a viewer could NOT work out by looking, which is now ONE
+  // case: a codec this browser cannot play. The other two were both noise —
+  // "switching rebuilds a copy of the file" described the implementation rather than
+  // the film, and "Preparing…" announced a wait that is already visible in the disabled
+  // select and is usually milliseconds long. Measured: 39 ms to a playable first frame,
+  // so the message was a flicker, not information.
   const chosen = audioTracks[audioChoice];
   const unplayable = chosen && !chosen.playable;
   els.audioNote.textContent = unplayable
     ? `This file\u2019s audio (${chosen.codec.toUpperCase()}) is not supported, so it will play silently.`
-    : audioBusy
-      ? 'Preparing\u2026'
-      : '';
+    : '';
+  // The disabled state is the feedback. A control that greys itself for 39 ms reads as
+  // responsive; one that also flashes a sentence reads as noisy.
   els.audioSelect.disabled = audioBusy;
 }
 
@@ -1690,6 +1690,38 @@ function remember() {
   api.storage[SETTINGS_AREA].set({ [POSITION_KEY]: positions }).catch(() => {});
 }
 
+/**
+ * Forget the stored position for the current file.
+ *
+ * Called by "Start over", which has to mean it: leaving the position stored means the
+ * offer returns on the next load asking whether you want to resume to the place you
+ * just declined.
+ */
+function forgetPosition() {
+  if (!videoFile) return;
+  delete positions[videoIdFor(videoFile)];
+  api.storage[SETTINGS_AREA].set({ [POSITION_KEY]: positions }).catch(() => {});
+}
+
+/**
+ * How long the resume offer waits before it retires itself.
+ *
+ * A banner that sits on the picture until it is dismissed is a modal nobody asked for,
+ * and this one covers the video. Ten seconds is long enough to read a timestamp and
+ * decide, and short enough not to be in the way — the same reasoning as any toast.
+ */
+const RESUME_TIMEOUT_MS = 10000;
+
+/** The pending auto-dismiss, so a manual dismissal cancels it. */
+let resumeTimer = null;
+
+/** Hide the offer and stop its timer. */
+function dismissResume() {
+  clearTimeout(resumeTimer);
+  resumeTimer = null;
+  els.resume.hidden = true;
+}
+
 /** Offer to resume, if a position was stored for this file. */
 function offerResume() {
   if (!videoFile) return;
@@ -1705,6 +1737,11 @@ function offerResume() {
   els.resumeText.textContent = `Resume at ${timecode(saved)}?`;
   els.resume.hidden = false;
   els.resume.dataset.seconds = String(saved);
+
+  // And it goes away on its own. Nothing else would ever dismiss it, and an offer that
+  // outlives the moment it was relevant is a bar across the picture.
+  clearTimeout(resumeTimer);
+  resumeTimer = setTimeout(dismissResume, RESUME_TIMEOUT_MS);
 }
 
 /** Human-readable, `1:12:40` style. @param {number} seconds */
@@ -1721,6 +1758,7 @@ function timecode(seconds) {
 els.resume.addEventListener('click', (event) => {
   const button = event.target.closest('button');
   if (!button) return;
+
   if (button.id === 'resume-go') {
     els.video.currentTime = Number(els.resume.dataset.seconds);
     // Seeking is not resuming, but calling `play()` straight after a seek does not
@@ -1730,8 +1768,18 @@ els.resume.addEventListener('click', (event) => {
     // element reported `paused: true` after the click while a plain `play()` outside the
     // handler succeeded, so the policy was never the problem. Wait for the seek to land.
     els.video.addEventListener('seeked', () => void els.video.play().catch(() => {}), { once: true });
+  } else {
+    // "Start over" did NOTHING but hide the banner. It fell through both branches, so the
+    // playhead stayed where it was and the offer was simply gone — the button's whole
+    // promise unkept, and unrecoverable, because `offerResume` only fires on metadata.
+    els.video.currentTime = 0;
+    // And the stored position has to go with it, or the offer returns on the next load
+    // and asks whether you want to resume to where you already declined to be.
+    forgetPosition();
+    void els.video.play().catch(() => {});
   }
-  els.resume.hidden = true;
+
+  dismissResume();
 });
 
 // --- Messages ---------------------------------------------------------------
@@ -1762,7 +1810,7 @@ function trackFor(languageCode) {
  *
  * **This is the fix for "no subtitles appear at all".** `settings.studyLanguage`
  * defaults to `null`, so the FIRST request for a video is always
- * `PROVIDE { languageCode: null }` — and a reader that answered "no such track"
+ * `PROVIDE { languageCode: null }` — and a viewer that answered "no such track"
  * produced no transcript for any file, ever, no matter how many tracks were found.
  *
  * The preference order is deliberate:
@@ -1826,14 +1874,14 @@ function fetchTrack(track, languageCode, fellBack = false) {
   const code = track?.languageCode ?? languageCode;
 
   if (!track) {
-    return { languageCode: code, translateTo: null, segments: [], error: errorText('READER005') };
+    return { languageCode: code, translateTo: null, segments: [], error: errorText('VIEWER005') };
   }
   if (!track.segments) {
     return {
       languageCode: code,
       translateTo: null,
       segments: [],
-      error: errorText('READER002', track.error ?? 'that track has not been read'),
+      error: errorText('VIEWER002', track.error ?? 'that track has not been read'),
     };
   }
   if (!track.segments.length) {
@@ -1841,7 +1889,7 @@ function fetchTrack(track, languageCode, fellBack = false) {
       languageCode: code,
       translateTo: null,
       segments: [],
-      error: track.error ?? errorText('READER002', 'no cues in that file'),
+      error: track.error ?? errorText('VIEWER002', 'no cues in that file'),
     };
   }
   void fellBack;
@@ -1875,7 +1923,7 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       if (needsReading) {
         // Reading a film's cues takes real time — it walks the media — so the reply
-        // is deferred. This is the one genuinely slow request in the reader, and why
+        // is deferred. This is the one genuinely slow request in the viewer, and why
         // the worker gives these two messages the long timeout.
         ensureSegments(track)
           .then(() => send(fetchTrack(track, message.languageCode ?? null, fellBack)))
@@ -1905,7 +1953,7 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       lastIndex = -2;
       lastRendered = -2;
       // The worker chose this track, so the list and dictionary follow it — the same
-      // path the reader's own default-track load takes.
+      // path the viewer's own default-track load takes.
       void prepareMarks(activeTrackLanguage).then(() => {
         for (const cue of segments) delete cue.marked;
         markSegments();
@@ -2167,10 +2215,10 @@ window.addEventListener('pagehide', () => {
 // worker may be starting up, and on an extension reload this page can outlive the
 // worker that would receive it. A single failed announcement leaves the panel
 // reporting "no supported video" while this page plays perfectly, so one retry is
-// worth it — and the worker looks for open reader tabs itself, so even a lost
+// worth it — and the worker looks for open viewer tabs itself, so even a lost
 // announcement is recoverable.
 function announce(attempt = 0) {
-  api.runtime.sendMessage({ type: MSG.READER_READY, target: TARGET.BACKGROUND }).catch(() => {
+  api.runtime.sendMessage({ type: MSG.VIEWER_READY, target: TARGET.BACKGROUND }).catch(() => {
     if (attempt === 0) setTimeout(() => announce(1), 500);
     else setStatus('Reopen this page from the toolbar menu.', true);
   });

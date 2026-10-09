@@ -1,5 +1,5 @@
 /*
- * Styles for the video reader.
+ * Styles for the video viewer.
  *
  * Dark, and matching the side panel so the two read as one product. The video is
  * the point of the page: it takes every pixel the controls do not need.
@@ -18,7 +18,7 @@
  *
  * `--caption-size` is set on the root and read by both caption placements, so the
  * size control moves both from one value. The panel's `--text-scale` scheme is not
- * used here because the reader has one text size to control, not nine.
+ * used here because the viewer has one text size to control, not nine.
  */
 
 :root {
@@ -141,7 +141,7 @@ body {
   font-size: var(--caption-size);
   line-height: 1.35;
   /* What a reading scales against. The shared ruby rules divide this, so the pinyin
-     grows with the caption instead of staying at a fixed small size — the reader's
+     grows with the caption instead of staying at a fixed small size — the viewer's
      base is the caption size, where the panel's is the text-size control. */
   --reading-base: var(--caption-size);
 }

@@ -1,5 +1,5 @@
 /**
- * The reader's subtitle parsing.
+ * The viewer's subtitle parsing.
  *
  * Pure functions, so these run hermetically with nothing installed — no browser,
  * no network, no fixtures on disk. That matters because this is where the
@@ -22,7 +22,7 @@ import {
   parseTimestamp,
   decodeSubtitles,
   languageFromFileName,
-} from '../src/reader/subtitles.js';
+} from '../src/viewer/subtitles.js';
 
 let failures = 0;
 let checks = 0;
@@ -335,7 +335,7 @@ section('language comes from the filename, and never by guessing');
   check('and a bare word is not either', languageFromFileName('subtitles.srt'), 'und');
 }
 
-section('every supported format survives a round trip through the reader path');
+section('every supported format survives a round trip through the viewer path');
 
 {
   // The three formats must agree about the same content, because the panel only

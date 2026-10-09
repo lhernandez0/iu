@@ -30,7 +30,7 @@
  * It does not decode anything. Remuxing hands the element the same codec it already
  * refused, so a file whose audio the browser cannot decode plays **silence** with no
  * `MediaError` to catch — which is why `listAudioTracks` reports `playable` per track
- * and the reader says so in words rather than letting a learner find out by ear.
+ * and the viewer says so in words rather than letting a learner find out by ear.
  */
 
 import {

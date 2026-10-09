@@ -56,7 +56,7 @@ console.log('\n=== from an extension page, with NO startup switch ===');
 try {
   const { context, extensionId, close } = await launchExtension();
   const page = await context.newPage();
-  await page.goto(`chrome-extension://${extensionId}/src/reader/reader.html`);
+  await page.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   const result = await page.evaluate(() => ({
     audioTracksOnElement: 'audioTracks' in HTMLMediaElement.prototype,
     hasChromeDebugger: typeof chrome?.debugger,

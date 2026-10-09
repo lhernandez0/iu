@@ -864,7 +864,7 @@ function sizeFrom(raw) {
  *
  * A px number rather than a preset or a multiplier: "18px" is what the browser's
  * own zoom and font settings speak, and it needs no arithmetic against a base
- * the reader would have to go and look up.
+ * the viewer would have to go and look up.
  *
  * @param {number} pixels
  */
@@ -1254,7 +1254,7 @@ function setActive(index, speaking = true) {
   if (!element) return;
   element.classList.add('active');
   // Not being spoken, but still the last line: dimmed rather than gone, so a
-  // reader looking up mid-gap keeps their place.
+  // viewer looking up mid-gap keeps their place.
   if (!speaking) element.classList.add('paused');
 
   // The next line is marked so the Live view can reveal it as a preview. The

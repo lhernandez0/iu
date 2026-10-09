@@ -2,7 +2,7 @@
  * Subtitle file parsing — SRT, WebVTT and ASS/SSA into `{ start, duration, text }`.
  *
  * Pure functions over text, no DOM and no chrome API, so the hermetic suite can
- * drive them directly and the reader page is only wiring. That split is
+ * drive them directly and the viewer page is only wiring. That split is
  * deliberate: this is where the correctness risk lives, and it should be
  * testable without a browser.
  *
@@ -448,5 +448,5 @@ const LANGUAGE_CODES = new Set([
   'ar', 'ara', 'th', 'tha', 'vi', 'vie', 'id', 'ind', 'tr', 'tur', 'pl', 'pol', 'sv', 'swe', 'uk', 'ukr',
 ]);
 
-/** The formats this module can read, for the reader's file input. */
+/** The formats this module can read, for the viewer's file input. */
 export const SUBTITLE_EXTENSIONS = ['.srt', '.vtt', '.ass', '.ssa'];

@@ -1,8 +1,8 @@
 /**
  * Turning segmented tokens into renderable marks.
  *
- * **Extracted from the service worker because the reader needs the same rules.**
- * The worker marks the panel's transcript; the reader marks its own captions. Both
+ * **Extracted from the service worker because the viewer needs the same rules.**
+ * The worker marks the panel's transcript; the viewer marks its own captions. Both
  * must agree about what a mark IS — which words are definable, what a level means,
  * when a reading is attached — or the two surfaces would show different annotations
  * for the same line, which is the kind of divergence nobody would notice until a
@@ -17,8 +17,8 @@ import { lookup, levelOf, readingOf, traditionalOf } from './wordlist.js';
 /**
  * Whether a word list can grade a language at all.
  *
- * **Shared by the worker and the reader.** The worker uses it to decide whether to
- * mark at all (and to explain why when it cannot); the reader uses it to pick a list
+ * **Shared by the worker and the viewer.** The worker uses it to decide whether to
+ * mark at all (and to explain why when it cannot); the viewer uses it to pick a list
  * that matches the subtitle track it loaded. Two copies of this would mean the panel
  * and the captions disagreed about which words are markable, which is the drift the
  * shared marking module exists to prevent.
@@ -60,7 +60,7 @@ export function listCoversLanguage(list, languageCode) {
  *
  * **The BROADEST list for the language**, not the first one in the index. The index
  * happens to lead with HSK 2.0, which places 4,993 words; HSK 3.0 places 10,969. So
- * "first" would leave 56% of the dictionary unmarked for a reader with no list
+ * "first" would leave 56% of the dictionary unmarked for a viewer with no list
  * picker — and the symptom is a transcript that looks barely marked rather than a
  * visibly wrong choice, which is the worst way for it to be wrong.
  *
@@ -68,7 +68,7 @@ export function listCoversLanguage(list, languageCode) {
  * places. Comparing it makes the choice a measurement rather than an assumption about
  * ordering.
  *
- * A reader grades against ONE list because it has no list picker (that is a
+ * A viewer grades against ONE list because it has no list picker (that is a
  * panel-side setting); the panel honours whichever list the learner chose, which is
  * why this takes a language rather than a chosen id.
  *

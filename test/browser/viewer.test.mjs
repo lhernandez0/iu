@@ -96,7 +96,7 @@ try {
   // The reader, opened the way the toolbar menu opens it — as an extension page in
   // a tab.
   reader = await context.newPage();
-  await reader.goto(`chrome-extension://${extensionId}/src/reader/reader.html`);
+  await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
 
   // The panel, connected to the same worker. Opened as a tab for the same reason
   // `harness.mjs` does: a real side panel is never the active tab, and opening one
@@ -213,18 +213,18 @@ section('the panel shows what is missing rather than an empty transcript');
   // A file with no subtitle tracks. This must explain itself, because an empty
   // transcript with no message is the failure shape the codebase designs against.
   const plain = await context.newPage();
-  await plain.goto(`chrome-extension://${extensionId}/src/reader/reader.html`);
+  await plain.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   await plain.bringToFront();
   await plain.setInputFiles('#pick-files', join(FIXTURES, 'no-subtitles.mkv'));
   // Same rule as above: wait for the message, not for a duration.
   await plain.waitForFunction(
-    () => /READER005|no subtitles/i.test(document.getElementById('status')?.textContent ?? ''),
+    () => /VIEWER005|no subtitles/i.test(document.getElementById('status')?.textContent ?? ''),
     null,
     { timeout: 15000 },
   );
 
   const status = await plain.textContent('#status');
-  check('a file with no subtitles says so', /READER005|no subtitles/i.test(status ?? ''), true);
+  check('a file with no subtitles says so', /VIEWER005|no subtitles/i.test(status ?? ''), true);
   // And it is VISIBLE, which is the point of keeping the element at all: a healthy file
   // shows nothing, but an error must still reach the screen.
   check(
@@ -506,7 +506,7 @@ section('A finished subtitle clears instead of staying on screen');
   // line up with the cues read from the original file. A test that depends on two
   // timelines agreeing is testing the wrong thing.
   const page3 = await context.newPage();
-  await page3.goto(`chrome-extension://${extensionId}/src/reader/reader.html`);
+  await page3.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   await page3.waitForTimeout(1200);
   await page3.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
   await page3.waitForFunction(() => document.getElementById('video')?.readyState >= 2, null, {
@@ -544,13 +544,95 @@ section('A finished subtitle clears instead of staying on screen');
   await page3.close();
 }
 
-section('Resume continues rather than sitting paused');
+section('The resume offer behaves like a toast');
+
+{
+  const page4 = await context.newPage();
+  await page4.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page4.waitForTimeout(1000);
+
+  await page4.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await page4.waitForFunction(() => document.getElementById('video')?.readyState >= 2, null, {
+    timeout: 15000,
+  });
+
+  // "Start over" used to hide the banner and do NOTHING else — the playhead stayed
+  // where it was and the offer was gone, which is the button's whole promise unkept and
+  // unrecoverable, because the offer only fires once per load.
+  await page4.evaluate(() => {
+    document.getElementById('video').currentTime = 3;
+  });
+  await page4.waitForTimeout(300);
+  await page4.evaluate(() => {
+    const banner = document.getElementById('resume');
+    banner.dataset.seconds = '3';
+    banner.hidden = false;
+  });
+  await page4.click('#resume-skip');
+  await page4.waitForTimeout(400);
+
+  const started = await page4.evaluate(() => ({
+    currentTime: document.getElementById('video').currentTime,
+    hidden: document.getElementById('resume').hidden,
+  }));
+  // Measured: lands at ~0.5s, not 0 — the seek sets zero and playback moves on
+  // immediately. Asserting `< 0.5` exactly would fail on a fast machine for the right
+  // behaviour, so this asks what matters: did it go back to the START (ahead), rather
+  // than staying at 3s where it was.
+  check('Start over rewinds to the beginning', started.currentTime < 1.5, true);
+  check('and dismisses the offer', started.hidden, true);
+
+  // The toast property, tested through the REAL trigger rather than a hand-shown
+  // banner. Setting `hidden = false` directly bypasses `offerResume`, which is where the
+  // timer lives — so the first version of this test proved nothing about the timer and
+  // failed, correctly.
+  //
+  // A stored position for this file, then a reload: the key is the worker's own, read
+  // from `chrome.storage.local`.
+  await page4.close();
+
+  const page5 = await context.newPage();
+  await page5.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page5.waitForTimeout(800);
+  await page5.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await page5.waitForFunction(() => document.getElementById('video')?.readyState >= 2, null, {
+    timeout: 15000,
+  });
+  // Play a moment so the position is remembered, then reload so the offer fires.
+  await page5.evaluate(() => {
+    document.getElementById('video').currentTime = 3;
+    document.getElementById('video').play().catch(() => {});
+  });
+  await page5.waitForTimeout(5200);
+  await page5.evaluate(() => document.getElementById('video').pause());
+  await page5.reload();
+  await page5.waitForTimeout(1200);
+  await page5.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+
+  const appeared = await page5
+    .waitForFunction(() => !document.getElementById('resume').hidden, null, { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  check('the real offer appears for a stored position', appeared, true);
+
+  // And retires itself. Wait for the CONDITION with a ceiling rather than sleeping past
+  // the timeout: a fixed sleep both slows the suite and can still race the timer.
+  const retired = await page5
+    .waitForFunction(() => document.getElementById('resume').hidden, null, { timeout: 15000 })
+    .then(() => true)
+    .catch(() => false);
+  check('and it retires itself without being touched', retired, true);
+
+  await page5.close();
+}
+
+section('Resume continues rather than sitting paused');section('Resume continues rather than sitting paused');
 
 {
   // Reported from use: clicking Resume moved the playhead and then left the film
   // paused, which is the one thing "Resume" cannot mean. `currentTime` is not a resume.
   const page2 = await context.newPage();
-  await page2.goto(`chrome-extension://${extensionId}/src/reader/reader.html`);
+  await page2.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   await page2.waitForTimeout(1000);
 
   // Seed a saved position directly, which is what the banner reads.

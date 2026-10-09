@@ -37,7 +37,7 @@
   /* The base size, in px, at the root. Every other size in this file is a
      multiple of it. A number rather than a multiplier: "18px" is unambiguous
      and is what a browser's own zoom and font settings speak, while a scale
-     factor forces the reader to do the arithmetic against a base they have to
+     factor forces the viewer to do the arithmetic against a base they have to
      go and look up. */
   --font-size: 13px;
   /* Unitless, and it has to be: CSS cannot multiply two lengths, so
@@ -511,7 +511,7 @@ select:disabled {
 }
 
 /* Between spoken lines: nothing is being said, but the transcript must not go
-   blank — a reader looking up mid-gap would lose their place entirely, which is
+   blank — a viewer looking up mid-gap would lose their place entirely, which is
    the opposite of what a reading aid is for. So the last line stays lit, with
    only its TEXT dimmed to show it is not being spoken right now.
 

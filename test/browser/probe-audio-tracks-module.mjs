@@ -1,5 +1,5 @@
 /**
- * Verify `src/reader/audio-tracks.js` against a real file.
+ * Verify `src/viewer/audio-tracks.js` against a real file.
  *
  * Ad-hoc probe. Prints for a person to read, asserts nothing.
  *
@@ -32,7 +32,7 @@ page.on('console', (message) => {
 await page.goto(`http://127.0.0.1:${PORT}/tools/ui/player.html`, { waitUntil: 'load' });
 
 const report = await page.evaluate(async (source) => {
-  const mod = await import('/src/reader/audio-tracks.js');
+  const mod = await import('/src/viewer/audio-tracks.js');
 
   const response = await fetch(source);
   const file = new File([await response.arrayBuffer()], 'sample.mkv', { type: 'video/x-matroska' });

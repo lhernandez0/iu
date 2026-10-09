@@ -223,7 +223,7 @@ let cuesAreReal = false;
  * Parse SubRip.
  *
  * Deliberately minimal — enough for the file this reads, not a general parser. The
- * reader's real parsing lives in `src/reader/subtitles.js` and is tested there;
+ * reader's real parsing lives in `src/viewer/subtitles.js` and is tested there;
  * duplicating it would be a second implementation to keep in step.
  *
  * @param {string} text

@@ -1,10 +1,10 @@
 /**
  * Rendering the learning layer into transcript lines and captions.
  *
- * **Shared by the side panel and the video reader.** Both draw the same thing — a
+ * **Shared by the side panel and the video viewer.** Both draw the same thing — a
  * line of `.mark` / `.word` spans with optional `.ruby` annotations and a definition
  * on hover — so the rendering lives in one place and both import it. A second
- * implementation in the reader would drift, and the symptom would be captions whose
+ * implementation in the viewer would drift, and the symptom would be captions whose
  * marks or popover behaved differently from the transcript's for no stated reason.
  *
  * It lives in `common/` rather than under `sidepanel/` for exactly that reason.
@@ -19,7 +19,7 @@
  *     and does nothing.
  *
  * It does NOT fetch definitions. A caller supplies the `{word, entry, levels}` for
- * a hovered token — the panel asks the worker, the reader looks it up in the
+ * a hovered token — the panel asks the worker, the viewer looks it up in the
  * dictionary it already holds — and this module only decides how that is drawn. That
  * is what lets the same code serve a surface that talks to the worker and one that
  * deliberately does not.
@@ -140,7 +140,7 @@ export function renderReading(tokens, levelCount, palette) {
   // "annotation over base text", so assistive technology reads the base and skips
   // or separates the annotation. A generic span instead puts `wǒmen` inside the
   // line's text content, and then anything reading `.textContent` — a screen
-  // reader, a copy, a test asserting the line still says what it said — sees the
+  // viewer, a copy, a test asserting the line still says what it said — sees the
   // pinyin interleaved with the characters. The browser suite caught exactly that.
   const fragment = document.createDocumentFragment();
   for (const token of tokens) {

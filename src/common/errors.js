@@ -110,7 +110,7 @@ export const ERRORS = Object.freeze({
     // parseable cues — which is also what a REFUSAL looks like. A block page is
     // HTTP 200 with an HTML body: no `<text>` elements, so it parses to zero cues
     // and was reported as "the caption track came back empty". That told the
-    // reader the video had no captions when the truth was that the server stopped
+    // viewer the video had no captions when the truth was that the server stopped
     // answering, and it sent a whole debugging session the wrong way.
     //
     // A refusal is temporary and the fix for it is to wait; an empty track is a
@@ -135,36 +135,36 @@ export const ERRORS = Object.freeze({
     detail: true,
   },
 
-  // --- READER: the local video page, which is a source we host ---------------
+  // --- VIEWER: the local video page, which is a source we host ---------------
   //
   // This is our own page rather than a site, so its failures are about the
   // USER'S files. That changes what a useful message is: a website can be
   // retried, but a Blu-ray rip will never have text subtitles no matter how many
   // times it is offered, and the honest answer names the file type.
-  READER001: {
-    message: 'Could not open the video reader.',
+  VIEWER001: {
+    message: 'Could not open the video viewer.',
     detail: true,
   },
-  READER002: {
+  VIEWER002: {
     // The detail is the reason: which decoder was tried, or that zero cues came
     // out. A subtitle file that parses to nothing is the case worth naming.
     message: 'Could not read that subtitle file.',
     detail: true,
   },
-  READER003: {
+  VIEWER003: {
     // Deliberately not "unsupported format". Chrome refuses a file for reasons
     // it does not tell us — a codec it has no decoder for, or a container it
     // cannot demux — and guessing which would be a worse message than this.
     message: 'This browser cannot play that video file.',
     detail: true,
   },
-  READER004: {
+  VIEWER004: {
     // Image subtitles. A fact about the file, not a fault: PGS and VobSub are
     // pictures of text and there is no string in them to mark.
     message: 'These subtitles are images (Blu-ray PGS or DVD VobSub) and cannot be read. Use a text subtitle file.',
     detail: false,
   },
-  READER005: {
+  VIEWER005: {
     message: 'This video has no subtitles, embedded or otherwise. Choose a .srt, .vtt or .ass file.',
     detail: false,
   },

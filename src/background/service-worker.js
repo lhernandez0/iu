@@ -461,12 +461,12 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   switch (message.type) {
     // --- From content scripts ------------------------------------------------
-    case MSG.READER_READY:
+    case MSG.VIEWER_READY:
       // One of our own sources announcing itself, so the panel resolves it
       // immediately rather than on the next tab switch.
       //
       // The id is taken from `sender.tab` when it is there, and otherwise looked
-      // up via `registerOpenReaderTabs()`. **Announcing is not sufficient on its
+      // up via `registerOpenViewerTabs()`. **Announcing is not sufficient on its
       // own**: this arrives from a PAGE rather than a content script, and
       // `sender.tab` is not guaranteed for one — so relying on it left the tab
       // unregistered and the panel reporting "no supported video" while the film
@@ -477,9 +477,9 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // always returns a promise — which Chrome reads as "the response is coming
       // by promise" and would break every other case in this switch.
       //
-      // Resolve now, so opening the reader with the panel already open shows the
+      // Resolve now, so opening the viewer with the panel already open shows the
       // video without the user having to click back and forth.
-      void registerOpenReaderTabs().then(() => refresh());
+      void registerOpenViewerTabs().then(() => refresh());
       return false;
 
     case MSG.CONTENT_POSITION:
@@ -508,13 +508,13 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       void onContentVideoChanged(sender?.tab?.id ?? null);
       return false;
 
-    case MSG.READER_CHANGED:
-      // A reader's content changed — a file was chosen, or a subtitle track was
+    case MSG.VIEWER_CHANGED:
+      // A viewer's content changed — a file was chosen, or a subtitle track was
       // added. No tab id is needed or sent: `refresh()` resolves the active tab,
-      // and a reader whose video matters is by definition the one being looked at.
+      // and a viewer whose video matters is by definition the one being looked at.
       //
-      // This is what makes the reader work when the panel was already open. Without
-      // it, `READER_READY` — which fires once, on an empty page — was the only
+      // This is what makes the viewer work when the panel was already open. Without
+      // it, `VIEWER_READY` — which fires once, on an empty page — was the only
       // notification the worker ever got, so the panel stayed empty no matter what
       // was loaded afterwards.
       void refresh();
@@ -614,11 +614,11 @@ function broadcastError(message) {
 /**
  * Tab ids that announced themselves as one of OUR OWN sources.
  *
- * The local video reader is a source, but it cannot be FOUND the way a website is
+ * The local video viewer is a source, but it cannot be FOUND the way a website is
  * found. `providerFor(tab.url)` is how a site is resolved, and `tab.url` is empty
  * for a `chrome-extension://` document without the `tabs` permission — which this
  * extension deliberately does not request, because it would expose the url of
- * every tab the user has open. So the reader announces itself on load, and the id
+ * every tab the user has open. So the viewer announces itself on load, and the id
  * comes from `sender.tab.id`, which needs no permission.
  *
  * Kept here rather than as a flag on a provider: `providers.js` is URL-match-and
@@ -630,13 +630,13 @@ function broadcastError(message) {
  */
 const registeredSources = new Set();
 
-/** The reader page, as the worker addresses it. */
-const READER_PATH = 'src/reader/reader.html';
+/** The viewer page, as the worker addresses it. */
+const VIEWER_PATH = 'src/viewer/viewer.html';
 
 /**
- * Find open reader tabs and register them.
+ * Find open viewer tabs and register them.
  *
- * **This exists because relying on the reader announcing itself is not enough.**
+ * **This exists because relying on the viewer announcing itself is not enough.**
  * The announcement arrives as a `runtime.sendMessage` from a PAGE, not a content
  * script — and `sender.tab` is not guaranteed for an extension page, so the
  * announcement can arrive with nothing to identify the tab. When that happened the
@@ -646,18 +646,18 @@ const READER_PATH = 'src/reader/reader.html';
  *
  * `runtime.getContexts({ contextTypes: ['TAB'] })` is the reliable answer, and it
  * needs no permission: it lists the extension's own contexts, and each carries a
- * `tabId`. Filtering on `documentUrl` keeps it to OUR reader, so another extension
+ * `tabId`. Filtering on `documentUrl` keeps it to OUR viewer, so another extension
  * page in a tab is not mistaken for a source.
  *
  * It also covers the case the announcement cannot: **reloading the extension
- * restarts the worker with an empty set, while the reader tab stays open**. Calling
- * this before concluding "nothing is readable" means a reader tab is found again
+ * restarts the worker with an empty set, while the viewer tab stays open**. Calling
+ * this before concluding "nothing is readable" means a viewer tab is found again
  * without the user reopening it.
  *
  * @returns {Promise<number>} How many tabs are registered, for the caller to log
  *   or assert on.
  */
-async function registerOpenReaderTabs() {
+async function registerOpenViewerTabs() {
   if (!api.runtime.getContexts) return registeredSources.size;
 
   const contexts = await api.runtime
@@ -668,7 +668,7 @@ async function registerOpenReaderTabs() {
     // `tabId` is -1 when a context is not in a tab, which we cannot address.
     if (typeof context?.tabId !== 'number' || context.tabId < 0) continue;
     const url = context.documentUrl ?? '';
-    if (url.endsWith(READER_PATH)) registeredSources.add(context.tabId);
+    if (url.endsWith(VIEWER_PATH)) registeredSources.add(context.tabId);
   }
 
   return registeredSources.size;
@@ -679,7 +679,7 @@ async function registerOpenReaderTabs() {
  *
  * **This exists so the two questions cannot drift apart.** Five places used to ask
  * `providerFor(tab.url)` directly, and every one of them would have answered "no"
- * for the reader — silently, and in a way that looks correct in the code. A
+ * for the viewer — silently, and in a way that looks correct in the code. A
  * single predicate is what makes "is this tab readable" one decision.
  *
  * @param {{id?: number, url?: string}|null|undefined} tab
@@ -695,7 +695,7 @@ api.tabs.onActivated.addListener(({ tabId }) => {
 });
 
 api.tabs.onRemoved.addListener((tabId) => {
-  // A closed reader must stop counting as a source, or the set grows for the
+  // A closed viewer must stop counting as a source, or the set grows for the
   // life of the worker and a later tab reusing the id is wrongly considered
   // readable — which resolves to "no transcript" rather than to "no video".
   registeredSources.delete(tabId);
@@ -713,9 +713,9 @@ async function onTabActivated(tabId) {
   const tab = await api.tabs.get(tabId).catch(() => null);
   // Our own pages report no usable `url`, so `tabs.get` cannot identify one. Ask
   // the runtime which of our contexts are open before deciding this tab is
-  // unreadable — otherwise switching TO the reader tab does nothing at all, which
+  // unreadable — otherwise switching TO the viewer tab does nothing at all, which
   // is exactly what it did.
-  if (tab?.id !== undefined && !registeredSources.has(tabId)) await registerOpenReaderTabs();
+  if (tab?.id !== undefined && !registeredSources.has(tabId)) await registerOpenViewerTabs();
   if (!isReadable(tab)) return;
   trackedTabId = tabId;
   await refresh();
@@ -920,15 +920,15 @@ async function refresh() {
 /** @returns {Promise<void>} */
 async function refreshInner() {
   // Before deciding anything: which of our own pages are open. This is the
-  // authority on whether a reader tab is readable, because our own pages report no
-  // usable `url` — and it also recovers a reader tab that was open across an
+  // authority on whether a viewer tab is readable, because our own pages report no
+  // usable `url` — and it also recovers a viewer tab that was open across an
   // extension reload, when the worker restarts with an empty set.
-  await registerOpenReaderTabs();
+  await registerOpenViewerTabs();
 
   if (trackedTabId !== null) {
     // A tracked tab can be closed or navigated away since we last looked. Note
-    // that a reader tab reports NO url, so this test has to go through
-    // `isReadable` — asking `providerFor(alive.url)` here would drop the reader
+    // that a viewer tab reports NO url, so this test has to go through
+    // `isReadable` — asking `providerFor(alive.url)` here would drop the viewer
     // on every single refresh, and the panel would say "no video" while the film
     // was playing in the next tab.
     const alive = await api.tabs.get(trackedTabId).catch(() => null);
@@ -1803,7 +1803,7 @@ function learningState(entry = null) {
     // presentation settings rather than read from storage by the panel — one owner
     // for settings, and the panel has the value in hand when it renders.
     //
-    // All three default to their `off`-equivalent, so a reader who has never
+    // All three default to their `off`-equivalent, so a viewer who has never
     // touched them gets the panel they had before any of this existed.
     romaji: settings.romaji,
     toneStyle: settings.toneStyle,
@@ -1875,18 +1875,18 @@ function persistSettings() {
  * Keep this worker's copy of the settings current when anyone else changes them.
  *
  * **This is what makes `chrome.storage` the source of truth rather than one
- * writer and a cache.** The panel, a future settings page and the video reader all
+ * writer and a cache.** The panel, a future settings page and the video viewer all
  * write to the same bucket, so a change made by one of them has to reach the
  * others — the storage API's own cross-context change event is exactly that
  * mechanism, and it keeps working while this worker is asleep, which a message
  * could not.
  *
  * Without this the worker served its boot-time copy forever: a setting changed in
- * the reader would be absent from every state push, and the panel would show the
+ * the viewer would be absent from every state push, and the panel would show the
  * value it started the session with.
  *
  * Re-applying the derived side effects matters as much as storing the value. A
- * reading placement changed in the reader has to rebuild the rows here, or the
+ * reading placement changed in the viewer has to rebuild the rows here, or the
  * panel's own view keeps the old annotation despite holding the new setting —
  * which is the same bug the local `applySetting` branch exists to prevent.
  */
@@ -2082,7 +2082,7 @@ api.action.onClicked.addListener((tab) => {
  * permission, which would expose every tab the user has open. Naming the source
  * generically is the price of not taking that one.
  */
-const READER_MENU_ID = 'open-reader';
+const VIEWER_MENU_ID = 'open-viewer';
 
 /**
  * Create the menu item if it is not already there.
@@ -2108,7 +2108,7 @@ function ensureActionMenu() {
 
   api.contextMenus.create(
     {
-      id: READER_MENU_ID,
+      id: VIEWER_MENU_ID,
       title: 'Open video files…',
       // The ACTION's menu — right-clicking the toolbar icon — not the page
       // context menu. The `contextMenus` permission is needed either way; this
@@ -2140,10 +2140,10 @@ api.runtime.onInstalled.addListener(() => {
 
 if (api.contextMenus?.onClicked) {
   api.contextMenus.onClicked.addListener((info) => {
-    if (info.menuItemId !== READER_MENU_ID) return;
-    // `tabs.create` needs no permission, and the URL is ours. The reader then
+    if (info.menuItemId !== VIEWER_MENU_ID) return;
+    // `tabs.create` needs no permission, and the URL is ours. The viewer then
     // announces itself, so the worker never has to match it by url.
-    void api.tabs.create({ url: api.runtime.getURL('src/reader/reader.html') });
+    void api.tabs.create({ url: api.runtime.getURL('src/viewer/viewer.html') });
   });
 }
 
@@ -2276,7 +2276,7 @@ async function primeDictionary() {
     // It is synchronous JSON.parse plus an index build on the same thread the
     // caption request is waiting on, and an MV3 worker is evicted after ~30s idle
     // so it repeats on every wake. `applyMarks` loads the dictionary it actually
-    // needs and is already deferred, so the eager call had no reader.
+    // needs and is already deferred, so the eager call had no viewer.
   } catch (error) {
     broadcastError(codeError('DICT001', error));
   }

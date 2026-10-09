@@ -4,11 +4,11 @@
     <meta charset="utf-8" />
     <title>IU — video</title>
     <link rel="stylesheet" href="../common/marks.css" />
-    <link rel="stylesheet" href="reader.css" />
+    <link rel="stylesheet" href="viewer.css" />
   </head>
   <body>
     <!--
-      The reader is an APPLICATION, not a dialog the side panel owns.
+      The viewer is an APPLICATION, not a dialog the side panel owns.
 
       It is a source, in exactly the sense a website is a source: it produces
       `{ start, duration, text }` segments on request and reports which one is
@@ -119,9 +119,9 @@
               stepping, speed, volume and four toggles. The icon is the band itself: a
               track with three runs along it, filled at the opacities the ramp uses.
 
-              This is where the reader DIVERGES from the preview, which has the same
-              button in the transport row. The reader's row is fuller, and the reason
-              above is the reader's.
+              This is where the viewer DIVERGES from the preview, which has the same
+              button in the transport row. The viewer's row is fuller, and the reason
+              above is the viewer's.
             -->
           </div>
 
@@ -303,7 +303,7 @@
             ROW 2 — the caption settings. Present ONLY while captions are on.
 
             The resolution to a real tension: there is no settings VIEW in the
-            reader, yet everything the captions need must still be reachable. The row
+            viewer, yet everything the captions need must still be reachable. The row
             appears exactly when it is relevant, instead of being fifteen controls in
             one line.
           -->
@@ -336,7 +336,7 @@
             <span class="divider" aria-hidden="true"></span>
 
             <!-- Which track each line draws. A local file can carry several — the
-                 reader was showing only one and claiming a file has one track, which
+                 viewer was showing only one and claiming a file has one track, which
                  is false. These are the SAME preferences the panel's dropdowns set,
                  so a track chosen in one surface is the one the other draws. -->
             <label class="field">
@@ -358,7 +358,7 @@
             <span class="divider" aria-hidden="true"></span>
 
             <!-- Which list the captions are graded against, and from what level.
-                 The reader has no panel to set these in, and without them the reader
+                 The viewer has no panel to set these in, and without them the viewer
                  had to guess from the track's language — which is a good default and
                  a poor only option. -->
             <label class="field">
@@ -401,6 +401,6 @@
       </div>
     </main>
 
-    <script type="module" src="reader.js"></script>
+    <script type="module" src="viewer.js"></script>
   </body>
 </html>

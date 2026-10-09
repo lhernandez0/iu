@@ -3,7 +3,7 @@
  *
  * The NEW part is the overlay bar, its single lifecycle, the two-row layout and
  * the caption strip in both placements. There is no shipped stylesheet to sit on
- * top of: `src/reader/reader.css` is a couple of hundred lines for one page, and
+ * top of: `src/viewer/reader.css` is a couple of hundred lines for one page, and
  * the point of this mock is to change that page's layout, so borrowing its rules
  * would mean borrowing the thing under discussion.
  *

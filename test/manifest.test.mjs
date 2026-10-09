@@ -131,19 +131,19 @@ section('package.json and the manifest describe the extension the same way');
   check('and the versions match', pkg.version, manifest.version);
 }
 
-section('shipped documents do not point at things a reader cannot have');
+section('shipped documents do not point at things a viewer cannot have');
 
 {
   // `docs/` is gitignored — planning notes, ADRs, the roadmap. They are ours and
   // deliberately private, which means a tracked file that references one publishes
-  // a pointer to something a reader of the repository cannot open.
+  // a pointer to something a viewer of the repository cannot open.
   //
   // This has gone wrong three times: two README links to design-decisions files
   // that 404 on GitHub, and then three "see ADR 0007" references in
   // CHROMEWEBSTORE.md. Each was found by a person noticing, not by anything
   // running. The fix is one grep, so it should never have been a person's job.
   //
-  // Scanned rather than imported: the point is the FILE as a reader receives it,
+  // Scanned rather than imported: the point is the FILE as a viewer receives it,
   // and the failure mode is text in prose that no module ever evaluates.
   const SHIPPED = ['README.md', 'CHROMEWEBSTORE.md', 'TESTING.md', 'THIRD-PARTY.md'];
   // A path into a gitignored directory, or an ADR reference. ADRs live in docs/,
@@ -163,7 +163,7 @@ section('shipped documents do not point at things a reader cannot have');
 
   check('no shipped document references a private doc or an ADR', offenders, []);
 
-  // The other half, and the one a reader actually hits: a relative link that does
+  // The other half, and the one a viewer actually hits: a relative link that does
   // not resolve. A link to a tracked file is fine; a link to `docs/` is not.
   const broken = [];
   for (const file of SHIPPED) {
@@ -272,7 +272,7 @@ section('shipped source can only reach youtube.com, and only over fetch');
   //      wordlist.js        2 — bundled dictionary JSON, read through
   //                            `runtime.getURL`. Local files, not the network.
   //      youtube-content.js 1 — `fetchBounded()`, the caption track.
-  //      reader/reader.js   1 — the same bundled dictionary JSON. The reader marks
+  //      viewer/viewer.js   1 — the same bundled dictionary JSON. The viewer marks
   //                            its own captions with the shared marking rules, so
   //                            it needs the dictionary too — and it fetches it from
   //                            `runtime.getURL`, i.e. from the extension's own
@@ -280,7 +280,7 @@ section('shipped source can only reach youtube.com, and only over fetch');
   const expected = {
     'content/youtube-content.js': 1,
     'learn/wordlist.js': 2,
-    'reader/reader.js': 1,
+    'viewer/viewer.js': 1,
   };
   const found = {};
   for (const file of sources) {
