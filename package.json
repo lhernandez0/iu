@@ -5,6 +5,9 @@
   "type": "module",
   "description": "A Chinese and Japanese dictionary for video: unknown words marked in the subtitles, meanings on hover.",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "capture": "node tools/capture.mjs",
     "conformance:fetch": "node tools/fetch-conformance.mjs",

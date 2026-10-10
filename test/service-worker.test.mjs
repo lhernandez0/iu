@@ -140,7 +140,20 @@ async function boot(options = {}) {
   await import(`../src/background/service-worker.js?boot=${++bootCount}`);
 
   const panel = connectPanel(stub);
-  await settle();
+
+  // Startup is finished when the state names the lists, which it can only do
+  // AFTER the index has been read.
+  //
+  // This used to be a single `await settle()`, one macrotask, and the worker's
+  // startup is deeper than that: it reads settings, registers open tabs, reads
+  // the index, then broadcasts. Whether one turn was enough depended on how many
+  // microtasks those awaits took, which differs between Node releases, so the
+  // suite passed on Node 26 and failed on the Node 22 that CI pins.
+  //
+  // Waiting for the CONDITION is the same rule the browser tier already follows,
+  // and it removes the version dependence rather than hiding it behind a count
+  // of turns.
+  await waitForState(panel.received, (state) => (state.lists?.length ?? 0) > 0, 'the list index to load');
 
   return {
     ...stub,
