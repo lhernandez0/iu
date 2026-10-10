@@ -105,6 +105,51 @@ section('the segmenter marks kanji and kana Japanese alike');
   check('leaving the inflected tail unmarked', segment('食べました', JA_HEADWORDS, JA_MAX_LEN).some((t) => !t.known && t.text === 'べ'), true);
 }
 
+// --- Korean: the same boundary, before the data lands ------------------------
+
+section('the segmenter sees Hangul, without which nothing Korean can mark');
+
+{
+  // The measured blocker the Korean plan was built on. Hangul was not in the
+  // matcher, so  not a single Korean character  was ever looked at, and a whole
+  // Korean sentence came through as ONE token. This asserts the class now covers
+  // it, which is the precondition for any Korean word being markable at all.
+  //
+  // Synthetic headwords on purpose: this is a test of the segmenter, not of the
+  // Korean word list, and it must hold before that list is generated and after.
+  const KO_HEADWORDS = new Set(['안녕', '학교', '한국어', '가요', '저', '학생']);
+  const KO_MAX_LEN = 4;
+  const known = (text) => segment(text, KO_HEADWORDS, KO_MAX_LEN).some((t) => t.known);
+
+  // The regression, stated as the thing that was true: a sentence with no space
+  // between matched words is one token, so nothing inside it could ever match.
+  check('a Korean sentence is no longer a single token', segment('안녕하세요', KO_HEADWORDS, KO_MAX_LEN).length > 1, true);
+  check('a headword inside it is matched', known('안녕하세요'), true);
+  check('and the match is the headword, not a fragment', segment('안녕하세요', KO_HEADWORDS, KO_MAX_LEN)[0].text, '안녕');
+
+  // Korean is space-separated, unlike Chinese and Japanese, and this relies on a
+  // space not being in the class so a run already breaks on it. Asserted because
+  // if the class ever gained whitespace, the walk would cross word boundaries and
+  // the tokens would stop reproducing the line.
+  const spaced = segment('안녕하세요 학교에 가요', KO_HEADWORDS, KO_MAX_LEN);
+  check('tokenising reproduces the line with its spaces', spaced.map((t) => t.text).join(''), '안녕하세요 학교에 가요');
+  check('the space survives as its own token', spaced.some((t) => t.text === ' '), true);
+  check('so a word after a space is matched too', spaced.some((t) => t.known && t.text === '학교'), true);
+
+  // Compatibility jamo (ㄱ, ㄴ, ㅏ) and conjoining jamo are in the class as well.
+  // Asserted directly, because they are the ranges a reader is most likely to
+  // assume are unnecessary and quietly drop.
+  check('compatibility jamo are matched', segment('ㄱㄴ', KO_HEADWORDS, KO_MAX_LEN).length > 1, true);
+  check('conjoining jamo are matched', segment('\u1100\u1161', KO_HEADWORDS, KO_MAX_LEN).length > 1, true);
+
+  // Widening the class must not change Chinese or Japanese, the guarantee the
+  // change is only acceptable under. Neither language contains Hangul, so a run
+  // of either must tokenise exactly as it did before.
+  check('Chinese is untouched', segment('我们在岸上等你', HEADWORDS, MAX_LEN).map((t) => t.text).join(''), '我们在岸上等你');
+  check('Japanese is untouched', segment('私は学生です', JA_HEADWORDS, JA_MAX_LEN).map((t) => t.text).join(''), '私は学生です');
+  check('and Chinese still matches its own headwords', segment('我们在岸上等你', HEADWORDS, MAX_LEN).some((t) => t.known), true);
+}
+
 section('the Japanese dictionary is internally consistent');
 
 {

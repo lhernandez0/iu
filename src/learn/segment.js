@@ -22,21 +22,33 @@
 /**
  * The characters the segmenter will try to match words against.
  *
- * Han (CJK ideographs, all three blocks) PLUS kana. Kana is not decoration: a
- * great many Japanese words are written in it and nowhere else, and the
- * dictionary keys on them, `とても`, `いらっしゃい`, `うっかり` are all headwords.
- * With Han alone they could never match, because the segmenter never looked at
- * the characters at all, so a large share of ordinary Japanese rendered unmarked.
+ * Han (CJK ideographs, all three blocks) PLUS kana PLUS Hangul. Neither kana nor
+ * Hangul is decoration: a great many Japanese words are written in kana and nowhere
+ * else, and every Korean word is written in Hangul, so with Han alone the segmenter
+ * never looked at those characters at all and ordinary text rendered unmarked.
+ * Measured: a Korean sentence came through as ONE token.
  *
- * Widening it cannot affect Chinese: Chinese text contains no kana, so no run of
- * Chinese is tokenised differently than before.
+ * Widening it cannot affect Chinese: Chinese text contains no kana and no Hangul, so
+ * no run of Chinese is tokenised differently than before. The same holds for Japanese
+ * and Hangul.
  *
  * The katakana block runs to \u30ff, which is the end of the main block. The
  * phonetic extensions (\u31f0-\u31ff) are deliberately left out for now, they
  * only affect Ainu and a handful of loanwords, and including them widens the
  * longest-match window for every line to serve almost nothing.
+ *
+ * Hangul is three ranges, and all three are needed:
+ *   \uac00-\ud7a3  precomposed syllables (가, 나, 한), what text almost always is
+ *   \u1100-\u11ff  conjoining jamo (initial/medial/final), which some input methods
+ *                  and normalisation forms produce
+ *   \u3130-\u318f  compatibility jamo (ㄱ, ㄴ, ㅏ), standalone letters
+ *
+ * Korean IS space-separated, which the longest-match walk below handles for free: a
+ * space is not in this class, so it already breaks a run and the walk never crosses
+ * one. A Korean sentence therefore segments into its written words, and the match
+ * then works within each, which is why no separate space-splitting path is needed.
  */
-const CJK = /[\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
+const CJK = /[\u3040-\u309f\u30a0-\u30ff\uac00-\ud7a3\u1100-\u11ff\u3130-\u318f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/;
 
 /**
  * @typedef {Object} Token
