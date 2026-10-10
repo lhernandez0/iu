@@ -1,9 +1,10 @@
 # IU Language Companion
 
 A Chinese and Japanese dictionary for video. It reads the subtitles of the video
-in your tab and shows them as a transcript you can look words up in.
+you are watching and shows them as a transcript you can look words up in.
 
-YouTube, in Chrome, Edge, Brave and Firefox. Free, open source, no account.
+YouTube, or a video file on your own computer. Chrome, Edge, Brave and Firefox.
+Free, open source, no account.
 
 > **IU**, *I* and *you*. 友 means **friend** in Hokkien (*iú*), Mandarin (*yǒu*)
 > and Japanese (*tomo*).
@@ -20,9 +21,8 @@ justifications and privacy disclosure.
 
 ## Install from source
 
-Load the folder in either browser, from a clean copy of the source, **not your
-working tree**, which also holds `node_modules/`, `docs/` and `test/fixtures/`.
-None of that belongs in an extension.
+Load the folder in either browser, from a clean copy of the source, not a working
+tree with `node_modules/` and `docs/` in it.
 
 **Chrome / Edge / Brave** (116+):
 
@@ -103,8 +103,10 @@ src/
   background/    service worker: transcript table, tab tracking, marking
   learn/         word lists, dictionaries, segmenter  (imports nothing)
   sidepanel/     renders state, sends intents
+  viewer/        local video source: player page, MKV parser, subtitles, audio
   offscreen/     PARKED: owns the MediaStream + engine
   engines/       PARKED: recogniser adapter + registry
+  vendor/        mediabunny.js, generated, MPL-2.0 (see THIRD-PARTY.md)
 ```
 
 `src/learn/` deliberately imports nothing and touches no `chrome` API, so it can
@@ -116,15 +118,9 @@ scripts and cannot `import`, so they repeat the message names and the
 
 Chinese and Japanese work. **Korean is planned.**
 
-Levels are data, not code. Each list declares its own levels, names and language,
-and nothing in the extension knows what HSK or JLPT is, so adding a list is a
-data change, and adding a *language* is a dictionary plus a row in the generated
-index.
-
-Korean is more than that. The segmenter's character class covers kana and Han and
-not Hangul, so Korean text currently comes through as one unbroken token and
-nothing can be marked; it needs a Korean dictionary, a TOPIK list, and work on the
-segmenter.
+Levels are data, not code: each list declares its own levels, names and language,
+so adding a list is a data change, and adding a language is a dictionary plus a
+row in the generated index.
 
 Both dictionaries are bundled and parsed on demand. Nothing is fetched from a
 server we run.
@@ -137,8 +133,10 @@ npm run test:browser   # real Chromium, fixture pages
 npm run ui             # Vite preview of the side panel, for layout work
 ```
 
-There are no runtime dependencies, and nothing is built, the repository is the
-extension.
+There are no runtime dependencies and no build step: the repository is the
+extension. The one generated file, `src/vendor/mediabunny.js`, is committed, so
+nothing has to be installed to load or package it. Rebuild it with
+`node tools/build-vendor.mjs` if its version changes.
 
 ### Building the store package
 
@@ -148,12 +146,10 @@ make release           # stage, lint, zip, verify -> build/iu-language-companion
 
 One ZIP serves both stores: the manifest carries each browser's keys and each
 ignores the other's, so there is nothing to build differently for Chrome and
-Firefox. `make help` lists the individual steps (`stage`, `lint`, `zip`, `verify`),
-which are independently useful while working a problem out.
+Firefox. `make help` lists the individual steps (`stage`, `lint`, `zip`, `verify`).
 
-The list of what ships lives in the Makefile, in one place, and `make verify`
-asserts the archive contains exactly that, a dotfile or a development directory
-inside the package fails the build rather than reaching a reviewer.
+The list of what ships lives in the Makefile, and `make verify` asserts the
+archive contains exactly that.
 
 [`TESTING.md`](TESTING.md) covers the tiers, what each suite does and does not
 cover, the panel preview in detail, and where the fixtures come from.
@@ -177,14 +173,16 @@ for that browser; the rest is the same source.
 
 ## AI use
 
-This project is developed with AI coding assistance. We support that use where it
-respects privacy and serves the common good, which is part of why the extension
-collects nothing and the source is open. The bar does not move: every claim in
-these documents is checked by a test against the shipped source, and a human
-reviews before merge. See [`AI-USE.md`](AI-USE.md) for the full note.
+This project is developed with AI coding assistance, and we support that use
+where it respects privacy and serves the common good. That is part of why this
+extension collects nothing, has no server and no account, and why the source is
+open under MIT.
 
-Agents working in this repository should read [`AGENTS.md`](AGENTS.md), which
-holds the commands and the published set of rules.
+The bar does not move for AI-assisted work: every claim in these documents is
+checked by a test against the shipped source, and a human reviews before merge.
+See [`AI-USE.md`](AI-USE.md).
+
+Agents working in this repository should read [`AGENTS.md`](AGENTS.md).
 
 ## Permissions
 
@@ -197,52 +195,53 @@ holds the commands and the published set of rules.
 | `contextMenus`     | Put **Open video files…** on the extension's own toolbar menu. Adds nothing to the page right-click menu, and grants no access to any page. |
 | `host_permissions` | `https://*.youtube.com/*`, read captions from the page. |
 
-That is the whole list, and it is pinned by a test, so a new one has to be added
-on purpose. There is no `activeTab`, no `tabs`, and no `web_accessible_resources`,
- the last of which means no page can reach into the extension.
+The list is pinned by a test. There is no `activeTab`, no `tabs`, and no
+`web_accessible_resources`, so no page can reach into the extension.
 
 ## Privacy
 
-**This extension collects nothing about you.** Not "we handle it responsibly",
-not "we only collect what we need", nothing. That is a design constraint rather
-than a policy, and it is enforced rather than promised:
+Nothing is collected.
 
 - **No account, no server of ours, no analytics, no telemetry, no crash
-  reporting.** There is nothing to sign into and nothing to leak.
-- **Your settings stay in your browser**, in `chrome.storage.local`. They are not
+  reporting.**
+- **Settings are stored in your browser**, in `chrome.storage.local`, and are not
   synced anywhere, not even to your own other devices.
-- **No browsing history, no tab contents beyond the caption data**, no
-  identifiers.
+- **No browsing history and no identifiers**, and no tab contents beyond the
+  caption data below.
 - **One external host: `youtube.com`.** The extension reads the caption track of
-  the video in the tab you have open, using that page's own session, the same
-  request the page's own subtitle button makes. The dictionaries are bundled, so
-  looking a word up makes no request at all.
+  the video in the tab you have open, using that page's own session. The
+  dictionaries are bundled, so looking a word up makes no request at all.
 
-That caption fetch is the only request the extension makes to anything outside
-itself, and it is not a promise, it is checked. The test suite scans shipped
-source and fails if a request to any host other than `youtube.com` appears, if a
-transport other than `fetch` is used, or if `storage.sync` is reached for. Adding
-one is a deliberate decision, not a slip. See
+The caption fetch is the only request the extension makes outside itself, and a
+test fails the build if another host or transport appears. See
 [`TESTING.md`](TESTING.md#the-privacy-claim-is-a-check-not-a-paragraph).
 
 ## Known limitations
 
-- **Marking covers Chinese and Japanese, kanji *and* kana.** Korean is not
-  supported yet: Hangul is outside the segmenter's character class, and spaced
-  scripts (English, Spanish) cannot be marked at all, a sentence is one token to a
-  word-list matcher.
+- **Marking is Chinese and Japanese only.** Korean needs segmenter support (below)
+  and spaced scripts like English cannot be marked at all, since a sentence is one
+  token to a word-list matcher.
 - **Inflected Japanese forms mark the dictionary headword, not the word on
-  screen.** `食べました` does not match `食べる`; where the stem is itself a
-  headword it marks that, carrying a narrower scope. Kanji forms mark correctly.
+  screen.** `食べました` does not match `食べる`. Kanji forms mark correctly.
 - **A few Japanese words share one entry where JMdict splits homographs** (`私` is
-  both わたし and あたし). 156 spellings are affected, so hover shows one reading.
-- **Bilingual alignment is approximate**, cues are matched by start time, and a
-  pair more than 1.5s apart is left blank rather than mismatched.
-- **Videos without captions show an error**, not a fallback. Auto-generated tracks
-  cover most, but not all.
-- **Live streams** have unstable caption timing; seeking may not line up.
-- **Transcripts are not persisted**, they survive tab switches and a closed panel,
-  but not a browser restart. The 6 most recent videos are cached.
+  both わたし and あたし), so hover shows one reading. 156 spellings are affected.
+- **Bilingual alignment is approximate.** Cues are matched by start time; a pair
+  more than 1.5s apart is left blank.
+- **Videos without captions show an error** rather than a fallback.
+- **Live streams** have unstable caption timing, so seeking may not line up.
+- **Transcripts are not persisted** past a browser restart. The 6 most recent
+  videos are cached.
+
+## Roadmap
+
+| Order | Work | What it involves |
+| ----- | ---- | ---------------- |
+| 1 | Save words, and export to Anki | Per-word known and unknown state, saving a word as you meet it, and one click from a line to a card |
+| 2 | Korean | Segmenter support for Hangul, a Korean dictionary, a TOPIK list, and inflection handling |
+| 3 | Netflix, Disney+ | A reader for each service, since neither exposes subtitles the way YouTube does |
+| 4 | Ebooks, webpages | The same treatment as the streaming services |
+
+Not planned: accounts, cross-device sync, a paid tier, mobile apps.
 
 ## Parked: audio capture
 
@@ -260,8 +259,12 @@ pipeline test and not a transcriber.
 
 ## Licence
 
-Our code, everything in `src/`, the icons, the tests, is **MIT**; see
-[`LICENSE`](LICENSE). No third-party code, fonts or images are bundled.
+Our code, everything in `src/` except `src/vendor/`, plus the icons and the tests,
+is **MIT**; see [`LICENSE`](LICENSE). One third-party file ships:
+`src/vendor/mediabunny.js` (MPL-2.0), a generated bundle that reads a local video's
+audio tracks. MPL-2.0 is file-level copyleft: it obliges publishing changes to its
+own files, and imposes nothing on this project. No third-party fonts or images are
+bundled.
 
 The dictionaries are **not** ours and **not** MIT. Both are CC BY-SA 4.0 derived
 works:

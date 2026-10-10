@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A Chinese and Japanese dictionary for video: words you don't know marked, definitions on hover.",
+  "description": "A Chinese and Japanese dictionary for video: unknown words marked in the subtitles, meanings on hover.",
   "license": "MIT",
   "scripts": {
     "capture": "node tools/capture.mjs",

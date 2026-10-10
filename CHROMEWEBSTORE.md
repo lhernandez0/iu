@@ -17,9 +17,9 @@ IU Language Companion
 
 **Short Description**
 
-A Chinese and Japanese dictionary for video: words you don't know marked, definitions on hover.
+A Chinese and Japanese dictionary for video: unknown words marked in the subtitles, meanings on hover.
 
-<!-- 94 characters, within the 132 limit. MUST match manifest.json
+<!-- 102 characters, within the 132 limit. MUST match manifest.json
      "description" exactly, the store reads that field, and a mismatch between
      this file and the manifest is the kind of thing that is only noticed at
      submission. The manifest test asserts the two files agree, so this cannot
@@ -27,41 +27,40 @@ A Chinese and Japanese dictionary for video: words you don't know marked, defini
 
 **Detailed Description**
 
-A dictionary for the video you are watching.
+A dictionary for the video you are watching, if you are reading Chinese or Japanese.
 
 The subtitles become text you can look words up in. Every word you do not know yet
-is picked out and explained, right beside the video. Chinese and Japanese, on
-YouTube, in Chrome, Edge, Brave or Firefox.
+is picked out and explained, beside the video rather than in another tab. On
+YouTube, or on a video from your own computer.
 
 EVERY WORD YOU DON'T KNOW, MARKED
 
-Pick HSK for Chinese or JLPT for Japanese, set the level you are working at, and
-the words you have not met yet are picked out in the transcript. Your known words
-fade into the background, so you can see at a glance how much of a sentence is
-actually in reach. Each list names its own levels, JLPT reads N5 to N1, HSK reads
-1 upward, in the order that language really counts.
+Choose HSK for Chinese or JLPT for Japanese, then the level you are working at.
+Every word above it is marked in the transcript, so you can see at a glance how
+much of a sentence is already in reach. Each list names its own levels: JLPT reads
+N5 to N1, HSK reads 1 upward.
 
-LOOK UP ANYTHING WITHOUT LEAVING THE VIDEO
+READING AND MEANING ON HOVER
 
-Hover a word for its reading and meaning. Chinese shows pinyin, Japanese shows
-kana, and a word appears under every list that knows it, HSK 2.0 and HSK 3.0
-disagree, and both are true. Words that sit outside the graded lists are still
-defined; they simply carry no level.
+Chinese shows pinyin, Japanese shows kana, and a word appears under every list
+that knows it. HSK 2.0 and HSK 3.0 often disagree, and both are shown.
 
 TWO SUBTITLES AT ONCE
 
-Your target language with a second line underneath, another subtitle track, or a
+Your target language with a second line beneath it, another subtitle track or a
 machine translation of the same one. Translated lines are tagged, so you always
 know which you are reading.
 
-NEVER LOSE YOUR PLACE
+YOUR OWN VIDEO FILES
 
-The transcript follows playback, and clicking a line jumps the video to it. Return
-to a video and it is still there, waiting.
+Not everything is on YouTube. Open an MKV or MP4 from your computer in the
+extension's own viewer, and the subtitles inside the file become the transcript. A
+file with more than one audio track gets a picker, so you can keep the original
+language rather than a dub.
 
-TAKE IT AWAY
+TAKE IT WITH YOU
 
-Export what you watched as plain text or an SRT subtitle file.
+Export the transcript as plain text or an SRT subtitle file.
 
 HOW TO USE IT
 
@@ -72,9 +71,9 @@ HOW TO USE IT
 
 PRIVACY
 
-The extension collects nothing. There is no analytics, no account, and no server.
-Your settings are stored in your own browser. See the privacy section below for
-detail.
+Nothing is collected: no account, no analytics, no server of ours. Your settings
+stay in your browser, and the only request is for the subtitles of the video you
+are already watching.
 
 **Category**
 Productivity
@@ -86,8 +85,8 @@ Productivity
 
 **Single Purpose**
 
-Reads a video's subtitles in the side panel as text marked up with dictionary
-definitions and word-list levels.
+Reads a video's subtitles, from YouTube or a file on your computer, as text marked
+up with dictionary definitions and word-list levels.
 
 <!-- One sentence, narrow. The store rejects extensions whose stated purpose does
      not cover what the permissions are for; every permission below serves this
@@ -227,7 +226,7 @@ subtitles of the video you are already watching.
 
 | Version | Date | Summary |
 |---------|------|---------|
-| 0.1.0 | - | Not submitted. Captions phase: reading YouTube subtitles in the side panel with word-list marking, hover definitions, bilingual tracks, and export. |
+| 0.1.0 | - | Not submitted. Reading YouTube subtitles in the side panel with word-list marking, hover definitions, bilingual tracks and export; plus a viewer for a local MKV or MP4 that reads the subtitle tracks inside the file and lets you choose the audio track. |
 
 <!-- No entry above is a real submission. The table exists so the first real one
      has somewhere to go. -->
@@ -243,9 +242,9 @@ From the store review checklist. The ones that apply to this extension:
 - [x] **ZIP excludes `node_modules/`, `.git/`, `docs/`, `test/`, `tools/` and every
       dotfile**, scripted. `make release` stages the shipping set, lints it with
       `web-ext lint`, zips it and then asserts the archive contains exactly what
-      the Makefile declares. The loaded dev tree is ~78 MB because of
-      `node_modules` and `docs`; the package is ~4.6 MB, of which 4.2 MB is the two
-      bundled dictionaries. One ZIP serves both stores.
+      the Makefile declares. The package is 5.3 MB unpacked and 1.5 MB zipped, of
+      which 4.2 MB unpacked is the two bundled dictionaries. One ZIP serves both
+      stores.
 - [ ] **Privacy policy URL live**, optional here (no data collection), not written.
 - [ ] **Version bumped in `manifest.json`**, 0.1.0 is the development version.
 
