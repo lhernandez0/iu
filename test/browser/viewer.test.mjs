@@ -732,6 +732,83 @@ section('Resume continues rather than sitting paused');section('Resume continues
   await page2.close();
 }
 
+section('Fullscreen, and the Picture-in-Picture round trip');
+
+{
+  // Three separate things, all reachable and all previously wrong:
+  //
+  //   1. The button could not ENTER fullscreen when `innerHeight` happened to equal
+  //      `screen.height` — which is true in a headless browser (no chrome) and in a
+  //      maximised window (4px of chrome). The heuristic that exists to notice
+  //      F11-fullscreen was blocking a legal request.
+  //   2. Entering PiP DROPS element fullscreen — measured, not assumed: the state goes
+  //      from `fsElement: "picture"` to `fsElement: null` the moment PiP starts.
+  //   3. So after the round trip nothing is fullscreen, and Escape has nothing to exit.
+  const page7 = await context.newPage();
+  await page7.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page7.waitForTimeout(1000);
+  await page7.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await page7.waitForTimeout(2000);
+
+  const state = () =>
+    page7.evaluate(() => ({
+      fsElement: document.fullscreenElement ? document.fullscreenElement.id : null,
+      pip: document.pictureInPictureElement ? 'video' : null,
+      inner: window.innerHeight,
+      screen: window.screen.height,
+    }));
+
+  check('nothing is fullscreen to begin with', (await state()).fsElement, null);
+
+  // (1) The button must ENTER fullscreen as its first response, whatever the viewport
+  // looks like. This is the assertion that fails against the old heuristic.
+  await page7.click('#fullscreen');
+  await page7.waitForTimeout(700);
+  check('the button enters fullscreen', (await state()).fsElement, 'picture');
+
+  // (2) PiP drops it. Asserted rather than assumed, because the fix depends on it being
+  // true — if a future Chrome preserves fullscreen across PiP, this test says so.
+  await page7.click('#pip');
+  await page7.waitForTimeout(1200);
+  const inPip = await state();
+  check('entering PiP starts PiP', inPip.pip, 'video');
+  check('and drops element fullscreen', inPip.fsElement, null);
+
+  await page7.click('#pip');
+  await page7.waitForTimeout(1200);
+  const afterPip = await state();
+  check('exiting PiP ends PiP', afterPip.pip, null);
+
+  // (3) The round trip must be LOSSLESS: fullscreen was on when PiP opened, so it has to
+  // be back when PiP closes.
+  //
+  // The restore has to happen in the PiP click, not in `leavepictureinpicture`, because
+  // a user gesture is required — measured both ways: refused from the event, succeeded
+  // from the click. And the state has to be captured on PiP ENTRY: the browser drops
+  // fullscreen when PiP OPENS, so reading `fullscreenElement` on exit is always null,
+  // which is a condition that can never be true.
+  check('fullscreen is back after the round trip', (await state()).fsElement, 'picture');
+
+  // Leaving works, which is the half that never broke but is worth pinning.
+  await page7.click('#fullscreen');
+  await page7.waitForTimeout(700);
+  check('and leaving works too', (await state()).fsElement, null);
+
+  // (4) And the other direction: PiP on its own must not DRAG the viewer into
+  // fullscreen. The flag is only set when fullscreen was already on.
+  await page7.click('#pip');
+  await page7.waitForTimeout(1200);
+  await page7.click('#pip');
+  await page7.waitForTimeout(1500);
+  check(
+    'PiP without fullscreen does not restore fullscreen',
+    (await state()).fsElement,
+    null,
+  );
+
+  await page7.close();
+}
+
 await closeAll();
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

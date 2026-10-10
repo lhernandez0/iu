@@ -2161,9 +2161,42 @@ document.getElementById('threshold').addEventListener('change', (event) => {
   setSetting('threshold', event.target.value ? Number(event.target.value) : null);
 });
 
+/**
+ * Whether the viewer was in fullscreen when PiP started.
+ *
+ * Recorded on ENTRY, not read on exit, and that distinction is the whole fix: the browser
+ * drops element fullscreen the moment PiP opens, so by the time anyone leaves PiP the
+ * answer is always "no". Reading it at exit is a condition that can never be true — which
+ * is what the first version of this did.
+ */
+let fullscreenBeforePip = false;
+
 click('pip', () => {
-  if (document.pictureInPictureElement) void document.exitPictureInPicture();
-  else void els.video.requestPictureInPicture().catch(() => {});
+  if (document.pictureInPictureElement) {
+    // Leaving PiP RESTORES fullscreen, if the viewer was in it when PiP started.
+    //
+    // It has to happen HERE, in the click handler, and that is not a preference — a user
+    // gesture is required and `leavepictureinpicture` is not one. Measured both ways:
+    //
+    //   from the LEAVE event:     refused (no gesture)  -> stayed not-fullscreen
+    //   from this click:          SUCCEEDED             -> fullscreen back
+    //
+    // So the browser drops fullscreen when PiP opens and never puts it back, and the
+    // only place the page can restore it is the gesture that closes PiP.
+    const wanted = fullscreenBeforePip;
+    fullscreenBeforePip = false;
+    void document
+      .exitPictureInPicture()
+      .then(() => (wanted ? els.picture.requestFullscreen() : undefined))
+      .catch(() => {});
+    return;
+  }
+
+  // The state is captured BEFORE PiP opens, because opening it is what drops it.
+  fullscreenBeforePip = Boolean(document.fullscreenElement);
+  void els.video.requestPictureInPicture().catch(() => {
+    fullscreenBeforePip = false;
+  });
 });
 
 // Fullscreen the PICTURE, not the video. This is what lets the bar be a sibling of
@@ -2171,32 +2204,33 @@ click('pip', () => {
 // and only that element and its descendants are rendered, so no overlay bar could
 // ever appear over it.
 /**
- * Whether this page currently believes it is fullscreen.
+ * Fullscreen, and the one thing the page CANNOT see.
  *
- * **The Fullscreen API cannot see the window manager.** When the user presses F11, or
- * maximises a window, or the browser is already fullscreen, `document.fullscreenElement`
- * stays `null` — the page is not ASKED, it is simply displayed larger. So the button was
- * in the state "not fullscreen" while the screen was full, and pressing it requested
- * fullscreen from an already-fullscreen window. That nesting is why leaving took two
- * Escapes.
+ * **The Fullscreen API describes elements, not windows.** When the user presses F11, or
+ * maximises a window, or PiP closes back into a fullscreen tab, `document.fullscreenElement`
+ * stays `null` — the page was not asked, it is simply displayed larger. There is no API
+ * for that state and no reliable way to detect it, so the button does not try. It manages
+ * ELEMENT fullscreen and labels itself honestly for what it will do.
  *
- * `window.innerHeight` is the honest signal: in a normal window it is noticeably less
- * than the screen, and in a fullscreen one it is the screen. So the page tracks that too
- * and ORs it with the API's own state, which is the only way the two can agree.
+ * ## What an earlier version got wrong, since it is the tempting mistake
+ *
+ * It compared `window.innerHeight` against `window.screen.height` to guess the window's
+ * state, and refused to request fullscreen when they matched. That heuristic cannot tell
+ * "the window is fullscreen" from "there is no browser chrome" — and the second is true
+ * in ANY maximised window, where those values differ by a few pixels of title bar. So the
+ * button reported "Exit fullscreen" while nothing was fullscreen and did nothing when
+ * pressed. Measured in a headless browser, which has no chrome at all:
+ *
+ *     before the click: {"innerHeight":720,"screenHeight":720,"windowIsFullscreen":true}
+ *     after the click:  {"fullscreenElement":null}          <- it never asked
+ *
+ * A heuristic that can only ever produce a false positive is worse than not having one,
+ * so this is gone rather than tuned.
  */
-let windowIsFullscreen = false;
-
-function detectWindowFullscreen() {
-  // A small tolerance: browser chrome is tens of pixels, and some window managers report
-  // an inner height a pixel or two under the screen. 4px will not mistake a real window
-  // for a fullscreen one, and 1px could.
-  windowIsFullscreen = window.innerHeight >= window.screen.height - 4;
-  syncFullscreenButton();
-}
-
-/** Put the button in the state the screen is actually in, not just the document. */
 function syncFullscreenButton() {
-  const on = Boolean(document.fullscreenElement) || windowIsFullscreen;
+  // The BUTTON'S OWN action is the label: element fullscreen in, element fullscreen out.
+  // `innerHeight === screen.height` is deliberately not part of it — see above.
+  const on = Boolean(document.fullscreenElement);
   const label = on ? 'Exit fullscreen' : 'Fullscreen';
   els.fullscreenButton.setAttribute('aria-pressed', String(on));
   els.fullscreenButton.setAttribute('aria-label', label);
@@ -2204,23 +2238,27 @@ function syncFullscreenButton() {
 }
 
 click('fullscreen', () => {
-  // Already full, by either definition: LEAVE. `exitFullscreen` is attempted even when
-  // the document is not the fullscreen element, because that is the case where the user
-  // pressed F11 and the only thing that can undo it is the browser's own shortcut —
-  // which the API call does not drive, so the message is the honest fallback.
   if (document.fullscreenElement) {
     void document.exitFullscreen().catch(() => {});
     return;
   }
-  if (windowIsFullscreen) {
-    // The window is full because of the browser or the OS, not us. There is no API to
-    // undo that, so say so rather than silently doing nothing.
-    setStatus('This window is fullscreen — press F11 to leave it.', true);
-    void document.exitFullscreen().catch(() => {});
-    return;
-  }
-  void els.picture.requestFullscreen().catch(() => {});
+  // Unconditionally, because `fullscreenElement === null` means element fullscreen is
+  // available — that is exactly what the check above established. Refusing here is how
+  // the button became a no-op in a maximised window.
+  void els.picture.requestFullscreen().catch(() => {
+    setStatus('This browser refused fullscreen for this page.', true);
+  });
 });
+
+// Entering Picture-in-Picture DROPS element fullscreen. Measured:
+//
+//     element fullscreen:  fsElement "picture"
+//     entered PiP:         fsElement null      <- the browser let go to open the window
+//     exited PiP:          fsElement null      <- and does not put it back
+//
+// The restore lives in the PiP button's handler rather than in `leavepictureinpicture`,
+// because the latter is not a user gesture and `requestFullscreen` is refused there —
+// tried first, and measured failing. See the handler above.
 
 document.addEventListener('fullscreenchange', () => {
   syncFullscreenButton();
@@ -2230,7 +2268,8 @@ document.addEventListener('fullscreenchange', () => {
 });
 
 window.addEventListener('resize', () => {
-  detectWindowFullscreen();
+  // Still measured, because `--bar-offset` decides where the captions sit and the bar's
+  // height changes with the row. Only the fullscreen guess is gone.
   measureBar();
 });
 
@@ -2343,7 +2382,7 @@ els.stage.addEventListener('mouseleave', hidePopover);
 
 applySettings();
 applyVolume();
-detectWindowFullscreen();
+syncFullscreenButton();
 render();
 setStatus('Ready.');
 
