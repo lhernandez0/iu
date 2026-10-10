@@ -460,16 +460,11 @@ section('the audio track selector');
   // asking a question with one sensible answer, for the most ordinary thing the control
   // does.
   //
-  // **What this can and cannot prove on this fixture.** `three-tracks.mkv` is SIX
-  // SECONDS long, and `offerResume` refuses any position later than `duration - 5` while
-  // also refusing anything at or under 2s — so on this file there is no position that
-  // could produce an offer at all. A stronger assertion here would pass for the wrong
-  // reason, and an earlier version of it did exactly that: it went green with the guard
-  // REMOVED, because the offer was absent for a reason unrelated to the bug.
-  //
-  // So this asserts the deterministic half — the switch keeps the timestamp — and the
-  // suppression itself was verified by removing the guard and watching this fail, which
-  // is written down because it is the only evidence there is for it.
+  // `three-tracks.mkv` is SIX SECONDS, which is too short to show the position bug at
+  // all — its `offerResume` refuses any position later than `duration - 5` and anything
+  // at or under 2s, so no position on that file can produce an offer. Verified by
+  // removing the guard: the assertion below stayed green, because the modal was absent
+  // for an unrelated reason.
   const afterSwitchOffer = await reader.evaluate(() => ({
     resumeHidden: document.getElementById('resume').hidden,
     currentTime: Number(document.getElementById('video').currentTime.toFixed(2)),
@@ -506,6 +501,63 @@ section('the audio track selector');
   check('and not in the time row', placement.inTimeRow, false);
   check('with nothing said when there is nothing wrong', placement.note, '');
   check('and the note takes no space when empty', placement.noteDisplay, 'none');
+}
+
+section('Switching audio keeps a long playback position');
+
+{
+  // The reported failure: resume offered 13:05, switch the audio track, land at 0:02.
+  // Reproduced at 240.95s -> 2.54s.
+  //
+  // The cause was TIMING, not arithmetic. On a Media Source stream `loadedmetadata`
+  // fires with `duration === Infinity` and `readyState 1`, and setting `currentTime`
+  // there is silently dropped because `seekable` is still empty. The duration resolves a
+  // moment later and playback starts from zero. Measured on this fixture:
+  //
+  //   currentTime 240.95 -> 0.00   (readyState 0, dur NaN)
+  //   loadedmetadata: duration=Infinity readyState=1
+  //   currentTime 0.00 -> 0.01     (readyState 4, dur 300.02)
+  //
+  // `three-tracks.mkv` cannot show this — it is six seconds. `two-audio.mkv` is five
+  // minutes and has two tracks, so the target is deep enough for the difference to be
+  // unmistakable.
+  const page6 = await context.newPage();
+  await page6.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page6.waitForTimeout(1000);
+  await page6.setInputFiles('#pick-files', join(FIXTURES, 'two-audio.mkv'));
+  await page6.waitForFunction(
+    () => !document.getElementById('audio-field').hidden && document.getElementById('video')?.readyState >= 2,
+    null,
+    { timeout: 25000 },
+  );
+  await page6.waitForTimeout(600);
+
+  const TARGET = 240;
+  await page6.evaluate((at) => {
+    document.getElementById('video').currentTime = at;
+  }, TARGET);
+  await page6.waitForFunction(
+    (at) => Math.abs(document.getElementById('video').currentTime - at) < 1.5,
+    TARGET,
+    { timeout: 15000 },
+  );
+
+  await page6.selectOption('#audio-track', '1');
+  // Wait for the rebuilt stream to be playing rather than for a duration.
+  await page6.waitForFunction(
+    () => {
+      const video = document.getElementById('video');
+      return video.readyState >= 3 && video.currentTime > 100;
+    },
+    null,
+    { timeout: 25000 },
+  ).catch(() => {});
+
+  const landed = await page6.evaluate(() => Number(document.getElementById('video').currentTime.toFixed(2)));
+  check('the playhead survives the switch', landed > TARGET - 5, true);
+  check('and it did not restart from the beginning', landed > 100, true);
+
+  await page6.close();
 }
 
 section('A finished subtitle clears instead of staying on screen');

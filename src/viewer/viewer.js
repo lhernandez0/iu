@@ -1466,6 +1466,65 @@ async function describeAudio(file) {
 }
 
 /**
+ * Put the playhead back after a re-source, once the stream can actually accept it.
+ *
+ * **`loadedmetadata` is too early for a Media Source stream, and that was the bug.**
+ * Measured on a five-minute dual-audio file: it fires with `duration === Infinity` and
+ * `readyState 1`, and setting `currentTime` there is silently DROPPED — `seekable` is
+ * empty, so the element has nowhere to seek to. The duration resolves a moment later and
+ * playback starts from zero. Reported as "resume offered 13:05, switched the audio track,
+ * landed at 0:02", and reproduced exactly: 240.95s became 2.54s.
+ *
+ * The arithmetic was never wrong — `Math.min(resumeAt, Infinity)` is `resumeAt`. Only the
+ * moment was, which is why the position vanished with no error at all.
+ *
+ * So this waits for the RANGE rather than for an event that only means "the element
+ * exists". `seekable` is the honest signal: empty until there is something to seek
+ * within, and it covers the target only once the fragments for it have arrived.
+ *
+ * @param {number} target Where to put the playhead.
+ * @param {() => void} [onRestored] Runs once, whether or not the seek succeeded.
+ */
+function restorePosition(target, onRestored) {
+  const EVENTS = ['loadeddata', 'canplay', 'progress', 'durationchange'];
+  let settled = false;
+
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    for (const event of EVENTS) els.video.removeEventListener(event, attempt);
+    clearTimeout(ceiling);
+    onRestored?.();
+  };
+
+  const attempt = () => {
+    if (settled) return;
+    const { seekable, duration } = els.video;
+
+    // The rebuilt stream is SHORTER than the target — a track that ends earlier, or a
+    // container that lost its tail. Seeking past the end throws, so go to the end and
+    // stop waiting for a range that will never cover it.
+    if (Number.isFinite(duration) && duration <= target + 0.5) {
+      els.video.currentTime = Math.max(0, duration - 0.5);
+      finish();
+      return;
+    }
+    if (!seekable.length) return;
+    if (seekable.end(seekable.length - 1) < target) return;
+
+    els.video.currentTime = target;
+    finish();
+  };
+
+  for (const event of EVENTS) els.video.addEventListener(event, attempt);
+  // A ceiling, so a stream that never becomes seekable does not leave four listeners on
+  // the element for the life of the page — and so `onRestored` runs either way, or a
+  // playback that should have continued would stay paused forever.
+  const ceiling = setTimeout(finish, 15000);
+  attempt();
+}
+
+/**
  * Switch to a track, by whichever route the browser allows.
  *
  * @param {number} index
@@ -1532,14 +1591,9 @@ async function selectAudioTrack(index) {
 
     // Back to where they were. A new source starts at zero, so without this a viewer
     // who switched mid-film would lose their place.
-    els.video.addEventListener(
-      'loadedmetadata',
-      () => {
-        els.video.currentTime = Math.min(resumeAt, els.video.duration || resumeAt);
-        if (wasPlaying) void els.video.play().catch(() => {});
-      },
-      { once: true },
-    );
+    restorePosition(resumeAt, () => {
+      if (wasPlaying) void els.video.play().catch(() => {});
+    });
 
     // Production is awaited, so `audioBusy` covers the whole rebuild rather than only
     // the setup. Releasing it when `streamTrack` returned would allow a second switch

@@ -149,6 +149,24 @@ ffmpeg([
   'ass-track.mkv',
 ]);
 
+console.log('two-audio.mkv — two audio tracks, and LONG enough to seek into');
+// The only fixture with audio, and the only one long enough for a position test.
+//
+// Both matter: `three-tracks.mkv` is SIX SECONDS, which cannot show a re-source losing a
+// playback position, and produced two misleading tests before this existed (see
+// `test/browser/viewer.test.mjs`). It is synthesised tones rather than speech, so the
+// two tracks are distinguishable by ear AND by frequency analysis.
+ffmpeg([
+  '-f', 'lavfi', '-i', 'testsrc=duration=300:size=192x108:rate=5',
+  '-f', 'lavfi', '-i', 'sine=frequency=440:duration=300',
+  '-f', 'lavfi', '-i', 'sine=frequency=880:duration=300',
+  '-map', '0:v', '-map', '1:a', '-map', '2:a',
+  '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+  '-c:a', 'aac',
+  '-shortest',
+  'two-audio.mkv',
+]);
+
 console.log('no-subtitles.mkv — a file with no subtitle tracks at all');
 ffmpeg([
   ...SHORT_VIDEO,
