@@ -175,6 +175,17 @@ handler feature-detects. Everything else is identical.
 Adding a third target means checking `world: "MAIN"` support and the sidebar API
 for that browser; the rest is the same source.
 
+## AI use
+
+This project is developed with AI coding assistance. We support that use where it
+respects privacy and serves the common good, which is part of why the extension
+collects nothing and the source is open. The bar does not move: every claim in
+these documents is checked by a test against the shipped source, and a human
+reviews before merge. See [`AI-USE.md`](AI-USE.md) for the full note.
+
+Agents working in this repository should read [`AGENTS.md`](AGENTS.md), which
+holds the commands and the published set of rules.
+
 ## Permissions
 
 | Permission         | Why                                                     |

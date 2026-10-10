@@ -49,6 +49,7 @@ ZIP     := $(BUILD)/$(SLUG)-$(VERSION).zip
 # already been filtered.
 SHIPPED := manifest.json icons src \
            LICENSE README.md THIRD-PARTY.md CHROMEWEBSTORE.md TESTING.md \
+           AI-USE.md AGENTS.md \
            package.json
 
 # --- Help --------------------------------------------------------------------

@@ -145,7 +145,7 @@ section('shipped documents do not point at things a viewer cannot have');
   //
   // Scanned rather than imported: the point is the FILE as a viewer receives it,
   // and the failure mode is text in prose that no module ever evaluates.
-  const SHIPPED = ['README.md', 'CHROMEWEBSTORE.md', 'TESTING.md', 'THIRD-PARTY.md'];
+  const SHIPPED = ['README.md', 'CHROMEWEBSTORE.md', 'TESTING.md', 'THIRD-PARTY.md', 'AI-USE.md', 'AGENTS.md'];
   // A path into a gitignored directory, or an ADR reference. ADRs live in docs/,
   // so naming one is the same mistake written a different way.
   const PRIVATE = /docs\/(design-decisions|private)\/|\bADR\s*\d{3,4}\b/;
