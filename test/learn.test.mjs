@@ -583,7 +583,81 @@ section('the conversion is reversible, which is why numbered pinyin exists');
   check('and an ordinary word stays lowercase', pinyinToNumbers('shénme'), 'shen2me');
   check('an apostrophe is kept as written', pinyinToNumbers("Xī'ān"), "Xi1'an1");
 }
+// --- Korean: the data, as it ships -------------------------------------------
 
+// The third language, and the first with TWO upstreams: levels from NIKL and
+// TOPIK, definitions from the unrelated Yonsei companion. Loaded here rather than
+// asserted about, because the interesting properties are all about what the join
+// did and did not produce.
+const korean = JSON.parse(await readFile(resolve(here, '../src/learn/data/korean.json'), 'utf8'));
+const KO_WORDS = new Set(Object.keys(korean.words));
+
+section('the Korean dictionary is internally consistent');
+
+{
+  const words = Object.keys(korean.words);
+  check('it has words', words.length > 6000, true);
+
+  // Every levelled word MUST also be a `words` key. `headwords` is built from the
+  // keys of `words`, so a word present only in `levels` can never be matched by the
+  // segmenter and would be invisible with nothing to say why. This is the check
+  // that makes the "emit the entry even with no definition" decision load-bearing
+  // rather than a preference: 4,558 of these words have no definition and all of
+  // them must still be here.
+  const levelled = new Set([...Object.keys(korean.levels.topik), ...Object.keys(korean.levels.nikl)]);
+  const orphaned = [...levelled].filter((word) => !KO_WORDS.has(word));
+  check('every levelled word is also a definable word', orphaned, []);
+
+  // The other direction is allowed and expected: a word can have a definition and
+  // no level, which is what "definition yes, colour no" means.
+  const undefinedWords = words.filter((word) => korean.words[word].m === '');
+  check('most words have no definition, which is the known limit', undefinedWords.length > 4000, true);
+  check('but every word has the full entry shape', words.every((w) => ['p', 'm', 't', 'pos'].every((f) => f in korean.words[w])), true);
+  // `t` is the traditional-Chinese field and is unused for Korean, as it is for
+  // Japanese. Asserted so a copy-paste from the Chinese builder shows up.
+  check('the traditional field is left empty', [...new Set(words.map((w) => korean.words[w].t))], ['']);
+}
+
+section('the Korean levels are the source\'s own, and ascend');
+
+{
+  for (const [id, count, names] of [
+    ['topik', 2, ['TOPIK I', 'TOPIK II']],
+    ['nikl', 3, ['A', 'B', 'C']],
+  ]) {
+    const list = korean.lists.find((l) => l.id === id);
+    check(`${id} is declared with ${count} levels`, list?.levelCount, count);
+    check(`${id} names them`, list?.levelNames, names);
+
+    const values = [...new Set(Object.values(korean.levels[id]))].sort((a, b) => a - b);
+    check(`${id} uses 1..${count}`, values, Array.from({ length: count }, (_, i) => i + 1));
+    check(`${id} has no level above its count`, Math.max(...Object.values(korean.levels[id])) <= count, true);
+  }
+
+  // The homograph merge, which is the transform most likely to be wrong. 가구03 and
+  // 가구04 are two senses of one spelling; stripping the suffix merges them, and the
+  // EASIEST of the merged rows must win so a word is never placed harder than any
+  // list says it is. Asserted through the key rather than the source: the merged
+  // word is spelled without its number.
+  check('a homograph suffix is stripped from the key', KO_WORDS.has('가구'), true);
+  check('and the numbered spelling is not a key', KO_WORDS.has('가구03'), false);
+}
+
+section('the Korean join is what it is, measured and not hoped');
+
+{
+  const words = Object.keys(korean.words);
+  const withDefinition = words.filter((word) => korean.words[word].m !== '');
+  const ratio = withDefinition.length / words.length;
+
+  // A range rather than an exact count, because the count depends on the source
+  // revision and pinning it would make a data refresh fail for no good reason. The
+  // MEANING is that the join covers roughly a third, which is the fact the README
+  // states and the reason the limitation is documented rather than hidden. If a
+  // future change makes this much better or much worse, this fails and says so.
+  check('about a third of words joined to a definition', ratio > 0.25 && ratio < 0.45, true);
+  check('and joined words are a real subset', withDefinition.length > 0, true);
+}
 // --- Result ------------------------------------------------------------------
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

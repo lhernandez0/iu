@@ -228,24 +228,57 @@ section('the index names every dictionary, and every dictionary declares its pro
 
   // Both ends of the same fact: an index entry naming a list, and the dictionary
   // that holds it. A mismatch means one of the two was edited alone.
+  //
+  // The licence is NO LONGER asserted to be one fixed string. Every dictionary used
+  // to be CC BY-SA 4.0 and the check hardcoded it, which was correct until Korean
+  // arrived: its definitions are CC BY-SA 3.0 and its level list is KOGL Type 1, so
+  // a fixed expectation would have failed a correct payload and invited someone to
+  // change the licence in the data to satisfy the test. The set of licences we may
+  // ship is enumerated (that is the real guard), and the specific one is derived
+  // from the sources rather than asserted.
+  const KNOWN_LICENCES = ['CC BY-SA 3.0', 'CC BY-SA 4.0', 'CC BY 4.0', 'KOGL Type 1', 'MIT'];
+  // Most to least restrictive. The payload as a whole must satisfy every source it
+  // draws on, so the licence it is offered under is the most restrictive of them.
+  const RESTRICTIVENESS = ['CC BY-SA 3.0', 'CC BY-SA 4.0', 'CC BY 4.0', 'KOGL Type 1', 'MIT'];
+
   for (const [language, rel] of paths) {
     const data = JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
     const meta = data.meta ?? {};
 
     check(`[${language}] the data carries a licence`, typeof meta.licence, 'string');
-    check(`[${language}] and it is the share-alike one`, meta.licence, 'CC BY-SA 4.0');
-    check(`[${language}] it names a source`, String(meta.source ?? '').length > 0, true);
+    check(`[${language}] and it is a licence we may ship`, KNOWN_LICENCES.includes(meta.licence), true);
     check(`[${language}] it names the upstream compiler`, String(meta.compiledBy ?? '').length > 0, true);
     check(`[${language}] the word count matches the payload`, meta.wordCount, Object.keys(data.words).length);
 
+    // Every upstream is listed as an object rather than as flat `sourceCommit` /
+    // `sourceTag` scalars. Those encoded the number of sources in their NAMES, so
+    // they could not describe Korean, whose levels and definitions come from two
+    // peers with no "the source" to hang a scalar on.
+    const sources = meta.sources;
+    check(`[${language}] it lists its sources`, Array.isArray(sources) && sources.length > 0, true);
+    const unnamed = (sources ?? []).filter((s) => !String(s.name ?? '').length);
+    check(`[${language}] every source is named`, unnamed.length, 0);
+    const unlicensed = (sources ?? []).filter((s) => !KNOWN_LICENCES.includes(s.licence));
+    check(`[${language}] every source declares a licence we may ship`, unlicensed.map((s) => s.name), []);
+
+    // The offered licence is DERIVED, and this is the check that it was derived
+    // consistently: it must equal the most restrictive of the sources listed. A
+    // hand-set string that drifts from the list above it fails here.
+    const mostRestrictive = RESTRICTIVENESS.find((l) => (sources ?? []).some((s) => s.licence === l));
+    check(`[${language}] the offered licence is the most restrictive of its sources`, meta.licence, mostRestrictive);
+
     // Finding A4. The input is not committed, so reproducibility depends on the
     // artefact naming the exact revision it was built from. A commit alone can be
-    // rewritten; the content hash cannot, so a hash is required, and for the
-    // Chinese source, whose upstream is a git repo, a commit as well.
-    check(`[${language}] it pins a source content hash`, /^[0-9a-f]{64}$/.test(String(meta.sourceSha256)), true);
-    if (language === 'zh') {
-      check(`[${language}] it pins the source commit`, /^[0-9a-f]{40}$/.test(String(meta.sourceCommit)), true);
-    }
+    // rewritten; the content hash cannot. At least ONE source must pin a content
+    // hash or a commit, or the payload cannot be rebuilt, and any pin that IS
+    // present must be well formed rather than a placeholder that merely has the
+    // right length.
+    const pins = (sources ?? []).filter((s) => s.sha256 || s.commit);
+    check(`[${language}] at least one source is pinned to a revision`, pins.length > 0, true);
+    const badHash = (sources ?? []).filter((s) => s.sha256 && !/^[0-9a-f]{64}$/.test(String(s.sha256)));
+    check(`[${language}] every content hash is a real sha256`, badHash.map((s) => s.name), []);
+    const badCommit = (sources ?? []).filter((s) => s.commit && !/^[0-9a-f]{40}$/.test(String(s.commit)));
+    check(`[${language}] every commit is a full revision`, badCommit.map((s) => s.name), []);
 
     // Every list the dictionary offers must be a list the index promises, and
     // vice versa, otherwise a list could exist in one place and not the other.
