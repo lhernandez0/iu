@@ -5,14 +5,14 @@
  * returning a Port it sends messages on and receives messages from. Nothing else
  * in the panel's import graph touches `chrome` at all. So standing a page up in a
  * browser with a fake Port is enough to run the real panel, real stylesheet and
- * real rendering — no extension loading, no Chrome flags, no headless browser.
+ * real rendering, no extension loading, no Chrome flags, no headless browser.
  *
  * The messages are the REAL ones (`../src/common/messages.js`), not copies. A
  * mock that invented its own protocol would drift, and the drift would look like
  * the panel being broken.
  *
  * This file is loaded BY THE BROWSER, so it must import nothing that touches the
- * filesystem. The scenario arrives as an argument — serialised by the server from
+ * filesystem. The scenario arrives as an argument, serialised by the server from
  * `scenarios.mjs`, which is Node-only. Importing that from here makes the browser
  * try to fetch `node:fs`, and the panel silently stays on its placeholder while
  * the console complains about CORS.
@@ -67,8 +67,8 @@ const TICK_MS = 120;
 /**
  * A fake `chrome.runtime.Port` and the panel talking over it.
  *
- * Deliberately shaped like the real thing — `postMessage`, `onMessage`,
- * `onDisconnect` — because the panel calls all three and a preview that quietly
+ * Deliberately shaped like the real thing, `postMessage`, `onMessage`,
+ * `onDisconnect`, because the panel calls all three and a preview that quietly
  * omitted one would not exercise the same code path.
  */
 export class MockPanelPort {
@@ -123,7 +123,7 @@ export function createMockWorker(scenario) {
   //
   // NOT awaited here. `loadDictionary` reaches for `chrome.runtime.getURL`, and
   // `globalThis.chrome` is installed by `installMockChrome` AFTER this function
-  // returns — so loading at construction time read an undefined `chrome` and the
+  // returns, so loading at construction time read an undefined `chrome` and the
   // dictionary silently failed, taking every mark with it. Deferred to `start()`,
   // by which point the mock is in place.
   let dictionary = null;
@@ -154,7 +154,7 @@ export function createMockWorker(scenario) {
   // or the first level.
   //
   // Mirrors `thresholdFor` in the worker, including the per-list memory. It used
-  // to read a `defaultThreshold` off the list, which no longer exists — the list
+  // to read a `defaultThreshold` off the list, which no longer exists, the list
   // is not allowed to carry a starting level, because a starting level chosen by
   // whoever wrote the data is one person's ability shipped to everyone.
   //
@@ -167,7 +167,7 @@ export function createMockWorker(scenario) {
    * What a list CALLS one of its levels.
    *
    * JLPT runs N5..N1 and HSK runs 1..N, so the stored number must never be shown
-   * as the name. Printing it rendered 私 — JLPT N5, stored 1 — as "JLPT 1", which
+   * as the name. Printing it rendered 私, JLPT N5, stored 1, as "JLPT 1", which
    * a reader takes for N1, the hardest level, on the easiest word in the language.
    * The preview shows the same names the panel does, or it is previewing a bug
    * that was already fixed.
@@ -188,7 +188,7 @@ export function createMockWorker(scenario) {
    * Every list that places this word, as the worker reports it for the popover.
    *
    * The hover reply was previously "unhandled", so the definition popover could
-   * not be previewed at all — which is a problem now that the popover is one of
+   * not be previewed at all, which is a problem now that the popover is one of
    * the things being designed.
    *
    * @param {string} word
@@ -275,7 +275,7 @@ export function createMockWorker(scenario) {
       secondary: aligned ? aligned[index] : '',
       // Marks are dropped when the study line is machine output, because the word
       // list describes the source language and a translation no longer holds those
-      // words — the same rule the worker applies.
+      // words, the same rule the worker applies.
       tokens: effectiveTranslation('study') ? undefined : markTokens(segment.text),
     }));
   };
@@ -310,12 +310,12 @@ export function createMockWorker(scenario) {
         fontSize: settings.fontSize,
         // Present so the panel applies it even though no control renders it yet.
         // Omitted, the panel's `applyMarkStyle` reads `undefined` and falls back to
-        // the underline base — which is correct, but means the preview could never
+        // the underline base, which is correct, but means the preview could never
         // show the other treatment, and a missing value would look identical to a
         // deliberate one. The mock reports what the worker reports.
         markStyle: settings.markStyle,
         // The reading placement and tone style, reported the way the worker
-        // reports them — the panel reads all three from `learning`, and a preview
+        // reports them, the panel reads all three from `learning`, and a preview
         // that omitted them would render no readings whatever was selected.
         romaji: settings.romaji,
         toneStyle: settings.toneStyle,
@@ -355,7 +355,7 @@ export function createMockWorker(scenario) {
   const cueAt = (time) => {
     const cues = rows();
     // The same "hold the last line through a gap" rule `findActiveIndex` uses,
-    // including the dimmed state — that behaviour is the point of the preview.
+    // including the dimmed state, that behaviour is the point of the preview.
     let index = -1;
     for (let i = 0; i < cues.length; i++) {
       const cue = cues[i];
@@ -407,7 +407,7 @@ export function createMockWorker(scenario) {
         return;
       }
       case MSG.SET_THRESHOLD:
-        // A threshold change changes the MARKS, so the rows have to be rebuilt —
+        // A threshold change changes the MARKS, so the rows have to be rebuilt,
         // it is not a control value that only the panel cares about. Without this
         // the mock logged the message as unhandled and the marks stayed as they
         // were, which made the threshold look broken in the preview.
@@ -439,7 +439,7 @@ export function createMockWorker(scenario) {
         return;
       }
       default:
-        // A look-up, a capture toggle, a list change — none of which the preview
+        // A look-up, a capture toggle, a list change, none of which the preview
         // can answer honestly. Reported rather than ignored, so a message the
         // panel sends that this mock does not know about is visible.
         console.info('[ui-preview] unhandled message', message);
@@ -496,7 +496,7 @@ export function installMockChrome(scenario) {
   };
 
   globalThis.chrome = { runtime };
-  // Installed under BOTH names, because `src/common/api.js` prefers `browser` —
+  // Installed under BOTH names, because `src/common/api.js` prefers `browser`,
   // it takes `globalThis.browser ?? globalThis.chrome`, and a real Chrome has
   // only `chrome`. Without this the preview would exercise a branch the shipping
   // extension never takes, so a difference between the two would be invisible

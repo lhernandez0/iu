@@ -94,7 +94,7 @@ const textOf = (fakeElement) => fakeElement?.textContent ?? '';
  *
  * The panel renders the settings controls from this, so a test that only wants
  * to exercise the view or the text size still has to send a state the panel can
- * render — a partial one would throw while rendering the rest of the bar and the
+ * render, a partial one would throw while rendering the rest of the bar and the
  * failure would look like the feature under test.
  *
  * @param {object} [learning]  Overrides for the `learning` block.
@@ -140,7 +140,7 @@ const stateWithSettings = (learning, top) => ({
     glossTranslated: false,
     listOptions: [{ value: 'hsk2_0', label: 'HSK 2.0' }, { value: 'hsk3_0', label: 'HSK 3.0' }],
     // Named by the list, and the numeric HSK names are the same as their values,
-    // so the panel test does not depend on the naming — the browser test is where
+    // so the panel test does not depend on the naming, the browser test is where
     // JLPT's N5..N1 ordering is exercised.
     thresholdOptions: [{ value: 1, label: '1' }, { value: 2, label: '2' }, { value: 3, label: '3' }],
     ...(learning ?? {}),
@@ -492,13 +492,13 @@ section('a setting can exist without a control, and still be a real setting');
 {
   // `markStyle` is the first of these: a genuine preference with no toolbar
   // control, waiting for a settings page. Two things have to hold, and they pull
-  // in opposite directions — it must not clutter the toolbar, and it must not be
+  // in opposite directions, it must not clutter the toolbar, and it must not be
   // a second-class setting that behaves differently from the visible ones.
   const hidden = SETTINGS.filter((setting) => setting.hidden);
   check('at least one setting is marked hidden', hidden.length > 0, true);
 
   // Hidden has to MEAN something, or the flag is decoration. The panel renders
-  // controls explicitly, so nothing would render it today either way — which is
+  // controls explicitly, so nothing would render it today either way, which is
   // exactly why the flag needs asserting now: it has to still be true on the day
   // someone adds a loop that renders every setting in a group.
   const rendered = new Set([...PANEL_IDS, ...HIDDEN_IDS]);
@@ -691,7 +691,7 @@ section('the Collapsed toggle is reachable from wherever it is set');
 
   // The bug this pins: the toggle was a select inside the reading bar, and the
   // reading bar is exactly what collapsed hides. Collapsing removed the only
-  // control that could undo it, so the panel was stuck with no way back — which is
+  // control that could undo it, so the panel was stuck with no way back, which is
   // the single most important property of a toggle, and it was absent.
   //
   // The DOM cannot prove where the button sits, so what is asserted here is that
@@ -770,7 +770,7 @@ section('readings render only when the setting asks for them');
   //
   // Counted from the `created` list with a mark and a slice, NOT a running total.
   // The stub records every element ever built and a state push does not clear it,
-  // so a bare count accumulates across the pushes below — which made `below` look
+  // so a bare count accumulates across the pushes below, which made `below` look
   // like it was drawing two rubies when it had drawn none.
   const TOKENS = [
     { text: '他', defined: true, level: 1, reading: 'tā' },
@@ -797,7 +797,7 @@ section('readings render only when the setting asks for them');
    * The words a rendered node actually says, with the annotation taken out.
    *
    * A reading is drawn as `<rt>` INSIDE the ruby, so the ruby's raw text is
-   * `tā他` — annotation first, exactly as it is written in the markup. Any
+   * `tā他`, annotation first, exactly as it is written in the markup. Any
    * assertion about the WORD has to drop the `<rt>` first, which is the same
    * rule the browser suite and `baseText` follow for a whole line.
    *
@@ -841,7 +841,7 @@ section('a reading with no word to attach to is not drawn as an empty stack');
 
 {
   // The negative that would otherwise be invisible. A token with no reading must
-  // render as plain text rather than as an empty ruby stack — a stack still takes
+  // render as plain text rather than as an empty ruby stack, a stack still takes
   // vertical space and indents its word, so a line of unknown words would come out
   // looking centre-aligned for no visible reason.
   const byClass = (dom, name) => dom.created.filter((el) => el.classList.contains(name));
@@ -935,7 +935,7 @@ section('the settings view replaces the transcript and comes back');
   check('both views exist', Boolean(view && transcript), true);
   check('the transcript starts on screen', transcript.hidden, false);
 
-  // The toggle is the ONLY way in and out — there is no back button, which was
+  // The toggle is the ONLY way in and out, there is no back button, which was
   // redundant once the gear stays on screen and still says what it does.
   toggle.dispatch('click');
   check('opening hides the transcript', transcript.hidden, true);
@@ -973,7 +973,7 @@ section('the settings view replaces the transcript and comes back');
   const body = byId.get('settings-body');
   const selects = body.find((el) => el.tagName === 'SELECT');
   // Found by VALUE, because the stub's `Option` stores the label on `.text` while
-  // `textContent` reads children — the same arrangement as the real DOM, where an
+  // `textContent` reads children, the same arrangement as the real DOM, where an
   // option's accessible text and its value are separate things.
   const marksSelect = selects.find((select) =>
     select.children.some((option) => option.value === 'highlight'),

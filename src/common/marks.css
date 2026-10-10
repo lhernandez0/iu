@@ -2,8 +2,8 @@
  * Shared mark, word and reading styling.
  *
  * **Extracted so the panel's transcript and the viewer's captions cannot disagree
- * about what a mark looks like.** Both draw the same `markLine` output — a `.row`
- * of `.mark` / `.word` spans with an optional `.ruby` + `.rt` annotation — and a
+ * about what a mark looks like.** Both draw the same `markLine` output, a `.row`
+ * of `.mark` / `.word` spans with an optional `.ruby` + `.rt` annotation, and a
  * second copy of these rules would drift the first time either changed, which is
  * the kind of divergence that shows up as "the captions look different from the
  * panel" and is nobody's intended behaviour.
@@ -11,7 +11,7 @@
  * Loaded by `sidepanel.html` and `viewer.html`. Nothing here is viewer- or
  * panel-specific: no layout, no bars, no sizes for chrome. Only the marks.
  *
- * `--mark` is the level colour, set per element by `levelColour()` — it is not
+ * `--mark` is the level colour, set per element by `levelColour()`, it is not
  * defined here because it depends on the list's length, which CSS cannot know.
  */
 
@@ -19,7 +19,7 @@
  * A marked word.
  *
  * TWO treatments, chosen by `markStyle` in the settings schema: `underline` and
- * `highlight`. Both use `--mark`, so the ramp is unchanged — only where the colour
+ * `highlight`. Both use `--mark`, so the ramp is unchanged, only where the colour
  * is put.
  *
  * Underline is the BASE rather than one of two equal branches. A rule applying only
@@ -29,7 +29,7 @@
  *
  * There is deliberately NO thickness variation between levels. It was tried: a
  * 1px→3.5px ramp encodes level a second time and is genuinely more readable without
- * colour. Rejected on sight — a row of words whose rules are all different weights
+ * colour. Rejected on sight, a row of words whose rules are all different weights
  * reads as inconsistent rather than informative, and text is read far more than it
  * is scanned.
  */
@@ -46,7 +46,7 @@
  * Scoped to an ANCESTOR, not to `html` itself.
  *
  * The panel sets this class on the document root, which an ancestor selector
- * matches. Written as `html.mark-highlight` it would match only there — and the
+ * matches. Written as `html.mark-highlight` it would match only there, and the
  * mark comparison sheet (`tools/ui/marks.html`) puts the class on a column so both
  * treatments can be on screen at once, which the `html`-qualified form silently
  * ignored. The sheet rendered two identical columns and looked fine doing it.
@@ -56,7 +56,7 @@
    *
    * A low alpha rather than a solid fill: at full strength a marked word becomes a
    * coloured block fighting the text on top of it, and a dense line turns into a
-   * row of chips. This is a wash — enough to see the extent of a mark from across
+   * row of chips. This is a wash, enough to see the extent of a mark from across
    * the line, light enough to read through.
    *
    * `color-mix` rather than a hand-picked rgba per level, so the wash derives from
@@ -74,7 +74,7 @@
 /* A word we can define but the current list does not place.
    Deliberately looks like ordinary text rather than a subdued mark: it has no
    level, so a colour would claim knowledge we do not have. Still hoverable, which
-   is the point — the definition is available either way. */
+   is the point, the definition is available either way. */
 .word {
   cursor: help;
 }
@@ -93,7 +93,7 @@
  * tiny pinyin above it.
  *
  * The ratio is 0.62 of the base. Print ruby runs about 50%, which is right at 10pt
- * on paper and too small at 13px on a screen — and at caption sizes the annotation
+ * on paper and too small at 13px on a screen, and at caption sizes the annotation
  * needs to be legible from across a room, which is where a subtitle is read from.
  * The floor stops it collapsing to nothing on a small panel.
  */
@@ -103,14 +103,14 @@
 }
 
 .ruby {
-  /* The element does its own annotation layout — `ruby-position` and `ruby-align`
+  /* The element does its own annotation layout, `ruby-position` and `ruby-align`
      are the browser's job. */
   padding: 0 1px;
   ruby-position: over;
   ruby-align: center;
   /* Ruby adds its own line box above the base, which pushes the base off the
      baseline its neighbours sit on. `vertical-align: bottom` keeps the CHARACTERS
-     aligned across the run — without it a word with a reading sits lower than one
+     aligned across the run, without it a word with a reading sits lower than one
      without, and the line staircases. */
   vertical-align: bottom;
 }
@@ -119,7 +119,7 @@
   /* Tight, so the reading sits close to its own characters rather than floating
      between two lines. */
   line-height: 1.1;
-  /* Dimmer than the text it annotates. Annotation is secondary by definition — the
+  /* Dimmer than the text it annotates. Annotation is secondary by definition, the
      marks are the thing being pointed at, and they keep the strong colour. */
   color: var(--muted, #8b93a7);
   /* Pinyin runs long, and a reading that wraps breaks the association it exists to
@@ -141,7 +141,7 @@
 /* --- The definition popover ---------------------------------------------- */
 
 /*
- * Shared with the viewer's captions, which offer the same definition on hover —
+ * Shared with the viewer's captions, which offer the same definition on hover,
  * built from their own dictionary rather than a worker round trip, but rendered by
  * the same code and so styled by the same rules.
  *

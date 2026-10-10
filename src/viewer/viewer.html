@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>IU — video</title>
+    <title>IU</title>
     <link rel="stylesheet" href="../common/marks.css" />
     <link rel="stylesheet" href="viewer.css" />
   </head>
@@ -13,7 +13,7 @@
       It is a source, in exactly the sense a website is a source: it produces
       `{ start, duration, text }` segments on request and reports which one is
       playing. Its entire interface to the rest of the extension is the content
-      message contract, and the side panel has no reference to this page at all —
+      message contract, and the side panel has no reference to this page at all,
       no button, no link, no name. That is what keeps every source first-class, and
       it is why this page can be opened by a menu item rather than by the panel.
 
@@ -47,7 +47,7 @@
           The DEFAULT placement: standard subtitle position, and it costs no picture
           height. A card behind the text rather than a full-width gradient strip,
           because a gradient has to end somewhere and over a bright frame that edge
-          is a visible seam — which is exactly what shows up once the browser chrome
+          is a visible seam, which is exactly what shows up once the browser chrome
           is out of the way.
         -->
         <div class="captions captions-overlay" id="captions-overlay" hidden>
@@ -75,17 +75,17 @@
           The control bar.
 
           ONE lifecycle, not two: it fades when the pointer is idle and returns on
-          movement or on focus. There is no collapse control — a manual collapse plus
+          movement or on focus. There is no collapse control, a manual collapse plus
           an automatic hide is three states where every player has two.
 
           `position: absolute` inside `.picture` so it overlays the picture rather
-          than costing it height, and `.picture` is what fullscreen targets — NOT the
+          than costing it height, and `.picture` is what fullscreen targets, NOT the
           `<video>`. Fullscreening the media element renders only that element and its
           descendants, so the bar could never appear over it.
         -->
         <div class="bar" id="bar" data-hidden="false">
           <!--
-            ROW 0 — the time bar.
+            ROW 0, the time bar.
 
             Above the transport, because it is a readout of where you are rather than
             a control you reach for. The cue strip is the part a generic player cannot
@@ -114,8 +114,8 @@
             <!--
               The difficulty toggle, in the time row rather than the transport row.
 
-              It belongs next to the thing it controls — the band is part of the
-              scrubber — and the transport row is already carrying transport, cue
+              It belongs next to the thing it controls, the band is part of the
+              scrubber, and the transport row is already carrying transport, cue
               stepping, speed, volume and four toggles. The icon is the band itself: a
               track with three runs along it, filled at the opacities the ramp uses.
 
@@ -125,7 +125,7 @@
             -->
           </div>
 
-          <!-- ROW 1 — transport. Always present: it is what the bar IS. -->
+          <!-- ROW 1, transport. Always present: it is what the bar IS. -->
           <div class="row row-transport">
             <!-- The file controls. An icon and a name, not a wide button: the name is
                  reference information and the icon is the action. Replacing the file
@@ -167,7 +167,7 @@
 
             <!-- Cue stepping and replay: the controls a generic player CANNOT have,
                  because it does not know where the cues are. Up and down rather than
-                 left and right — the transcript is a vertical list. -->
+                 left and right, the transcript is a vertical list. -->
             <button type="button" class="button icon-button" id="prev-cue" aria-label="Previous line" title="Previous line">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M6 15.5 12 9.5l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
@@ -193,7 +193,7 @@
               WHICH audio track.
 
               No button. There was one, and it toggled the select beside it, which is a
-              control that exists only to reveal the control next to it — the select is
+              control that exists only to reveal the control next to it, the select is
               already one tab stop away and always in the same place. A toggle whose
               whole job is to show something adjacent is a click tax.
 
@@ -211,7 +211,7 @@
 
             <!-- The difficulty band, with the other toggles rather than in the time
                  row. The band is drawn ON the scrubber, but the control for it is a
-                 toggle like the rest — and a row about WHERE you are is the wrong place
+                 toggle like the rest, and a row about WHERE you are is the wrong place
                  for a control about what is drawn there. -->
             <button type="button" class="button icon-button" id="difficulty" aria-label="Hide difficulty band" aria-pressed="true" title="Hide difficulty band">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -240,7 +240,7 @@
               Volume: a mute button AND a slider, in one group.
 
               Both, because each answers a question the other cannot. A slider alone
-              has no way back to a known level once it has been dragged to zero — you
+              has no way back to a known level once it has been dragged to zero, you
               would have to guess where it was. A toggle alone has no "quiet but not
               silent".
 
@@ -248,7 +248,7 @@
               control is keyboard-operable and announced correctly for free.
 
               NOT persisted. The element keeps its volume across a file change, and the
-              OS volume is the real preference — a second one stored here would fight
+              OS volume is the real preference, a second one stored here would fight
               it.
             -->
             <div class="volume">
@@ -300,7 +300,7 @@
           </div>
 
           <!--
-            ROW 2 — the caption settings. Present ONLY while captions are on.
+            ROW 2, the caption settings. Present ONLY while captions are on.
 
             The resolution to a real tension: there is no settings VIEW in the
             viewer, yet everything the captions need must still be reachable. The row
@@ -335,7 +335,7 @@
 
             <span class="divider" aria-hidden="true"></span>
 
-            <!-- Which track each line draws. A local file can carry several — the
+            <!-- Which track each line draws. A local file can carry several, the
                  viewer was showing only one and claiming a file has one track, which
                  is false. These are the SAME preferences the panel's dropdowns set,
                  so a track chosen in one surface is the one the other draws. -->
@@ -359,7 +359,7 @@
 
             <!-- Which list the captions are graded against, and from what level.
                  The viewer has no panel to set these in, and without them the viewer
-                 had to guess from the track's language — which is a good default and
+                 had to guess from the track's language, which is a good default and
                  a poor only option. -->
             <label class="field">
               <span class="field-label">List</span>
@@ -375,8 +375,8 @@
           <!--
             The status line: ERRORS ONLY, and hidden otherwise.
 
-            It used to narrate a healthy file — "Ready.", "3 subtitle tracks in this
-            video" — which is the bar telling the viewer things they can already see.
+            It used to narrate a healthy file, "Ready.", "3 subtitle tracks in this
+            video", which is the bar telling the viewer things they can already see.
             The element stays because an error has to go somewhere, and a red line is
             the one thing worth interrupting for; it is simply empty and collapsed the
             rest of the time.
@@ -388,7 +388,7 @@
       <!--
         The captions, pinned below the picture.
 
-        Its own row, and the picture shrinks above it. Nothing is ever covered —
+        Its own row, and the picture shrinks above it. Nothing is ever covered,
         which is the case for someone who does not want the image obstructed at all,
         where the overlay costs no height but does sit over the bottom of the frame.
 

@@ -2,8 +2,8 @@
  * Assert a built ZIP contains exactly what should ship.
  *
  * The failure this exists to catch: a package that installs and works while
- * carrying files it should not. Nobody notices by installing it — the extension
- * behaves identically — and by then it is on a store. The 8.9 MB conversation log
+ * carrying files it should not. Nobody notices by installing it, the extension
+ * behaves identically, and by then it is on a store. The 8.9 MB conversation log
  * under `docs/`, the 52 MB of `node_modules/`, and the real video id in
  * `test/fixtures/` are all things that would have shipped silently if the
  * exclusion list were wrong.
@@ -12,7 +12,7 @@
  * restated here. Restating it would be a second source of truth, which is the
  * problem this is meant to solve.
  *
- * @see Makefile — `make verify`
+ * @see Makefile, `make verify`
  */
 
 import { execFileSync } from 'node:child_process';
@@ -76,7 +76,7 @@ console.log(`  (${names.length} entries in ${zipFile})`);
 // a whole directory arriving because a new tool wrote into it.
 //
 // ANY leading dot is rejected, with no exception. An earlier version of this
-// check carved out `.env.example` — because the Makefile's SHIPPED list had it —
+// check carved out `.env.example`, because the Makefile's SHIPPED list had it,
 // and that is the wrong direction: the guard was adjusted to permit the thing it
 // should have caught. `.env.example` documents `npm run capture`, which is a
 // development tool that is not in the package, so it explained a file that would
@@ -114,7 +114,7 @@ check('the filename carries the manifest version', zipFile.includes(version), tr
 //
 // Every check above reads the zip's CENTRAL DIRECTORY, which is a list of names
 // and sizes. That list can be perfectly well-formed while the archive is not
-// readable at all — and it was.
+// readable at all, and it was.
 //
 // `tools/pack.mjs` was writing central records with no local-header offset (byte
 // 42), so every entry claimed to start at position 0. The central directory read
@@ -123,8 +123,8 @@ check('the filename carries the manifest version', zipFile.includes(version), tr
 // bomb)". Both stores would have rejected it. The one thing that would have caught
 // it is asking a real ZIP reader to read it.
 //
-// So the last check shells out. `unzip` is not required to BUILD the package —
-// that is why pack.mjs exists — but a workspace that cannot test the artifact it
+// So the last check shells out. `unzip` is not required to BUILD the package,
+// that is why pack.mjs exists, but a workspace that cannot test the artifact it
 // produces is not verifying anything, and this is the only test that reads the
 // bytes the way a store will.
 {
@@ -138,7 +138,7 @@ check('the filename carries the manifest version', zipFile.includes(version), tr
   } catch (error) {
     if (error.code === 'ENOENT') {
       // `unzip` is not installed. That is why `pack.mjs` exists, so this is a skip
-      // rather than a failure — and it says so, because a silent pass would be
+      // rather than a failure, and it says so, because a silent pass would be
       // worse than no check at all.
       console.log('  skip  a real zip reader can read every entry (no `unzip` on PATH)');
       broken = undefined;

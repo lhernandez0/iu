@@ -73,7 +73,7 @@ export function watchPage({ videoId, title, tracks, serveAsrNames = false, trans
           languageCode: track.languageCode,
           name: serveAsrNames ? { runs: [{ text: track.name }] } : { simpleText: track.name },
           kind: track.kind ?? undefined,
-          // A capture knows which tracks really are translatable — YouTube will
+          // A capture knows which tracks really are translatable, YouTube will
           // not machine-translate a human-authored one, and assuming otherwise
           // would make the picker offer a menu that changes nothing.
           isTranslatable: track.isTranslatable ?? true,
@@ -108,7 +108,7 @@ export function watchPage({ videoId, title, tracks, serveAsrNames = false, trans
     // knowing: the content script runs in an isolated world, and Chrome gives
     // each world its own wrapper for the same DOM node. An expando or accessor
     // installed by the page is therefore not what the content script's
-    // \`video.currentTime = n\` reaches — it reaches the native setter. A
+    // \`video.currentTime = n\` reaches, it reaches the native setter. A
     // sourceless media element still holds a playback position, so reading the
     // native property is both simpler and actually observes the seek.
     window.__position = () => document.getElementById('player').currentTime;
@@ -116,7 +116,7 @@ export function watchPage({ videoId, title, tracks, serveAsrNames = false, trans
     /**
      * Move playback to a position, the way watching the video would.
      *
-     * Exists because the alternative — assigning currentTime from the test —
+     * Exists because the alternative, assigning currentTime from the test,
      * reaches different wrappers in different worlds, and because a source-less
      * media element never ADVANCES on its own. Setting it from inside the page is
      * the only way a test can put the extension at a position further down a long
@@ -200,7 +200,7 @@ export const OTHER_ENGLISH = {
 //
 // The fixtures above are written by hand, which means they encode what we BELIEVE
 // YouTube sends. A capture recorded by tools/capture.mjs is what it actually
-// sent — so a test that runs against one can falsify a wrong belief rather than
+// sent, so a test that runs against one can falsify a wrong belief rather than
 // confirm it.
 //
 // Fixtures are local (gitignored), so every reader here tolerates their absence:
@@ -227,7 +227,7 @@ export function listCaptures() {
  * A captured video, in the shape the harness serves.
  *
  * Segment text and timings come from the capture, so what the panel renders is
- * the real transcript rather than something invented — which is the entire point.
+ * the real transcript rather than something invented, which is the entire point.
  *
  * @param {string} videoId
  * @returns {{videoId: string, title: string, translationLanguages: object[], tracks: object[], capturedAt: string}|null}
@@ -258,8 +258,8 @@ export function captureFor(videoId) {
 /**
  * A raw captured body, exactly as YouTube sent it.
  *
- * For the cases where the interesting question is what the REAL bytes contain —
- * markup inside caption text, say — rather than what our parser made of them.
+ * For the cases where the interesting question is what the REAL bytes contain,
+ * markup inside caption text, say, rather than what our parser made of them.
  *
  * @param {string} videoId
  * @param {string} kind Substring to match, e.g. 'timedtext' or 'watch'.

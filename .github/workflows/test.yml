@@ -32,7 +32,7 @@ jobs:
       - run: npm ci
 
       # The MKV fixtures are GENERATED, not committed, so a fresh checkout has
-      # none — and `mkv-container.test.mjs` fails rather than skipping without
+      # none, and `mkv-container.test.mjs` fails rather than skipping without
       # them, deliberately. Generating takes two seconds.
       #
       # Installed explicitly rather than assumed. It happens to be preinstalled on
@@ -84,10 +84,10 @@ jobs:
           set -o pipefail
           npm run test:browser 2>&1 | tee /tmp/browser.log
           # `findChrome` returning null makes every suite SKIP and the runner exit
-          # 0, so without this the job would pass while testing nothing — which is
+          # 0, so without this the job would pass while testing nothing, which is
           # the exact failure this workflow exists to prevent.
           if grep -q 'Skipped: no browser' /tmp/browser.log; then
-            echo "::error::the browser tier skipped — no Chromium was found, so nothing was tested"
+            echo "::error::the browser tier skipped, no Chromium was found, so nothing was tested"
             exit 1
           fi
 
@@ -107,7 +107,7 @@ jobs:
       # it on every push would be 190 MB of nothing.
       #
       # **`*.mkv`, not the directory.** Caching `test/conformance` would also cache
-      # `run.mjs`, and a cache restore happens AFTER checkout — so a stale copy from
+      # `run.mjs`, and a cache restore happens AFTER checkout, so a stale copy from
       # a previous run would overwrite the freshly checked-out test file, and the
       # suite would run last week's assertions against this week's parser. The
       # narrower path is the difference between caching data and caching code.

@@ -10,7 +10,7 @@
  *
  * It IS implemented in Blink, behind `--enable-blink-features=AudioVideoTracks` or the
  * user-facing `--enable-experimental-web-platform-features`. With either flag it works
- * correctly — verified by frequency analysis, not by reading `.enabled` back
+ * correctly, verified by frequency analysis, not by reading `.enabled` back
  * (`probe-audio-hear-switch.mjs`: switching a 440/880 Hz file really moves the tone).
  * Chromium held it back because switching froze playback; that was fixed in **M138**,
  * June 2025, and the reporter confirmed it on M139.
@@ -18,7 +18,7 @@
  * So there are two paths and this module owns both:
  *
  *   1. **The API, when the browser has it.** Preferred: the browser demuxes, decodes
- *      and switches, which means it handles every codec it can PLAY — including AC-3
+ *      and switches, which means it handles every codec it can PLAY, including AC-3
  *      and DTS, which we cannot decode ourselves at any price we would pay.
  *   2. **Remuxing, when it does not.** Ask for a copy of the file containing only the
  *      chosen track, and hand the element that. Costs real work per switch and only
@@ -29,7 +29,7 @@
  *
  * It does not decode anything. Remuxing hands the element the same codec it already
  * refused, so a file whose audio the browser cannot decode plays **silence** with no
- * `MediaError` to catch — which is why `listAudioTracks` reports `playable` per track
+ * `MediaError` to catch, which is why `listAudioTracks` reports `playable` per track
  * and the viewer says so in words rather than letting a learner find out by ear.
  */
 
@@ -47,7 +47,7 @@ import {
 /**
  * Audio codecs a browser can be expected to decode.
  *
- * Only used to WARN. A codec absent from this list is not refused — `canPlayType` has
+ * Only used to WARN. A codec absent from this list is not refused, `canPlayType` has
  * the final say, because a browser may support more than this list knows (and Chrome on
  * Windows ships AC-3 where Linux Chromium does not). The list exists so the common
  * failure can be named in advance rather than discovered as silence.
@@ -89,7 +89,7 @@ export async function listAudioTracks(file) {
     const language = track.languageCode && track.languageCode !== 'und' ? track.languageCode : null;
     // The file's own label first, then the language, then the position. Most Matroska
     // files carry neither a title nor a language, and a list of identical "Track"
-    // entries is worse than useless — the index is always there, so there is always
+    // entries is worse than useless, the index is always there, so there is always
     // something to say.
     const name = track.name || language || '';
     return {
@@ -123,14 +123,14 @@ export async function listAudioTracks(file) {
  * Media Source Extensions wants an INITIALISATION segment before any media, then
  * fragments to append. So:
  *
- *   - `StreamTarget` hands us bytes as they are produced. **Not `chunked: true`** —
+ *   - `StreamTarget` hands us bytes as they are produced. **Not `chunked: true`**,
  *     that option accumulates up to 16 MiB before writing, which is the opposite of
  *     what is wanted here and turns a stream back into a buffer.
  *   - `CmafOutputFormat` produces exactly the init-plus-fragments pair, via
  *     `initTarget`, which is why it is used rather than plain MP4.
  *   - Initialisation and media are appended through ONE ordered queue. MSE rejects
  *     media appended before the init segment, and a single queue makes that impossible
- *     by construction rather than by remembering to check — mediabunny writes the init
+ *     by construction rather than by remembering to check, mediabunny writes the init
  *     segment first, so it is naturally at the head.
  *
  * ## The contract, which is the part a caller must get right
@@ -194,7 +194,7 @@ export async function streamTrack(file, index, options = {}) {
   /**
    * Set when chunks are arriving but nothing can be appended.
    *
-   * The `sawInit` gate below is an assumption about library internals — that init is
+   * The `sawInit` gate below is an assumption about library internals, that init is
    * always written first. If that ever stopped being true the gate would hold every
    * chunk forever, `done` would resolve cleanly, and the result would be a black
    * element with a healthy-looking UI. This is what turns that invisible hang into a
@@ -220,7 +220,7 @@ export async function streamTrack(file, index, options = {}) {
     const head = queue[0];
     // The rule, enforced instead of assumed: nothing may be appended until the
     // initialisation segment has been. mediabunny writes init first, so in practice
-    // this never blocks — but if it ever does, the chunk count says so rather than
+    // this never blocks, but if it ever does, the chunk count says so rather than
     // waiting forever in silence.
     if (!head.init && !sawInit) {
       if (queue.length > 1) {
@@ -279,7 +279,7 @@ export async function streamTrack(file, index, options = {}) {
         sourceBuffer.addEventListener('updateend', () => pump());
         pump();
       } catch (error) {
-        // Thrown here for a codec the browser will not take — the one case where the
+        // Thrown here for a codec the browser will not take, the one case where the
         // failure is worth naming, because the alternative is silence.
         failure = error;
       }

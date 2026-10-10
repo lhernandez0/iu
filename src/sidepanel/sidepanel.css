@@ -10,7 +10,7 @@
 
      `system-ui` alone is a Latin-first face, and a Han glyph rendered by a
      Latin-first fallback is drawn from whatever CJK face the OS happens to
-     substitute — often a thin, wide one that sits oddly beside the Latin text in
+     substitute, often a thin, wide one that sits oddly beside the Latin text in
      the same line. The panel is mostly CJK by volume, so the reading surface
      names real CJK faces before falling back.
 
@@ -42,7 +42,7 @@
   --font-size: 13px;
   /* Unitless, and it has to be: CSS cannot multiply two lengths, so
      `calc(12px * var(--text-scale))` only works while this is a plain number.
-     Dividing px by px is what yields one — writing `calc(var(--font-size) / 13)`
+     Dividing px by px is what yields one, writing `calc(var(--font-size) / 13)`
      leaves a length, and every `calc(12px * that)` is then invalid, which
      silently discards those declarations and falls back to the browser default.
      The 13px here must match the 13px above. */
@@ -108,7 +108,7 @@ body {
   cursor: default;
 }
 
-/* The title attribute lives on the input, so hovering the label has to show it —
+/* The title attribute lives on the input, so hovering the label has to show it,
    which it does via the label's own title being set too. Both are set from the
    panel; the rule here is only for the dimmed state. */
 
@@ -121,7 +121,7 @@ body {
   accent-color: var(--accent);
 }
 
-/* The target for whichever lines are ticked — one control, not one per line,
+/* The target for whichever lines are ticked, one control, not one per line,
    because the language you read in is a preference rather than a per-line choice.
    Shown only when something is asking to be translated. */
 .translate-target-row {
@@ -151,7 +151,7 @@ body {
    transcript.
 
    The toggle is NOT in either hidden region. It lives in the language row, and it
-   was originally in the reading bar — which this rule hides — so collapsing
+   was originally in the reading bar, which this rule hides, so collapsing
    removed the only control that could undo it and the panel was stuck. A control
    must not live inside the region it controls. */
 body.collapsed .bar.learning,
@@ -166,7 +166,7 @@ body.collapsed .status {
  *
  * At panel height there is not room for both, and a settings sheet covering the
  * transcript would hide the thing being tuned. `flex: 1` so it takes the space the
- * transcript just gave up, and `min-height: 0` — the same trap as everywhere else
+ * transcript just gave up, and `min-height: 0`, the same trap as everywhere else
  * in this file: without it the content's intrinsic height wins and the footer is
  * pushed off screen instead of the view scrolling.
  */
@@ -238,7 +238,7 @@ body.collapsed .status {
  * One setting per row: label left, control right.
  *
  * A grid rather than a flex row, so every control starts at the same x whatever
- * its label's length — with flex the selects form a ragged column and the page
+ * its label's length, with flex the selects form a ragged column and the page
  * reads as unaligned rather than as a list.
  */
 .settings-row {
@@ -352,7 +352,7 @@ body.collapsed .status {
 
      This control sets the text size, so scaling it by that size is circular: at
      the 10px minimum the field, the digits and the spinner all shrink together
-     until the number cannot be read — and the number is the one thing you need
+     until the number cannot be read, and the number is the one thing you need
      to read to change it back. A control for a size must not depend on the size
      it controls. */
   font-size: 13px;
@@ -447,7 +447,7 @@ select:disabled {
   overflow-y: auto;
   padding: 4px 6px 12px;
   /* Themed, because the default light scrollbar on a dark panel is the single
-     loudest thing on screen — it reads as a bright stripe down the right edge and
+     loudest thing on screen, it reads as a bright stripe down the right edge and
      is the first thing the eye lands on. `scrollbar-color` is the standard
      property and is enough on its own in current Chrome; no vendor prefixes and
      no hand-built track, which is what this used to need. */
@@ -511,13 +511,13 @@ select:disabled {
 }
 
 /* Between spoken lines: nothing is being said, but the transcript must not go
-   blank — a viewer looking up mid-gap would lose their place entirely, which is
+   blank, a viewer looking up mid-gap would lose their place entirely, which is
    the opposite of what a reading aid is for. So the last line stays lit, with
    only its TEXT dimmed to show it is not being spoken right now.
 
    The background is deliberately left to `.row.active`. An earlier version set
-   its own darker background here, which — at equal specificity, later in the
-   file — simply overrode the active highlight and made the line look as though
+   its own darker background here, which, at equal specificity, later in the
+   file, simply overrode the active highlight and made the line look as though
    nothing was highlighted at all. Only the text colour belongs here.
 
    The marks are not dimmed either: a coloured underline is the one thing saying
@@ -567,7 +567,7 @@ select:disabled {
 .learning {
   /* Tighter than a normal bar, in every dimension that costs height.
    *
-   * Four controls share ~350px, and a side panel is about 600px tall on a laptop —
+   * Four controls share ~350px, and a side panel is about 600px tall on a laptop,
    * so three bars plus a status line is a large fraction of the space before a
    * single line of transcript is drawn. This bar is the one that can afford to be
    * thin: its controls are secondary to the language pickers above it, and the
@@ -597,7 +597,7 @@ select:disabled {
 }
 
 /* The reading placement. Short options (`Off`, `Above`, `Below`, `Marked`), so it
-   can be narrower than the other selects without clipping — which matters because
+   can be narrower than the other selects without clipping, which matters because
    `flex: 1 1 0` would otherwise give it an equal share of a bar it needs less of,
    taking width from the word list that has to hold `HSK 2.0`. */
 #reading {
@@ -606,7 +606,7 @@ select:disabled {
 }
 
 /* Focus view: only the current line and the next are shown.
-   The rows are not re-rendered for this — the same rows are filtered by CSS, so
+   The rows are not re-rendered for this, the same rows are filtered by CSS, so
    marks, hover and seek all keep working and switching modes is instant. */
 .transcript.focus .row {
   display: none;
@@ -659,7 +659,7 @@ select:disabled {
 /* Motion is the panel's to add, not its to impose.
 
    Some people become ill from interface motion, and the operating system already
-   exposes that preference — `prefers-reduced-motion` is the configuration, so
+   exposes that preference, `prefers-reduced-motion` is the configuration, so
    there is nothing to build and no setting to maintain. Transitions are the only
    thing here that moves, so they are the only thing this has to switch off; the
    accent, the colours and the layout are all unchanged, which is the point. A

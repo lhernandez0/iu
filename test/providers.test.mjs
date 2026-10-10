@@ -4,7 +4,7 @@
  * The seam exists so that no file outside `providers.js` has to name a video
  * site. That is easy to state and easy to erode, so two things are asserted:
  *
- *   1. `providerFor` answers correctly — the interesting case is a URL that
+ *   1. `providerFor` answers correctly, the interesting case is a URL that
  *      must NOT match, since a provider that matches everything would silently
  *      try to read captions from every tab.
  *   2. No module outside the provider's own files mentions a site name. This is
@@ -86,8 +86,8 @@ section('the provider names read correctly for user-facing text');
 section('no module outside the provider names a video site');
 
 {
-  // The provider's own content scripts are site-specific by definition — they
-  // read one site's player internals — so they are exempt. Everything else is
+  // The provider's own content scripts are site-specific by definition, they
+  // read one site's player internals, so they are exempt. Everything else is
   // the code the seam exists to keep generic.
   const EXEMPT = [
     'src/common/providers.js',

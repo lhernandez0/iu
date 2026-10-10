@@ -1,5 +1,5 @@
 /**
- * Service worker — owns the transcript table. Nothing else does.
+ * Service worker, owns the transcript table. Nothing else does.
  *
  * The panel is a subscriber that renders whatever it is sent; content scripts
  * are stateless fetch providers. Putting the table here is what makes the panel
@@ -43,7 +43,7 @@ import { markLine, listCoversLanguage } from '../learn/marking.js';
  *
  * A PREFERENCE, not a fix. A first reading of the compatibility tables said
  * Firefox's `chrome.*` is callback-only, which would have made this mandatory.
- * That is true of Manifest V2 and false of MV3 — Mozilla: "In Manifest V3,
+ * That is true of Manifest V2 and false of MV3, Mozilla: "In Manifest V3,
  * Firefox supports promises for asynchronous events in the `chrome.*`
  * namespace." Our code is promise-based `chrome.*` throughout, so it already
  * works in Firefox. This is here because one identifier that reads the same
@@ -52,7 +52,7 @@ import { markLine, listCoversLanguage } from '../learn/marking.js';
  * DECLARED PER FILE rather than imported from a shared module, deliberately.
  * Tried the module first and it broke the test suite: a module is evaluated
  * once and cached, so `api` snapshots whichever global existed at first import,
- * while the test stubs reassign `globalThis.chrome` for every boot — the worker
+ * while the test stubs reassign `globalThis.chrome` for every boot, the worker
  * ended up holding a dead stub. Reading the global where it is used cannot go
  * stale. The content script cannot import at all (it is a classic script), so
  * this also keeps one mechanism rather than two. Same shape as MSG and TARGET.
@@ -64,7 +64,7 @@ const api = globalThis.browser ?? globalThis.chrome;
  *
  * Off, because it printed on every load in everyone's console. It exists because
  * the numbers are occasionally the only way to tell a slow dictionary from a slow
- * network — they need opposite fixes — so removing it outright would mean writing
+ * network, they need opposite fixes, so removing it outright would mean writing
  * it again the next time that question comes up. Set it in the service worker
  * console: `chrome.storage` is not involved, so this is per-session and cannot be
  * left on by accident.
@@ -131,8 +131,8 @@ const videos = new Map();
  * Every learner preference, held as one object.
  *
  * Settings live here rather than as a field each because they are already
- * interdependent — the threshold is meaningless without the word list, and the
- * word list is meaningless without the dictionary loaded — so keeping them
+ * interdependent, the threshold is meaningless without the word list, and the
+ * word list is meaningless without the dictionary loaded, so keeping them
  * together is what lets them be normalised, persisted and sent as a unit.
  *
  * Language choices are settings too, which is what makes them sticky: they are
@@ -147,7 +147,7 @@ let settings = defaults();
  * Resolves once the stored settings have been read.
  *
  * The first refresh is what seeds a video's language choices, and it can be
- * triggered the moment a panel connects — which is before an async storage read
+ * triggered the moment a panel connects, which is before an async storage read
  * has finished. Without waiting, the restored choice loses the race and the first
  * video of every session comes up in the default language, which looks exactly
  * like the setting not persisting at all.
@@ -167,8 +167,8 @@ let currentVideoId = null;
  * preserves the cache while the panel is open.
  *
  * Note the split: requests arrive on this port, but content-script reports
- * arrive on chrome.runtime.onMessage. Port messages do NOT reach onMessage —
- * they are two separate channels — which is why the panel's own reply(add
+ * arrive on chrome.runtime.onMessage. Port messages do NOT reach onMessage,
+ * they are two separate channels, which is why the panel's own reply(add
  * refresh) is handled here rather than in the switch below.
  *
  * @type {chrome.runtime.Port|null}
@@ -268,10 +268,10 @@ const FIRST_LEVEL = 1;
  * never chosen one. Nothing here guesses a starting point on their behalf.
  *
  * It used to be a number carried by the list, and that number was 4 for both HSK
- * lists — the personal level of whoever built this, shipped to everybody. A
+ * lists, the personal level of whoever built this, shipped to everybody. A
  * midpoint of the range is no better: it is still the app deciding, on the
  * learner's behalf, that they are average at a language it has never seen them
- * read. Memory is the honest answer — it can only be wrong until they touch the
+ * read. Memory is the honest answer, it can only be wrong until they touch the
  * control once, and after that it is right.
  *
  * Per list rather than global, because a threshold only means something against
@@ -294,7 +294,7 @@ function thresholdFor(list) {
  * Record the level the learner chose, against the list they chose it for.
  *
  * The only writer of a starting level. When they switch away and back, this is
- * what `thresholdFor` reads — so a deliberate choice survives a list change
+ * what `thresholdFor` reads, so a deliberate choice survives a list change
  * without leaking into a list it was never about.
  *
  * @param {string|null|undefined} listId
@@ -314,7 +314,7 @@ function rememberThreshold(listId, level) {
  * The stored level is ordered 1..N so the ramp and the threshold comparison are
  * the same for every list, but the NAME differs and it differs in direction: HSK
  * counts 1..9 getting harder, JLPT counts N5..N1 getting harder. So the number is
- * an implementation detail and must never be shown as if it were the name — doing
+ * an implementation detail and must never be shown as if it were the name, doing
  * that rendered 私 (JLPT N5, stored 1) as "JLPT 1", which reads as N1, the HARDEST
  * level, on the easiest word in the language.
  *
@@ -333,7 +333,7 @@ function levelName(list, level) {
  * A word list by id, or the first available.
  *
  * Resolved from `availableLists` rather than passed around, because the two
- * settings that need it — which list, and what threshold within it — are changed
+ * settings that need it, which list, and what threshold within it, are changed
  * from different places and each has to look the list up from the id it stored.
  *
  * @param {string|null|undefined} listId
@@ -360,8 +360,8 @@ let activeIndex = -1;
 /**
  * Whether the highlighted cue sits in a gap between two lines.
  *
- * Cue times do not tile the timeline — a line ends and the next starts a moment
- * later — so for a fraction of a second after every line nothing is being said.
+ * Cue times do not tile the timeline, a line ends and the next starts a moment
+ * later, so for a fraction of a second after every line nothing is being said.
  * The panel dims rather than dropping the highlight, and this is what tells it
  * which. Kept beside the index because the two always travel together.
  *
@@ -376,7 +376,7 @@ let pendingError = null;
  * A translation that could not be produced, kept apart from the transcript.
  *
  * `entry.error` replaces the whole transcript on screen and blocks the cache, so
- * a failed second line must not go there — the first line is already correct and
+ * a failed second line must not go there, the first line is already correct and
  * readable. This clears as soon as a translation succeeds.
  *
  * @type {string|null}
@@ -400,8 +400,8 @@ let availableLists = [];
 let listIndex = null;
 
 /**
- * The dictionary for the ACTIVE language. Loaded lazily — see
- * `ensureDictionaryFor` — and null until then.
+ * The dictionary for the ACTIVE language. Loaded lazily, see
+ * `ensureDictionaryFor`, and null until then.
  *
  * @type {object|null}
  */
@@ -414,7 +414,7 @@ let dictionaryLanguage = null;
  * Make `dictionary` hold the given list's language.
  *
  * A no-op when it already does, so this is safe to call on every rebuild. Called
- * from three places — startup, a list change, and a hover lookup — because any of
+ * from three places, startup, a list change, and a hover lookup, because any of
  * them can be the first to need words and a missed one shows as a lookup that
  * silently returns nothing.
  *
@@ -433,7 +433,7 @@ async function ensureDictionaryFor(listId) {
   // Japanese". A dictionary is 1.4-3MB of synchronous JSON.parse plus an index
   // build, on the same thread a caption request is waiting on, and the worker is
   // evicted after ~30s idle so it repeats on every wake. Measuring it is what
-  // separates that from a slow network — they need opposite fixes.
+  // separates that from a slow network, they need opposite fixes.
   //
   // Reporting rather than logging. These numbers were logged unconditionally for
   // a diagnostic that was never concluded, which printed on every caption load in
@@ -454,7 +454,7 @@ let session = null;
 // Both the panel and content scripts address the worker, but on different
 // channels: the panel uses its port (see handlePanelMessage above), content
 // scripts use chrome.runtime.sendMessage and land here. Panel intents that
-// arrive here anyway — the parked capture control below — are handled too, so
+// arrive here anyway, the parked capture control below, are handled too, so
 // the capture path keeps working whether or not a port is connected.
 api.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.target !== TARGET.BACKGROUND) return false;
@@ -468,13 +468,13 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // The id is taken from `sender.tab` when it is there, and otherwise looked
       // up via `registerOpenViewerTabs()`. **Announcing is not sufficient on its
       // own**: this arrives from a PAGE rather than a content script, and
-      // `sender.tab` is not guaranteed for one — so relying on it left the tab
+      // `sender.tab` is not guaranteed for one, so relying on it left the tab
       // unregistered and the panel reporting "no supported video" while the film
       // played.
       if (sender?.tab?.id !== undefined) registeredSources.add(sender.tab.id);
       // NOT awaited, and the listener is NOT async: this callback returns
       // `false`/`true` to control the response channel, and an `async` listener
-      // always returns a promise — which Chrome reads as "the response is coming
+      // always returns a promise, which Chrome reads as "the response is coming
       // by promise" and would break every other case in this switch.
       //
       // Resolve now, so opening the viewer with the panel already open shows the
@@ -492,7 +492,7 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // start at the live cue rather than at the top of the transcript.
       //
       // `paused` travels with it because the index alone cannot say whether that
-      // line is being spoken or is the line that just finished — those are
+      // line is being spoken or is the line that just finished, those are
       // different states on screen, and only the content script knows which.
       activeIndex = message.index;
       activePaused = Boolean(message.paused);
@@ -509,12 +509,12 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
 
     case MSG.VIEWER_CHANGED:
-      // A viewer's content changed — a file was chosen, or a subtitle track was
+      // A viewer's content changed, a file was chosen, or a subtitle track was
       // added. No tab id is needed or sent: `refresh()` resolves the active tab,
       // and a viewer whose video matters is by definition the one being looked at.
       //
       // This is what makes the viewer work when the panel was already open. Without
-      // it, `VIEWER_READY` — which fires once, on an empty page — was the only
+      // it, `VIEWER_READY`, which fires once, on an empty page, was the only
       // notification the worker ever got, so the panel stayed empty no matter what
       // was loaded afterwards.
       void refresh();
@@ -568,7 +568,7 @@ async function answerLookup(word) {
   if (!panelPort || !word) return;
   try {
     // The dictionary for the active language, awaited because a hover can arrive
-    // before anything has marked a row — and a lookup that returned nothing for
+    // before anything has marked a row, and a lookup that returned nothing for
     // that reason would read as "this word has no definition".
     const entry = currentEntry();
     const active = await ensureDictionaryFor(effectiveListId(entry));
@@ -587,7 +587,7 @@ async function answerLookup(word) {
 
 /**
  * Every list that places this word, so hover can show them all rather than only
- * the selected one — a word is HSK 4 in 2.0 and HSK 6 in 3.0, and both are true.
+ * the selected one, a word is HSK 4 in 2.0 and HSK 6 in 3.0, and both are true.
  *
  * @param {object} dictionary
  * @param {string} word
@@ -616,7 +616,7 @@ function broadcastError(message) {
  *
  * The local video viewer is a source, but it cannot be FOUND the way a website is
  * found. `providerFor(tab.url)` is how a site is resolved, and `tab.url` is empty
- * for a `chrome-extension://` document without the `tabs` permission — which this
+ * for a `chrome-extension://` document without the `tabs` permission, which this
  * extension deliberately does not request, because it would expose the url of
  * every tab the user has open. So the viewer announces itself on load, and the id
  * comes from `sender.tab.id`, which needs no permission.
@@ -638,7 +638,7 @@ const VIEWER_PATH = 'src/viewer/viewer.html';
  *
  * **This exists because relying on the viewer announcing itself is not enough.**
  * The announcement arrives as a `runtime.sendMessage` from a PAGE, not a content
- * script — and `sender.tab` is not guaranteed for an extension page, so the
+ * script, and `sender.tab` is not guaranteed for an extension page, so the
  * announcement can arrive with nothing to identify the tab. When that happened the
  * tab never registered, so `isReadable` said no, and the panel showed
  * "no supported video is open in the active tab" **while the film played perfectly
@@ -679,7 +679,7 @@ async function registerOpenViewerTabs() {
  *
  * **This exists so the two questions cannot drift apart.** Five places used to ask
  * `providerFor(tab.url)` directly, and every one of them would have answered "no"
- * for the viewer — silently, and in a way that looks correct in the code. A
+ * for the viewer, silently, and in a way that looks correct in the code. A
  * single predicate is what makes "is this tab readable" one decision.
  *
  * @param {{id?: number, url?: string}|null|undefined} tab
@@ -697,7 +697,7 @@ api.tabs.onActivated.addListener(({ tabId }) => {
 api.tabs.onRemoved.addListener((tabId) => {
   // A closed viewer must stop counting as a source, or the set grows for the
   // life of the worker and a later tab reusing the id is wrongly considered
-  // readable — which resolves to "no transcript" rather than to "no video".
+  // readable, which resolves to "no transcript" rather than to "no video".
   registeredSources.delete(tabId);
   if (trackedTabId === tabId) trackedTabId = null;
   if (session?.tabId === tabId) void stopCapture();
@@ -713,7 +713,7 @@ async function onTabActivated(tabId) {
   const tab = await api.tabs.get(tabId).catch(() => null);
   // Our own pages report no usable `url`, so `tabs.get` cannot identify one. Ask
   // the runtime which of our contexts are open before deciding this tab is
-  // unreadable — otherwise switching TO the viewer tab does nothing at all, which
+  // unreadable, otherwise switching TO the viewer tab does nothing at all, which
   // is exactly what it did.
   if (tab?.id !== undefined && !registeredSources.has(tabId)) await registerOpenViewerTabs();
   if (!isReadable(tab)) return;
@@ -727,7 +727,7 @@ async function onTabActivated(tabId) {
  * The reporting tab matters. A tab in the background also notices when its video
  * changes, and following that would drag the panel away from what the user is
  * looking at. So the change is only honoured when the tab reporting it is the
- * active one — which is the same rule the rest of this file follows: whatever is
+ * active one, which is the same rule the rest of this file follows: whatever is
  * in the current tab is what the panel shows.
  *
  * @param {number|null} tabId The tab that reported, from the message sender.
@@ -753,7 +753,7 @@ async function onContentVideoChanged(tabId) {
  * Frames we have already injected into, as `tabId:frameId`.
  *
  * `executeScript` re-runs the file every time it is called, and both content
- * scripts are called on every round trip — so without this, one refresh would
+ * scripts are called on every round trip, so without this, one refresh would
  * inject four times. The scripts' own re-entry guards make that harmless, but it
  * is still work: the file is fetched, compiled and evaluated each time.
  *
@@ -782,7 +782,7 @@ api.webNavigation.onCommitted.addListener(({ tabId, frameId }) => {
  *
  * The bridge is injected first and always, because it is what the content
  * script talks to, and on a tab that was already open when the extension loaded
- * the manifest-declared scripts are absent too — so without injecting both,
+ * the manifest-declared scripts are absent too, so without injecting both,
  * every request would come back empty.
  *
  * @param {number} tabId
@@ -792,7 +792,7 @@ async function ensureContentScript(tabId) {
   // One of our own pages is never injected into. It is a single document that
   // answers `runtime.onMessage` directly, so `scripting.executeScript` would throw
   // and `webNavigation.getAllFrames` would report no recognised frame for it.
-  // `undefined` is the sentinel `sendToContent` reads as "no frame — address the
+  // `undefined` is the sentinel `sendToContent` reads as "no frame, address the
   // tab itself".
   if (registeredSources.has(tabId)) return undefined;
 
@@ -827,7 +827,7 @@ async function ensureContentScript(tabId) {
 
 /** How long to wait for a content script before giving up on it. Without this
  *  a missing or wedged script leaves refresh() pending forever, and the panel
- *  shows nothing at all — which reads as "broken", with no clue why. */
+ *  shows nothing at all, which reads as "broken", with no clue why. */
 const CONTENT_TIMEOUT_MS = 4000;
 
 /**
@@ -836,13 +836,13 @@ const CONTENT_TIMEOUT_MS = 4000;
  * The content script answers DESCRIBE, SET_TRACK and CONTENT_SEEK out of
  * memory, so four seconds there only ever means it is wedged. PROVIDE and
  * FETCH_TRACK are different in kind: they download a caption track from
- * YouTube, and PROVIDE may then translate it — one or two real round trips
+ * YouTube, and PROVIDE may then translate it, one or two real round trips
  * whose duration this extension does not control.
  *
  * Timing those out on the same clock as a local question is a false failure:
  * the fetch was working, and the worker throws away a transcript it was about
  * to receive. That is what a "provide did not answer within 4000ms" report
- * with no further context is — not a broken content script, a slow download.
+ * with no further context is, not a broken content script, a slow download.
  *
  * So the slow path gets a budget in the same order as the requests it waits on,
  * and a chart of the two is the reason they are separate constants rather than
@@ -921,14 +921,14 @@ async function refresh() {
 async function refreshInner() {
   // Before deciding anything: which of our own pages are open. This is the
   // authority on whether a viewer tab is readable, because our own pages report no
-  // usable `url` — and it also recovers a viewer tab that was open across an
+  // usable `url`, and it also recovers a viewer tab that was open across an
   // extension reload, when the worker restarts with an empty set.
   await registerOpenViewerTabs();
 
   if (trackedTabId !== null) {
     // A tracked tab can be closed or navigated away since we last looked. Note
     // that a viewer tab reports NO url, so this test has to go through
-    // `isReadable` — asking `providerFor(alive.url)` here would drop the viewer
+    // `isReadable`, asking `providerFor(alive.url)` here would drop the viewer
     // on every single refresh, and the panel would say "no video" while the film
     // was playing in the next tab.
     const alive = await api.tabs.get(trackedTabId).catch(() => null);
@@ -999,7 +999,7 @@ async function refreshInner() {
     rebuildRows(entry);
     // Hand the transcript over before saying anything. The content script keys
     // its position reporting off the segments it holds, and nothing was fetched,
-    // so without this a freshly loaded page — or a panel opened after a reload —
+    // so without this a freshly loaded page, or a panel opened after a reload,
     // reports no cue at all and the panel never learns where playback is.
     void primeContentPosition(entry);
     broadcastState();
@@ -1011,7 +1011,7 @@ async function refreshInner() {
   //
   // The translation target travels with the request rather than being applied
   // afterwards, because the provider has to choose a source track that actually
-  // supports translation — and it cannot know that from a second round trip.
+  // supports translation, and it cannot know that from a second round trip.
   //
   // `null` for the study line, always: the line being learned is never machine
   // translated, so the provider is asked for the plain track.
@@ -1025,7 +1025,7 @@ async function refreshInner() {
     });
   } catch (error) {
     // Pass-through, so a CONN002 timeout from `sendToContent` survives as itself
-    // rather than being relabelled as a caption fault — which is what made this
+    // rather than being relabelled as a caption fault, which is what made this
     // report ambiguous in the first place.
     pendingError = codeError('TRACK003', error);
     broadcastState();
@@ -1055,8 +1055,8 @@ async function refreshInner() {
   // Show the study line immediately, then fill in the gloss.
   //
   // The check is for the GLOSS'S RENDERING, not for its language code. The gloss
-  // may be the same language as the study line — that is how you ask for one
-  // language with its translation underneath — and a language-code test would
+  // may be the same language as the study line, that is how you ask for one
+  // language with its translation underneath, and a language-code test would
   // see the study line's entry, decide the gloss was already loaded, and leave it
   // showing the study line's text instead of its own rendering.
   const glossKey = entry.glossLang ? trackKey(entry.glossLang, effectiveTranslation(entry, 'gloss')) : null;
@@ -1103,7 +1103,7 @@ function suppliedTranslation(fetched) {
 function adoptVideo(video) {
   // The remembered cue belongs to the video that was playing before. Carrying it
   // across would highlight a line of the NEW transcript at an index measured
-  // against the old one — off by as much as the two transcripts differ.
+  // against the old one, off by as much as the two transcripts differ.
   if (currentVideoId !== video.videoId) {
     activeIndex = -1;
     activePaused = false;
@@ -1126,7 +1126,7 @@ function adoptVideo(video) {
       // and a Chinese subtitle choice was silently lost on the next video.
       //
       // A preference that this video cannot satisfy is cleared from the entry
-      // below, but never from the settings — so returning to a video that has
+      // below, but never from the settings, so returning to a video that has
       // the language brings it back.
       studyLang: settings.studyLanguage,
       glossLang: settings.glossLanguage,
@@ -1180,7 +1180,7 @@ function isCached(entry) {
   //
   // A guard rather than a tested path: changing the translation already goes
   // through loadTrack, which compares the same thing. This catches the case
-  // where the cache and the wanted rendering diverge WITHOUT that path running —
+  // where the cache and the wanted rendering diverge WITHOUT that path running,
   // most plausibly a video whose track list stops reporting `isTranslatable`
   // between refreshes, which would otherwise leave translated text on screen
   // while the extension believed the setting no longer applied.
@@ -1194,8 +1194,8 @@ function isCached(entry) {
  * the rule is about the LINE, not about which line it is.
  *
  * An earlier version allowed only the gloss, reasoning that the study line is
- * "the text being learned". That conflated two different things — which line
- * carries the learning MARKS, and which line can be TRANSLATED — and forbade a
+ * "the text being learned". That conflated two different things, which line
+ * carries the learning MARKS, and which line can be TRANSLATED, and forbade a
  * feature for a reason that only applies to the other one. The cases it broke are
  * ordinary: a Chinese-only video where you want the Chinese line translated with
  * the original kept alongside, or an English video where the first line is the one
@@ -1219,7 +1219,7 @@ function effectiveTranslation(entry, role) {
 
   const languageCode = role === 'study' ? entry.studyLang : entry.glossLang;
   // Nothing to translate. Unlike before, the provider is not asked to choose a
-  // track "with translation in mind" — the result has to land on a line that
+  // track "with translation in mind", the result has to land on a line that
   // exists.
   if (!languageCode) return null;
 
@@ -1233,7 +1233,7 @@ function effectiveTranslation(entry, role) {
 }
 
 /** Keep the cache bounded. Map iteration order is insertion order, so the first
- *  key is the oldest — never the video currently on screen. */
+ *  key is the oldest, never the video currently on screen. */
 function evictOldest() {
   while (videos.size > MAX_CACHED_VIDEOS) {
     const oldest = videos.keys().next().value;
@@ -1257,7 +1257,7 @@ function currentEntry() {
  *
  * Keying by language code alone made those collide. The second fetch overwrote
  * the first, so both slots read back the same entry and the panel showed the
- * translation on BOTH lines — the original source text was gone. It also meant
+ * translation on BOTH lines, the original source text was gone. It also meant
  * choosing the same language twice silently discarded one of the choices.
  *
  * @param {string} languageCode
@@ -1296,12 +1296,12 @@ function recordTrack(entry, fetched) {
  * Hand the content script a transcript it did not fetch.
  *
  * Position reporting is keyed off the segments the content script holds, and on
- * a cache hit nothing is fetched — so a freshly loaded page would report no cue
+ * a cache hit nothing is fetched, so a freshly loaded page would report no cue
  * at all until the next cue boundary, which on a paused video never arrives. The
  * panel would then sit at the top of the transcript with nothing highlighted.
  *
  * Not awaited by its callers: it is a notification, and a failure to deliver it
- * is recoverable — the panel still has `activeIndex` in state, and the next
+ * is recoverable, the panel still has `activeIndex` in state, and the next
  * report (whenever it comes) corrects everything.
  *
  * The video id travels with it because the content script's own sync() clears
@@ -1333,7 +1333,7 @@ async function primeContentPosition(entry) {
 async function loadTrack(entry, languageCode, translateTo = null) {
   if (!languageCode || trackedTabId === null) return null;
 
-  // Already the right rendering — same track AND same translation. A different
+  // Already the right rendering, same track AND same translation. A different
   // translation of the same track is NOT a hit, which is the whole point.
   //
   // The check is deliberately about what is cached rather than about deleting
@@ -1366,7 +1366,7 @@ async function loadTrack(entry, languageCode, translateTo = null) {
  * work thousands of times, and the worker is where the dictionary already lives.
  *
  * Tokens are carried over by text where possible. Rows are rebuilt whenever the
- * track changes, which discards them — and without this, switching language
+ * track changes, which discards them, and without this, switching language
  * silently unmarked the whole transcript until a control was touched by hand.
  *
  * The carry-over is conditional on the settings that produced the tokens still
@@ -1374,7 +1374,7 @@ async function loadTrack(entry, languageCode, translateTo = null) {
  * way that stayed hidden: a row's tokens encode a (list, threshold) pair, so
  * reusing tokens after the list changed hands back levels from the wrong list.
  * Worse, `applyMarks` treats "every row already has tokens" as "marking is
- * done" — so a stale carry-over made that check pass while the marks on screen
+ * done", so a stale carry-over made that check pass while the marks on screen
  * were wrong, and anything waiting for marking to finish saw it as finished
  * immediately.
  *
@@ -1390,7 +1390,7 @@ function activeList(entry) {
  * The id of the list actually in force for an entry.
  *
  * Distinct from `settings.listId`, which is the last list the learner CHOSE. The
- * two differ when the stored choice cannot mark what is on screen — HSK 2.0 is
+ * two differ when the stored choice cannot mark what is on screen, HSK 2.0 is
  * stored, a Japanese video is open, so the effective list is JLPT. Every part of
  * the marking path has to agree on which list is in force, or the dictionary
  * loaded, the cache key and the levels applied come from different lists and the
@@ -1406,12 +1406,12 @@ function effectiveListId(entry) {
 /**
  * The threshold actually in force for an entry.
  *
- * A threshold is relative to its list — 4 is "upper intermediate" in a 6-level
- * list and something else in a 5-level one — so it cannot be carried across a
+ * A threshold is relative to its list, 4 is "upper intermediate" in a 6-level
+ * list and something else in a 5-level one, so it cannot be carried across a
  * language switch. When the effective list is the one the learner chose, their
  * stored threshold stands. When it is not (they were on a Chinese list and opened
  * a Japanese video, so JLPT took over), that list's own REMEMBERED level is used
- * — or the top of it if they have never chosen one there.
+ *, or the top of it if they have never chosen one there.
  *
  * The stored choice is deliberately NOT overwritten: switching to a Japanese
  * video and back must restore the HSK list and the level that was set for it.
@@ -1445,7 +1445,7 @@ function effectiveThreshold(entry) {
  * disagree: an English line translated into Chinese is offered the Chinese lists
  * because Chinese is what the learner is reading.
  *
- * `null` when no video is open — the caller then offers everything, because the
+ * `null` when no video is open, the caller then offers everything, because the
  * alternative is an empty dropdown before a video is chosen, and a learner who
  * opens the panel first would see nothing to pick.
  *
@@ -1473,7 +1473,7 @@ function listsFor(entry) {
   if (!language) return availableLists;
 
   const covering = availableLists.filter((list) => listCoversLanguage(list, language));
-  // A language no list covers — an English video, say — leaves the lists empty.
+  // A language no list covers, an English video, say, leaves the lists empty.
   // Falling back to all of them keeps the control usable and lets `markedReason`
   // explain why nothing is marked, which is more useful than a disabled control
   // with no way to find out why.
@@ -1530,8 +1530,8 @@ function rebuildRows(entry) {
   // language coverage: a line can be marked when a word list exists for the
   // language it is DISPLAYING. Today the only lists are Chinese, so translating
   // the study line away from Chinese does lose its marks, which is what this
-  // achieves. It is wrong the other way — an English line translated INTO Chinese
-  // is markable and this would refuse — and it should be replaced by the coverage
+  // achieves. It is wrong the other way, an English line translated INTO Chinese
+  // is markable and this would refuse, and it should be replaced by the coverage
   // check rather than by another guess. Noted rather than silently left.
   const studyTranslated = Boolean(effectiveTranslation(entry, 'study'));
 
@@ -1560,7 +1560,7 @@ async function applyMarks(entry) {
 
   // Skip only when every row is genuinely marked for the current settings. The
   // check is on the rows rather than on a remembered flag, because a flag can
-  // claim marks that are no longer there — which is precisely how the transcript
+  // claim marks that are no longer there, which is precisely how the transcript
   // came back unmarked after a language switch.
   const wanted = `${effectiveListId(entry)}:${effectiveThreshold(entry)}`;
   const allMarked = entry.rows.every((row) => Array.isArray(row.tokens));
@@ -1568,7 +1568,7 @@ async function applyMarks(entry) {
 
   // Which dictionary holds this list's words, ensuring it is the loaded one.
   // Not a local variable: `ensureDictionaryFor` sets the module-level dictionary,
-  // and the marking below reads it — a shadowing local stayed undefined and threw
+  // and the marking below reads it, a shadowing local stayed undefined and threw
   // on `.headwords`.
   const words = await ensureDictionaryFor(effectiveListId(entry)).catch((error) => {
     // A missing word list must not take the transcript down with it: the panel
@@ -1586,7 +1586,7 @@ async function applyMarks(entry) {
   // Can the chosen list mark the language actually on screen?
   //
   // Asked BEFORE segmenting, because the answer changes what "no marks" means. If
-  // the list cannot cover the line at all — English text against a Chinese list —
+  // the list cannot cover the line at all, English text against a Chinese list,
   // then marking would find nothing and the transcript would render plain with no
   // explanation, which reads as a broken feature. Recording it lets the panel say
   // why. It also skips the segmentation work for a line it cannot help with.
@@ -1603,7 +1603,7 @@ async function applyMarks(entry) {
 
   // A cue index is only meaningful against the transcript it was measured on.
   // Re-marking can change the row list, so a remembered index could point at a
-  // different line — or past the end.
+  // different line, or past the end.
   if (activeIndex >= entry.rows.length) {
     activeIndex = -1;
     activePaused = false;
@@ -1733,7 +1733,7 @@ function deriveState() {
     // Whether each track can be translated at all, so the panel can disable the
     // menu for a track that cannot. YouTube reports `isTranslatable` per track
     // and applying a translation to a track that lacks it returns the original
-    // text — a menu that appears to work and changes nothing.
+    // text, a menu that appears to work and changes nothing.
     translationAvailable: Object.fromEntries(
       (entry.trackList ?? []).map((track) => [track.languageCode, Boolean(track.isTranslatable)]),
     ),
@@ -1748,7 +1748,7 @@ function deriveState() {
     glossTranslated: Boolean(settings.glossTranslated),
     // Why nothing is marked, when the chosen list cannot cover the line. Sent so
     // the panel can explain a plain transcript rather than leaving it looking
-    // broken — "HSK 3.0 does not cover en" is actionable; an unmarked transcript
+    // broken, "HSK 3.0 does not cover en" is actionable; an unmarked transcript
     // is not.
     markedReason: entry.markedReason ?? null,
     study: entry.studyLang,
@@ -1763,7 +1763,7 @@ function deriveState() {
     // A translation failure is reported BEFORE the track error. They are
     // separate on purpose: a track error replaces the transcript and blocks the
     // cache, while a translation error means "the text below is the original,
-    // not the language you asked for" — which the learner needs to know even
+    // not the language you asked for", which the learner needs to know even
     // though there is a perfectly good transcript on screen.
     error: pendingError ?? translationError ?? entry.error,
     // The entry decides which lists are offered, so the options and the marks
@@ -1777,7 +1777,7 @@ function deriveState() {
  * Everything the panel needs to render its controls, in one object.
  *
  * The panel renders controls from the settings schema, so what it needs is the
- * current value *and* the options available right now — and both the list options
+ * current value *and* the options available right now, and both the list options
  * and the threshold options depend on what is on screen, which only the worker
  * knows about.
  *
@@ -1791,16 +1791,16 @@ function learningState(entry = null) {
     view: settings.view,
     // Sent so the panel can put its chrome back the way it was. Its absence was a
     // real bug: every state push re-applied `undefined`, which meant the panel
-    // started full every time and the control appeared to do nothing — the setting
+    // started full every time and the control appeared to do nothing, the setting
     // was stored, broadcast, and then immediately overwritten.
     layout: settings.layout,
     fontSize: settings.fontSize,
     // A presentation choice, but it travels with the state like the others rather
-    // than being read from storage by the panel — one owner for settings, and the
+    // than being read from storage by the panel, one owner for settings, and the
     // panel already has the value in hand when it renders.
     markStyle: settings.markStyle,
     // Where a word's reading goes, and how it is written. Sent like the other
-    // presentation settings rather than read from storage by the panel — one owner
+    // presentation settings rather than read from storage by the panel, one owner
     // for settings, and the panel has the value in hand when it renders.
     //
     // All three default to their `off`-equivalent, so a viewer who has never
@@ -1810,7 +1810,7 @@ function learningState(entry = null) {
     scriptConversion: settings.scriptConversion,
     // The list actually in force, not the raw stored id. A stored value can name
     // a list that no longer exists (data changed under it), one that never did, or
-    // one that does not cover this video's language — and reporting the raw id
+    // one that does not cover this video's language, and reporting the raw id
     // tells the panel to select an option that is not in its dropdown. The control
     // then renders blank while the marking uses the fallback list, so the panel
     // and the marks disagree about what is selected.
@@ -1852,14 +1852,14 @@ async function restoreSettings() {
 /**
  * Where settings live: the `local` storage bucket.
  *
- * NOT the cross-device bucket, which `manifest.test.mjs` fails the build over —
+ * NOT the cross-device bucket, which `manifest.test.mjs` fails the build over,
  * preferences staying on the machine is a documented product promise, not a
  * default that drifted.
  *
  * A function rather than a captured reference, because the area is a property of
  * the environment: a browser that does not offer `sync` should degrade to `local`
  * rather than throw, and reading it at call time is what allows that. The fallback
- * is not expected to run — every target browser has `sync` — but a missing bucket
+ * is not expected to run, every target browser has `sync`, but a missing bucket
  * would otherwise crash startup with a TypeError, which is a much worse failure
  * than settings not following the user between machines.
  */
@@ -1877,7 +1877,7 @@ function persistSettings() {
  * **This is what makes `chrome.storage` the source of truth rather than one
  * writer and a cache.** The panel, a future settings page and the video viewer all
  * write to the same bucket, so a change made by one of them has to reach the
- * others — the storage API's own cross-context change event is exactly that
+ * others, the storage API's own cross-context change event is exactly that
  * mechanism, and it keeps working while this worker is asleep, which a message
  * could not.
  *
@@ -1887,7 +1887,7 @@ function persistSettings() {
  *
  * Re-applying the derived side effects matters as much as storing the value. A
  * reading placement changed in the viewer has to rebuild the rows here, or the
- * panel's own view keeps the old annotation despite holding the new setting —
+ * panel's own view keeps the old annotation despite holding the new setting,
  * which is the same bug the local `applySetting` branch exists to prevent.
  */
 api.storage.onChanged.addListener((changes, areaName) => {
@@ -1912,7 +1912,7 @@ api.storage.onChanged.addListener((changes, areaName) => {
   if (affectsRows) {
     if (previous.listId !== settings.listId) {
       // A different list may be a different language, and `rebuildRows` reads the
-      // dictionary synchronously — so the words have to be in hand first or the
+      // dictionary synchronously, so the words have to be in hand first or the
       // transcript repaints unmarked and stays that way.
       void ensureDictionaryFor(settings.listId).then(() => {
         rebuildRows(currentEntry());
@@ -1929,7 +1929,7 @@ api.storage.onChanged.addListener((changes, areaName) => {
  * Apply one setting, doing whatever else that change implies.
  *
  * Most settings are just stored. The ones that need follow-up declare it here,
- * so the panel never has to know which changes are the expensive ones — it
+ * so the panel never has to know which changes are the expensive ones, it
  * sends a value and the worker decides what that costs.
  *
  * @param {string} id
@@ -1970,8 +1970,8 @@ async function applySetting(id, value) {
     case 'studyTranslated':
     case 'glossTranslated': {
       // Only the RENDERING changes, not the chosen language, so this re-renders
-      // rather than re-choosing. All three settings decide the same thing — what
-      // the lines show — so they share a branch.
+      // rather than re-choosing. All three settings decide the same thing, what
+      // the lines show, so they share a branch.
       //
       // No cache surgery: loadTrack compares the cached rendering against the
       // one wanted, so a different target refetches and an unreachable target
@@ -1989,7 +1989,7 @@ async function applySetting(id, value) {
       translationError = wanted && refused ? errorText('TRACK001') : null;
 
       // Re-render BOTH lines. Either may have changed rendering, and a line whose
-      // rendering is already cached returns immediately — so this is cheap when
+      // rendering is already cached returns immediately, so this is cheap when
       // only one of them moved. Doing only the study line was a real bug: the
       // gloss kept its old text, so ticking a box changed nothing on screen.
       const study = entry?.studyLang ?? null;
@@ -2008,7 +2008,7 @@ async function applySetting(id, value) {
     case 'romaji':
     case 'toneStyle':
       // The reading is attached to each TOKEN by `markLine`, and the tone style is
-      // applied when it is drawn — so a change here has to rebuild the rows, not
+      // applied when it is drawn, so a change here has to rebuild the rows, not
       // just repaint them. Without this the setting appeared to do nothing until
       // the next video, because the tokens already in hand carried the old answer.
       //
@@ -2030,7 +2030,7 @@ async function applySetting(id, value) {
 // Called at the bottom of this file rather than here, so the whole worker is
 // defined before anything asynchronous can run. A module-scope rejection would
 // abort evaluation, and a worker that fails to evaluate never answers the panel
-// — which looks, from the panel's side, exactly like nothing happening.
+//, which looks, from the panel's side, exactly like nothing happening.
 
 // --- Action -----------------------------------------------------------------
 
@@ -2038,8 +2038,8 @@ async function applySetting(id, value) {
  * Reveal the transcript panel when the toolbar icon is clicked.
  *
  * The ONE genuinely browser-specific call in the extension. Chrome and Firefox
- * provide incompatible sidebar APIs — `sidePanel` with `open()` on one,
- * `sidebarAction` with `toggle()` on the other — and neither implements the
+ * provide incompatible sidebar APIs, `sidePanel` with `open()` on one,
+ * `sidebarAction` with `toggle()` on the other, and neither implements the
  * other's. This is the whole of the difference on the code side.
  *
  * Feature-detected rather than browser-detected. Sniffing the user agent would
@@ -2047,7 +2047,7 @@ async function applySetting(id, value) {
  * actually matters, and it stays correct if a browser adds the other one.
  *
  * Firefox's `toggle()` takes no argument because its sidebar is a per-window
- * toggle rather than something a call can open into a specific window — and on a
+ * toggle rather than something a call can open into a specific window, and on a
  * fresh install it starts hidden, so the first click shows it and the second
  * hides it. That is Firefox's own affordance and not something to work around.
  */
@@ -2073,7 +2073,7 @@ api.action.onClicked.addListener((tab) => {
  * **This costs one permission: `contextMenus`.** An earlier draft of this design
  * claimed it cost none, on the reasoning that `contexts: ['action']` is the
  * action's menu rather than the page context menu. That reasoning is about WHERE
- * the item appears and says nothing about whether the API is available at all —
+ * the item appears and says nothing about whether the API is available at all,
  * which it is not, without the permission. The claim was wrong, it was approved on
  * that basis, and the item was silently absent until it was fixed.
  *
@@ -2089,7 +2089,7 @@ const VIEWER_MENU_ID = 'open-viewer';
  *
  * Called at module scope rather than only on `onInstalled`, because an unpacked
  * extension reloaded from `chrome://extensions` does not reliably fire that event
- * — and the failure is silent and confusing: the menu is simply absent, with
+ *, and the failure is silent and confusing: the menu is simply absent, with
  * nothing to explain why. A service worker is re-created on every event, so
  * module scope is the one place guaranteed to run.
  *
@@ -2100,7 +2100,7 @@ const VIEWER_MENU_ID = 'open-viewer';
  */
 function ensureActionMenu() {
   // Feature-detected, not assumed. This runs at module scope, where a throw is
-  // fatal to the whole worker — the panel would then get no reply to anything,
+  // fatal to the whole worker, the panel would then get no reply to anything,
   // which looks exactly like the extension not being installed. A browser or an
   // older version without `contextMenus` should lose the menu item, not the
   // entire extension.
@@ -2110,7 +2110,7 @@ function ensureActionMenu() {
     {
       id: VIEWER_MENU_ID,
       title: 'Open video files…',
-      // The ACTION's menu — right-clicking the toolbar icon — not the page
+      // The ACTION's menu, right-clicking the toolbar icon, not the page
       // context menu. The `contextMenus` permission is needed either way; this
       // only decides WHERE the item appears.
       contexts: ['action'],
@@ -2175,7 +2175,7 @@ async function stopCapture() {
   session = null;
   // The offscreen document owns the stream; it tears itself down after stopping.
   await api.runtime.sendMessage({ type: MSG.STOP_CAPTURE, target: TARGET.OFFSCREEN }).catch(() => {
-    // Offscreen document may already be gone — that is a valid stopped state.
+    // Offscreen document may already be gone, that is a valid stopped state.
   });
 }
 
@@ -2221,7 +2221,7 @@ void settingsReady.then(primeDictionary);
  * Two loads rather than one, deliberately. The index is ~1 KB and names every
  * list; a dictionary is ~1.4-3 MB of words. Loading only the index eagerly means
  * the language and list pickers work immediately and a second language costs
- * nothing until one of its lists is actually selected — with one language this
+ * nothing until one of its lists is actually selected, with one language this
  * was all inside one file, and with two that would mean parsing every language's
  * words on every worker wake just to fill a dropdown.
  *
@@ -2241,11 +2241,11 @@ async function primeDictionary() {
     // reasonably concluded the highlighting was broken. Defaulting to the
     // widest list shows marks immediately; a narrower list remains a choice.
     //
-    // "Widest" means widest in the PRIMARY language — the first the index
-    // declares — not widest overall. With one language those were the same
+    // "Widest" means widest in the PRIMARY language, the first the index
+    // declares, not widest overall. With one language those were the same
     // thing; with two they are not. JLPT places 11,158 words and HSK 3.0 places
     // 10,969, so widest-overall silently made Japanese the default for every new
-    // user — and on a Chinese video that list covers nothing, which is the exact
+    // user, and on a Chinese video that list covers nothing, which is the exact
     // unmarked-transcript symptom the widest-list rule was added to remove.
     const primaryLanguage = availableLists[0]?.language;
     const primary = availableLists.filter((list) => list.language === primaryLanguage);
@@ -2267,7 +2267,7 @@ async function primeDictionary() {
     // Deliberately NOT loading the dictionary here.
     //
     // This used to be `await ensureDictionaryFor(settings.listId)`, which parses
-    // the language of the STORED or DEFAULT list — Chinese, on a fresh install.
+    // the language of the STORED or DEFAULT list, Chinese, on a fresh install.
     // The marking path then parses the language of the VIDEO, which may be the
     // other one. So a Japanese video made the worker parse BOTH bundled files:
     // 1.4MB of Chinese it would never read, then 3MB of Japanese it needed. That

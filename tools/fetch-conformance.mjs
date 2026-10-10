@@ -10,7 +10,7 @@
  * ## What the suite is
  *
  * `ietf-wg-cellar/matroska-test-files` is the IETF CELLAR working group's
- * conformance suite — eight files, each probing one feature, authored by the
+ * conformance suite, eight files, each probing one feature, authored by the
  * mkvmerge and libmatroska maintainers. In their words: *\"The files presented here
  * represent the minimum support a player should have.\"*
  *
@@ -25,7 +25,7 @@
  * ## What it does NOT cover
  *
  * Cellar's suite is about CONTAINERS, not about our features. It has no
- * `S_TEXT/ASS` track, no image-subtitle file, and no file without subtitles — those
+ * `S_TEXT/ASS` track, no image-subtitle file, and no file without subtitles, those
  * cases stay with our own fixtures, which are shaped for them.
  *
  * ## Licensing, and what it obliges
@@ -51,7 +51,7 @@ const OUT = join(ROOT, 'test', 'conformance');
  *
  * Recorded here rather than only in the suite's own README, because the reason we
  * want a file is the useful part when a test using it fails. `tests` says whether
- * our parser should already handle it — a file we knowingly cannot read is listed
+ * our parser should already handle it, a file we knowingly cannot read is listed
  * so the limitation is visible rather than absent.
  */
 const FILES = [
@@ -62,7 +62,7 @@ const FILES = [
   { name: 'test5.mkv', what: 'seven subtitle languages in one file', tests: true },
   { name: 'test6.mkv', what: 'element sizes coded in 1 or 8 bytes, and no Cues', tests: true },
   { name: 'test7.mkv', what: 'unknown junk elements and a deliberately damaged region', tests: true },
-  { name: 'test8.mkv', what: 'an audio gap — not our concern, kept for completeness', tests: false },
+  { name: 'test8.mkv', what: 'an audio gap, not our concern, kept for completeness', tests: false },
 ];
 
 const BASE = 'https://raw.githubusercontent.com/ietf-wg-cellar/matroska-test-files/master/test_files';
@@ -76,7 +76,7 @@ for (const file of FILES) {
 
   if (existsSync(target)) {
     const mb = statSync(target).size / 1e6;
-    console.log(`  have  ${file.name}  (${mb.toFixed(1)} MB) — ${file.what}`);
+    console.log(`  have  ${file.name}  (${mb.toFixed(1)} MB), ${file.what}`);
     continue;
   }
 
@@ -90,7 +90,7 @@ for (const file of FILES) {
     await pipeline(Readable.fromWeb(response.body), createWriteStream(target));
 
     const mb = statSync(target).size / 1e6;
-    console.log(`${mb.toFixed(1)} MB — ${file.what}`);
+    console.log(`${mb.toFixed(1)} MB, ${file.what}`);
     fetched++;
   } catch (error) {
     // A partial download is worse than none: it would be read as a corrupt file

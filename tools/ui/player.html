@@ -2,24 +2,24 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>IU — video reader player</title>
+    <title>IU, video reader player</title>
     <link rel="icon" href="/icons/icon-32.png" />
     <link rel="stylesheet" href="/tools/ui/player.css" />
   </head>
   <body class="player-preview">
     <!--
-      A mock of the READER's player — `src/viewer/viewer.html` — with the decided
+      A mock of the READER's player, `src/viewer/viewer.html`, with the decided
       changes applied, so they can be USED rather than described.
 
       It plays a REAL file: `tools/ui/assets/preview.mp4`, a stream copy of CELLAR's
       `test5.mkv`. The film is **Elephants Dream** (Blender Foundation / Netherlands
-      Media Art Institute, CC BY 2.5) — the file's own `TITLE` tag says "Big Buck
+      Media Art Institute, CC BY 2.5), the file's own `TITLE` tag says "Big Buck
       Bunny", which is wrong on this master, and the sample's subtitles name Proog and
       Emo, who exist only in Elephants Dream.
 
       This is the review artifact for the reader UI: what behaves wrongly here
       behaves wrongly in the reader. What it does NOT carry is the content-message
-      contract, the Matroska reading and the track resolution — none of which is on
+      contract, the Matroska reading and the track resolution, none of which is on
       trial.
     -->
     <header class="pp-controls">
@@ -61,7 +61,7 @@
              as broken. -->
         <div class="pp-placeholder" id="pp-placeholder">
           <p class="pp-placeholder-title">Loading a real sample…</p>
-          <p class="pp-placeholder-hint">Elephants Dream (Blender Foundation / Netherlands Media Art Institute, CC BY 2.5) — remuxed from CELLAR test5.mkv</p>
+          <p class="pp-placeholder-hint">Elephants Dream (Blender Foundation / Netherlands Media Art Institute, CC BY 2.5), remuxed from CELLAR test5.mkv</p>
           <p class="pp-placeholder-error" id="pp-placeholder-error"></p>
         </div>
 
@@ -86,7 +86,7 @@
           THE RESUME BANNER. On load, offer to resume.
 
           A prompt rather than an automatic seek, because the file cannot be reopened
-          by itself — you re-pick it — and a jump with no explanation is disorienting.
+          by itself, you re-pick it, and a jump with no explanation is disorienting.
           The banner is what makes the re-pick feel like resuming.
         -->
         <div class="pp-resume" id="pp-resume" hidden>
@@ -99,7 +99,7 @@
           THE CONTROL BAR.
 
           ONE lifecycle, not two: it auto-hides when the pointer is idle and returns
-          on movement or on focus. There is NO collapse chevron — a manual collapse
+          on movement or on focus. There is NO collapse chevron, a manual collapse
           plus an automatic hide is three states where every player has two, and the
           chevron was what made the bar's behaviour hard to predict.
 
@@ -143,7 +143,7 @@
           </div>
 
           <!--
-            ROW 1 — transport. Always present, because it is what the bar IS.
+            ROW 1, transport. Always present, because it is what the bar IS.
           -->
           <div class="pp-row pp-row-transport">
             <button type="button" class="pp-button pp-icon-button" id="pp-open" aria-label="Open another file" title="Open another file">
@@ -155,11 +155,11 @@
             <!--
               The filename, written by the script from whatever is ACTUALLY playing.
 
-              It was hardcoded to `Big Buck Bunny — test5.mkv`, which was wrong twice:
+              It was hardcoded to `Big Buck Bunny, test5.mkv`, which was wrong twice:
               it kept saying that after another file was opened, and even for the
               bundled sample the name shown was not the name of the file being loaded.
               A label that is typed rather than derived goes stale silently, which is
-              exactly what happened. It also named the wrong FILM — see the note at the
+              exactly what happened. It also named the wrong FILM, see the note at the
               top of the file.
 
               The `title` carries the CC BY attribution because the bundled sample is
@@ -189,7 +189,7 @@
 
             <!-- Cue stepping and replay: the controls a generic player CANNOT have,
                  because it does not know where the cues are. Up/down rather than
-                 left/right — the transcript is a vertical list. -->
+                 left/right, the transcript is a vertical list. -->
             <button type="button" class="pp-button pp-icon-button" id="pp-prev-cue" aria-label="Previous line" title="Previous line">
               <svg class="pp-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path d="M6 15.5 12 9.5l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
@@ -229,7 +229,7 @@
               Volume: a mute button AND a slider, in one group.
 
               Both, because each answers a question the other cannot. A slider alone
-              has no way back to a known level once it has been dragged to zero — you
+              has no way back to a known level once it has been dragged to zero, you
               would have to guess where it was. A toggle alone has no "quiet but not
               silent". Players ship the pair for that reason.
 
@@ -248,7 +248,7 @@
                   <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
                   <!-- Swapped by CSS from the button's own `aria-pressed`, so the icon
                        and the announced state cannot disagree. NOT `hidden`: that is an
-                       HTML attribute and an SVG <g> ignores it — both glyphs rendered
+                       HTML attribute and an SVG <g> ignores it, both glyphs rendered
                        on top of each other when they were toggled that way. -->
                   <g id="pp-volume-waves">
                     <path d="M15 9a4.4 4.4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
@@ -281,7 +281,7 @@
             <!--
               WHICH audio track.
 
-              The icon is a waveform, NOT a speaker. The speaker belongs to volume —
+              The icon is a waveform, NOT a speaker. The speaker belongs to volume,
               they were the same glyph for one revision, which made two adjacent
               buttons mean different things with the same picture. A waveform is the
               other half of the pair: the speaker is how LOUD, this is WHICH. It is
@@ -299,7 +299,7 @@
             </button>
 
             <!--
-              The difficulty band. One button, because the band is one thing — it is
+              The difficulty band. One button, because the band is one thing, it is
               not a sub-option of captions or of anything else, and it is the only
               control here that a generic player could not offer.
 
@@ -329,7 +329,7 @@
           </div>
 
           <!--
-            ROW 2 — the caption settings. Present ONLY while captions are on.
+            ROW 2, the caption settings. Present ONLY while captions are on.
 
             The resolution to a real tension: there is no settings VIEW in the reader,
             yet everything the captions need is still reachable. The row appears
@@ -370,7 +370,7 @@
               WHICH AUDIO, listed separately from the subtitle picks above.
 
               A subtitle track is what you READ; an audio track is what you HEAR, and
-              the two are not alternatives — you want the original audio AND the
+              the two are not alternatives, you want the original audio AND the
               subtitle for it. Lumping them into one "Track" control would be wrong even
               though both are tracks in the same file.
 
@@ -395,7 +395,7 @@
             The status line: STATUS AND ERRORS ONLY.
 
             It used to show the current cue, which is what made the caption toggle
-            look broken — the same sentence was already on screen in the bar, so
+            look broken, the same sentence was already on screen in the bar, so
             turning captions on changed nothing visible. A cue belongs to the
             captions and nowhere else.
           -->
@@ -405,7 +405,7 @@
 
       <!--
         THE BELOW PLACEMENT. Its own row under the picture; the picture shrinks above
-        it. Nothing is ever covered — for someone who does not want the image
+        it. Nothing is ever covered, for someone who does not want the image
         obstructed at all, where the overlay costs no height but does sit over the
         bottom of the frame.
       -->
@@ -420,17 +420,17 @@
 
       A `<details>` rather than a hand-rolled toggle: it is the native disclosure
       element, so it is keyboard-reachable and announced without a line of script, and
-      it REMEMBERS nothing — which is right, because this is a note you read once and
+      it REMEMBERS nothing, which is right, because this is a note you read once and
       then want out of the way. Collapsed by default, because it was eating the whole
       preview.
     -->
     <details class="pp-breakdown" id="pp-breakdown">
       <summary>What this is showing</summary>
       <dl class="pp-list">
-        <dt>One lifecycle — auto-hide, no chevron</dt>
+        <dt>One lifecycle, auto-hide, no chevron</dt>
         <dd>
           The bar fades after ~2.5s without pointer movement and returns on movement
-          <strong>or on focus</strong> — tab into the faded bar and it comes back,
+          <strong>or on focus</strong>, tab into the faded bar and it comes back,
           which is the trap pointer-only hiding walks into. It does <strong>not</strong>
           hide while paused: pausing is what people do right before reaching for a
           control.
@@ -440,13 +440,13 @@
         <dd>
           <button type="button" class="pp-link" id="pp-error2">Show an error</button>.
           The status line turns red and names the problem. It does NOT pin the bar
-          open — a bar that refuses to get out of the way is its own annoyance, and
+          open, a bar that refuses to get out of the way is its own annoyance, and
           the message stays in the DOM rather than being lost with the fade.
         </dd>
 
         <dt>The cue is not in the bar</dt>
         <dd>
-          Status and errors only. The cue lives in the captions — having it in both
+          Status and errors only. The cue lives in the captions, having it in both
           places is exactly what made the toggle look inert.
         </dd>
 
@@ -459,7 +459,7 @@
 
         <dt>Captions: over the picture or below it</dt>
         <dd>
-          Overlay is the default — standard subtitle position, costs no picture
+          Overlay is the default, standard subtitle position, costs no picture
           height. <strong>Below</strong> gives the strip its own row and the picture
           shrinks above it. Both are wanted, so it is a choice, and the switch is
           independent of the control bar: hide the controls and the captions stay.

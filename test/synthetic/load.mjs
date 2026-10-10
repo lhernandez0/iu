@@ -4,7 +4,7 @@
  * The corpus in `test/synthetic/` is our own invented text wearing the shapes of a
  * real capture. It exists because every fixture in this suite used to be written by
  * hand from an idea of what YouTube sends, so the tests could only ever confirm the
- * idea — thirteen bugs were reported from use and not one was found by the suite.
+ * idea, thirteen bugs were reported from use and not one was found by the suite.
  *
  * Shape comes from `test/fixtures/`, which is real and local. Text is ours, which
  * is what makes the corpus committable. Neither half is useful alone: invented
@@ -13,7 +13,7 @@
  *
  * If nothing has been derived yet, the loaders return a small self-contained
  * fallback so the suite still runs on a fresh clone. The fallback is deliberately
- * minimal and clearly marked — it is a bootstrapping aid, not a second source of
+ * minimal and clearly marked, it is a bootstrapping aid, not a second source of
  * truth, and a test that depends on its exact contents is a test that will break
  * when someone derives the real corpus.
  */
@@ -84,8 +84,8 @@ export function loadSynthetic(name = null) {
 /**
  * A JSON3 caption body built from a derived track.
  *
- * JSON3 is what the extension actually requests — `fmt=json3` is hard-coded in
- * `buildTrackUrl` — so this is the shape that matters, and it is rebuilt from the
+ * JSON3 is what the extension actually requests, `fmt=json3` is hard-coded in
+ * `buildTrackUrl`, so this is the shape that matters, and it is rebuilt from the
  * real field names (`events`, `tStartMs`, `dDurationMs`, `segs`, `utf8`).
  *
  * `segs` is split into two pieces on some cues on purpose: the real body does that,
@@ -129,7 +129,7 @@ export function xmlFrom(segments) {
 }
 
 /**
- * A `SUMMARY`-shaped payload — what the content script's `describe` reports.
+ * A `SUMMARY`-shaped payload, what the content script's `describe` reports.
  *
  * @param {object} fixture From `loadSynthetic`.
  * @param {object} [overrides]
@@ -161,7 +161,7 @@ export function summaryFrom(fixture, overrides = {}) {
  * The fallback used when nothing has been derived.
  *
  * Small, self-contained, and obviously synthetic. It exists so a fresh clone can
- * run `npm test`, not so tests can depend on it — anything asserting an exact cue
+ * run `npm test`, not so tests can depend on it, anything asserting an exact cue
  * here would break the moment the real corpus is derived, which is the wrong
  * direction of dependency.
  */

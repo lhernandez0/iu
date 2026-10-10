@@ -12,7 +12,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * is enough to actually evaluate the module, which catches a whole class of
  * failure that static checks cannot: anything thrown at module scope. A worker
  * that throws while loading never answers the panel, and the panel just sits on
- * its placeholder — indistinguishable, from the panel's side, from a slow
+ * its placeholder, indistinguishable, from the panel's side, from a slow
  * network.
  *
  * Only the surfaces the worker reaches are implemented. Anything else is
@@ -29,7 +29,7 @@ const here = dirname(fileURLToPath(import.meta.url));
  * @param {any} [options.trackPayload]     What it returns for FETCH_TRACK.
  * @param {object} [options.storage]       Pre-existing chrome.storage.local contents.
  * @param {number} [options.storageDelay]  Milliseconds the storage read takes.
- * @param {object[]} [options.contexts]    The extension's own open contexts — a
+ * @param {object[]} [options.contexts]    The extension's own open contexts, a
  *   reader page in a tab, the offscreen document. Empty by default, because a
  *   fresh worker has none.
  * @returns {{listeners: object, calls: object, storage: object}}
@@ -76,7 +76,7 @@ export function installChromeStub(options = {}) {
   // RESOLVED BY FILENAME, not by a `learn/data/` prefix. The prefix version
   // served chinese.json for every data URL, which was correct while there was one
   // dictionary and silently wrong the moment there were two: a test that switched
-  // to a JLPT list would have been handed Chinese words and passed — or failed
+  // to a JLPT list would have been handed Chinese words and passed, or failed
   // for a reason that had nothing to do with the code under test. Anything not on
   // the allowlist throws, so an unexpected network call in a hermetic test is
   // loud rather than silently returning nothing.
@@ -98,7 +98,7 @@ export function installChromeStub(options = {}) {
       onConnect: { addListener: addListener('connect') },
       onInstalled: { addListener: addListener('installed') },
       getURL: (path) => `chrome-extension://test/${path}`,
-      // The extension's own open contexts — the reader page in a tab, and the
+      // The extension's own open contexts, the reader page in a tab, and the
       // offscreen document.
       //
       // Configurable because it is load-bearing twice over: it is how the worker
@@ -123,7 +123,7 @@ export function installChromeStub(options = {}) {
     },
     // The toolbar icon's menu, which is how a source is opened. Present so the
     // registration path actually runs rather than being skipped by the worker's
-    // feature detection — a stub that omits this would let a broken menu pass.
+    // feature detection, a stub that omits this would let a broken menu pass.
     contextMenus: {
       create: (properties, callback) => {
         calls.menusCreated.push(properties);
@@ -159,7 +159,7 @@ export function installChromeStub(options = {}) {
       },
     },
     storage: (() => {
-      // The `storage` option is the SETTINGS bucket — the one `SETTINGS_AREA`
+      // The `storage` option is the SETTINGS bucket, the one `SETTINGS_AREA`
       // names, which is `local`. Kept by reference so `stub.storage.settings` is
       // what a test reads to see what was persisted, which is the assertion most
       // of these tests make.
@@ -235,7 +235,7 @@ export function installChromeStub(options = {}) {
   };
 
   // The worker holds no reference to the stub, so mutating these mid-test is how
-  // a test changes what the "page" reports — for instance to simulate the user
+  // a test changes what the "page" reports, for instance to simulate the user
   // switching to a different video in the same tab.
   const answers = { describePayload, providePayload, trackPayload };
 
@@ -244,7 +244,7 @@ export function installChromeStub(options = {}) {
    *
    * The content script picks the track the worker ASKS for and only falls back to
    * a default when that track is missing. A stub that always returns the same
-   * payload cannot tell those apart — it would report success for a language the
+   * payload cannot tell those apart, it would report success for a language the
    * video does not have, and quietly turn a real bug into a passing test.
    *
    * Named `answerFor` rather than `resolve` because `resolve` here is
@@ -263,7 +263,7 @@ export function installChromeStub(options = {}) {
     calls,
     storage,
     /**
-     * The `chrome.storage` API itself, so a test can act as ANOTHER context —
+     * The `chrome.storage` API itself, so a test can act as ANOTHER context,
      * writing to the bucket directly and firing the cross-context change event,
      * which is the only way to test that a live worker reacts to a change it did
      * not make.

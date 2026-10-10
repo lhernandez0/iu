@@ -10,7 +10,7 @@
  * THE ONLY THING IN THIS PROJECT THAT OPENS youtube.com.
  *
  * That is the rule this tool exists to enforce, and the reason it is shaped the
- * way it is. Every test — hermetic, replay, anything added later — reads captured
+ * way it is. Every test, hermetic, replay, anything added later, reads captured
  * fixtures and never touches the network, so hitting the real site is a thing you
  * do deliberately, once, and can never happen as a side effect of running a
  * suite.
@@ -23,7 +23,7 @@
  * `--force`.
  *
  * That shape exists because of a real failure: this tool was iterated against the
- * live site on its first outing — four page loads of the same video — because
+ * live site on its first outing, four page loads of the same video, because
  * there was no way to rehearse it and no cost to running it again. Every one of
  * those four could have been caught offline. A network call you only get once has
  * to be treated like one.
@@ -35,7 +35,7 @@
  *   test/fixtures/<id>/raw/          exactly what YouTube sent
  *   test/fixtures/<id>/normalised/   the same, cleaned up and readable
  *
- * Both, on purpose. The raw bytes are the honest record — nothing about our
+ * Both, on purpose. The raw bytes are the honest record, nothing about our
  * beliefs is in them, so they can falsify a wrong assumption rather than confirm
  * it. The normalised copies are what a person actually reads while reviewing,
  * because a fixture you cannot read is a fixture nobody checks.
@@ -50,7 +50,7 @@
  *     the extension's fallback actually uses
  *
  * Two of those are known to matter from the first capture: the direct URL answers
- * 200 with an EMPTY body on a real video, so only the fallback had content — and
+ * 200 with an EMPTY body on a real video, so only the fallback had content, and
  * our XML parser had never once seen a real XML body, because `fmt=json3` had
  * always been forced. The second capture resolved the second half: the ANDROID
  * client's default format returns `text/xml`, so a real default-format body is now
@@ -59,7 +59,7 @@
  * Fixtures are LOCAL and gitignored: a raw capture contains a signed caption URL
  * (`signature`, `ei`, `ip`, `expire`), which is a session artifact rather than
  * something to put in a repository. The committed counterpart is
- * `test/synthetic/` — our own invented content, shaped by a structural report
+ * `test/synthetic/`, our own invented content, shaped by a structural report
  * derived from a real capture. That is what the tests read.
  */
 
@@ -81,7 +81,7 @@ const PAGE_SETTLE_MS = 5000;
  * How long one caption request may take before it is abandoned.
  *
  * A capture is a single page load, so a request that never answers does not just
- * lose its own body — it holds the run open until the browser gives up, and the
+ * lose its own body, it holds the run open until the browser gives up, and the
  * bodies still to come are lost with it. Bounding each request means the worst
  * case is one missing body rather than a spent capture.
  */
@@ -105,7 +105,7 @@ const MAX_REQUESTS = 12;
 /**
  * How many EXTRA tracks get a content request of their own.
  *
- * The parsing path does not vary by language — the first track proves it — so the
+ * The parsing path does not vary by language, the first track proves it, so the
  * only thing more languages buy is a different script and encoding. Two extra is
  * enough for that, and it does not grow with the video: a nine-track video costs
  * the same as a three-track one.
@@ -116,7 +116,7 @@ const MAX_TRACK_CONTENT = 2;
  * Whether a response is the server refusing us rather than answering.
  *
  * 429 is explicit. The other two are how a silent refusal actually arrives: a 200
- * whose body is an HTML page — Google's "Sorry..." block page is 1103 bytes of
+ * whose body is an HTML page, Google's "Sorry..." block page is 1103 bytes of
  * HTML with a 200 status. Treating that as a caption body is what let a rate limit
  * masquerade as "this video has no captions", because a parser finds no `<text>`
  * elements in an error page and reports an empty track.
@@ -141,8 +141,8 @@ function isRefusal(result) {
  * A response is the ground truth about its own format; the request that produced
  * it is only a hope. Classifying by the request would let a server that ignores
  * `fmt` (answering XML to a `fmt=json3` call, or JSON to no-`fmt` at all) be
- * recorded as whatever we wanted, and the disagreement — which is the interesting
- * part — would be invisible.
+ * recorded as whatever we wanted, and the disagreement, which is the interesting
+ * part, would be invisible.
  *
  * @param {string} body
  * @returns {'json3'|'xml'|'empty'|'other'}
@@ -163,7 +163,7 @@ function bodyShape(body) {
  * a mismatch.
  *
  * `ttml` is served as XML, so an XML body satisfies a `ttml` request. Anything
- * else — including an HTML error page, which is neither — is a mismatch.
+ * else, including an HTML error page, which is neither, is a mismatch.
  *
  * @param {string|undefined} shape Observed body shape.
  * @param {string|null} fmt What the request asked for.
@@ -178,7 +178,7 @@ function formatMatches(shape, fmt) {
  * Reject if a promise has not settled within `ms`.
  *
  * Playwright's own timeout is generous, and a caption request that hangs does not
- * fail — it just never returns, holding the single page load open. This bounds the
+ * fail, it just never returns, holding the single page load open. This bounds the
  * cost of a hang to one body instead of the whole capture.
  *
  * The underlying request is not cancelled (it cannot be, from here); it is
@@ -228,7 +228,7 @@ function loadEnv() {
  * Video ids from a whitespace- or comma-separated list.
  *
  * Accepts full URLs as well as bare ids, because a URL is what a person has in
- * hand — they paste the address bar. A bare id in a config file reads like a
+ * hand, they paste the address bar. A bare id in a config file reads like a
  * typo; a URL does not.
  *
  * @param {string} raw
@@ -256,10 +256,10 @@ function parseVideoIds(raw) {
 
         return (
           // Path forms first: `/shorts/<id>` and `/live/<id>` are unambiguous,
-          // whereas a `v` parameter can be unrelated — a shorts URL with `?v=1`
+          // whereas a `v` parameter can be unrelated, a shorts URL with `?v=1`
           // on it would otherwise resolve to the literal id "1".
           /^\/(?:shorts|live)\/([\w-]+)/.exec(url.pathname)?.[1] ??
-          // youtu.be/<id> — the short form, which is what the Share button hands
+          // youtu.be/<id>, the short form, which is what the Share button hands
           // out, so it is the URL most likely to be pasted.
           (/^youtu\.be$/i.test(url.hostname) ? url.pathname.slice(1).split('/')[0] : null) ??
           url.searchParams.get('v') ??
@@ -275,7 +275,7 @@ function parseVideoIds(raw) {
 /**
  * Query parameters that are session artifacts rather than part of the format.
  *
- * They are useless as credentials — `expire` is hours away at most — but they
+ * They are useless as credentials, `expire` is hours away at most, but they
  * are still someone's session, they make every re-capture look like a total
  * change, and there is no reason for them to be in a fixture. Dropped from the
  * URLs we record; the raw BODIES keep everything, because those are the record.
@@ -313,8 +313,8 @@ function section(name) {
  *
  * This is the licence-safe bridge from a real capture to the committed synthetic
  * corpus. It records what a reviewer needs to confirm our invented fixtures have
- * the same SHAPE as YouTube's — which fields exist, what type each is, how an
- * array nests — while containing none of the video's text. Facts about a format,
+ * the same SHAPE as YouTube's, which fields exist, what type each is, how an
+ * array nests, while containing none of the video's text. Facts about a format,
  * not about a film.
  *
  * Arrays are summarised from their first element, plus their length, because the
@@ -378,22 +378,22 @@ function rendererReport(body) {
  * Every body shape worth having, as requests to make inside the one page load.
  *
  * WHY THIS IS NO LONGER PER-TRACK. The first version built the whole matrix for
- * every caption track — 4 combinations plus two explicit formats plus a
+ * every caption track, 4 combinations plus two explicit formats plus a
  * translation, times every track. On a real 9-track video that is 57 requests in
  * one run, which is not a budget this tool gets to spend: it is a free endpoint we
  * are not paying for, and 57 rapid requests in a row is indistinguishable from
  * abuse. It earned a rate limit, and the rate limit then looked like "every video
  * has no captions" for hours.
  *
- * The matrix answers questions about a FORMAT and a CLIENT — what shape does the
+ * The matrix answers questions about a FORMAT and a CLIENT, what shape does the
  * endpoint return, does it honour `fmt`, do the two clients disagree. Those
  * answers do not vary by language, so asking them once answers them for the whole
  * video. What is genuinely per-track is the CONTENT, and that needs one request
  * per language, not seven.
  *
  * ORDER MATTERS and is deliberate. The one shape we do not hold is a real
- * default-format body — everything captured so far was requested with `fmt=json3`
- * — so that is collected FIRST, before anything else can fail and take the shot
+ * default-format body, everything captured so far was requested with `fmt=json3`
+ *, so that is collected FIRST, before anything else can fail and take the shot
  * with it. The page client comes before the fallback for the same reason: it is the
  * path the extension tries first, so it is the one worth having.
  *
@@ -454,7 +454,7 @@ function collectionPlan(tracks, translateTo) {
   //
   // Bounded on purpose. The extension's parsing does not vary by language, so the
   // first track already proves the path; what more languages add is DIFFERENT
-  // SCRIPTS — a CJK body and a Latin one exercise encoding and cue shapes that a
+  // SCRIPTS, a CJK body and a Latin one exercise encoding and cue shapes that a
   // single track does not. Three is enough for that and it does not grow with the
   // video: a 9-track video does not get 9 content requests, it gets three.
   for (const track of tracks) {
@@ -520,7 +520,7 @@ const REHEARSAL_EXPECTED = [
  * Rebuild a JSON3 body in the XML shape YouTube sends when nobody asks for a
  * format.
  *
- * REHEARSAL ONLY — this never runs against the network and never writes a fixture.
+ * REHEARSAL ONLY, this never runs against the network and never writes a fixture.
  * It was originally the only way `--replay` could exercise the XML branch, because
  * no capture held a default-format body. One now does, so the rehearsal serves the
  * real one and this is a FALLBACK for a capture that predates it (or for `--check`,
@@ -528,7 +528,7 @@ const REHEARSAL_EXPECTED = [
  * used matters: a rehearsal that claimed to test the real body while actually
  * testing this would be the exact self-deception this whole exercise is about.
  *
- * The cues are the real ones from the capture — real timings, real text — just in
+ * The cues are the real ones from the capture, real timings, real text, just in
  * the other serialisation. Two extra cues are appended that the real body does
  * not contain, because they exercise code the real one cannot reach:
  *
@@ -586,7 +586,7 @@ const MODE_LIST = flags.has('--list');
 const FORCE = flags.has('--force');
 
 /**
- * `--fail-after=N` — rehearse the FAILURE path, not just the happy one.
+ * `--fail-after=N`, rehearse the FAILURE path, not just the happy one.
  *
  * The capture that cost the shot failed part-way through the collection loop, and
  * the code that decides what to keep on failure had never once been executed. A
@@ -613,7 +613,7 @@ const videoIds = explicit.length
 
 /** Show the plan without opening anything. */
 if (MODE_LIST || !videoIds.length) {
-  section(MODE_LIST && videoIds.length ? `Would capture ${videoIds.length} video(s) — nothing was opened` : 'Nothing configured');
+  section(MODE_LIST && videoIds.length ? `Would capture ${videoIds.length} video(s), nothing was opened` : 'Nothing configured');
   for (const videoId of videoIds) {
     const done = existsSync(join(FIXTURES, videoId, 'normalised', 'video.json'));
     console.log(`  ${videoId}${done ? '   (already captured)' : ''}`);
@@ -663,7 +663,7 @@ function preflight() {
 
 if (MODE_CHECK || MODE_REPLAY) {
   const problems = preflight();
-  section(MODE_CHECK ? 'Preflight — opens nothing' : 'Replay rehearsal — opens nothing');
+  section(MODE_CHECK ? 'Preflight, opens nothing' : 'Replay rehearsal, opens nothing');
   console.log(`  browser:   ${executablePath ?? 'NOT FOUND'}`);
   console.log(`  video(s):  ${videoIds.join(', ') || 'none'}`);
   console.log(`  mode:      ${MODE_REPLAY ? 'replay (network stubbed)' : 'check only'}`);
@@ -683,7 +683,7 @@ if (MODE_CHECK || MODE_REPLAY) {
     // Parse a sample body on a blank page, exactly as the real run will.
     //
     // This is what `--check` is FOR. Every other precondition is a file or a flag;
-    // this one is the thing that actually cost a capture — `DOMParser.parseFromString`
+    // this one is the thing that actually cost a capture, `DOMParser.parseFromString`
     // refusing a plain string under `require-trusted-types-for`. Proving the
     // blank-page path works here means it is known-good before the open is spent,
     // rather than discovered during it.
@@ -696,7 +696,7 @@ if (MODE_CHECK || MODE_REPLAY) {
     const parser = await context.newPage();
     await parser.goto('about:blank');
 
-    section('Parse check — opens nothing');
+    section('Parse check, opens nothing');
     // A minimal body of each shape, built here so the check does not depend on
     // any capture existing. Both branches of the parser are exercised, which is
     // the point: the XML branch had never run against a real body, and the check
@@ -727,7 +727,7 @@ if (MODE_CHECK || MODE_REPLAY) {
     await browser.close();
 
     if (parseFailed) {
-      console.log('\n  the parser cannot run on a blank page — a capture would lose every body.');
+      console.log('\n  the parser cannot run on a blank page, a capture would lose every body.');
       process.exit(1);
     }
     console.log('\n  the parser works where the capture will run it.');
@@ -744,7 +744,7 @@ if (MODE_CHECK || MODE_REPLAY) {
  * the network stubbed.
  *
  * This is the rehearsal that was missing. It exercises routing, staging, parsing,
- * the normalised writes and the shape report — everything except the one thing
+ * the normalised writes and the shape report, everything except the one thing
  * that genuinely cannot be rehearsed, which is what YouTube chooses to send. A
  * real run should be the first time the tool sees live data, not the first time it
  * runs at all.
@@ -762,7 +762,7 @@ async function installReplayRoutes(context, sourceDir) {
   // Which caption bodies the capture actually holds, by format.
   //
   // The rehearsal serves the REAL bodies. It used to synthesise the XML from a
-  // JSON3 body, because no capture had ever held a default-format body — and then
+  // JSON3 body, because no capture had ever held a default-format body, and then
   // one did, and the synthesiser silently produced nothing, because it was handed
   // real XML and expected JSON. A rehearsal whose input is built from an assumption
   // breaks the moment the assumption changes; serving reality cannot.
@@ -776,7 +776,7 @@ async function installReplayRoutes(context, sourceDir) {
 
   // Two rehearsal-only cues, spliced into an XML body so entity decoding and
   // child-element flattening are exercised deterministically. They are appended to
-  // whatever XML we serve — real or synthesised — because the real body cannot be
+  // whatever XML we serve, real or synthesised, because the real body cannot be
   // relied on to contain an entity or a nested element on any given day.
   const withRehearsalCues = (xml) =>
     xml.includes('</transcript>')
@@ -786,7 +786,7 @@ async function installReplayRoutes(context, sourceDir) {
         )
       : xml;
 
-  // The default-format body — what YouTube sends with no `fmt`. The real one when
+  // The default-format body, what YouTube sends with no `fmt`. The real one when
   // the capture has it; otherwise SYNTHESISED from json3 so the XML branch still
   // executes. A rehearsal that skips the branch it exists to rehearse is pointless,
   // so on a fresh json3-only capture we build the stand-in rather than serve
@@ -813,7 +813,7 @@ async function installReplayRoutes(context, sourceDir) {
   // Fail closed FIRST, so nothing can reach the network during a rehearsal.
   await context.route('**', (route) => route.abort());
   // The charset is not optional. Playwright's `contentType` is sent verbatim, and
-  // a page served without one is decoded as Latin-1 — so the replayed title came
+  // a page served without one is decoded as Latin-1, so the replayed title came
   // back as mojibake (`ä¸å›½æ—…æ¸¸` for 中国旅游) even though the bytes on disk
   // were correct UTF-8. YouTube sends a charset; the rehearsal has to as well, or
   // it exercises a page that differs from the real one.
@@ -825,7 +825,7 @@ async function installReplayRoutes(context, sourceDir) {
   );
 
   // The caption route answers according to what was ASKED FOR, because that is
-  // what the real site does and what the tool is trying to learn — but it answers
+  // what the real site does and what the tool is trying to learn, but it answers
   // with the REAL bodies the capture holds, not with reconstructions of them.
   //
   //   - `fmt=json3` → the captured JSON3 body
@@ -866,7 +866,7 @@ async function fetchCaption(page, baseUrl, fmt, tlang) {
       try {
         const url = new URL(href);
         // Explicitly DELETE when we want the default, so we learn what YouTube
-        // sends when nobody asks for a format — the shape our parser has never
+        // sends when nobody asks for a format, the shape our parser has never
         // seen, because every previous call set `fmt=json3`.
         if (format) url.searchParams.set('fmt', format);
         else url.searchParams.delete('fmt');
@@ -929,7 +929,7 @@ async function fetchAndroidPlayer(page, videoId, key) {
  * Runs in a BLANK page the tool owns, never in the YouTube page.
  *
  * The YouTube page enforces `require-trusted-types-for`, which makes
- * `parseFromString` refuse a plain string — the failure that cost a capture. A
+ * `parseFromString` refuse a plain string, the failure that cost a capture. A
  * page we create carries no such policy. It is still the platform's DOMParser and
  * `textContent`, so agreement with the extension is structural rather than
  * approximate, and independent of the extension's own code.
@@ -976,8 +976,8 @@ async function parseCaptionBodyInPage(page, body) {
 /**
  * Write the two manifests that describe a capture.
  *
- * Split out and called REPEATEDLY — after the player responses and after every
- * collected body — rather than once at the end. A capture is single-shot, so a run
+ * Split out and called REPEATEDLY, after the player responses and after every
+ * collected body, rather than once at the end. A capture is single-shot, so a run
  * that dies part-way must still be able to say what it got: the previous version
  * wrote these after the whole loop, so a mid-loop failure left bodies on disk with
  * nothing that named them, and the most informative run was the emptiest.
@@ -1026,7 +1026,7 @@ async function writeManifests(normalised, summary) {
 /**
  * Keep a failed run's staging somewhere it can be found and derived from.
  *
- * A failed capture must not be an empty one — there may be no second attempt, so
+ * A failed capture must not be an empty one, there may be no second attempt, so
  * whatever was fetched before the failure is the only evidence that will ever
  * exist. Copying (not moving) into a `.partial/` sibling means the good capture is
  * untouched, the partial is nameable, and `derive-synthetic` can merge the two.
@@ -1075,7 +1075,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
   // YouTube page, and YouTube serves `require-trusted-types-for`, which forbids
   // handing a plain string to `DOMParser.parseFromString`. That threw and cost a
   // capture. A page this tool creates has no policy of its own, so the parser runs
-  // where nothing forbids it — and it still uses the platform's DOMParser and
+  // where nothing forbids it, and it still uses the platform's DOMParser and
   // `textContent`, so it agrees with the extension structurally rather than by
   // approximation.
   //
@@ -1094,8 +1094,8 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
         url,
         status: response.status(),
         body: await response.body(),
-        // Headers, not just the body. The policy that broke a capture —
-        // `require-trusted-types-for` — arrived as a HEADER, so a tool that saved
+        // Headers, not just the body. The policy that broke a capture,
+        // `require-trusted-types-for`, arrived as a HEADER, so a tool that saved
         // only bodies left the cause invisible even after the fact. Anything we
         // might later need to reason about has to be in the record.
         headers: response.headers(),
@@ -1154,10 +1154,10 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
 
   // A consent or bot-check screen means the open is already spent and there is
   // nothing here worth asking for. Bail out BEFORE the android player request and
-  // the whole collection loop — there is no point spending a dozen requests
+  // the whole collection loop, there is no point spending a dozen requests
   // against a page that is not the video, and a run that does looks like work.
   if (probe.consentWall) {
-    console.log('    !! consent or bot-check screen — no video on the page');
+    console.log('    !! consent or bot-check screen, no video on the page');
     console.log('    !! stopping here rather than spending requests on it');
     summary.collection.push({ name: 'aborted', note: 'consent or bot-check screen' });
     await writeManifests(normalised, summary);
@@ -1170,7 +1170,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
   // leaves something that names the video and its tracks.
   await writeManifests(normalised, summary);
 
-  // The page's own player response, verbatim — what the bridge reads.
+  // The page's own player response, verbatim, what the bridge reads.
   const pageResponse = await page.evaluate(() => JSON.stringify(window.ytInitialPlayerResponse ?? null));
   if (pageResponse && pageResponse !== 'null') {
     await writeFile(join(raw, 'web-player-response.json'), pageResponse);
@@ -1179,7 +1179,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
 
   // A FRESH response from the ANDROID client the extension's fallback uses. Two
   // clients can serve different track lists, and the fallback's correctness rests
-  // entirely on this one — so it is worth having even though the page response
+  // entirely on this one, so it is worth having even though the page response
   // already has tracks.
   const android = await fetchAndroidPlayer(page, videoId, probe.innertubeKey);
   let androidTracks = [];
@@ -1234,8 +1234,8 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
   // Every body shape, in the one page load.
   //
   // Each request is isolated. The previous version only guarded the PARSE, so a
-  // throw from `fetchCaption` or a write — a navigation, a closed page, a transient
-  // failure on the fourth of twelve requests — abandoned the loop and every body
+  // throw from `fetchCaption` or a write, a navigation, a closed page, a transient
+  // failure on the fourth of twelve requests, abandoned the loop and every body
   // still to come. One request failing must cost one request.
   let attempted = 0;
   const plan = collectionPlan(probe.tracks, translateTo);
@@ -1243,7 +1243,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
     // Reported rather than silently truncated, because a plan larger than the cap
     // means the shape of the plan changed and the cap is now arbitrary.
     console.warn(
-      `    ! the plan wants ${plan.length} requests, over the ${MAX_REQUESTS} cap — the first ${MAX_REQUESTS} will be made`,
+      `    ! the plan wants ${plan.length} requests, over the ${MAX_REQUESTS} cap, the first ${MAX_REQUESTS} will be made`,
     );
   }
 
@@ -1286,7 +1286,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
       const note = String(error?.message ?? error);
       summary.collection.push({ ...describeRequest(request), ok: false, status: 0, bytes: 0, shape: null, file: null, note });
       await writeManifests(normalised, summary);
-      console.log(`    ${label}: ERR — ${note}`);
+      console.log(`    ${label}: ERR, ${note}`);
       continue;
     }
 
@@ -1306,7 +1306,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
     // The previous version carried on through a rate limit and recorded every
     // subsequent response as an ordinary body. 56 block pages were written to disk
     // as though they were capture data, and because a block page parses to zero
-    // cues, the summary read as "this video has no captions" — a false conclusion
+    // cues, the summary read as "this video has no captions", a false conclusion
     // that cost hours of looking in the wrong place.
     //
     // Stopping is also the correct behaviour towards the server. Continuing to ask
@@ -1315,7 +1315,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
     // not wasted.
     if (isRefusal(result)) {
       entry.shape = bodyShape(result.body);
-      entry.note = `REFUSED (${result.status}) — stopping the run`;
+      entry.note = `REFUSED (${result.status}), stopping the run`;
       if (result.body.trim()) {
         await writeFile(join(raw, `${label}.txt`), result.body);
         entry.file = `raw/${label}.txt`;
@@ -1323,7 +1323,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
       summary.collection.push(entry);
       summary.refusedAt = { label, status: result.status, after: attempted };
       await writeManifests(normalised, summary);
-      console.log(`    ${label}: REFUSED (${result.status}) — stopping. ${attempted} request(s) made.`);
+      console.log(`    ${label}: REFUSED (${result.status}), stopping. ${attempted} request(s) made.`);
       break;
     }
 
@@ -1336,7 +1336,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
       entry.formatMatches = formatMatches(entry.shape, request.fmt);
 
       // Parsed straight away, not just stored. Transport succeeding says nothing
-      // about whether the PARSER handles the body — and the XML branch has never
+      // about whether the PARSER handles the body, and the XML branch has never
       // executed against real data, so "it downloaded 28KB" is exactly the kind of
       // reassurance that hides a failure. Recording the cue count and whether any
       // markup survived makes the rehearsal prove the whole path, which is the
@@ -1349,7 +1349,7 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
         parsed = await parseCaptionBodyInPage(parser, result.body);
       } catch (error) {
         // Recorded and carried on. One body failing to parse must not throw away
-        // every other body already fetched — that is the whole reason staging is
+        // every other body already fetched, that is the whole reason staging is
         // kept on failure.
         entry.note = `parse failed: ${error?.message ?? error}`;
         console.log(`    ! ${label}: ${entry.note}`);
@@ -1378,14 +1378,14 @@ async function captureVideo(context, videoId, { replay = false, opened }) {
     const parsedCues = entry.shape ? ` → ${entry.segments} cues` : '';
     const leaked = entry.markupLeaked ? ' !! MARKUP LEAKED INTO TEXT' : '';
     const mismatch = entry.shape && entry.formatMatches === false ? ' !! FORMAT MISMATCH' : '';
-    console.log(`    ${label}: ${bits.filter(Boolean).join(' ')}${entry.shape ? ` (${entry.shape})` : ''}${parsedCues}${leaked}${mismatch}${entry.note ? ` — ${entry.note}` : ''}`);
+    console.log(`    ${label}: ${bits.filter(Boolean).join(' ')}${entry.shape ? ` (${entry.shape})` : ''}${parsedCues}${leaked}${mismatch}${entry.note ? `, ${entry.note}` : ''}`);
   }
 
   // --- Normalised: the segments a reviewer (and the replay tier) can read -----
   for (const track of probe.tracks) {
     // Pick the body whose format actually matches what was asked for, preferring
-    // the default-format body — the shape we are structuring the whole capture
-    // around — and falling back to json3 and then anything with content.
+    // the default-format body, the shape we are structuring the whole capture
+    // around, and falling back to json3 and then anything with content.
     //
     // Written to disk based on the STORED body, not the in-memory parse, so the
     // file a reviewer reads is the file that was checked.
@@ -1454,8 +1454,8 @@ const opened = { count: 0 };
 
 section(
   MODE_REPLAY
-    ? 'Rehearsing against the existing capture — opens nothing'
-    : `Capturing ${videoIds.length} video(s) — this opens youtube.com ${videoIds.length} time(s), and no more`,
+    ? 'Rehearsing against the existing capture, opens nothing'
+    : `Capturing ${videoIds.length} video(s), this opens youtube.com ${videoIds.length} time(s), and no more`,
 );
 
 const browser = await chromium.launch({
@@ -1476,7 +1476,7 @@ for (const videoId of videoIds) {
 
     if (summary.consentWall) {
       console.log('    !! the page was a consent or bot-check screen, not a video');
-      console.log('    !! nothing useful was captured — that open is spent');
+      console.log('    !! nothing useful was captured, that open is spent');
       continue;
     }
     console.log(`    ${summary.title}`);
@@ -1490,7 +1490,7 @@ for (const videoId of videoIds) {
     // Whatever was fetched before the failure is the only evidence that will
     // exist, so it is copied somewhere findable rather than left in `.staging`
     // where the next run's first line would delete it. The good capture is never
-    // touched on a failure — that is the whole point of staging.
+    // touched on a failure, that is the whole point of staging.
     const partial = await promotePartial(videoId).catch(() => null);
     if (partial) {
       console.log(`    partial results kept at: ${partial.slice(ROOT.length + 1)}`);
@@ -1505,7 +1505,7 @@ await browser.close();
 section('Done');
 console.log(`  pages opened: ${opened.count}`);
 if (opened.count > videoIds.length) {
-  console.log('  !! more pages were opened than videos asked for — this should be impossible');
+  console.log('  !! more pages were opened than videos asked for, this should be impossible');
 }
 
 // --- Rehearsal self-check ----------------------------------------------------
@@ -1522,12 +1522,12 @@ if (MODE_REPLAY) {
 
   if (Number.isInteger(FAIL_AFTER)) {
     // --fail-after rehearses the FAILURE path. The happy-path assertions do not
-    // apply — the loop was deliberately cut short — so what is checked instead is
+    // apply, the loop was deliberately cut short, so what is checked instead is
     // that the partial was preserved and is self-describing, which is the code
     // path that had never run when the last shot was lost.
     const summary = summaries[0] ?? { collection: [] };
     const partial = join(FIXTURES, `${videoIds[0]}.partial`);
-    // The partial is the only record — a thrown run returns no summary, so what it
+    // The partial is the only record, a thrown run returns no summary, so what it
     // collected has to be read back from the file on disk. That is the point: the
     // evidence must outlive the process.
     const partialShape = existsSync(join(partial, 'normalised', 'shape-report.json'))
@@ -1558,7 +1558,7 @@ if (MODE_REPLAY) {
       if (!ok) failed++;
     }
     if (failed) {
-      console.log(`\n  ${failed} check(s) failed — the partial-preservation path is broken.`);
+      console.log(`\n  ${failed} check(s) failed, the partial-preservation path is broken.`);
       process.exitCode = 1;
     } else {
       console.log('\n  a mid-loop failure preserves and names its partial results.');
@@ -1578,7 +1578,7 @@ if (MODE_REPLAY) {
     checks.push(['no markup leaked into any parsed text', collection.every((c) => !c.markupLeaked)]);
     // The response is the ground truth about its own format. If a server ignored
     // `fmt`, the capture must record the disagreement rather than the format we
-    // hoped for — otherwise the one interesting finding is the one we cannot see.
+    // hoped for, otherwise the one interesting finding is the one we cannot see.
     checks.push(['no request received a format other than the one asked for', collection.every((c) => c.formatMatches !== false)]);
 
     // The synthetic cues, checked against exactly what they must decode to. Only
@@ -1601,7 +1601,7 @@ if (MODE_REPLAY) {
       if (!ok) failed++;
     }
     if (failed) {
-      console.log(`\n  ${failed} check(s) failed — the live run would be discovering this.`);
+      console.log(`\n  ${failed} check(s) failed, the live run would be discovering this.`);
       process.exitCode = 1;
     } else {
       console.log('\n  every branch exercised offline. The live run should see nothing new.');
@@ -1614,7 +1614,7 @@ if (MODE_REPLAY) {
 // This is the fix for the thing that hurt most: the capture that cost the shot
 // fetched a real body, wrote it to staging, threw on the next branch, and then
 // this line deleted the evidence along with everything else. A failed run should
-// be the MOST informative one, not the emptiest — there may be no second attempt
+// be the MOST informative one, not the emptiest, there may be no second attempt
 // to gather what it found.
 if (opened.count && opened.failed) {
   console.log(`\n  staging kept for inspection: ${join('test', 'fixtures', '.staging')}`);

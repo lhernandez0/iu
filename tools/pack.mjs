@@ -10,11 +10,11 @@
  * So the staging step owns the exclusion list (`SHIPPED` in the Makefile) and this
  * does the zipping, with the manifest at the archive root as both stores require.
  *
- * No `zip` binary is needed — there is not one on this machine — so this uses
+ * No `zip` binary is needed, there is not one on this machine, so this uses
  * Node's own zlib through the archive format. Deflate, because the two dictionaries
  * are 4 MB of JSON and compress well.
  *
- * @see Makefile — `make pack`
+ * @see Makefile, `make pack`
  */
 
 import { createWriteStream, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -41,11 +41,11 @@ function walk(dir) {
 /**
  * DOS-format date and time for the archive entries.
  *
- * A fixed value, so two builds of the same source are byte-identical — that is
+ * A fixed value, so two builds of the same source are byte-identical, that is
  * deliberate and worth keeping.
  *
  * **The value matters, and the original was wrong.** DOS packs the date as
- * `year-1980` in the top 7 bits, month in the next 4, day in the low 5 — so
+ * `year-1980` in the top 7 bits, month in the next 4, day in the low 5, so
  * `0x2100` decodes to 1996, month 8, **day 0**, which is not a date at all.
  * `unzip -l` printed `1996-08-00` and every entry carried it.
  *
@@ -111,7 +111,7 @@ function entry(name, data, offset) {
   // read to decide an entry is a file rather than a directory.
   central.writeUInt32LE((0o100644 << 16) >>> 0, 38);
   // **The field that was missing.** Byte 42 is the offset of this entry's LOCAL
-  // header from the start of the file. Omitted, every record claimed offset 0 —
+  // header from the start of the file. Omitted, every record claimed offset 0,
   // so the archive described every file as starting at the same place. `unzip`
   // rejected the result outright ("overlapped components (possible zip bomb)")
   // and refused to extract anything, while a naive reader that walks the central
@@ -147,14 +147,14 @@ for (const file of files) {
   centrals.push(built.central);
   uncompressed += built.size;
   // Advanced by the LOCAL header's real length, which includes the name and the
-  // payload — not by the payload alone, or every offset after the first is short
+  // payload, not by the payload alone, or every offset after the first is short
   // by the size of the headers before it.
   offset += built.local.length;
 }
 
 // The manifest has to be at the archive root. Both stores reject a package where
 // it is nested, and the failure reads as "invalid manifest" rather than "wrong
-// layout" — so it is asserted here rather than discovered at upload.
+// layout", so it is asserted here rather than discovered at upload.
 if (!files.some((file) => relative(sourceDir, file) === 'manifest.json')) {
   console.error('manifest.json is not at the root of the staged directory');
   process.exit(1);

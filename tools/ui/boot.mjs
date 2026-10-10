@@ -2,7 +2,7 @@
  * Bootstraps the panel inside the preview.
  *
  * Three jobs, in order: install the fake Port, fetch the scenario the URL asks
- * for, and then import the panel. The import has to be LAST and dynamic — the
+ * for, and then import the panel. The import has to be LAST and dynamic, the
  * panel calls `chrome.runtime.connect` at module scope, so the mock must already
  * be in place when it evaluates.
  *
@@ -48,14 +48,14 @@ async function boot() {
   const id = params.get('scenario') ?? 'bilingual';
 
   const scenario = await fetchScenario(id);
-  document.title = `IU preview — ${scenario.label}`;
+  document.title = `IU preview, ${scenario.label}`;
   await renderSwitcher(id);
 
   const { worker } = installMockChrome(scenario);
 
   // Settings overrides from the URL, so a layout can be linked to and reloaded
   // rather than rebuilt by clicking. Vite's HMR makes them less essential than
-  // they were — an edit lands without a reload — but a link is still how one
+  // they were, an edit lands without a reload, but a link is still how one
   // state gets shared or returned to.
   const patch = {};
   if (params.has('view')) patch.view = params.get('view');
@@ -82,7 +82,7 @@ let worker = await boot();
 //
 // Deliberately NOT forcing a reload on every update. Vite handles the two kinds
 // of change differently and correctly on its own: a stylesheet edit is injected
-// without a reload — which is the entire point of using a dev server here — while
+// without a reload, which is the entire point of using a dev server here, while
 // a panel module edit falls back to a full reload, because `sidepanel.js` accepts
 // no hot updates and mounting it twice is not a lifecycle that exists in a real
 // side panel. Intercepting `vite:beforeUpdate` would have turned the CSS case

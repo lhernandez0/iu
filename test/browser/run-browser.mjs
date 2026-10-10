@@ -4,7 +4,7 @@
  *   node test/browser/run-browser.mjs
  *
  * There is no live tier. It used to exist and was gated behind a flag, but it was
- * still a second thing that opened youtube.com — and the rule is that exactly one
+ * still a second thing that opened youtube.com, and the rule is that exactly one
  * command ever does that: `npm run capture`. A capture is taken once per video
  * and the resulting fixtures are replayed here, so this tier is offline, always,
  * and cannot reach the network even by accident.
@@ -53,7 +53,7 @@ const failed = results.filter((r) => r.code !== 0 && !r.skipped);
 for (const result of results) {
   const summary = /(\d+)\/(\d+) checks passed/.exec(result.output);
   const label = result.skipped ? 'SKIP' : result.code === 0 ? 'ok  ' : 'FAIL';
-  console.log(`${label}  ${result.file.padEnd(34)} ${summary ? `${summary[1]}/${summary[2]}` : '—'}`);
+  console.log(`${label}  ${result.file.padEnd(34)} ${summary ? `${summary[1]}/${summary[2]}` : '-'}`);
 }
 
 if (skipped.length) console.log('\nSkipped: no browser able to load extensions was found.');

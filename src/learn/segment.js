@@ -13,7 +13,7 @@
  *
  * The failure mode is worth stating because it is not what it looks like: when
  * the list contains both a character and a compound built from it, this prefers
- * the compound. That is usually correct — `岸上` is a better token than `岸` —
+ * the compound. That is usually correct, `岸上` is a better token than `岸`,
  * but it means the level attached to a token is the headword's, so a character
  * the learner knows can appear inside a word they do not. That is a property of
  * the data, not a bug here.
@@ -24,7 +24,7 @@
  *
  * Han (CJK ideographs, all three blocks) PLUS kana. Kana is not decoration: a
  * great many Japanese words are written in it and nowhere else, and the
- * dictionary keys on them — `とても`, `いらっしゃい`, `うっかり` are all headwords.
+ * dictionary keys on them, `とても`, `いらっしゃい`, `うっかり` are all headwords.
  * With Han alone they could never match, because the segmenter never looked at
  * the characters at all, so a large share of ordinary Japanese rendered unmarked.
  *
@@ -32,7 +32,7 @@
  * Chinese is tokenised differently than before.
  *
  * The katakana block runs to \u30ff, which is the end of the main block. The
- * phonetic extensions (\u31f0-\u31ff) are deliberately left out for now — they
+ * phonetic extensions (\u31f0-\u31ff) are deliberately left out for now, they
  * only affect Ainu and a handful of loanwords, and including them widens the
  * longest-match window for every line to serve almost nothing.
  */
@@ -49,7 +49,7 @@ const CJK = /[\u3040-\u309f\u30a0-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]
 /**
  * Build a membership test for whichever container the caller has.
  *
- * A Set and a Map both answer `has`, but a plain object does not — and
+ * A Set and a Map both answer `has`, but a plain object does not, and
  * `Object.hasOwn` on a Set checks its *properties*, not its members, which
  * silently reports that every word is absent. Supporting all three explicitly is
  * what stops that mistake being possible again.
@@ -65,8 +65,8 @@ function membership(headwords) {
 /**
  * Split one line into tokens.
  *
- * Runs of text in neither Han nor kana — spaces, punctuation, latin words,
- * numbers — are emitted as a single token each so the caller can render them
+ * Runs of text in neither Han nor kana, spaces, punctuation, latin words,
+ * numbers, are emitted as a single token each so the caller can render them
  * untouched. That keeps the index arithmetic honest: concatenating `text` over
  * every token reproduces the input exactly, which is the invariant the tests
  * lean on.
@@ -94,7 +94,7 @@ export function segment(text, headwords, maxWordLength) {
       continue;
     }
 
-    // Longest match. The window is bounded by the longest headword in the data —
+    // Longest match. The window is bounded by the longest headword in the data,
     // 4 for Chinese, but longer for Japanese, whose kana compounds run to about
     // 15 characters. Still only a handful of lookups per position, and measured
     // at ~1.3M characters/sec on a Japanese transcript.
@@ -127,7 +127,7 @@ export function segment(text, headwords, maxWordLength) {
  * Segment a whole transcript.
  *
  * One call per line rather than joining first, so a token can never span two
- * cues — which would attach a word to the wrong timestamp.
+ * cues, which would attach a word to the wrong timestamp.
  *
  * @param {Array<{start: number, duration?: number, text: string}>} segments
  * @param {Set<string>|Map<string, unknown>|Record<string, unknown>} headwords

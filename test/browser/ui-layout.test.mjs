@@ -3,7 +3,7 @@
  *
  * The bug this exists for: the toggle was a `<select>` inside the reading bar, and
  * the reading bar is exactly what `collapsed` hides. Collapsing therefore removed
- * the only control that could undo it, and the panel was stuck — the one property
+ * the only control that could undo it, and the panel was stuck, the one property
  * a toggle must have, and it was missing.
  *
  * A hermetic test cannot catch that. It can assert the button reports the right

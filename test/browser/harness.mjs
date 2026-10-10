@@ -2,9 +2,9 @@
  * Browser-test scaffolding: launch the real extension, serve a fake YouTube,
  * drive the real panel.
  *
- * Nothing here is stubbed in JavaScript. The extension runs for real — real
+ * Nothing here is stubbed in JavaScript. The extension runs for real, real
  * service worker, real content scripts injected by `chrome.scripting`, real
- * panel document — and only the network is intercepted, at the transport layer.
+ * panel document, and only the network is intercepted, at the transport layer.
  * So the content script genuinely fetches, genuinely parses, and the panel
  * genuinely renders.
  *
@@ -70,7 +70,7 @@ export async function launchExtension() {
   const context = await chromium.launchPersistentContext('', {
     executablePath,
     // The bundled headless shell cannot load extensions, but this flag makes
-    // full Chromium run without a display — which is what lets this work in a
+    // full Chromium run without a display, which is what lets this work in a
     // container and in WSL.
     headless: true,
     args: [
@@ -92,7 +92,7 @@ export async function launchExtension() {
  * Serve a fake YouTube, so a test never touches the network.
  *
  * Safe to call repeatedly for different videos, and a test that covers more than
- * one video must call it more than once — do NOT instead call it twice and hope.
+ * one video must call it more than once, do NOT instead call it twice and hope.
  * Playwright matches routes last-registered-first, so two competing `watch**`
  * handlers would silently serve whichever was registered most recently for every
  * video. Instead the routes are installed once and dispatch on the `?v=`
@@ -119,7 +119,7 @@ export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = '
     playerRequests: [],
     // Every request that matched no handler and was refused. Read by a test to
     // assert the tier really is offline, rather than assuming it from the route
-    // list — which is what let an unrouted path have gone to the network before.
+    // list, which is what let an unrouted path have gone to the network before.
     blockedRequests: [],
     // Whether the watch page carries YouTube's real Trusted Types policy.
     trustedTypes: false,
@@ -130,7 +130,7 @@ export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = '
   // a later call without the flag must not silently drop the policy.
   if (trustedTypes) registry.trustedTypes = true;
 
-  // A capture carries the real track list, the real segments and — importantly —
+  // A capture carries the real track list, the real segments and, importantly,
   // the real `translationLanguages`, none of which a hand-written fixture can be
   // trusted about. Hand-written tracks remain for the cases that need a specific
   // shape, and both go down the same route handlers.
@@ -172,7 +172,7 @@ export async function routeYouTube(context, { videoId = 'dQw4w9WgXcQ', title = '
  *
  * Verified the hard way: a capture died on `DOMParser.parseFromString` with
  * "This document requires 'TrustedHTML' assignment", which is that policy and
- * nothing else. Reproduced locally in `tools/probe-trusted-types.mjs` — a page
+ * nothing else. Reproduced locally in `tools/probe-trusted-types.mjs`, a page
  * serving this header throws the identical error, and a blank page does not.
  *
  * It matters here because the tier is supposed to replay the real CONDITIONS, not
@@ -195,8 +195,8 @@ async function installRoutes(context, registry) {
   //
   // Playwright tries the most recently registered route first, so this is only
   // consulted when none of the specific handlers below matched. Without it, any
-  // request we did not anticipate — a consent redirect, a subdomain, an analytics
-  // call, a path we simply did not know about — goes to the REAL internet. The
+  // request we did not anticipate, a consent redirect, a subdomain, an analytics
+  // call, a path we simply did not know about, goes to the REAL internet. The
   // suite would still look hermetic, because the tests would pass either way, and
   // "offline" would be a property of my memory rather than of the browser.
   //
@@ -286,7 +286,7 @@ async function installRoutes(context, registry) {
 
     // Auto-translate is not a separate track: YouTube serves the SAME track with
     // `tlang` added and re-renders the text. The fixture has to do the same, or
-    // the picker would appear to work while returning the original language —
+    // the picker would appear to work while returning the original language,
     // and the browser tier is the only place the real URL is built.
     const translateTo = params.get('tlang');
     const segments = translateTo
@@ -315,7 +315,7 @@ export async function openWatchPage(context, videoId = 'dQw4w9WgXcQ') {
  * Open the side panel as a document, beside a watch page.
  *
  * A real panel is not a tab. It is loaded here as one because that is the only
- * way to drive it, and the panel document behaves identically — same origin,
+ * way to drive it, and the panel document behaves identically, same origin,
  * same permissions, same service worker.
  *
  * One difference matters and is easy to get wrong: opening the panel makes it
@@ -376,7 +376,7 @@ export async function waitForStatus(page, timeout = 20000) {
  * ⚠️ A ROW COUNT ALONE IS NOT THE CONDITION, and waiting on it is how this helper
  * produced a flaky test. The panel keeps showing the previous video's rows until
  * the new video's transcript arrives, so `waitForRows(page, 2)` returns
- * IMMEDIATELY when a previous section left three rows on screen — and the test
+ * IMMEDIATELY when a previous section left three rows on screen, and the test
  * then asserts against the old video's text. It passed most of the time only
  * because the rebuild usually won the race.
  *
@@ -401,7 +401,7 @@ export async function waitForRows(page, count = 1, { timeout = 20000, text = nul
         if (!primary) return false;
         // Ruby annotation removed before matching. The reading sits inside the
         // line's element, so a substring test against `textContent` sees
-        // `wǒmen我们…` and never matches `我们` — which made this wait time out
+        // `wǒmen我们…` and never matches `我们`, which made this wait time out
         // with the transcript visibly correct on screen.
         const clone = primary.cloneNode(true);
         for (const annotation of clone.querySelectorAll('rt')) annotation.remove();
@@ -426,7 +426,7 @@ export async function panelState(page) {
     isError: document.getElementById('status')?.classList.contains('error') ?? false,
     rows: [...document.querySelectorAll('.row')].map((row) => ({
       time: row.querySelector('.time')?.textContent ?? '',
-      // Ruby annotation removed, as everywhere else that reads a line's text —
+      // Ruby annotation removed, as everywhere else that reads a line's text,
       // see `baseText`. `textContent` includes the reading, so any assertion
       // against this would see `wǒmen我们…`.
       text: (() => {
@@ -466,14 +466,14 @@ export async function pagePosition(page) {
  * problem with the page rather than with how it was called. Taking the selector as
  * an ARGUMENT is what makes the function self-contained and serialisable.
  *
- * **Why not `textContent` directly.** The panel can draw a reading over each word —
- * 拼音 or Rōmaji — and the annotation lives inside the line's element, correctly,
+ * **Why not `textContent` directly.** The panel can draw a reading over each word,
+ * 拼音 or Rōmaji, and the annotation lives inside the line's element, correctly,
  * because `<rt>` belongs beside its base text. `textContent` therefore returns
  * `wǒmen我们zài在…`, so an assertion comparing the line to what was said fails while
  * the panel is perfectly right. That is not hypothetical: it broke the moment
  * readings defaulted on.
  *
- * Dropping `<rt>` is the platform's own rule for ruby — it is what a screen reader
+ * Dropping `<rt>` is the platform's own rule for ruby, it is what a screen reader
  * skips and what a copy of the rendered text produces.
  *
  * Exports are unaffected either way: copy and save read the panel's row data, not
@@ -494,7 +494,7 @@ export const baseText = (selector) => {
  * Whether an element's text, minus ruby annotation, equals an expected string.
  *
  * A separate function for `page.waitForFunction`, which needs a PREDICATE rather
- * than a value — and which takes its argument the same way, so this stays
+ * than a value, and which takes its argument the same way, so this stays
  * serialisable for the same reason.
  *
  * @param {{selector: string, expected: string}} args

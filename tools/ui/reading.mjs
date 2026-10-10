@@ -1,7 +1,7 @@
 /**
  * Reading-layout mock: romanization and script conversion, on the real panel.
  *
- * A throwaway design page — it demonstrates four layouts for showing readings
+ * A throwaway design page, it demonstrates four layouts for showing readings
  * (拼音 / Rōmaji) and one toggle for 繁 ↔ 简, so a decision can be made by looking
  * at pixels rather than at ASCII.
  *
@@ -9,7 +9,7 @@
  *
  * Real: the panel's own stylesheet, the real `.row` / `.lines` / `.primary` /
  * `.secondary` / `.mark` / `.word` markup, and `renderTokens` imported from
- * `src/sidepanel/marks.js` — so a marked word here is marked by the shipped code
+ * `src/sidepanel/marks.js`, so a marked word here is marked by the shipped code
  * path, including its level colour ramp.
  *
  * Mocked: the tokens themselves. Producing real ones needs the worker, the
@@ -28,7 +28,7 @@ import { renderTokens } from '/src/common/marks.js';
 import { pinyinToNumbers } from '/src/learn/wordlist.js';
 
 /**
- * The real `renderTokens` draws a span ONLY for a token with `defined: true` —
+ * The real `renderTokens` draws a span ONLY for a token with `defined: true`,
  * anything else becomes a bare text node with no mark and no colour. That was a
  * real defect in the first version of this page: every token rendered as plain
  * text, so no level colours appeared at all while the readings looked correct,
@@ -165,9 +165,9 @@ const els = {
 };
 
 const NOTES = {
-  above: 'Readings sit above each word, ruby style. Every glyph keeps its place, so the line reads as one unit — but the row is taller and the gloss is pushed down.',
+  above: 'Readings sit above each word, ruby style. Every glyph keeps its place, so the line reads as one unit, but the row is taller and the gloss is pushed down.',
   below: 'Readings on their own line under the text. Cheaper to build, and it reads as a conversion rather than as annotation: the eye has to travel between the two.',
-  marked: 'Readings only on marked words — the ones above your level. The row height is unchanged, and the annotation lands exactly where the marks already are.',
+  marked: 'Readings only on marked words, the ones above your level. The row height is unchanged, and the annotation lands exactly where the marks already are.',
   popover: 'Nothing in the row. Readings stay on hover, which is where they already are. Zero cost, and nothing is shown unless asked for.',
 };
 
@@ -177,7 +177,7 @@ const NOTES = {
  * One row, in the panel's own markup.
  *
  * Cloned from `buildRow` in `sidepanel.js` rather than invented, because the
- * point of this page is to see the layout in the real thing — a bespoke markup
+ * point of this page is to see the layout in the real thing, a bespoke markup
  * would be styled by the real stylesheet into something that does not exist.
  *
  * @param {object} row
@@ -265,7 +265,7 @@ function buildRow(row, container) {
   element.append(lines);
   element.addEventListener('click', () => {
     // Scoped to the container, so clicking in the narrow column does not also
-    // highlight the same row in the wide one — they are separate views of the
+    // highlight the same row in the wide one, they are separate views of the
     // same content and sharing a highlight between them would be confusing.
     for (const other of container.querySelectorAll('.row')) other.classList.remove('active');
     element.classList.add('active');
@@ -285,7 +285,7 @@ function formatReading(reading) {
  *
  * **The mock is not the implementation, and this makes that obvious.** A real
  * conversion needs OpenCC or an equivalent: it is many-to-one (髮 and 發 both
- * become 发), and the boundary between characters is not the only problem —
+ * become 发), and the boundary between characters is not the only problem,
  * vocabulary differs too, so 軟體 converts to 软体, the right characters for a
  * word mainlanders do not use. This table is here to show what the TOGGLE looks
  * like, not to demonstrate the conversion.
@@ -382,7 +382,7 @@ function applyTextSize(pixels) {
 sizeInput.addEventListener('input', () => {
   const value = Number(sizeInput.value);
   // Ignored while the field is empty or nonsense, rather than snapping to
-  // something — the same rule the panel uses, so a half-typed "1" does not
+  // something, the same rule the panel uses, so a half-typed "1" does not
   // briefly render the panel at 1px.
   if (!sizeInput.value.trim() || !Number.isFinite(value) || value < 10 || value > 32) return;
   applyTextSize(value);

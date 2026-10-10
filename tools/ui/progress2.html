@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>IU — what to show on the progress bar</title>
+    <title>IU, what to show on the progress bar</title>
     <link rel="icon" href="/icons/icon-32.png" />
     <style>
       /*
@@ -15,16 +15,16 @@
        *
        * The base bar is 3px at rest and 9px on hover, deliberately almost invisible.
        * So the real question for any overlay is not "is this information useful" but
-       * **what does it cost the resting state** — and that splits the options three
+       * **what does it cost the resting state**, and that splits the options three
        * ways, which is the grouping below:
        *
-       *   - costs NOTHING   — encoded into the bar's own colour or texture
-       *   - costs a HOVER   — appears only when the pointer is there
-       *   - costs HEIGHT    — a permanent second strip, which is what the difficulty
+       *   - costs NOTHING, encoded into the bar's own colour or texture
+       *   - costs a HOVER, appears only when the pointer is there
+       *   - costs HEIGHT, a permanent second strip, which is what the difficulty
        *                       band did and what this page is looking for alternatives to
        *
-       * Every card draws the SAME transcript data — one synthetic cue list, one set of
-       * marked-word levels — so what differs is only the presentation. A shared
+       * Every card draws the SAME transcript data, one synthetic cue list, one set of
+       * marked-word levels, so what differs is only the presentation. A shared
        * playhead drives all of them, so they can be compared at one position rather
        * than side by side at different ones.
        */
@@ -183,7 +183,7 @@
       }
 
       /* Density, drawn INSIDE the track so it adds no height. Only the unplayed part
-         is visible, because `.played` draws over it at z-index 2 — which is the right
+         is visible, because `.played` draws over it at z-index 2, which is the right
          way round: the interesting part is always ahead. */
       .density {
         position: absolute;
@@ -255,7 +255,7 @@
   <body>
     <h1>What to show on the bar</h1>
     <p class="sub">
-      The base is option 3 — a 3px hairline that grows on hover — in every card. What
+      The base is option 3, a 3px hairline that grows on hover, in every card. What
       differs is what is drawn on it. The cards are grouped by the thing that actually
       matters for a bar this thin: <b>what the overlay costs when you are just
       watching</b>. One shared playhead drives all of them, so they can be compared at
@@ -287,7 +287,7 @@
       //
       // Hand-shaped rather than random, because random density makes every option look
       // equally informative. The shape is deliberate: an easy opening, a dense middle
-      // where new vocabulary lands, a quiet stretch, then a hard run to the end — which
+      // where new vocabulary lands, a quiet stretch, then a hard run to the end, which
       // is what a real episode looks like.
 
       const DURATION = 182;
@@ -317,7 +317,7 @@
             level,
             n: level === 0 ? 0 : 1 + (level % 3),
           });
-          // A gap after some cues — real subtitles do not tile the timeline, and the
+          // A gap after some cues, real subtitles do not tile the timeline, and the
           // silence overlays need somewhere to point at.
           t += duration + (out.length % 5 === 3 ? 2.4 : out.length % 7 === 5 ? 4.1 : 0.35);
           if (t > DURATION - 1) break;
@@ -358,7 +358,7 @@
         return out;
       }
 
-      // The stretches with NO marks at all — the parts you can coast through.
+      // The stretches with NO marks at all, the parts you can coast through.
       const quietRuns = () => {
         const out = [];
         let current = null;
@@ -403,7 +403,7 @@
 
       const CARDS = {
         nothing: {
-          name: 'Baseline — nothing',
+          name: 'Baseline, nothing',
           note: 'The plain bar, for reference. Nothing is encoded and nothing is added.',
           why: '<b>The control case.</b> Everything below is judged against how much this asks of you and how much it gives back.',
           screen: '',
@@ -412,13 +412,13 @@
         tint: {
           name: 'Density tinted into the bar',
           note: 'The marked-word density is drawn INSIDE the track, under the played region, so it costs no height at all.',
-          why: '<b>Free.</b> The same information the difficulty band carried, at zero vertical cost — the hairline simply has a warm cast where the hard words are. <b>Risk:</b> at 3px resting height a tint is nearly invisible, so this really only reads on hover, when the bar is 9px.',
+          why: '<b>Free.</b> The same information the difficulty band carried, at zero vertical cost, the hairline simply has a warm cast where the hard words are. <b>Risk:</b> at 3px resting height a tint is nearly invisible, so this really only reads on hover, when the bar is 9px.',
           screen: `<div class="density">${densityMarkup(() => 'rgba(224,179,60,0.5)')}</div>`,
         },
 
         levelTint: {
           name: 'Level-tinted bar',
-          note: 'The same idea, but the tint is coloured by the LEVEL of the words there — so it says how hard, not merely that something is.',
+          note: 'The same idea, but the tint is coloured by the LEVEL of the words there, so it says how hard, not merely that something is.',
           why: '<b>Strictly more information than one amber band</b>, for the same zero cost. You can see the difficulty ramp across the film: green early, red at the end. Uses the real level ramp, so the colours mean the same here as on a word.',
           screen: `<div class="density">${densityMarkup((run) => `color-mix(in srgb, ${levelColour(run.level, 5)} 60%, transparent)`)}</div>`,
         },
@@ -426,7 +426,7 @@
         currentLine: {
           name: 'Current line, extended',
           note: 'The cue being spoken is drawn as a segment on the bar, so you can see how long the line runs and where it starts.',
-          why: '<b>The cheapest genuinely new thing.</b> Cue stepping and replay both get a visual target, and you can see whether you are near the start or the end of a long sentence — which nothing else on the screen tells you. <b>Cost:</b> one more thing moving on the bar.',
+          why: '<b>The cheapest genuinely new thing.</b> Cue stepping and replay both get a visual target, and you can see whether you are near the start or the end of a long sentence, which nothing else on the screen tells you. <b>Cost:</b> one more thing moving on the bar.',
           screen: `<div class="line-span" data-span></div>`,
         },
 
@@ -439,20 +439,20 @@
 
         hoverBubble: {
           name: 'Time under the pointer',
-          note: 'A bubble above the thumb, and the time the pointer is over — appearing only on hover.',
-          why: 'Fixes the real friction in "go back to that bit": right now you drag, look away to the counter, and drag again. <b>Cost:</b> none at rest. <b>Note:</b> the honest version shows the time under the POINTER, not the playhead — otherwise it just repeats the counter.',
+          note: 'A bubble above the thumb, and the time the pointer is over, appearing only on hover.',
+          why: 'Fixes the real friction in "go back to that bit": right now you drag, look away to the counter, and drag again. <b>Cost:</b> none at rest. <b>Note:</b> the honest version shows the time under the POINTER, not the playhead, otherwise it just repeats the counter.',
           screen: `<div class="bubble"><b data-bubble>0:00</b> <span data-bubble-rest>· 24 marked</span></div>`,
         },
 
         quiet: {
           name: 'Quiet stretches',
-          note: 'The parts with NO marked words drawn as faint spans — the opposite of the density band.',
-          why: '<b>A different question, and a useful one.</b> Density says where it is hard; this says where you can relax, or where to park the review and come back later. Arguably the more actionable of the two — "skip to the easy bit" is a thing you do.',
+          note: 'The parts with NO marked words drawn as faint spans, the opposite of the density band.',
+          why: '<b>A different question, and a useful one.</b> Density says where it is hard; this says where you can relax, or where to park the review and come back later. Arguably the more actionable of the two, "skip to the easy bit" is a thing you do.',
           screen: `<div class="density">${densityMarkup(() => 'rgba(255,255,255,0.13)')}</div>`,
         },
 
         wall: {
-          name: 'The wall — one marker',
+          name: 'The wall, one marker',
           note: 'A single dot at the hardest run in the whole film. Nothing else.',
           why: '<b>The lowest-cost version of "where is the hard part".</b> One pixel of information that survives at 3px, does not smear on a two-hour film, and is the thing you actually want from a scrubber before you start: how bad does it get, and when.',
           screen: `<div class="wall" data-wall></div>`,
@@ -461,7 +461,7 @@
 
       const GROUPS = [
         {
-          title: 'Costs nothing — encoded in the bar',
+          title: 'Costs nothing, encoded in the bar',
           note: 'No extra height and no hover needed. The only cost is legibility at 3px, which is why two of these really only read on hover.',
           ids: ['nothing', 'tint', 'levelTint'],
         },
@@ -472,7 +472,7 @@
         },
         {
           title: 'Shows something the bar normally cannot',
-          note: 'Still no extra height, but these need a real reading of the transcript — where the unknown words are, how long a line runs — rather than the geometry of the bar.',
+          note: 'Still no extra height, but these need a real reading of the transcript, where the unknown words are, how long a line runs, rather than the geometry of the bar.',
           ids: ['currentLine', 'quiet', 'wall'],
         },
       ];

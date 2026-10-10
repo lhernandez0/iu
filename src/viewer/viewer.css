@@ -60,7 +60,7 @@ body {
   flex: 1;
   /* Lets `.picture` shrink so the `below` strip can take its own row. Without
      this the video's intrinsic height wins and the strip is pushed off the
-     bottom of the page — the layout's one real trap. */
+     bottom of the page, the layout's one real trap. */
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -82,7 +82,7 @@ body {
   max-height: 100%;
   object-fit: contain;
   background: #000;
-  /* The video is NOT the fullscreen target — `.picture` is. Fullscreening the
+  /* The video is NOT the fullscreen target, `.picture` is. Fullscreening the
      media element renders only that element and its descendants, so the control
      bar could never appear over it. */
 }
@@ -103,7 +103,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  /* Not `display: none` — the element is toggled by hiding this attribute, so a
+  /* Not `display: none`, the element is toggled by hiding this attribute, so a
      screen reader that has already seen it keeps it, and layout does not reflow. */
   pointer-events: none;
   text-align: center;
@@ -141,7 +141,7 @@ body {
   font-size: var(--caption-size);
   line-height: 1.35;
   /* What a reading scales against. The shared ruby rules divide this, so the pinyin
-     grows with the caption instead of staying at a fixed small size — the viewer's
+     grows with the caption instead of staying at a fixed small size, the viewer's
      base is the caption size, where the panel's is the text-size control. */
   --reading-base: var(--caption-size);
 }
@@ -153,16 +153,16 @@ body {
 }
 
 /*
- * OVERLAY — floats over the bottom of the picture.
+ * OVERLAY, floats over the bottom of the picture.
  *
  * **ONE card with the lines stacked inside it, not a card per line.** The first
  * version made each line its own `inline-block` with its own background and a margin
- * between them, so two lines drew as two separate boxes — "a second caption" beside
+ * between them, so two lines drew as two separate boxes, "a second caption" beside
  * the first rather than two lines of one subtitle. Real subtitles are one block: a
  * background behind the whole thing, with the lines left to stack inside it.
  *
  * So the CONTAINER is the card and the lines are plain blocks within it, and the card
- * is `inline-block` so it shrink-wraps to its widest line — which is what gives the
+ * is `inline-block` so it shrink-wraps to its widest line, which is what gives the
  * background its tight edges instead of a full-width gradient's hard seam.
  *
  * `--bar-offset` keeps the card clear of the control bar when that is showing. It is
@@ -183,12 +183,12 @@ body {
  * The card. `inline-block` so it is only as wide as its content.
  *
  * The width cap is a VIEWPORT-RELATIVE band, not a fixed character count. It was
- * `min(46ch, 92%)`, and 46ch is about 460px at the default caption size — so on a
+ * `min(46ch, 92%)`, and 46ch is about 460px at the default caption size, so on a
  * 1440px window a subtitle wrapped at a third of the width it had, which reads as the
  * text spilling for no reason.
  *
  * `clamp(28ch, 72vw, 84ch)` says: never narrower than 28 characters (so a narrow window
- * still gets a sane block), grow with the window, and never wider than 84 characters —
+ * still gets a sane block), grow with the window, and never wider than 84 characters,
  * beyond that a line becomes hard to track back to its start. Both bounds matter, which
  * is why it is a clamp rather than a single value.
  */
@@ -200,7 +200,7 @@ body {
   background: rgba(8, 10, 14, 0.74);
   text-align: center;
   /* The one thing on the strip that wants the pointer, for a hovered word's
-     definition — the rest of the overlay must not swallow clicks meant for the
+     definition, the rest of the overlay must not swallow clicks meant for the
      picture. */
   pointer-events: auto;
 }
@@ -212,14 +212,14 @@ body {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
 
-/* The gloss sits just under the line being learned — closer than a paragraph gap,
+/* The gloss sits just under the line being learned, closer than a paragraph gap,
    because the two are one subtitle rather than two. */
 .captions-overlay .caption-secondary {
   margin-top: 1px;
 }
 
 /*
- * BELOW — its own row, and the picture shrinks above it.
+ * BELOW, its own row, and the picture shrinks above it.
  *
  * Deliberately not an overlay: an overlay covers the picture, and "I just want to
  * see the subs" is exactly the case where covering it is wrong. It lives outside
@@ -230,7 +230,7 @@ body {
   padding: 10px 18px;
   background: #14161c;
   border-top: 1px solid var(--edge);
-  /* A long cue wraps and the strip scrolls rather than growing without bound — it
+  /* A long cue wraps and the strip scrolls rather than growing without bound, it
      is pinned, so unbounded growth would eat the picture. */
   max-height: 22vh;
   overflow-y: auto;
@@ -246,7 +246,7 @@ body {
  * An empty gloss line takes no space at all.
  *
  * The element is EMPTIED rather than removed when a file has one subtitle track, so
- * a caller cannot forget to put it back — but an empty `inline-block` still drew its
+ * a caller cannot forget to put it back, but an empty `inline-block` still drew its
  * padding, which showed as a second card beside every caption. That is what this
  * removes, and it has to come AFTER both placement rules: at equal specificity the
  * later one wins, so putting it earlier silently lost and the block stayed.
@@ -328,7 +328,7 @@ body {
  * Hidden because the pointer is idle, NOT because anything collapsed.
  *
  * `opacity` plus `pointer-events` rather than `display: none`, so the controls keep
- * their place in the tab order — hiding them outright would break the `focusin`
+ * their place in the tab order, hiding them outright would break the `focusin`
  * rule that exists to get them back.
  */
 .bar[data-hidden='true'] {
@@ -384,7 +384,7 @@ body {
   display: inline-flex;
   align-items: center;
   /* 3px, not 5px: seven of these sit in the caption row, so the two pixels are worth
-     fourteen across it — which is the difference between fitting a 1024px window and
+     fourteen across it, which is the difference between fitting a 1024px window and
      wrapping to a third line. */
   gap: 3px;
   min-width: 0;
@@ -441,7 +441,7 @@ body {
  *
  * `appearance: none` plus explicit pseudo-element rules, because the default range is
  * a different control in every browser and none of them match the bar. The pieces are
- * styled separately — track, then thumb — which is the only way to size them
+ * styled separately, track, then thumb, which is the only way to size them
  * independently.
  */
 .scrubber {
@@ -509,7 +509,7 @@ body {
   border-radius: 4px;
 }
 
-/* Tabular figures, so the counter does not jitter as the seconds tick — a
+/* Tabular figures, so the counter does not jitter as the seconds tick, a
    proportional font changes width every time `1` becomes `8`. */
 .time {
   color: var(--muted);
@@ -525,7 +525,7 @@ body {
 /*
  * The caption row's own label, dropped when the row is tight.
  *
- * "Captions" costs 54px to say what the seven labels beside it already say — Reading,
+ * "Captions" costs 54px to say what the seven labels beside it already say, Reading,
  * Marks, Line 1, Line 2, Size, List, Mark from. On a roomy window it is a useful group
  * marker; below about 1100px it is the difference between one row and two, and the
  * controls do not become less clear without it.
@@ -545,12 +545,12 @@ body {
 /*
  * The reason a track cannot be used, inline in the row.
  *
- * Only ever populated when there is something wrong — an unsupported codec, or a
+ * Only ever populated when there is something wrong, an unsupported codec, or a
  * rebuild still running. Not a `title` on the select, because a disabled select does
  * not show one and the explanation would exist and be unreachable.
  *
  * Empty by default and collapsed when empty, so it costs no layout on the files that
- * have nothing to say — which is all of them, most of the time.
+ * have nothing to say, which is all of them, most of the time.
  */
 .audio-note {
   color: var(--danger);
@@ -569,7 +569,7 @@ body {
  *
  * The slider is narrow on purpose. It shares the transport row with the transport, the
  * cue stepping, the speed select and four toggles, and a full-width slider would push
- * the row into wrapping on a modest window — a wrapped transport row is a worse outcome
+ * the row into wrapping on a modest window, a wrapped transport row is a worse outcome
  * than a short slider. It is a set-and-forget control; the mute button is the one that
  * gets used mid-playback.
  */
@@ -581,7 +581,7 @@ body {
 
 .volume-slider {
   /* `accent-color` themes the native control, which keeps keyboard support and the
-     correct announcements for free — unlike a range reimplemented as a div, which
+     correct announcements for free, unlike a range reimplemented as a div, which
      loses the states the native one has. */
   accent-color: var(--accent);
   width: 72px;
@@ -617,15 +617,15 @@ body {
  * A select's width must not be decided by its longest option.
  *
  * Measured: the caption row needed 1039px in 1004px of space, and ONE control was the
- * reason — the word-list picker at 157px, sized to fit the longest list name in its
+ * reason, the word-list picker at 157px, sized to fit the longest list name in its
  * options rather than the one actually selected. Capping it and ellipsising brings the
  * row inside a 1024px window, which is the common laptop case.
  *
  * The `title` on each select carries the full text, so nothing is hidden that cannot be
- * read — see `renderTrackPickers`, which sets it.
+ * read, see `renderTrackPickers`, which sets it.
  */
 .row-captions select {
-  /* `min-width: 0` is what actually lets a flex item shrink below its content — without
+  /* `min-width: 0` is what actually lets a flex item shrink below its content, without
      it the select keeps its intrinsic width no matter what `max-width` says, which is
      why the first attempt at this changed nothing. */
   min-width: 0;
@@ -685,7 +685,7 @@ body {
  * Icon buttons: a square target around an SVG.
  *
  * `inline-flex` with both centring rather than padding, so every icon is the same
- * size regardless of how much of its 24x24 viewBox it uses — padding would make a
+ * size regardless of how much of its 24x24 viewBox it uses, padding would make a
  * narrow glyph look like a narrower button.
  */
 .icon-button {
@@ -718,7 +718,7 @@ body {
   background: #24304a;
 }
 
-/* The focus outline must show even when the bar is faded — the rule the `focusin`
+/* The focus outline must show even when the bar is faded, the rule the `focusin`
    listener exists to honour. */
 .button:focus-visible,
 .seg-button:focus-visible,
@@ -786,7 +786,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   /* 30ch is 210px measured, and it was the widest thing in the transport row by a
-     distance — twice the next largest control. A filename is reference information, not
+     distance, twice the next largest control. A filename is reference information, not
      the thing you are reading, so it is the right thing to give up first when the row is
      tight. `title` carries the whole name. */
   max-width: 18ch;

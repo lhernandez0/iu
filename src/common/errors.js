@@ -8,14 +8,14 @@
  * place, instead of a paragraph that has to be re-diagnosed from scratch.
  *
  * CODES ARE STABLE. A code is never renumbered and never reused for a different
- * fault — a code that changes meaning is worse than no code, because it makes an
+ * fault, a code that changes meaning is worse than no code, because it makes an
  * old report wrong rather than merely vague. Retiring a fault leaves its code
  * unused; adding one takes the next number in its category.
  *
  * FORMAT: `<CATEGORY><NNN>`, three letters and three digits. The category says
  * which layer failed, which is the first thing worth knowing:
  *
- *   CONN   reaching the page or its content script — the transport
+ *   CONN   reaching the page or its content script, the transport
  *   VIDEO  the page answered, but there is nothing to read
  *   TRACK  a caption track was found but could not be fetched or translated
  *   DICT   the bundled word list
@@ -25,14 +25,14 @@
  * whichever site it came from, and encoding a provider in the code would mean a
  * new code for every site and no way to see a pattern across them.
  *
- * Every code carries a `message` — the sentence shown to the learner — and a
+ * Every code carries a `message`, the sentence shown to the learner, and a
  * `detail` flag saying whether a `(…)` suffix belongs on it. A code whose message
  * already fully describes the fault takes no detail, so a caller cannot append a
  * raw exception and turn a stable code into an unstable string.
  *
  * The content script cannot `import` (classic scripts), so it carries its own
  * copy of the codes it raises. `test/errors.test.mjs` asserts the two stay in
- * step — the same arrangement `messages.js` uses for MSG and TARGET.
+ * step, the same arrangement `messages.js` uses for MSG and TARGET.
  *
  * ONE DELIBERATE EXCEPTION: `src/learn/wordlist.js` throws plain errors with no
  * code, because that module must import nothing (the layering guard in
@@ -107,7 +107,7 @@ export const ERRORS = Object.freeze({
   },
   TRACK005: {
     // Added because TRACK002 is reported when a response arrives with no
-    // parseable cues — which is also what a REFUSAL looks like. A block page is
+    // parseable cues, which is also what a REFUSAL looks like. A block page is
     // HTTP 200 with an HTML body: no `<text>` elements, so it parses to zero cues
     // and was reported as "the caption track came back empty". That told the
     // viewer the video had no captions when the truth was that the server stopped
@@ -116,7 +116,7 @@ export const ERRORS = Object.freeze({
     // A refusal is temporary and the fix for it is to wait; an empty track is a
     // fact about the video. Conflating them makes the wrong one look like the
     // right one, which is the most expensive kind of error message.
-    message: 'The caption request was refused — likely too many requests.',
+    message: 'The caption request was refused, likely too many requests.',
   },
 
   // --- DICT: the bundled word list --------------------------------------------
@@ -153,8 +153,8 @@ export const ERRORS = Object.freeze({
   },
   VIEWER003: {
     // Deliberately not "unsupported format". Chrome refuses a file for reasons
-    // it does not tell us — a codec it has no decoder for, or a container it
-    // cannot demux — and guessing which would be a worse message than this.
+    // it does not tell us, a codec it has no decoder for, or a container it
+    // cannot demux, and guessing which would be a worse message than this.
     message: 'This browser cannot play that video file.',
     detail: true,
   },
@@ -174,7 +174,7 @@ export const ERRORS = Object.freeze({
  * A code: two to six uppercase letters, then exactly three digits. `CONN002`.
  *
  * The width is a range rather than a fixed 3 because the category is a SLUG, not
- * an abbreviation — `CONN` and `VIDEO` are both natural, and forcing either to
+ * an abbreviation, `CONN` and `VIDEO` are both natural, and forcing either to
  * three letters would produce `VID`, which reads as a truncation. It was 3 here
  * at first and every check silently failed to match, which is the failure mode
  * of a pattern that is too strict: nothing looks wrong, it just never matches.
@@ -186,7 +186,7 @@ export const CODE_PATTERN = /^[A-Z]{2,6}\d{3}$/;
  *
  * The code comes FIRST so it survives truncation. The panel shows a single
  * clipped status line, and a code at the end of a long sentence is the part that
- * gets cut — which is exactly the part worth keeping.
+ * gets cut, which is exactly the part worth keeping.
  *
  * @param {string} code
  * @param {string} [detail] Extra context from the underlying failure.
@@ -207,7 +207,7 @@ export function errorText(code, detail) {
  *
  * Codes propagate outward: the layer closest to the failure knows best what
  * failed. `sendToContent` raises a `CONN002` timeout, and the refresh path that
- * calls it must NOT wrap that in its own `CONN003` — a report reading
+ * calls it must NOT wrap that in its own `CONN003`, a report reading
  * `CONN003 … (CONN002 …)` has two codes for one fault and the outer one is
  * noise. So an already-coded message is passed through untouched and the
  * fallback code applies only to something uncoded.

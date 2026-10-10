@@ -8,7 +8,7 @@
  *   node tools/build-wordlist.mjs --ja path/to/jmdict.json --jlpt path/to/dir
  *   node tools/build-wordlist.mjs --zh … --ja … --jlpt …      (both, one index)
  *
- * WHY AN INDEX. The list dropdown is populated from the dictionary —
+ * WHY AN INDEX. The list dropdown is populated from the dictionary,
  * `primeDictionary()` sets `availableLists` from `dictionary.lists`. With one
  * language that was fine. With two, the service worker would parse ~2.6MB of
  * JSON on every wake just to fill a dropdown, which is the cost `wordlist.js`
@@ -19,7 +19,7 @@
  * Provenance travels with the data so the licence is discoverable from the
  * artefact itself, not only from this script. Generated here rather than
  * hand-written into the JSON, because a hand-edited field and a script that does
- * not know about it drift apart the moment either one changes — which is exactly
+ * not know about it drift apart the moment either one changes, which is exactly
  * what happened once already, when a rebuild silently dropped `defaultThreshold`.
  * A field the artefact carries must be a field this script emits.
  *
@@ -28,12 +28,12 @@
  *
  * --- Chinese source -----------------------------------------------------------
  * https://github.com/TeaPearce/chinese-english-dictionary
- *   data/parsed_hsk_enriched.json — 11,470 usable entries, CC BY-SA 4.0, derived
+ *   data/parsed_hsk_enriched.json, 11,470 usable entries, CC BY-SA 4.0, derived
  *   from CC-CEDICT, with HSK levels from the official MOE HSK 3.0 word list
  *   (upstream file data/hsk31-words-pleco.txt; "Pleco" in that filename is the
  *   OCR tool, not the author).
  *
- *   PINNED SOURCE — the input is not committed and is not fetched by this script,
+ *   PINNED SOURCE, the input is not committed and is not fetched by this script,
  *   so a rebuild needs the exact revision:
  *     commit  a9aea223269eb9820590e5bca783eb299c317439  (2026-08-27)
  *     blob    7562130dea9284b99c86c9e8a5b8fe0a2cc003a1
@@ -98,25 +98,25 @@ if (jaSource && !jlptDir) {
  * for the list rather than the highest level present.
  *
  * There is deliberately NO starting level here. Where marking begins is the
- * learner's own choice, remembered per list by the app — the only thing this data
+ * learner's own choice, remembered per list by the app, the only thing this data
  * could say about someone it has never seen read is a guess about them. It used to
  * carry one, and it was `4` for both HSK lists: the level of whoever built it,
  * shipped as a constant to everyone.
  *
  * `levelNames` is what the level is CALLED, easiest first. The stored level is an
  * ordered 1..N so the ramp and the threshold comparison work the same for every
- * list; the NAME is the only part that differs, and it differs a lot — HSK counts
+ * list; the NAME is the only part that differs, and it differs a lot, HSK counts
  * 1..9 getting harder, JLPT counts N5..N1 getting harder, so the same internal
  * "2" is "2" in one list and "N4" in the other. Printing the internal number as
  * though it were the list's own name is what made 私 (JLPT N5, internal 1) show as
- * "JLPT 1", which a reader takes for N1 — the hardest level — on the easiest word.
+ * "JLPT 1", which a reader takes for N1, the hardest level, on the easiest word.
  */
 const CHINESE_LISTS = [
   { id: 'hsk2_0', label: 'HSK 2.0', language: 'zh', levelCount: 6, levelNames: ['1', '2', '3', '4', '5', '6'], field: 'hsk2_0' },
   { id: 'hsk3_0', label: 'HSK 3.0', language: 'zh', levelCount: 9, levelNames: ['1', '2', '3', '4', '5', '6', '7', '8', '9'], field: 'hsk3_0' },
 ];
 
-// JLPT is ONE list with five levels, not five lists — mirroring how HSK 2.0 is one
+// JLPT is ONE list with five levels, not five lists, mirroring how HSK 2.0 is one
 // list with six. Numbering is N5=1 (easiest) … N1=5, so the ramp runs cool→warm
 // easy→hard exactly as the HSK lists do. The internal number stays ascending so
 // nothing downstream has to know JLPT counts backwards; only the NAME differs.
@@ -128,7 +128,7 @@ const JAPANESE_LISTS = [
  * The fields the app reads off a list, in the shape both builders emit.
  *
  * Shared so the Chinese and Japanese payloads cannot drift, and so a field added
- * here cannot be emitted by one builder and forgotten by the other — which is how
+ * here cannot be emitted by one builder and forgotten by the other, which is how
  * `defaultThreshold` came to be hand-added to the JSON and then silently dropped
  * by the next rebuild.
  *
@@ -221,7 +221,7 @@ async function buildChinese(sourcePath) {
  *
  * The JLPT files quote any meaning containing a comma and escape an embedded
  * quote by doubling it. Splitting on commas would work on the happy path and
- * corrupt exactly the rows with punctuation — which is most of the interesting
+ * corrupt exactly the rows with punctuation, which is most of the interesting
  * ones.
  *
  * @param {string} text
@@ -272,7 +272,7 @@ function parseCsv(text) {
  *
  * A cell may hold several alternatives separated by `;` (`足; 脚`, `いい; よい`)
  * and may carry a `～` prefix for counters (`～円`). Without splitting and
- * stripping, a naive join silently loses about 10% of levels — hundreds of words
+ * stripping, a naive join silently loses about 10% of levels, hundreds of words
  * that look undefined but are simply spelled differently here than in the word
  * list.
  *
@@ -338,7 +338,7 @@ async function buildJapanese(sourcePath, jlptDirPath) {
     // it wrong is quiet: the word simply never matches.
     //
     //   `とても` is the case that exposed it. Its only kanji form is `迚も`,
-    //   tagged `rK` (rare kanji) — a spelling nobody has written in a century and
+    //   tagged `rK` (rare kanji), a spelling nobody has written in a century and
     //   that appears in no transcript. Keying on it put an unusable spelling in
     //   the index while the word that appears in every other sentence was absent.
     //
@@ -349,7 +349,7 @@ async function buildJapanese(sourcePath, jlptDirPath) {
     //
     // Kana is NOT added as an extra key for entries that do have kanji, on
     // purpose: `はし` is 橋/箸/端, and one shared kana key would resolve to
-    // whichever entry was written last — a confidently wrong meaning, which is
+    // whichever entry was written last, a confidently wrong meaning, which is
     // worse than no mark.
     const RARE = new Set(['rK', 'rk']);
     const usable = (forms) => (forms ?? []).filter((f) => !(f.tags ?? []).some((t) => RARE.has(t)));
@@ -402,7 +402,7 @@ async function buildJapanese(sourcePath, jlptDirPath) {
     // expression keys occur in more than one entry.
     //
     // FIRST WINS, deliberately. JMdict lists entries roughly common-first, so
-    // `私` resolves to わたし — the reading a learner will actually meet — while
+    // `私` resolves to わたし, the reading a learner will actually meet, while
     // last-wins gave あたし. Merging the glosses instead was rejected: several
     // unrelated senses concatenated reads as one confusing definition, and the
     // hover popover has a fixed narrow width. Overwrites are counted so this
@@ -451,7 +451,7 @@ async function buildJapanese(sourcePath, jlptDirPath) {
 
 /**
  * The list manifest: which lists exist, and which dictionary holds each one's
- * words. Small on purpose — the worker loads this eagerly so the dropdown can be
+ * words. Small on purpose, the worker loads this eagerly so the dropdown can be
  * filled without parsing any word data.
  *
  * @param {object[]} lists
@@ -486,11 +486,11 @@ if (zhSource) collected.push(...(await buildChinese(zhSource)));
 if (jaSource) collected.push(...(await buildJapanese(jaSource, jlptDir)));
 
 // Only rewrite the index when BOTH languages are present. A partial run must not
-// silently drop a language from the manifest — the app would then lose a list
+// silently drop a language from the manifest, the app would then lose a list
 // nobody asked to remove. Building one language at a time is a development
 // convenience; the committed index has to describe what actually ships.
 if (zhSource && jaSource) {
   await writeIndex(collected);
 } else {
-  console.log('note: not rewriting index.json — build both languages to update it');
+  console.log('note: not rewriting index.json, build both languages to update it');
 }

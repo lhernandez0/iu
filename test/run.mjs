@@ -3,11 +3,11 @@
  *
  * "Hermetic" is the point: these never touch the network and never launch a
  * browser, so they are fast enough to run on every change. Anything that opens
- * a real browser or reaches the network lives in test/browser/ and is opt-in —
+ * a real browser or reaches the network lives in test/browser/ and is opt-in,
  * see TESTING.md for why that split exists and how to run each tier.
  *
  * Each file is spawned as its own process on purpose. They all reach for the
- * same globals — `chrome`, `document`, and the module cache — and a shared
+ * same globals, `chrome`, `document`, and the module cache, and a shared
  * process would let one suite's stubs leak into another's. Isolation is cheaper
  * than defending against that.
  *
@@ -62,7 +62,7 @@ function run(file) {
  * suite rather than the sum.
  *
  * The output is deliberately ordered by the declaration above rather than by
- * completion, so a run looks the same every time — a report that reorders itself
+ * completion, so a run looks the same every time, a report that reorders itself
  * between runs is hard to diff against the last one.
  *
  * @param {string[]} names
@@ -77,7 +77,7 @@ const results = await runAll(files);
 for (const result of results) {
   const passed = /(\d+)\/(\d+) checks passed/.exec(result.output);
   const label = result.code === 0 ? 'ok  ' : 'FAIL';
-  const summary = passed ? `${passed[1]}/${passed[2]}` : '—';
+  const summary = passed ? `${passed[1]}/${passed[2]}` : '-';
   console.log(`${label}  ${result.file.padEnd(28)} ${summary}`);
 
   // Only print detail for failures; a green run should be quiet.

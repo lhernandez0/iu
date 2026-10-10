@@ -3,7 +3,7 @@
  *
  * Shared by the capture tool and the browser test harness, and deliberately not
  * owned by either: capture is the only thing that touches the network, so it
- * must not depend on test scaffolding — and the tests must not depend on the
+ * must not depend on test scaffolding, and the tests must not depend on the
  * capture tool.
  *
  * The bundled Playwright headless shell cannot load extensions, which is why a
@@ -21,7 +21,7 @@ import { join } from 'node:path';
  * **Discovered rather than listed.** The paths used to be three hardcoded build
  * numbers, which is correct on exactly the machine where they were written: the
  * build number changes with every Playwright release, and `playwright install`
- * in CI — or on any other contributor's machine — produces a different one. The
+ * in CI, or on any other contributor's machine, produces a different one. The
  * failure was silent in the worst way, because a browser that cannot be found
  * makes the whole tier SKIP and report green.
  *

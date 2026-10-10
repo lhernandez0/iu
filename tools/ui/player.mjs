@@ -1,7 +1,7 @@
 /**
  * The video-reader player mock.
  *
- * Plays a REAL file and exercises the decided behaviour for real — the bar's single
+ * Plays a REAL file and exercises the decided behaviour for real, the bar's single
  * lifecycle, the error pinning, both caption placements, the resume prompt. A mock
  * whose buttons do nothing is a picture; this is the behaviour, so a layout that
  * only LOOKS right can be caught by using it.
@@ -18,7 +18,7 @@
  *
  * ## Where the video comes from
  *
- * `tools/ui/assets/preview.mp4` — a STREAM COPY (not a re-encode) of
+ * `tools/ui/assets/preview.mp4`, a STREAM COPY (not a re-encode) of
  * `test/conformance/test5.mkv`, CELLAR's subtitle test file. The film is **Elephants
  * Dream** (Blender Foundation / Netherlands Media Art Institute, CC BY 2.5). Built by
  * `make-preview-video.mjs`, which also extracts the file's own subtitle track for the
@@ -29,7 +29,7 @@
  * fact is how the preview shipped claiming the wrong film under the wrong licence. The
  * evidence that settles it is in the sample's OWN SUBTITLES: they name **Proog** and
  * **Emo**, the two characters of Elephants Dream. Nothing in Big Buck Bunny says
- * either name. The picture agrees — this file is dark, warm and saturated
+ * either name. The picture agrees, this file is dark, warm and saturated
  * (`mean_rgb=(120,80,36)`, saturation 70%), where the actual Big Buck Bunny files
  * (test1, test6) are bright and near-desaturated (`(180,179,161)`, 10%).
  *
@@ -37,7 +37,7 @@
  * label below, one file further in.
  *
  * The remux exists because **the VS Code integrated browser cannot play the
- * Matroska container at all** — measured: H.264 in MP4 plays, H.264 in MKV does not,
+ * Matroska container at all**, measured: H.264 in MP4 plays, H.264 in MKV does not,
  * and neither does VP9 in MKV. It is the container, not the codec, and
  * `canPlayType` says "probably" throughout, which makes the wrong diagnosis
  * convincing. **Check MKV in real Chrome.**
@@ -51,8 +51,8 @@ const SOURCE = params.get('src') ?? '/tools/ui/assets/preview.mp4';
 /**
  * The file the user picked, if they have picked one.
  *
- * The bar shows this or, failing that, `SOURCE` — never a typed-in string. The label
- * WAS a literal `Big Buck Bunny — test5.mkv` in the markup, which was wrong three
+ * The bar shows this or, failing that, `SOURCE`, never a typed-in string. The label
+ * WAS a literal `Big Buck Bunny, test5.mkv` in the markup, which was wrong three
  * times over: it kept claiming that after another file was opened, it was not the name
  * of the file being loaded, and it named the wrong FILM. A label that is written
  * rather than derived goes stale without anyone noticing, which is exactly what
@@ -69,7 +69,7 @@ let pickedFile = null;
  * the sample alone. A picked file gets its own name and no attribution, because we
  * have no idea what it is.
  *
- * **Elephants Dream, and CC BY 2.5** — not Big Buck Bunny and 3.0. `THIRD-PARTY.md`
+ * **Elephants Dream, and CC BY 2.5**, not Big Buck Bunny and 3.0. `THIRD-PARTY.md`
  * had this right. The file's `TITLE` tag says Big Buck Bunny and is wrong; the
  * subtitles name Proog and Emo, who exist only in Elephants Dream. The licence turns
  * on this: CC BY 2.5 and 3.0 are different instruments, so naming the wrong one in an
@@ -77,13 +77,13 @@ let pickedFile = null;
  */
 const SAMPLE_TITLE =
   'Elephants Dream (c) copyright 2006, Blender Foundation / Netherlands Media Art ' +
-  'Institute / www.elephantsdream.org — CC BY 2.5, remuxed from the CELLAR suite\u2019s test5.mkv';
+  'Institute / www.elephantsdream.org, CC BY 2.5, remuxed from the CELLAR suite\u2019s test5.mkv';
 
 /**
  * The file's own subtitle track, extracted by `make-preview-video.mjs`.
  *
  * Overridable so a different sample can bring its own cues: `?srt=/path/to.srt`.
- * Without one the cue list falls back to placeholders AND SAYS SO — a subtitle
+ * Without one the cue list falls back to placeholders AND SAYS SO, a subtitle
  * feature mocked with invented subtitles is not a test of anything.
  */
 const SRT_URL = params.get('srt') ?? '/tools/ui/assets/preview.en.srt';
@@ -137,7 +137,7 @@ const els = {
 // Mirrors the extension's registry: the same ids, the same defaults, the same
 // coercion. The real reader reads these from `chrome.storage` and writes them the
 // same way; here they go to `localStorage` because a preview has no extension
-// storage. The SHAPE is what matters — one object, one write function, defaults in
+// storage. The SHAPE is what matters, one object, one write function, defaults in
 // one place.
 
 const SETTINGS_KEY = 'iu-preview-settings';
@@ -150,7 +150,7 @@ const DEFAULTS = {
   captionSize: 20,
   defaultSpeed: '1',
   // Whether the difficulty band is drawn under the scrubber. On by default, because
-  // it is the one piece of information a generic player cannot show — but a toggle,
+  // it is the one piece of information a generic player cannot show, but a toggle,
   // because a learner who is watching rather than studying may want a clean bar.
   difficulty: true,
   // Volume is remembered per preview, not per file. Persisting it is the point:
@@ -172,7 +172,7 @@ const SPEEDS = ['0.5', '0.75', '1', '1.25'];
  * The settings in force.
  *
  * Read once at load and written through `saveSettings`, exactly as the extension
- * does — the alternative is reading storage in a render and writing it in a
+ * does, the alternative is reading storage in a render and writing it in a
  * listener, which is how two places come to disagree.
  */
 let settings = { ...DEFAULTS };
@@ -222,7 +222,7 @@ let cuesAreReal = false;
 /**
  * Parse SubRip.
  *
- * Deliberately minimal — enough for the file this reads, not a general parser. The
+ * Deliberately minimal, enough for the file this reads, not a general parser. The
  * reader's real parsing lives in `src/viewer/subtitles.js` and is tested there;
  * duplicating it would be a second implementation to keep in step.
  *
@@ -260,7 +260,7 @@ function placeholderCues(duration) {
     out.push({
       start,
       end: Math.min(start + 4, duration),
-      text: `placeholder line ${out.length + 1} — no subtitle track loaded`,
+      text: `placeholder line ${out.length + 1}, no subtitle track loaded`,
     });
   }
   return out;
@@ -275,7 +275,7 @@ function activeCueIndex(seconds) {
 //
 // Keyed on the path here, where the reader keys on
 // `local:<name>:<size>:<lastModified>`. The identity scheme is the extension's
-// business and is already implemented; what is being looked at is the PROMPT — the
+// business and is already implemented; what is being looked at is the PROMPT, the
 // position cannot reopen the file, so the offer is the feature.
 
 const POSITION_KEY = `iu-preview-position:${SOURCE}`;
@@ -346,7 +346,7 @@ function tick() {
   if (index !== lastCueIndex) {
     lastCueIndex = index;
     renderCaptions(index);
-    // The status line tracks whether there is a cue at all, NOT which cue — the
+    // The status line tracks whether there is a cue at all, NOT which cue, the
     // cue text belongs to the captions and nowhere else.
     if (!statusPinned()) {
       els.status.textContent = cues.length
@@ -372,7 +372,7 @@ function tick() {
  * Draw the cue into the visible caption placement.
  *
  * Both placements are kept in the DOM and their text is written together, so
- * switching placement never shows a stale line — a placement switch that revealed
+ * switching placement never shows a stale line, a placement switch that revealed
  * the last cue from ten minutes ago would look like a bug in the video.
  *
  * The gloss line is empty on purpose: there is no translation without the worker,
@@ -432,7 +432,7 @@ function applyCaptions() {
 
   renderCaptions(activeCueIndex(els.video.currentTime));
   // The overlay sits above the bar, so its offset depends on how tall the bar
-  // currently is — measured rather than guessed, because the bar grows when the
+  // currently is, measured rather than guessed, because the bar grows when the
   // caption row appears.
   measureBar();
 }
@@ -447,7 +447,7 @@ function setCaptions(on) {
 /**
  * Reflect the difficulty setting in the button and the band.
  *
- * The label is the ACTION ("Hide difficulty band"), matching the caption toggle — and
+ * The label is the ACTION ("Hide difficulty band"), matching the caption toggle, and
  * it carries the band's name, because "Hide band" on its own is a mystery in a control
  * bar full of things that hide.
  */
@@ -475,7 +475,7 @@ function setDifficulty(on) {
 // per file, volume is not.
 //
 // This is the one control here that a generic player ALSO has, so the only thing worth
-// designing is where it sits and that it composes with the mute button — see the
+// designing is where it sits and that it composes with the mute button, see the
 // markup for why it is a pair rather than one or the other.
 
 /**
@@ -485,7 +485,7 @@ function setDifficulty(on) {
  * through the part of the range where hearing actually changes. Perceptual loudness is
  * roughly logarithmic, so a linear control spends half its travel on loud-to-louder,
  * where the ear can barely tell the difference, and rushes through the quiet end where
- * it can. The square is the standard cheap correction — the same curve Firefox uses
+ * it can. The square is the standard cheap correction, the same curve Firefox uses
  * for `media.volume_scale`. It is kept in a named function because a bare `** 2` at a
  * call site is the kind of magic number that gets "cleaned up".
  *
@@ -496,7 +496,7 @@ function volumeScale(position) {
   return fraction * fraction;
 }
 
-/** The slider position a volume means — the inverse of `volumeScale`. */
+/** The slider position a volume means, the inverse of `volumeScale`. */
 function volumePosition(volume) {
   return Math.round(Math.sqrt(Math.min(1, Math.max(0, volume))) * 100);
 }
@@ -529,7 +529,7 @@ function applyVolume() {
  * The remembered level is what makes the slider usable: without it, unmuting after
  * sliding to zero would leave you silent with the button claiming otherwise, and
  * getting back to where you were would be guesswork. Kept in the element rather than
- * in settings because it is not a preference — it is the state of one interaction.
+ * in settings because it is not a preference, it is the state of one interaction.
  *
  * @param {boolean} muted
  */
@@ -570,7 +570,7 @@ let lastVolume = 100;
 // and `list[i].enabled = true` switches playback. Verified against both a
 // two-audio-track MKV and MP4.
 //
-// So this is not "impossible", it is "not shipped" — and the difference decides the
+// So this is not "impossible", it is "not shipped", and the difference decides the
 // shape of the code. Everything is feature-detected, and where the API is absent
 // the control explains itself and stays unavailable rather than disappearing. A
 // missing button raises "where is it?"; a disabled one with a reason answers it.
@@ -581,7 +581,7 @@ let lastVolume = 100;
 //
 // The local-file path only. YouTube is a separate problem: the player has its own
 // quality/track API reachable from the MAIN-world `page-bridge.js`, and whether
-// those methods survive in the current build is unverified — a different probe and a
+// those methods survive in the current build is unverified, a different probe and a
 // different answer.
 
 /** Whether the audio panel is open. The button toggles it; the setting does not. */
@@ -598,7 +598,7 @@ function audioTracksSupported() {
  * The order of preference is specificity: a `label` the muxer wrote, then the
  * language tag, then the codec, then the position in the file. The last two are the
  * ones that matter, because most Matroska files in the wild carry neither a title
- * nor a language — and a list of four identical "Track" entries is worse than
+ * nor a language, and a list of four identical "Track" entries is worse than
  * useless. The index is always there, so there is always something to say.
  *
  * @param {{label?: string, language?: string, id?: string}} track
@@ -617,7 +617,7 @@ function describeAudioTrack(track, index) {
  * Build the audio panel from the file's own track list.
  *
  * Offered ONLY when there is a choice to make. A one-track file is the overwhelmingly
- * common case, and a control over a single option is noise — the same reason the row
+ * common case, and a control over a single option is noise, the same reason the row
  * of caption settings appears only while captions are on.
  *
  * Filenames are never used to name a track. `preview.mp4` says nothing
@@ -653,7 +653,7 @@ function renderAudioTracks() {
  * Say why the control cannot be used, in a sentence THE USER CAN REACH.
  *
  * **`aria-disabled`, never `disabled`.** A truly disabled element fires no mouse
- * events, so its `title` never appears and it cannot be focused — which is how such a
+ * events, so its `title` never appears and it cannot be focused, which is how such a
  * control ends up with an explanation that exists and is unreachable at the same
  * time. This is the standard "disabled but explainable" pattern: the button stays
  * focusable and clickable, announces itself as unavailable, and opens a panel that
@@ -707,8 +707,8 @@ function selectAudioTrack(index) {
  * Write the bar's filename from whatever is ACTUALLY loaded.
  *
  * Two sources and no third: a file the user picked, whose base name is all the web
- * platform will give us (`file.name` has no path — verified), or the bundled sample's
- * own file name. Never a literal — see `pickedFile`.
+ * platform will give us (`file.name` has no path, verified), or the bundled sample's
+ * own file name. Never a literal, see `pickedFile`.
  */
 function paintFilename() {
   if (pickedFile) {
@@ -731,14 +731,14 @@ function paintFilename() {
  * Repaint the counter, the scrubber position and the played region.
  *
  * Driven from the same tick as the captions rather than from `timeupdate`, so the
- * three never disagree about where playback is — they are one reading of the clock,
+ * three never disagree about where playback is, they are one reading of the clock,
  * not three listeners on it.
  */
 function paintTime() {
   const duration = els.video.duration;
   const now = els.video.currentTime;
   els.timeCurrent.textContent = timecode(now);
-  els.timeDuration.textContent = Number.isFinite(duration) ? timecode(duration) : '—';
+  els.timeDuration.textContent = Number.isFinite(duration) ? timecode(duration) : '-';
 
   if (!Number.isFinite(duration) || duration <= 0) return;
   // The range's MAX is the duration, set once known. A range on a fixed 0-100 scale
@@ -759,7 +759,7 @@ function paintTime() {
  *
  * **Runs, not one span per cue.** Adjacent cues of the same level drawn separately
  * leave hairline gaps from rounding, so the band comes out striped rather than
- * continuous — which reads as noise and hides the thing it is meant to show.
+ * continuous, which reads as noise and hides the thing it is meant to show.
  *
  * Coloured with `levelColour`, the same ramp the word underlines use, so a colour means
  * the same thing here as it does on a word in the transcript. That is what makes this
@@ -801,7 +801,7 @@ function paintDifficulty(duration) {
     const mark = document.createElement('span');
     mark.style.left = `${(run.start / duration) * 100}%`;
     mark.style.width = `${Math.max(0.3, ((run.end - run.start) / duration) * 100)}%`;
-    // 60% alpha, the same treatment the comparison page used — the band is a hint
+    // 60% alpha, the same treatment the comparison page used, the band is a hint
     // under the track, and the played region has to stay readable over it.
     mark.style.background = `color-mix(in srgb, ${levelColour(run.level, 5)} 60%, transparent)`;
     els.cues.append(mark);
@@ -832,8 +832,8 @@ els.scrubber.addEventListener('change', () => {
 // --- The bar's lifecycle -----------------------------------------------------
 //
 // ONE mechanism: the bar is visible or it is not, and it becomes not-visible when
-// the pointer has been idle. There was briefly a second mechanism — an
-// expanded/collapsed pair with a chevron — and it was removed: three states where
+// the pointer has been idle. There was briefly a second mechanism, an
+// expanded/collapsed pair with a chevron, and it was removed: three states where
 // every player has two, and the chevron was what made the bar unpredictable.
 
 /**
@@ -841,12 +841,12 @@ els.scrubber.addEventListener('change', () => {
  *
  * **An error is the reason this exists.** The bar's normal rule is to fade when the
  * pointer leaves, but a failure the user has to act on must not be able to hide
- * itself — a red line that fades after 2.5s over a black video is worse than no
+ * itself, a red line that fades after 2.5s over a black video is worse than no
  * message at all. While this is true, the idle timer does nothing.
  */
 function statusPinned() {
   // Errors NO LONGER pin the bar open. The user's call: an error is shown, and the
-  // bar may still fade — the alternative was a bar that refused to get out of the
+  // bar may still fade, the alternative was a bar that refused to get out of the
   // way, and a failure that lingers over a video is its own annoyance. The status
   // line itself persists in the DOM, so the message is not lost, only the bar it
   // sits in fades like any other chrome.
@@ -914,7 +914,7 @@ els.bar.addEventListener('focusin', () => {
 
 els.bar.addEventListener('focusout', (event) => {
   // `focusout` fires when moving BETWEEN children too, so the test is whether focus
-  // left the bar entirely — `relatedTarget` is where it went.
+  // left the bar entirely, `relatedTarget` is where it went.
   if (els.bar.contains(event.relatedTarget)) return;
   focused = false;
   scheduleHide();
@@ -976,7 +976,7 @@ document.getElementById('pp-difficulty').addEventListener('click', (event) => {
 // button picks up the same "this is currently active" styling as its neighbours.
 els.audioButton.addEventListener('click', () => {
   // Hidden means there is nothing to choose, so the control is not on screen and
-  // activating it must be a no-op — without this, a click on the hidden button of a
+  // activating it must be a no-op, without this, a click on the hidden button of a
   // single-track file left the panel flagged open. Unavailable is different: the panel
   // opens, it just explains instead of listing.
   if (els.audioButton.hidden) return;
@@ -1026,7 +1026,7 @@ document.getElementById('pp-caption-size').addEventListener('input', (event) => 
  * Open another file.
  *
  * Changing what is playing while something is playing is a real thing to want, so
- * this picks a file, swaps the object URL and re-reads the cue list — the sequence
+ * this picks a file, swaps the object URL and re-reads the cue list, the sequence
  * the reader runs. `URL.revokeObjectURL` on the way out, because a blob URL pins its
  * file and picking a 4GB film then another would hold both until the tab closes.
  */
@@ -1045,7 +1045,7 @@ document.getElementById('pp-open').addEventListener('click', () => {
     els.resume.hidden = true;
     els.video.src = objectUrl;
     // A picked file has no sidecar on disk, so the cue list falls back to
-    // placeholders — and the status says so rather than showing invented lines as
+    // placeholders, and the status says so rather than showing invented lines as
     // though they were the file's.
     void loadCues(null);
     setNote(`opened ${file.name}`);
@@ -1076,7 +1076,7 @@ document.getElementById('pp-fwd').addEventListener('click', () => {
 });
 
 /**
- * Cue stepping — the control a generic player cannot have.
+ * Cue stepping, the control a generic player cannot have.
  *
  * `+0.05` on the step so landing "on" a boundary is INSIDE the cue rather than a
  * hair before it, where float rounding puts you in the previous one. This is the
@@ -1157,7 +1157,7 @@ function toggleError() {
   failing = !failing;
   if (failing) {
     setStatus('Could not read subtitle tracks from this video. Use a .srt file.', true);
-    setNote('error raised — the bar cannot hide while it is up');
+    setNote('error raised, the bar cannot hide while it is up');
   } else {
     setStatus('Ready');
     setNote('error cleared');
@@ -1186,7 +1186,7 @@ for (const id of ['pp-reload', 'pp-reload2']) {
   document.getElementById(id).addEventListener('click', () => {
     setNote('reloading…');
     // A REAL reload. The position survives it in localStorage, which is the point
-    // being demonstrated — and a reload genuinely loses the video, exactly as it
+    // being demonstrated, and a reload genuinely loses the video, exactly as it
     // does today. Settings survive too, so the bar comes back as it was left.
     location.reload();
   });
@@ -1215,7 +1215,7 @@ async function loadCues(srtUrl) {
       cuesAreReal = cues.length > 0;
       if (!cues.length) cues = placeholderCues(els.video.duration);
     } catch {
-      // A failed fetch is not a failure of the page — the cues are a preview aid.
+      // A failed fetch is not a failure of the page, the cues are a preview aid.
       cues = placeholderCues(els.video.duration);
       cuesAreReal = false;
     }
@@ -1223,7 +1223,7 @@ async function loadCues(srtUrl) {
   // SYNTHETIC marks, clearly labelled as such.
   //
   // The preview has no dictionary and its sample is an English film, so nothing would
-  // ever be marked and the strip would be an empty bar — a control whose whole purpose
+  // ever be marked and the strip would be an empty bar, a control whose whole purpose
   // is invisible in the one place built to look at it.
   //
   // The levels are sampled from a SHAPE by position in the file, not handed out by cue
@@ -1232,7 +1232,7 @@ async function loadCues(srtUrl) {
   //
   // The shape itself is deliberate: an easy opening, a stretch where new vocabulary
   // lands, a quiet middle, then a hard run to the end. A uniform wash would tell you
-  // nothing about whether the design works — the thing being judged is whether the
+  // nothing about whether the design works, the thing being judged is whether the
   // difficulty RAMP reads.
   //
   // NOTE the sample is 46 seconds with five cues, so the ramp is coarse here. It is a
@@ -1256,7 +1256,7 @@ els.video.addEventListener('loadedmetadata', () => {
   els.placeholder.hidden = true;
   void loadCues(SRT_URL).then(() => {
     setNote(
-      `${cues.length} cues${cuesAreReal ? '' : ' (placeholders — no subtitle track)'} · ${SOURCE}`,
+      `${cues.length} cues${cuesAreReal ? '' : ' (placeholders, no subtitle track)'} · ${SOURCE}`,
     );
     els.video.playbackRate = Number(settings.defaultSpeed);
     document.getElementById('pp-speed').value = settings.defaultSpeed;
@@ -1279,9 +1279,9 @@ els.video.addEventListener('error', () => {
   els.placeholderError.textContent =
     `Could not play ${SOURCE}` + (code ? ` (media error ${code})` : '') +
     (isMatroska
-      ? '\nThis browser will not play the MKV container. It is not the codec — H.264 in MP4 plays fine. Check MKV in real Chrome; the VS Code integrated browser cannot, and neither can most embedded views.'
+      ? '\nThis browser will not play the MKV container. It is not the codec, H.264 in MP4 plays fine. Check MKV in real Chrome; the VS Code integrated browser cannot, and neither can most embedded views.'
       : '\nPass ?src=/path/to/file to try another one.');
-  setStatus('Media error — this file could not be played', true);
+  setStatus('Media error, this file could not be played', true);
 });
 
 // --- Start -------------------------------------------------------------------

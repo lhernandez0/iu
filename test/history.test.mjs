@@ -2,8 +2,8 @@
  * Scrub guards.
  *
  * The repository's history was rewritten once to remove identifiers that had
- * leaked from a real capture: the video's title, its id, and — never committed,
- * but checked for completeness — the uploader's own description. That work is
+ * leaked from a real capture: the video's title, its id, and, never committed,
+ * but checked for completeness, the uploader's own description. That work is
  * invisible once done, which is exactly why it needs a guard: nothing about a
  * normal `git commit` would ever tell you the leak had returned.
  *
@@ -12,16 +12,16 @@
  *
  *   1. the content of tracked files right now;
  *   2. the content of every blob in every commit (a string can live on in old
- *      history after being removed from HEAD — that is what a rewrite is for);
+ *      history after being removed from HEAD, that is what a rewrite is for);
  *   3. every path ever used (a filename can carry an id even when no file
  *      content does).
  *
  * The needles are the real values, base64-encoded so that this file does not
- * itself contain the strings it forbids — otherwise `git grep` would match the
+ * itself contain the strings it forbids, otherwise `git grep` would match the
  * guard and it would fail on itself. This is the one test allowed to name what it
  * forbids, because a guard that does not is not a guard.
  *
- * Skipped, not failed, when there is no git repository — an exported tarball is a
+ * Skipped, not failed, when there is no git repository, an exported tarball is a
  * legitimate way to hold this code.
  */
 
@@ -70,12 +70,12 @@ function git(args) {
 
 /**
  * Strings that must not appear anywhere, base64-encoded. The real video's id and
- * title, and the uploader's handle from its description — the last is
+ * title, and the uploader's handle from its description, the last is
  * belt-and-braces: it lives only in the gitignored capture, so this also catches
  * anyone un-ignoring that.
  *
- * The title needle is the distinctive half of the title — the part naming the
- * specific trip — not the whole string, and not the generic theme word that
+ * The title needle is the distinctive half of the title, the part naming the
+ * specific trip, not the whole string, and not the generic theme word that
  * legitimately appears as a mojibake example in `capture.mjs`. That theme word is
  * not identifying, and a guard that fires on it gets deleted, taking the real
  * protection with it.
@@ -92,7 +92,7 @@ const FORBIDDEN = [
 const isRepo = git(['rev-parse', '--is-inside-work-tree'])?.trim() === 'true';
 
 if (!isRepo) {
-  console.log('\n(no git repository — history checks skipped)');
+  console.log('\n(no git repository, history checks skipped)');
 } else {
   section('no leaked identifier appears in any tracked file');
 

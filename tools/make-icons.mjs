@@ -2,13 +2,13 @@
  * Regenerate the extension icons from `icons/icon.svg`.
  *
  * Run with `npm run icons`. The PNGs are committed, so this is only needed when
- * the SVG changes — but it must exist, or the icons would be four opaque binaries
+ * the SVG changes, but it must exist, or the icons would be four opaque binaries
  * nobody can edit.
  *
  * Why a browser rather than an image library: rasterising is the one thing this
  * would otherwise need a dependency for, and the project already requires
  * Playwright's Chromium for the browser test tier. Using it here adds nothing to
- * install and keeps the project's "no build step, no dependencies" promise —
+ * install and keeps the project's "no build step, no dependencies" promise,
  * `npm test` still runs with nothing installed, because this script is not part
  * of it.
  *
@@ -40,14 +40,14 @@ const SIZES = [
 const svg = readFileSync(SVG, 'utf8');
 
 // The SVG declares its own viewBox and is square. Reading it rather than
-// assuming 16 keeps this script correct if the artwork is ever redrawn larger —
+// assuming 16 keeps this script correct if the artwork is ever redrawn larger,
 // a hardcoded "16" would silently stretch every icon.
 const viewBox = /viewBox="([\d.\s-]+)"/.exec(svg)?.[1]?.trim().split(/\s+/).map(Number);
 if (!viewBox || viewBox.length !== 4) {
   console.error('icons/icon.svg has no usable viewBox; cannot rasterise it.');
   process.exit(1);
 }
-const [, , boxWidth, boxHeight] = viewBox;
+const [,, boxWidth, boxHeight] = viewBox;
 if (boxWidth !== boxHeight) {
   console.error(`icons/icon.svg is not square (${boxWidth}x${boxHeight}); Chrome icons must be.`);
   process.exit(1);
@@ -121,7 +121,7 @@ for (const { size } of SIZES) {
 
 console.log(
   failed
-    ? `\n  ${failed} icon(s) are wrong — the toolbar would show a blank or stretched mark.\n`
+    ? `\n  ${failed} icon(s) are wrong, the toolbar would show a blank or stretched mark.\n`
     : '\n  icons are ready. manifest.json declares them; run `npm test` to check that.\n',
 );
 process.exit(failed ? 1 : 0);

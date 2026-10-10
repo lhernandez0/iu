@@ -6,7 +6,7 @@
  * Opens NOTHING. Every response is served from a local route, so the browser
  * never leaves the machine. This exists because the capture failed on a
  * `parseFromString` call and the explanation for WHY has to be demonstrated
- * rather than asserted — the whole point of the guard we added is that we stop
+ * rather than asserted, the whole point of the guard we added is that we stop
  * reasoning from belief.
  *
  * Three contexts, because the difference between them is the finding:

@@ -11,7 +11,7 @@
  * derived from a live page, and nothing here is imported by the extension.
  *
  * THIS FILE IS NODE-ONLY. It reads the corpus from disk, so it must not be
- * imported by anything the browser loads — doing that produced
+ * imported by anything the browser loads, doing that produced
  * "Access to script at 'node:fs' ... blocked by CORS policy" and left the panel
  * stuck on its placeholder, with no mention of the real cause. The server
  * serialises a scenario and sends it to the page as data; the browser half is
@@ -34,7 +34,7 @@ const zh = track('zh-Hans') ?? track('en');
  * A Japanese track, written here because the corpus has none.
  *
  * The committed corpus is `zh-Hans` and `en` only, so there was no way to preview
- * the Japanese path at all — which is a problem now that it is the newest feature
+ * the Japanese path at all, which is a problem now that it is the newest feature
  * and the one with open design questions (JLPT level names, kana marks, and
  * furigana if it lands). Hand-written text is the same convention `test/synthetic/`
  * uses: ours, in real shapes.
@@ -44,7 +44,7 @@ const zh = track('zh-Hans') ?? track('en');
  * that only showed kanji would look correct while hiding the half that used to be
  * broken.
  *
- * Short on purpose — five cues is enough to judge marks and reading. A 400-cue
+ * Short on purpose, five cues is enough to judge marks and reading. A 400-cue
  * Japanese transcript would be more faithful and no more useful for styling.
  */
 const ja = {
@@ -81,7 +81,7 @@ export const SCENARIOS = [
   {
     id: 'bilingual',
     label: 'Two languages',
-    note: 'Chinese being learned, English underneath — the ordinary case.',
+    note: 'Chinese being learned, English underneath, the ordinary case.',
     tracks: [zh, en],
     settings: { studyLanguage: zh.languageCode, glossLanguage: en.languageCode },
   },
@@ -119,7 +119,7 @@ export const SCENARIOS = [
   {
     id: 'no-marks',
     label: 'High threshold',
-    note: 'Marking only from level 3, so only the rarer words are highlighted. A threshold above every level is no longer expressible — the list is real now.',
+    note: 'Marking only from level 3, so only the rarer words are highlighted. A threshold above every level is no longer expressible, the list is real now.',
     tracks: [zh, en],
     settings: { studyLanguage: zh.languageCode, glossLanguage: en.languageCode, threshold: 3 },
   },

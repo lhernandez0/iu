@@ -1,9 +1,9 @@
 /**
  * Rendering the learning layer into transcript lines and captions.
  *
- * **Shared by the side panel and the video viewer.** Both draw the same thing — a
+ * **Shared by the side panel and the video viewer.** Both draw the same thing, a
  * line of `.mark` / `.word` spans with optional `.ruby` annotations and a definition
- * on hover — so the rendering lives in one place and both import it. A second
+ * on hover, so the rendering lives in one place and both import it. A second
  * implementation in the viewer would drift, and the symptom would be captions whose
  * marks or popover behaved differently from the transcript's for no stated reason.
  *
@@ -19,8 +19,8 @@
  *     and does nothing.
  *
  * It does NOT fetch definitions. A caller supplies the `{word, entry, levels}` for
- * a hovered token — the panel asks the worker, the viewer looks it up in the
- * dictionary it already holds — and this module only decides how that is drawn. That
+ * a hovered token, the panel asks the worker, the viewer looks it up in the
+ * dictionary it already holds, and this module only decides how that is drawn. That
  * is what lets the same code serve a surface that talks to the worker and one that
  * deliberately does not.
  */
@@ -38,7 +38,7 @@ import { levelColour, pinyinToNumbers } from '../learn/wordlist.js';
  *
  * A word becomes interactive whenever we hold a definition for it, whether or
  * not it carries a mark. Conflating the two was a real bug: on HSK 2.0, 这样 and
- * 这么 have no level, so they rendered as bare text and had no hover — whole
+ * 这么 have no level, so they rendered as bare text and had no hover, whole
  * sentences looked unmarked and undefined even though the words were known.
  *
  * So there are three cases, not two:
@@ -86,7 +86,7 @@ export function renderTokens(tokens, levelCount, palette) {
  * Render tokens with their readings, according to the placement in force.
  *
  * Returns the same thing `renderTokens` does, so a caller can use either without
- * knowing which it got. When no reading is being shown — the default — this IS
+ * knowing which it got. When no reading is being shown, the default, this IS
  * `renderTokens`, and the extra work is one comparison per token.
  *
  * The placement is read from the LAST state the panel received rather than passed
@@ -117,7 +117,7 @@ export function renderReading(tokens, levelCount, palette) {
     // because a raw string is not a node: `textContent` on the parent cannot read
     // it, so the spaces were invisible to the test while being present on screen.
     // Writing them out is also what keeps the readings from running together,
-    // which matters here in a way it does not in ruby — ruby has one reading per
+    // which matters here in a way it does not in ruby, ruby has one reading per
     // word and this is a single run.
     let first = true;
     for (const token of tokens) {
@@ -133,14 +133,14 @@ export function renderReading(tokens, levelCount, palette) {
   }
 
   // `above` and `marked`: the reading sits over its own word, and `marked` skips
-  // the words the list does not place beyond the threshold — which are exactly the
+  // the words the list does not place beyond the threshold, which are exactly the
   // words with no mark, so the annotation lands where attention already is.
   //
   // **`<ruby>` and `<rt>`, not spans.** That is the element pair that MEANS
   // "annotation over base text", so assistive technology reads the base and skips
   // or separates the annotation. A generic span instead puts `wǒmen` inside the
-  // line's text content, and then anything reading `.textContent` — a screen
-  // viewer, a copy, a test asserting the line still says what it said — sees the
+  // line's text content, and then anything reading `.textContent`, a screen
+  // viewer, a copy, a test asserting the line still says what it said, sees the
   // pinyin interleaved with the characters. The browser suite caught exactly that.
   const fragment = document.createDocumentFragment();
   for (const token of tokens) {
@@ -157,7 +157,7 @@ export function renderReading(tokens, levelCount, palette) {
     ruby.className = 'ruby';
     // ORDER MATTERS, and it is the spec's order: the base text comes FIRST and the
     // annotation after it, `<ruby>base<rt>annotation</rt></ruby>`. Appending the
-    // `<rt>` first is invalid and Chrome lays it out wrong — the reading ends up
+    // `<rt>` first is invalid and Chrome lays it out wrong, the reading ends up
     // offset well to the left of the character it annotates, which reads as a layout
     // bug in our CSS and is really malformed markup. Measured: the reading sat 16px
     // left of its base's centre.
@@ -175,7 +175,7 @@ export function renderReading(tokens, levelCount, palette) {
  * The reading settings in force, pushed in by the panel on every state.
  *
  * An explicit setter rather than the module reading the panel's own `view`,
- * which would be a circular import — and rather than a global, which would be a
+ * which would be a circular import, and rather than a global, which would be a
  * second place for the truth to live.
  *
  * Two fields because they are independent: WHERE a reading goes and HOW it is
@@ -209,7 +209,7 @@ function readingPlacement() {
  * A reading as it should be written.
  *
  * Tone numbers are a Chinese convention with no Japanese equivalent, and the
- * conversion leaves kana alone either way — so this needs no language check.
+ * conversion leaves kana alone either way, so this needs no language check.
  *
  * @param {string} reading
  * @returns {string}
@@ -347,7 +347,7 @@ export function showEntry(result) {
       const badge = document.createElement('span');
       badge.className = 'badge';
       // The list's own NAME for the level, never the stored number. JLPT names
-      // its levels N5..N1 — easiest first — so printing the stored 1 as "1" read
+      // its levels N5..N1, easiest first, so printing the stored 1 as "1" read
       // as N1, the hardest, on 私. `levelName` carries the name; the number is
       // only an ordering.
       badge.textContent = `${level.label} ${level.levelName ?? level.level}`;

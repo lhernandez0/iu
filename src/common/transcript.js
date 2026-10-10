@@ -100,7 +100,7 @@ export function findActiveIndex(segments, seconds) {
  * bearing:
  *
  *   - **A cue is used at most once.** Without this, a sparse second track would
- *     repeat one cue across several primary lines — the same translation of one
+ *     repeat one cue across several primary lines, the same translation of one
  *     sentence shown against two different sentences.
  *   - **A pair further apart than `maxDriftMs` is unmatched** and left blank.
  *     Without this, a track offset by a few seconds would put a
@@ -124,7 +124,7 @@ export function alignSecondary(primary, secondary, maxDriftMs = 1500) {
 
     // Drop secondary cues that sit too far behind this cue to ever be its
     // translation. A later primary cue starts even later, so they cannot match
-    // it either — they are spent.
+    // it either, they are spent.
     while (cursor < secondary.length && secondary[cursor].start < target - tolerance) cursor++;
     if (cursor >= secondary.length) break; // nothing left to match; the rest stay blank
 

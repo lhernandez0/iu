@@ -1,12 +1,12 @@
 /**
- * Subtitle file parsing — SRT, WebVTT and ASS/SSA into `{ start, duration, text }`.
+ * Subtitle file parsing, SRT, WebVTT and ASS/SSA into `{ start, duration, text }`.
  *
  * Pure functions over text, no DOM and no chrome API, so the hermetic suite can
  * drive them directly and the viewer page is only wiring. That split is
  * deliberate: this is where the correctness risk lives, and it should be
  * testable without a browser.
  *
- * The output shape is the one the rest of the extension already deals in — the
+ * The output shape is the one the rest of the extension already deals in, the
  * same `{ start, duration, text }` the YouTube content script returns. Nothing
  * downstream knows or cares that these came from a file, which is what lets the
  * panel, the word marking and the alignment stay untouched.
@@ -25,7 +25,7 @@ const ENCODING_SNIFF_BYTES = 4096;
  *
  * **This is the most important detail in the file.** Chinese subtitle files are
  * very often GBK and Japanese ones Shift-JIS, and decoding either as UTF-8 does
- * not throw — it substitutes U+FFFD, which parses *perfectly* into a transcript
+ * not throw, it substitutes U+FFFD, which parses *perfectly* into a transcript
  * of garbage. That is the worst failure shape available: everything looks like it
  * worked, and a learner sees a page of replacement characters with no error
  * anywhere.
@@ -61,7 +61,7 @@ export function decodeSubtitles(bytes) {
     try {
       // `fatal` only for utf-8: the legacy decoders have no equivalent, and a
       // wrong one of those produces replacement characters rather than throwing.
-      // That is why utf-8 strictness matters most — it is the case where a
+      // That is why utf-8 strictness matters most, it is the case where a
       // confident wrong answer is most likely.
       const fatal = encoding === 'utf-8';
       const text = new TextDecoder(encoding, { fatal }).decode(view);
@@ -86,8 +86,8 @@ export function decodeSubtitles(bytes) {
 /**
  * Which format a file is, from its content rather than its extension.
  *
- * Extension lies often enough here — `.srt` files that are really ASS, `.ass`
- * files that are SRT — that sniffing the body is more reliable and costs one
+ * Extension lies often enough here, `.srt` files that are really ASS, `.ass`
+ * files that are SRT, that sniffing the body is more reliable and costs one
  * `startsWith`.
  *
  * @param {string} text
@@ -101,7 +101,7 @@ export function detectFormat(text) {
   if (/^WEBVTT\b/.test(trimmed)) return 'vtt';
   // Any of the three ASS section headers, not just the first one. A real ASS file
   // always opens with `[Script Info]`, but a file that has been trimmed or
-  // hand-edited may not — and requiring the first header specifically means such
+  // hand-edited may not, and requiring the first header specifically means such
   // a file falls through to `null` and reports "unrecognised format" for
   // something the parser would have read perfectly. `[Events]` is the block that
   // actually carries cues, so it is the more truthful marker of the two.
@@ -126,7 +126,7 @@ export function parseTimestamp(stamp) {
   const match = /^(?:(\d+):)?(\d{1,2}):(\d{1,2})[.,](\d{1,3})$/.exec(stamp.trim());
   if (!match) return NaN;
   const [, hours, minutes, seconds, fraction] = match;
-  // Milliseconds may be written with 1, 2 or 3 digits — `.5` is half a second,
+  // Milliseconds may be written with 1, 2 or 3 digits, `.5` is half a second,
   // not 5ms. Padding to three is what makes that distinction.
   const ms = Number(fraction.padEnd(3, '0'));
   return Number(hours ?? 0) * 3600 + Number(minutes) * 60 + Number(seconds) + ms / 1000;
@@ -260,8 +260,8 @@ function stripAssTags(text) {
  * The `Dialogue:` lines carry the cues and the `Format:` line above them says
  * which comma-separated field is which. That indirection cannot be skipped by
  * splitting on commas and taking a fixed index: files vary in field order and
- * count, and the `Text` field — the last one by spec, but not always in practice
- * — legitimately CONTAINS commas, so a naive split would truncate every line at
+ * count, and the `Text` field, the last one by spec, but not always in practice
+ *, legitimately CONTAINS commas, so a naive split would truncate every line at
  * its first comma.
  *
  * @param {string} text
@@ -329,7 +329,7 @@ function parseAss(text) {
  * `h:mm:ss.cc` to seconds.
  *
  * ASS uses a SINGLE-digit hour and a two-digit hundredth, which is why this
- * cannot share `parseTimestamp` — that would read `0:02:40.65` as 2 minutes 40
+ * cannot share `parseTimestamp`, that would read `0:02:40.65` as 2 minutes 40
  * seconds and 650ms, when it is 2 seconds and 65 centiseconds of a minute's field.
  * Getting this wrong shifts every line by an order of magnitude, so it is a
  * separate function with its own tests rather than a flag on the other one.
@@ -363,7 +363,7 @@ export function parseSubtitles(bytes, fileName = '') {
       encoding,
       error:
         encodingError ??
-        `could not tell what format${fileName ? ` ${fileName}` : ''} is — expected SRT, WebVTT or ASS`,
+        `could not tell what format${fileName ? ` ${fileName}` : ''} is, expected SRT, WebVTT or ASS`,
     };
   }
 
@@ -385,7 +385,7 @@ export function parseSubtitles(bytes, fileName = '') {
  *
  * The formats have no language metadata field, so the convention in the wild is
  * the filename: `film.zh-Hans.srt`, `film.zho.srt`, `film.en.srt`. When nothing
- * recognisable is present the answer is `und` — undetermined — rather than a
+ * recognisable is present the answer is `und`, undetermined, rather than a
  * guess, because guessing English for a Japanese film marks it with the wrong
  * word list and looks like a bug in the marking rather than in the guess.
  *
@@ -395,7 +395,7 @@ export function parseSubtitles(bytes, fileName = '') {
 export function languageFromFileName(fileName) {
   const stem = String(fileName).replace(/\.[^.]+$/, '');
   // Split on `.`, `_` and spaces but NOT hyphens: `zh-Hans` is one language tag,
-  // and splitting it would hand back `zh` and throw away the script — which is
+  // and splitting it would hand back `zh` and throw away the script, which is
   // the difference between Simplified and Traditional, i.e. between marking a
   // Simplified subtitle with the right word list and the wrong one.
   const parts = stem.split(/[._ ]+/).filter(Boolean);
@@ -405,8 +405,8 @@ export function languageFromFileName(fileName) {
     const candidate = parts[i];
     if (LANGUAGE_CODES.has(candidate.toLowerCase())) return normaliseLanguage(candidate);
 
-    // The language may be hyphen-joined to something else — `movie-zh`,
-    // `film-zh-Hans` — so fall back to the sub-parts before giving up. Tested
+    // The language may be hyphen-joined to something else, `movie-zh`,
+    // `film-zh-Hans`, so fall back to the sub-parts before giving up. Tested
     // from the end first, because the language is nearer the extension in the
     // conventions that use this form.
     if (!candidate.includes('-')) continue;
@@ -429,7 +429,7 @@ function normaliseLanguage(code) {
  * Language tags we recognise in a filename.
  *
  * Both the ISO 639-1 two-letter codes and the ISO 639-2/B three-letter ones,
- * because subtitle archives use both interchangeably — `.zh.srt` and `.zho.srt`
+ * because subtitle archives use both interchangeably, `.zh.srt` and `.zho.srt`
  * are the same language and both are everywhere. Deliberately not a complete ISO
  * registry: a filename `film.abc.srt` is far more likely to be a release tag than
  * a language, and a false positive would choose the wrong word list.

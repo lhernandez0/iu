@@ -10,12 +10,12 @@ others reaches anything unless it is named.
 | Conformance | `npm run test:conformance` | the CELLAR Matroska files on disk | ~5s | After touching the container parser |
 
 `npm run test:all` runs the first two. The conformance tier needs
-`npm run conformance:fetch` once, and is a **development dependency** — a
+`npm run conformance:fetch` once, and is a **development dependency**, a
 contributor without those files can still run everything else.
 
 ## Why the split exists
 
-The browser tests are genuinely better evidence — they run the real extension,
+The browser tests are genuinely better evidence, they run the real extension,
 with the real service worker, real content scripts injected through
 `chrome.scripting`, and a real panel document. They found three bugs the hermetic
 suite could not: an in-tab video switch that left the old transcript on screen,
@@ -29,46 +29,47 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1 — hermetic (`npm test`, 788 checks)
+## Tier 1: hermetic (`npm test`, 1030 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
-message surfaces. No network, no browser, no dependencies — plain Node scripts,
+message surfaces. No network, no browser, no dependencies, plain Node scripts,
 so they run with nothing installed.
 
 | Suite | Boots | Checks |
 | --- | --- | --- |
 | `manifest.test.mjs` | nothing | 39 |
-| `unit.test.mjs` | nothing | 52 |
+| `unit.test.mjs` | nothing | 104 |
 | `errors.test.mjs` | the error registry | 20 |
-| `learn.test.mjs` | segmenter + word list | 64 |
-| `licence.test.mjs` | the licence files on disk | 46 |
+| `learn.test.mjs` | segmenter + word list | 91 |
+| `licence.test.mjs` | the licence files on disk | 49 |
 | `providers.test.mjs` | the provider seam | 15 |
-| `mkv-container.test.mjs` | the container parser, on generated fixtures | 65 |
-| `reader.test.mjs` | subtitle parsing, encoding, the reader's messages | 71 |
-| `service-worker.test.mjs` | worker + `chrome` stub | 248 |
-| `sidepanel.test.mjs` | panel + DOM stub | 117 |
+| `mkv-container.test.mjs` | the container parser, on generated fixtures | 72 |
+| `viewer.test.mjs` | subtitle parsing, encoding, the viewer's messages | 71 |
+| `marking.test.mjs` | the word-marking renderer | 21 |
+| `service-worker.test.mjs` | worker + `chrome` stub | 256 |
+| `sidepanel.test.mjs` | panel + DOM stub | 150 |
 | `page-bridge.test.mjs` | bridge + page stub | 50 |
 | `content.test.mjs` | content script | 106 |
 | `history.test.mjs` | the transcript cache | 9 |
 
 Each file is spawned as its own process, because they all grab the same globals
 (`chrome`, `document`, the module cache) and a shared process lets one suite's
-stubs leak into another's — which has already produced a misleading result once.
-The counts above are the runner's own per-suite lines; 788 is their sum, kept here
+stubs leak into another's, which has already produced a misleading result once.
+The counts above are the runner's own per-suite lines; 1030 is their sum, kept here
 so a suite quietly losing cases is visible in the diff of this file.
 
 **A stub that ignores its request cannot test behaviour that depends on it.**
 The content-script stub used to return a fixed payload whatever `languageCode`
 was requested, so "it kept the chosen language" passed against code that had lost
 the choice. Payloads may now be functions of the request, and a race can be made
-deterministic with `storageDelay` — otherwise the test passes either way.
+deterministic with `storageDelay`, otherwise the test passes either way.
 
 The DOM stub models a select's value as its selected option, not as the last
 value assigned. Options are rebuilt on every state push, so the older stub
 reported a stale value the browser never would, and anything depending on the
 selection could not be tested honestly.
 
-PROVIDE and FETCH_TRACK return **different shapes** — `{ok, video, fetched}`
+PROVIDE and FETCH_TRACK return **different shapes**, `{ok, video, fetched}`
 versus the segment list itself. Using one where the other belongs fails as a
 silently empty transcript.
 
@@ -83,15 +84,15 @@ The README says the extension collects nothing and talks to one host. That is a
 statement about the code, so `manifest.test.mjs` verifies it against the code
 rather than trusting the prose to stay accurate:
 
-- **No transport but `fetch`** — `XMLHttpRequest`, `WebSocket`, `EventSource`,
+- **No transport but `fetch`**, `XMLHttpRequest`, `WebSocket`, `EventSource`,
   `sendBeacon`, `importScripts` and `navigator.send` all fail the suite. None is
   used, so an appearance is a new decision rather than a slip.
-- **Every absolute URL host in `src/` is `youtube.com`** — and a host built at
+- **Every absolute URL host in `src/` is `youtube.com`**, and a host built at
   runtime fails too, because a URL assembled from parts cannot be vouched for.
 - **The `fetch` call sites are a named list.** Two in `wordlist.js`, reading
   bundled dictionary JSON through `runtime.getURL`; one in `youtube-content.js`,
   the caption track. Adding a third changes a count and fails the test.
-- **Nothing uses `storage.sync`** — settings stay on the machine, not in an
+- **Nothing uses `storage.sync`**, settings stay on the machine, not in an
   account.
 
 Why this exists: an extension's privacy story never breaks in one commit. It
@@ -108,13 +109,13 @@ green.
 ### The permission list is checked too, and that half was missing
 
 The scan above reads `src/`. It says nothing about what the extension is
-**allowed** to do, which lives in `manifest.json` — and the privacy section makes
+**allowed** to do, which lives in `manifest.json`, and the privacy section makes
 claims about both. There is now a second group of checks for it:
 
 - **`host_permissions` is exactly `['https://*.youtube.com/*']`.**
 - **Nothing is in `web_accessible_resources`**, which is what "no page can reach
   into the extension" actually means.
-- **No `activeTab`, `tabs` or `unlimitedStorage`** — each widens what the
+- **No `activeTab`, `tabs` or `unlimitedStorage`**, each widens what the
   extension can do on its own initiative.
 - **Every script a provider names is declared in `content_scripts`**, and no
   script is injected for a site no provider claims. This is the fourth copy of
@@ -123,7 +124,7 @@ claims about both. There is now a second group of checks for it:
 **The gap these close was real and measured.** Before them, expanding
 `host_permissions` to `https://*.example.com/*` **and `file:///*`** left the suite
 at 33/33. `file:///*` is how an extension reads files off someone's disk without
-them picking a file — precisely the thing the privacy section promises does not
+them picking a file, precisely the thing the privacy section promises does not
 happen. It now fails, along with `web_accessible_resources` and an orphaned
 content script.
 
@@ -131,23 +132,24 @@ Pinning the host list means **adding a provider is a deliberate edit to this
 file**. That is the feature rather than friction: "we read one host" is a promise,
 and a promise that can be widened by accident is not one.
 
-## Tier 2 — browser, offline (`npm run test:browser`, 179 checks)
+## Tier 2: browser, offline (`npm run test:browser`, 282 checks)
 
-Four suites, and the count is the runner's own. `iu.browser.test.mjs` (108) loads the
-real extension; `ui-preview.test.mjs` and `ui-hmr.test.mjs` check the design preview
-server, which is a development tool rather than a test of the extension — see
+Five suites, and the count is the runner's own. `iu.browser.test.mjs` (108) loads the
+real extension; `viewer.test.mjs` (69) drives the local-video viewer page over
+`chrome-extension://`; `ui-preview.test.mjs`, `ui-hmr.test.mjs` and
+`ui-layout.test.mjs` check the design preview server, which is a development tool
+rather than a test of the extension, see
 [Designing the panel](#designing-the-panel) for why it is checked in at all.
-`ui-layout.test.mjs` checks the preview's layout.
 
-**`reader.test.mjs` drives the reader page over `chrome-extension://`** — the real
-page, the real worker, the real panel — and it exists because of a gap nothing else
+**`viewer.test.mjs` drives the viewer page over `chrome-extension://`**: the real
+page, the real worker, the real panel, and it exists because of a gap nothing else
 covered. `mkv-container.test.mjs` proves the container parser reads real files, and
-`service-worker.test.mjs` proves the worker resolves a reader tab, but **nothing
+`service-worker.test.mjs` proves the worker resolves a viewer tab, but **nothing
 proved those two connected, and they did not**: `settings.studyLanguage` defaults to
 `null`, so the first request for any video is `PROVIDE { languageCode: null }`, and
-the reader answered "no such track". A file with three parsed subtitle tracks
+the viewer answered "no such track". A file with three parsed subtitle tracks
 produced no transcript at all, with both suites green, because neither ever asked
-the reader for a track. The YouTube path had always handled it, which is exactly why
+the viewer for a track. The YouTube path had always handled it, which is exactly why
 the gap was invisible.
 
 The real extension in real Chromium. The only thing faked is the network, and it
@@ -170,19 +172,19 @@ Covers what the hermetic tier structurally cannot:
   then changed back. A hermetic test stubs the fetch, so it can never show the
   parameter arriving.
 - **that derived CSS actually computes**: the font size is asserted as an exact
-  px value rather than "it grew". This caught a real bug immediately —
+  px value rather than "it grew". This caught a real bug immediately,
   `calc(13px * calc(var(--font-size) / 13))` multiplies two lengths, which CSS
   rejects, so every one of the nine derived sizes silently fell back to the
   browser default while every hermetic test stayed green.
 - **that a cascaded override does not erase a highlight**: `.row.paused` and
   `.row.active` are equal specificity, so only a real cascade shows which one
-  wins. The reported "nothing is highlighted between two lines" was exactly that
-  — a later rule replacing the highlight background with the page colour.
+  wins. The reported "nothing is highlighted between two lines" was exactly that,
+ a later rule replacing the highlight background with the page colour.
 
 **A throttled background tab is not a failure.** The watch page is not the active
  tab while the panel is open, so its 250ms position poll is throttled. An
 assertion that reads the panel immediately after opening it can therefore see a
-stale state and look like a code bug — which it did, costing several rounds.
+stale state and look like a code bug, which it did, costing several rounds.
 Wait for the CONDITION, never for "long enough".
 
 Notable details in `test/browser/harness.mjs`, all of which cost time to find:
@@ -203,7 +205,7 @@ Notable details in `test/browser/harness.mjs`, all of which cost time to find:
 ## There is no live tier
 
 There used to be. It was gated behind `--live`, and it was still a second thing
-that opened youtube.com — a flag is not a structural constraint. It is deleted, not
+that opened youtube.com, a flag is not a structural constraint. It is deleted, not
 disabled.
 
 Noticing YouTube changing shape is now the capture tool's job: re-run
@@ -221,14 +223,14 @@ discovered in the one place it cannot be repeated.
 | Command | Opens | What it proves |
 | --- | --- | --- |
 | `npm run capture -- --list` | nothing | The plan: which videos, which already captured. |
-| `npm run capture -- --check` | nothing | Preconditions, **and that the parser runs on a blank page** — the exact failure that cost a capture. |
+| `npm run capture -- --check` | nothing | Preconditions, **and that the parser runs on a blank page**, the exact failure that cost a capture. |
 | `npm run capture -- --replay` | nothing | The whole pipeline against the previous capture, network stubbed: routing, staging, both parsers, the normalised writes, the shape report. |
 | `npm run capture -- --replay --fail-after=N` | nothing | The **failure** path: the loop throws after N requests, and the partial results must still be preserved and named. |
 | `npm run capture [--force]` | **once** | The capture itself. |
 
 The rehearsal asserts rather than prints. It checks that both formats were served,
 that every body produced cues, that no markup leaked into text, that an entity
-decoded and a child element flattened, and — the one most easily faked — that **no
+decoded and a child element flattened, and, the one most easily faked, that **no
 request received a format other than the one it asked for**. A body is classified by
 what it *is*, not by what was requested, so a server disagreeing is recorded as the
 disagreement it is instead of as the format we hoped for.
@@ -243,7 +245,7 @@ with both manifests written, so a spent open still yields evidence to derive fro
 iterating on layout without loading the extension.
 
 It exists because the alternative was loading the extension, opening a YouTube
-video, and reading a live transcript for every change to a colour or a control —
+video, and reading a live transcript for every change to a colour or a control,
 and because the states worth designing against (one subtitle, nothing marked, a
 long silence, an error) are the hardest to reach on demand. Reading a real
 transcript while working on layout is also a licence problem, which is why
@@ -257,30 +259,30 @@ the project does not otherwise have.
 
 **Why it works at all.** The panel's **entire** contact with the extension is
 `chrome.runtime.connect` returning a Port, and every module it imports is
-chrome-free. So the real panel runs as a plain page with a fake Port — real
-rendering, real stylesheet, real controls — with no extension loading.
+chrome-free. So the real panel runs as a plain page with a fake Port, real
+rendering, real stylesheet, real controls, with no extension loading.
 
-- `tools/ui/vite.config.mjs` — root is the repository, so the page imports the
+- `tools/ui/vite.config.mjs`, root is the repository, so the page imports the
   panel by the same paths the extension uses. One plugin serves the scenarios as
   JSON, because they read the corpus from disk and the browser cannot import a
   Node module.
-- `tools/ui/index.html` — the panel's markup, **duplicated** from
+- `tools/ui/index.html`, the panel's markup, **duplicated** from
   `sidepanel.html` (that file ships to users and must not reference a dev tool).
   The cost is real: a control added there must be added here, and forgetting shows
   up as `Cannot read properties of null` rather than as a missing control.
-- `tools/ui/boot.mjs` — installs the mock, fetches the scenario, then imports the
+- `tools/ui/boot.mjs`, installs the mock, fetches the scenario, then imports the
   panel. The import must be last and dynamic, because the panel calls `connect` at
   module scope.
-- `tools/ui/mock-worker.mjs` — imports the **real** protocol constants, settings
+- `tools/ui/mock-worker.mjs`, imports the **real** protocol constants, settings
   schema and alignment function, so it cannot drift from what the panel expects.
-- `tools/ui/scenarios.mjs` — **Node-only**; the server serialises a scenario and
+- `tools/ui/scenarios.mjs`, **Node-only**; the server serialises a scenario and
   sends it as data.
 - `?scenario=` switches; `?view=`, `?fontSize=`, `?threshold=` override settings so
   a state can be linked to rather than rebuilt by clicking.
 
 **HMR is the point, and it is tested.** `test/browser/ui-hmr.test.mjs` edits the
 real stylesheet, waits for the change to arrive, and asserts the page did **not**
-reload — a dev server that reloads on every CSS save would lose the entire
+reload, a dev server that reloads on every CSS save would lose the entire
 benefit, and would pass a smoke test. An earlier hand-rolled server had no HMR at
 all, which is why it was replaced.
 
@@ -292,7 +294,7 @@ proved here is nothing. That is `test/browser/iu.browser.test.mjs`'s job.
 `sidepanel.html` and not here shows up as a blank page, and nobody notices until
 they next want to use it. `test/browser/ui-preview.test.mjs` therefore asserts that
 every scenario renders, that each one's distinctive feature is on screen, and that
-no console error was raised. It asserts nothing about appearance — that is what the
+no console error was raised. It asserts nothing about appearance, that is what the
 preview is for.
 
 ## Where the fixtures come from
@@ -300,14 +302,14 @@ preview is for.
 Two kinds, and mixing them up is the mistake this repository made for a long time.
 
 **`test/synthetic/` is committed** and is what tests read. It is our own invented
-text wearing shapes measured from a real capture — real cue counts, real timings
+text wearing shapes measured from a real capture, real cue counts, real timings
 including the offsets and the silences, real language codes, real renderer keys.
 Shape from reality, text from us, which is what makes it both faithful and
 committable.
 
 **`test/fixtures/` is local and gitignored** and is where that shape comes from.
-`npm run capture` opens the real site once per video — the only thing in the project
-that ever does — and `npm run derive-synthetic` turns the result into the corpus.
+`npm run capture` opens the real site once per video, the only thing in the project
+that ever does, and `npm run derive-synthetic` turns the result into the corpus.
 
 Why it is arranged this way: every fixture used to be hand-written from an idea of
 what YouTube sends, so the tests could only confirm the idea. Thirteen bugs were
@@ -322,7 +324,7 @@ it is a bootstrapping aid, not a second source of truth.
 
 `test/mkv/*.mkv` is produced by `npm run fixtures`, which drives `ffmpeg` over a
 synthesised test pattern. No third-party media, nothing to attribute, and two
-seconds to rebuild — which is why they are generated rather than checked in as
+seconds to rebuild, which is why they are generated rather than checked in as
 opaque binaries.
 
 They live in their own directory rather than in `test/fixtures/` because the two
@@ -340,14 +342,44 @@ the first is irreplaceable.
 There are five, and each exists for a case a simpler file cannot reach: three text
 subtitle tracks with real language metadata, a genuine `S_TEXT/ASS` track (whose
 events are stored differently from SRT's), one with no subtitle tracks at all, one
-with `language=und`, and one with **no `Language` element whatever** — which is not
+with `language=und`, and one with **no `Language` element whatever**, which is not
 the same thing, and the difference turned out to matter.
 
-## Tier 3 — conformance (`npm run test:conformance`, 22 checks)
+## Measurements that settled a design question
+
+Some facts were settled by a throwaway script that opened a real browser, measured,
+and printed for a person to read. The scripts have been removed, because an
+unasserted script in the test directory is clutter that never runs. What they
+measured decided real code, so the answers are kept here rather than lost with them.
+
+None of this is a test. Where a fact could be pinned, it was, and that is said per
+line:
+
+- **Which audio track does Chrome play from a multi-track file?** The first, every
+  time. Established by routing playback through an `AnalyserNode` and reading the
+dominant frequency, because the fixture's two tracks are 440 Hz and 880 Hz and
+  nothing else in the pipeline can fake that. **A real test now**: `viewer.test.mjs`
+  carries the same measurement, so the fact is pinned rather than trusted.
+- **Can the element play AC-3, when WebCodecs cannot decode it?** Yes. A `<video>`
+  element is not WebCodecs: it has the browser's own demuxer and its own platform
+  decoders. Remuxing copies bytes and never decodes, so a codec only needs to be
+  playable, never decodable by us.
+- **Which codecs can WebCodecs decode?** AAC and MP3 yes; AC-3, E-AC-3 and DTS no.
+  This is why the audio path remuxes instead of decoding, and it is the reason that
+  choice is not a preference: a decoder of our own would work on some real files and
+  silently not on others.
+- **What does `canPlayType` accept?** A measurement, deliberately not a gate. MKV
+  reports nothing even for files Chrome plays, so it cannot decide anything; the only
+  honest signal is the element's `error` event after a play attempt.
+- **Can `audioTracks` be switched on without a startup flag?** No. It is compiled in
+  and flagged off, and no page-level switch reaches it. Feature detection is the
+  whole answer, and the feature lands for free the day Chrome unflags it.
+
+## Tier 3, conformance (`npm run test:conformance`, 22 checks)
 
 **Optional, and a development dependency.** The files are the [IETF CELLAR working
 group's Matroska conformance
-suite](https://github.com/ietf-wg-cellar/matroska-test-files) — eight files, each
+suite](https://github.com/ietf-wg-cellar/matroska-test-files), eight files, each
 probing one feature, written by the people who maintain mkvmerge and libmatroska.
 They are downloaded, never committed:
 
@@ -369,18 +401,18 @@ neither of which any fixture in this repository could have caught:
 
 - **`TimecodeScale` was never read.** Block timestamps are integer ticks and the
   scale says how long one is. The parser divided by 1000, which is correct only for
-  the default of one millisecond — so `test2.mkv`, which sets 100,000, had **every
+  the default of one millisecond, so `test2.mkv`, which sets 100,000, had **every
   timestamp ten times too large**: a two-minute film's subtitles landing at twenty
   minutes, with no error and a complete-looking transcript. `ffmpeg` cannot write a
   non-default scale, so no fixture here could have reached it.
 - **An absent `Language` element was treated as unknown.** Matroska defines the
   element as defaulting to English, and the suite's many-language file relies on
-  that — its English track carries no language tag at all. We were reporting it as
+  that, its English track carries no language tag at all. We were reporting it as
   undetermined, so the English subtitles were offered in the panel and **never
   marked**, because no word list matches `null`.
 
 Both were the same shape: correct-looking output that was quietly wrong. That is
-what a conformance suite is for, and it is a different job from our fixtures — which
+what a conformance suite is for, and it is a different job from our fixtures, which
 test *our* features (ASS-in-container, image-codec refusal, language metadata) that
 a container-conformance suite has no reason to include.
 
@@ -396,15 +428,15 @@ because the shape of the answer was not what had been assumed.
 
 **The gap.** Every capture requested `fmt=json3`, so the default-format row never
 produced a body. The XML branch was only ever exercised against XML *we* built from
-JSON3 — a test of the parser, not of what YouTube sends.
+JSON3, a test of the parser, not of what YouTube sends.
 
 **What the second capture found.** A request with no `fmt`, from the ANDROID client,
-returns `text/xml` — the older `<transcript><text start=… dur=…>` shape, not JSON3.
+returns `text/xml`, the older `<transcript><text start=… dur=…>` shape, not JSON3.
 So the default-format path was genuinely a different serialisation, and the parser
 had been right about its structure all along, from a fixture that was at least
 structurally honest. Two facts the real body settled that no fixture had:
 
-- The English track carries **161 `&amp;` entities** — escaping is routine, not
+- The English track carries **161 `&amp;` entities**, escaping is routine, not
   theoretical. The hermetic test stub used to leave entities raw, which made every
   escaping bug a passing test; it now decodes them, with a cue containing a real
   `&` and `<` to prove the round-trip.

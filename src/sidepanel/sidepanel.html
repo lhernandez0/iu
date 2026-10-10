@@ -12,7 +12,7 @@
 
       A control must not live inside the region it controls. This was put in the
       reading bar and that bar is exactly what collapsing hides, so collapsing
-      removed the only way back — the panel was stuck with no visible control at
+      removed the only way back, the panel was stuck with no visible control at
       all. Both rows survive collapse, so either would work; this one is chosen
       because the reading bar is the one being hidden, and keeping the toggle out
       of it makes that self-evident.
@@ -56,7 +56,7 @@
     <!--
       The translate target, one per panel rather than one per line: it is a
       preference you set once, and what varies per line is only WHETHER that line
-      is translated — which is what the two checkboxes above are for. Either line
+      is translated, which is what the two checkboxes above are for. Either line
       can be translated; both at once is allowed.
     -->
     <div id="translate-target-row" class="translate-target-row" hidden>
@@ -71,7 +71,7 @@
         <span class="size-unit">px</span>
       </label>
       <!--
-        Where a word's reading goes — 拼音 for Chinese, Rōmaji for Japanese.
+        Where a word's reading goes, 拼音 for Chinese, Rōmaji for Japanese.
 
         A select rather than a toggle, because the four values are genuinely
         different layouts rather than off and on: `above` is ruby, `below` is a
@@ -91,7 +91,7 @@
 
       It REPLACES the transcript rather than sitting above it: a side panel is
       roughly 600px tall, and a settings section plus a transcript in that height
-      gives neither enough room. One document, one thing on screen — the same
+      gives neither enough room. One document, one thing on screen, the same
       arrangement the panel already uses for its collapsed layout.
 
       An empty container on purpose. The controls are built from the registry in

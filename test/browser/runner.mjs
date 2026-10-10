@@ -2,7 +2,7 @@
  * The small runner shared by both browser tiers.
  *
  * Suites are plain scripts that take a context, report checks, and exit
- * non-zero on failure — the same convention as the hermetic suites, so there is
+ * non-zero on failure, the same convention as the hermetic suites, so there is
  * one way to write a test in this repo.
  *
  * `describe()` handles the two things a browser suite needs that a pure one
@@ -69,7 +69,7 @@ export async function runBrowserSuite(body) {
     await body(launch, report);
   } catch (error) {
     // A suite that throws has not finished, whatever its checks said. Report it
-    // as a failure rather than letting the count decide — otherwise a suite that
+    // as a failure rather than letting the count decide, otherwise a suite that
     // passed four checks and then crashed would exit green.
     console.log(`\nSUITE ERROR: ${error?.stack ?? error}`);
     console.log(`\n${report.checks() - report.failures()}/${report.checks()} checks passed before the failure`);

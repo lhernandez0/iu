@@ -4,14 +4,14 @@
  * **This file exists because there was no test between the Matroska parser and the
  * panel.** `matroska.test.mjs` proves the container parser reads real files;
  * `service-worker.test.mjs` proves the worker resolves a reader tab. Nothing proved
- * the two connect — and they did not, in a way neither suite could see.
+ * the two connect, and they did not, in a way neither suite could see.
  *
  * ## The bug this would have caught
  *
  * `settings.studyLanguage` defaults to `null`, so the FIRST request for any video
  * is `PROVIDE { languageCode: null }`. The reader answered "no such track". So a
  * file with three subtitle tracks, perfectly parsed, produced **no transcript at
- * all** — while the parser suite stayed green and the worker suite stayed green,
+ * all**, while the parser suite stayed green and the worker suite stayed green,
  * because neither of them ever asked the reader for a track.
  *
  * The YouTube content script has always handled this (`wanted ??
@@ -93,7 +93,7 @@ let reader;
 let panel;
 
 try {
-  // The reader, opened the way the toolbar menu opens it — as an extension page in
+  // The reader, opened the way the toolbar menu opens it, as an extension page in
   // a tab.
   reader = await context.newPage();
   await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
@@ -106,14 +106,16 @@ try {
 
   // **Bring the reader back to the front, and this is not incidental.** The worker
   // resolves the ACTIVE tab, so a file chosen in a background tab is a file the
-  // panel never hears about. That is correct behaviour — a real user picks a file
-  // while looking at the reader — but it makes the test order-dependent, which is
+  // panel never hears about. That is correct behaviour, a real user picks a file
+  // while looking at the reader, but it makes the test order-dependent, which is
   // how this suite failed intermittently with the panel opened last.
   await reader.bringToFront();
 
   await panel.waitForTimeout(1500);
 
-  check('the reader page loaded', await reader.title(), 'IU — video');
+  // No file chosen yet, so the title is just our name. It gains the file name
+  // once one is picked, which is what makes one viewer tab tellable from another.
+  check('the reader page loaded', await reader.title(), 'IU');
   // The reader must be resolvable even with the panel already open, which is the
   // path that was broken.
   const readerStatus = await reader.textContent('#status');
@@ -127,7 +129,7 @@ section('a real MKV produces subtitles in the panel');
 
 {
   // The whole point. A file with three text subtitle tracks goes in, and text must
-  // come out the other end — through DESCRIBE, the language pickers, PROVIDE with
+  // come out the other end, through DESCRIBE, the language pickers, PROVIDE with
   // a NULL language (because the default study language is unset), cue extraction,
   // and the row model.
   const before = await panel.textContent('#transcript');
@@ -139,18 +141,21 @@ section('a real MKV produces subtitles in the panel');
   await reader.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
 
   // Wait for the CONDITION rather than for a duration: extraction walks the media,
-  // and a fixed sleep is either slower than necessary or occasionally too short —
+  // and a fixed sleep is either slower than necessary or occasionally too short,
   // the latter producing a flaky failure that reads as a code bug.
   await panel.waitForFunction(() => document.querySelectorAll('.row').length > 0, null, { timeout: 15000 });
 
   const after = await panel.textContent('#transcript');
   const rows = await panel.locator('.row').count();
 
+  // The tab now names the file, so several viewers can be told apart.
+  check('the title names the chosen file', (await reader.title()).includes('three-tracks.mkv'), true);
+
   check('the reader found the embedded tracks', rows > 0, true);
   // The regression, stated directly: rows must appear with NO language chosen.
   check('the panel shows transcript rows', rows > 0, true);
   check('and the transcript actually changed', after !== before, true);
-  // The panel's language picker must offer the fixture's languages, normalised —
+  // The panel's language picker must offer the fixture's languages, normalised,
   // `zho`/`jpn` in the file, `zh`/`ja` here, because that is what the word lists
   // are keyed by and a track under any other code marks nothing.
   const options = await panel.locator('#study option').allTextContents();
@@ -174,7 +179,7 @@ section('machine translation is refused for a local file, visibly');
   // where the two halves meet: the panel already had the disable logic (`a track
   // that cannot be translated disables its own box`), and it was only useful here
   // if the reader actually reports the flag. A unit test on either side passes
-  // while the pair is broken — which is the exact shape of the bug that made the
+  // while the pair is broken, which is the exact shape of the bug that made the
   // reader produce no transcript at all.
   //
   // Without this the checkboxes appear to work and change nothing, which is the
@@ -244,12 +249,12 @@ section('the time bar, the volume control and the difficulty band');
   await reader.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
 
   // The Chinese track, chosen EXPLICITLY. The reader honours the shared
-  // `studyLanguage`, and a previous section leaves it on English — where no word list
+  // `studyLanguage`, and a previous section leaves it on English, where no word list
   // exists, so nothing marks and the band is correctly empty. Depending on whatever
   // that setting happens to hold would make this test assert the ambient state.
   await reader.selectOption('#study-track', 'zh');
 
-  // The band is painted FROM the marks, and the marks need the dictionary — so wait
+  // The band is painted FROM the marks, and the marks need the dictionary, so wait
   // for a span rather than assuming the paint happened with the file.
   const bandAppeared = await reader
     .waitForFunction(() => document.querySelectorAll('#cues span').length > 0, null, { timeout: 20000 })
@@ -257,7 +262,7 @@ section('the time bar, the volume control and the difficulty band');
     .catch(() => false);
 
   // The load-bearing check. The band first shipped with every span 0px wide, because
-  // the reader's cues carry `duration` where the preview's carried `end` — the width
+  // the reader's cues carry `duration` where the preview's carried `end`, the width
   // came out `NaN%`, which CSS silently drops. The band existed, was the right colour
   // and painted nothing, which a DOM-presence check passes happily.
   const band = await reader.evaluate(() => {
@@ -270,7 +275,7 @@ section('the time bar, the volume control and the difficulty band');
   });
 
   check('the band has a span', bandAppeared && band.count > 0, true);
-  // `every` on an empty array is `true`, so the count is asserted first — otherwise a
+  // `every` on an empty array is `true`, so the count is asserted first, otherwise a
   // band with no spans at all passes the width check it was written to catch.
   check('and every span has real width', band.count > 0 && band.widths.every((width) => width > 1), true);
 
@@ -337,7 +342,7 @@ section('the time bar, the volume control and the difficulty band');
   check('unmuting restores the previous level rather than guessing', afterUnmute.value, '50');
   check('and the element follows', afterUnmute.volume, 0.25);
 
-  // The bar is taller now, so the overlay captions must still clear it — the offset is
+  // The bar is taller now, so the overlay captions must still clear it, the offset is
   // measured rather than fixed, and a stale one puts the captions behind the bar.
   const offset = await reader.evaluate(() => ({
     offset: getComputedStyle(document.documentElement).getPropertyValue('--bar-offset').trim(),
@@ -351,7 +356,7 @@ section('the audio track selector');
 {
   // The fixture is AAC 440 Hz followed by AAC 880 Hz, so the TONE says which track is
   // playing. Asserting the `<select>` value would prove nothing about what came out of
-  // the speakers — that is the exact trap Chromium issue 40663787 is about, where the
+  // the speakers, that is the exact trap Chromium issue 40663787 is about, where the
   // state said one thing and the audio said another.
   await reader.bringToFront();
 
@@ -386,7 +391,7 @@ section('the audio track selector');
    * `captureStream`, NOT `createMediaElementSource`. The latter can only be called once
    * per element and it reroutes the element's audio into the Web Audio graph and out of
    * the default output, so a second measurement through it captures silence. Using
-   * `captureStream` for every measurement keeps the method identical each time — which
+   * `captureStream` for every measurement keeps the method identical each time, which
    * is what makes measuring a second switch possible at all.
    */
   const measureTone = () =>
@@ -422,7 +427,7 @@ section('the audio track selector');
   check('with playback still running', heard.playing, true);
 
   // The streaming property, which is the reason this does not buffer. A rebuilt
-  // stream must be USABLE before it is complete — that is what lets playback begin on
+  // stream must be USABLE before it is complete, that is what lets playback begin on
   // a fragment instead of after the whole film has been copied, and it is the one
   // thing a buffered implementation cannot do. The element's source is a MediaSource
   // blob and its buffer fills ahead of the playhead.
@@ -455,13 +460,13 @@ section('the audio track selector');
   check('switching back returns to the first track', switchedBack.hz, 441);
   check('and it is still playing rather than detached', switchedBack.playing, true);
 
-  // Switching track re-sources the element, which fires `loadedmetadata` again — and the
+  // Switching track re-sources the element, which fires `loadedmetadata` again, and the
   // handler there offered to RESUME a film the viewer is already watching. A modal
   // asking a question with one sensible answer, for the most ordinary thing the control
   // does.
   //
   // `three-tracks.mkv` is SIX SECONDS, which is too short to show the position bug at
-  // all — its `offerResume` refuses any position later than `duration - 5` and anything
+  // all, its `offerResume` refuses any position later than `duration - 5` and anything
   // at or under 2s, so no position on that file can produce an offer. Verified by
   // removing the guard: the assertion below stayed green, because the modal was absent
   // for an unrelated reason.
@@ -475,13 +480,13 @@ section('the audio track selector');
 }
 
 {
-  // The control is SHOWN, not hidden behind a reveal, and it sits in the transport row —
+  // The control is SHOWN, not hidden behind a reveal, and it sits in the transport row,
   // which is never hidden for a loaded file. There was a button here, and it toggled the
   // select beside it; a control whose whole job is to reveal the thing next to it is a
   // click tax, not a feature.
   //
   // The placement matters for a reason beyond tidiness: it lived in the caption row
-  // once, and that row disappears when captions are off — so the control was unreachable
+  // once, and that row disappears when captions are off, so the control was unreachable
   // for a viewer who wants the original audio WITHOUT subtitles, which is the case this
   // feature exists for.
   const placement = await reader.evaluate(() => ({
@@ -518,7 +523,7 @@ section('Switching audio keeps a long playback position');
   //   loadedmetadata: duration=Infinity readyState=1
   //   currentTime 0.00 -> 0.01     (readyState 4, dur 300.02)
   //
-  // `three-tracks.mkv` cannot show this — it is six seconds. `two-audio.mkv` is five
+  // `three-tracks.mkv` cannot show this, it is six seconds. `two-audio.mkv` is five
   // minutes and has two tracks, so the target is deep enough for the difference to be
   // unmistakable.
   const page6 = await context.newPage();
@@ -564,7 +569,7 @@ section('A finished subtitle clears instead of staying on screen');
 
 {
   // Its own page and its own file. This ran inside the audio section at first and
-  // failed — not because the caption was wrong but because that section has already
+  // failed, not because the caption was wrong but because that section has already
   // replaced the source with a rebuilt MSE stream, whose timeline is not guaranteed to
   // line up with the cues read from the original file. A test that depends on two
   // timelines agreeing is testing the wrong thing.
@@ -593,7 +598,7 @@ section('A finished subtitle clears instead of staying on screen');
   // one and before the next.
   const duringHold = await captionAt(4.0);
 
-  // Still up immediately after the cue ended — this is the hold that keeps an ordinary
+  // Still up immediately after the cue ended, this is the hold that keeps an ordinary
   // dialogue run from blinking through the fraction-of-a-second gaps between its cues.
   check('a finished cue holds briefly rather than vanishing at once', duringHold.length > 0, true);
 
@@ -619,7 +624,7 @@ section('The resume offer behaves like a toast');
     timeout: 15000,
   });
 
-  // "Start over" used to hide the banner and do NOTHING else — the playhead stayed
+  // "Start over" used to hide the banner and do NOTHING else, the playhead stayed
   // where it was and the offer was gone, which is the button's whole promise unkept and
   // unrecoverable, because the offer only fires once per load.
   await page4.evaluate(() => {
@@ -638,7 +643,7 @@ section('The resume offer behaves like a toast');
     currentTime: document.getElementById('video').currentTime,
     hidden: document.getElementById('resume').hidden,
   }));
-  // Measured: lands at ~0.5s, not 0 — the seek sets zero and playback moves on
+  // Measured: lands at ~0.5s, not 0, the seek sets zero and playback moves on
   // immediately. Asserting `< 0.5` exactly would fail on a fast machine for the right
   // behaviour, so this asks what matters: did it go back to the START (ahead), rather
   // than staying at 3s where it was.
@@ -647,7 +652,7 @@ section('The resume offer behaves like a toast');
 
   // The toast property, tested through the REAL trigger rather than a hand-shown
   // banner. Setting `hidden = false` directly bypasses `offerResume`, which is where the
-  // timer lives — so the first version of this test proved nothing about the timer and
+  // timer lives, so the first version of this test proved nothing about the timer and
   // failed, correctly.
   //
   // A stored position for this file, then a reload: the key is the worker's own, read
@@ -717,7 +722,7 @@ section('Resume continues rather than sitting paused');section('Resume continues
   });
 
   // A REAL click, not `element.click()` from inside `evaluate`. Playwright's click is a
-  // trusted gesture, and autoplay without one is refused — which is exactly what the
+  // trusted gesture, and autoplay without one is refused, which is exactly what the
   // first version of this test failed on: the handler was correct and the test was
   // measuring the autoplay policy.
   await page2.click('#resume-go');
@@ -738,10 +743,10 @@ section('Fullscreen, and the Picture-in-Picture round trip');
   // Three separate things, all reachable and all previously wrong:
   //
   //   1. The button could not ENTER fullscreen when `innerHeight` happened to equal
-  //      `screen.height` — which is true in a headless browser (no chrome) and in a
+  //      `screen.height`, which is true in a headless browser (no chrome) and in a
   //      maximised window (4px of chrome). The heuristic that exists to notice
   //      F11-fullscreen was blocking a legal request.
-  //   2. Entering PiP DROPS element fullscreen — measured, not assumed: the state goes
+  //   2. Entering PiP DROPS element fullscreen, measured, not assumed: the state goes
   //      from `fsElement: "picture"` to `fsElement: null` the moment PiP starts.
   //   3. So after the round trip nothing is fullscreen, and Escape has nothing to exit.
   const page7 = await context.newPage();
@@ -767,7 +772,7 @@ section('Fullscreen, and the Picture-in-Picture round trip');
   check('the button enters fullscreen', (await state()).fsElement, 'picture');
 
   // (2) PiP drops it. Asserted rather than assumed, because the fix depends on it being
-  // true — if a future Chrome preserves fullscreen across PiP, this test says so.
+  // true, if a future Chrome preserves fullscreen across PiP, this test says so.
   await page7.click('#pip');
   await page7.waitForTimeout(1200);
   const inPip = await state();
@@ -783,7 +788,7 @@ section('Fullscreen, and the Picture-in-Picture round trip');
   // be back when PiP closes.
   //
   // The restore has to happen in the PiP click, not in `leavepictureinpicture`, because
-  // a user gesture is required — measured both ways: refused from the event, succeeded
+  // a user gesture is required, measured both ways: refused from the event, succeeded
   // from the click. And the state has to be captured on PiP ENTRY: the browser drops
   // fullscreen when PiP OPENS, so reading `fullscreenElement` on exit is always null,
   // which is a condition that can never be true.

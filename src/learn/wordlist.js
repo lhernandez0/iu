@@ -47,7 +47,7 @@ const loading = new Map();
  * The cache is per-worker-lifetime, which is right in production: a worker starts
  * on every wake and re-parsing 1.4MB each time would be felt. In a test harness
  * that evaluates the worker repeatedly in ONE process, the same cache silently
- * carries the first load into every later run — so a test that changes the served
+ * carries the first load into every later run, so a test that changes the served
  * word lists sees the previous ones and passes or fails for the wrong reason.
  *
  * Only the tests call this. Nothing in the extension does.
@@ -55,7 +55,7 @@ const loading = new Map();
 export function resetDictionary() {
   // Wait for any in-flight loads before clearing, or a previous worker instance's
   // pending `loadDictionary()` resolves AFTER the reset and repopulates the cache
-  // with the old data — which is how a later test saw a dictionary that did not
+  // with the old data, which is how a later test saw a dictionary that did not
   // exist yet and reported an empty word list far from the cause.
   const pending = [...loading.values()];
   loaded.clear();
@@ -68,12 +68,12 @@ export function resetDictionary() {
  *
  * Pure: takes the parsed JSON, returns a Dictionary. Nothing here knows where the
  * data came from, which is what lets it be called from a test with a literal, from
- * a browser with a fetched document, or from Node with a file — and is why this
+ * a browser with a fetched document, or from Node with a file, and is why this
  * module no longer reaches for `chrome`.
  *
  * The index built here is what makes TRADITIONAL text work. The data is keyed by
  * simplified form, so a traditional character is not a key, is not a headword, and
- * resolves to nothing — every traditional character rendered unmarked and
+ * resolves to nothing, every traditional character rendered unmarked and
  * undefined. `variants` maps a traditional surface form back to the simplified key
  * it belongs to, and `headwords` includes both forms so the segmenter can find a
  * word in either script.
@@ -129,7 +129,7 @@ export function indexDictionary(raw) {
  * be felt. The result is cached for the worker's lifetime.
  *
  * The URL comes from the caller. Reading `chrome.runtime.getURL` here would make
- * this module unusable outside an extension — untestable in isolation, and unable
+ * this module unusable outside an extension, untestable in isolation, and unable
  * to be reused by anything that is not a Chrome extension. It is a data module;
  * where the data lives is not its business.
  *
@@ -140,7 +140,7 @@ export async function loadDictionary(url) {
   // Keyed by URL, not a single slot. The single slot was correct while there was
   // one dictionary and silently wrong the moment there were two: the second
   // request returned the first language's words, so every Japanese lookup missed
-  // and every Japanese mark used Chinese headwords — with nothing throwing.
+  // and every Japanese mark used Chinese headwords, with nothing throwing.
   const cached = loaded.get(url);
   if (cached) return cached;
 
@@ -166,7 +166,7 @@ export async function loadDictionary(url) {
 /**
  * Where the bundled list manifest lives, relative to the extension root.
  *
- * Kept here as a fact about the data rather than a call to `chrome` — the caller
+ * Kept here as a fact about the data rather than a call to `chrome`, the caller
  * resolves it, because only the caller knows whether it is a browser.
  */
 export const INDEX_PATH = 'src/learn/data/index.json';
@@ -223,7 +223,7 @@ export function dictionaryPathFor(index, listId) {
  * The data is keyed by simplified form, so a traditional word has to be mapped
  * back before it can be looked up. Everything that reads the dictionary goes
  * through here, which is what stops one caller remembering and another forgetting
- * — the failure mode being a word that is defined in one place and undefined in
+ *, the failure mode being a word that is defined in one place and undefined in
  * the next.
  *
  * @param {Dictionary} dictionary
@@ -262,7 +262,7 @@ export function levelOf(dictionary, listId, word) {
 }
 
 /**
- * How a word is read — 拼音 for Chinese, kana for Japanese — or null.
+ * How a word is read, 拼音 for Chinese, kana for Japanese, or null.
  *
  * Both languages store this in the SAME field, `p`, because the data was built
  * from sources with the same shape: CC-CEDICT carries pinyin, JMdict carries the
@@ -273,7 +273,7 @@ export function levelOf(dictionary, listId, word) {
  * `canonical` is applied first, and that is the part worth remembering: the data
  * is keyed by simplified form, so looking up a traditional surface form directly
  * finds nothing. Resolving through `canonical` gives a traditional word its own
- * reading instead of silently none — a failure that would look like missing data
+ * reading instead of silently none, a failure that would look like missing data
  * rather than a missing lookup.
  *
  * @param {Dictionary} dictionary
@@ -283,7 +283,7 @@ export function levelOf(dictionary, listId, word) {
 export function readingOf(dictionary, word) {
   const entry = lookup(dictionary, word);
   // An empty string is present-but-empty in the data (JMdict has these for
-  // symbols and loanwords with no kana), treated the same as absent — a blank
+  // symbols and loanwords with no kana), treated the same as absent, a blank
   // reading is not something to draw.
   return entry?.p || null;
 }
@@ -306,7 +306,7 @@ export function traditionalOf(dictionary, word) {
 /**
  * The tone-marked pinyin form a reading is written in, turned into numbered.
  *
- * `māma` becomes `ma1ma`, and `le` stays `le` — a syllable with no mark is the
+ * `māma` becomes `ma1ma`, and `le` stays `le`, a syllable with no mark is the
  * neutral tone and carries no number, which is the part a version built from the
  * Latin letters alone gets wrong by appending `0` or nothing at the end of the
  * whole string rather than per syllable.
@@ -322,7 +322,7 @@ export function traditionalOf(dictionary, word) {
  *
  * **The numbering is per SYLLABLE, and syllable boundaries cannot be found from
  * the letters.** `zhongyu` could split as `zhong-yu` or `zho-ng-yu`, and nothing
- * in the string says which — so two simpler implementations both produce
+ * in the string says which, so two simpler implementations both produce
  * something wrong:
  *
  *   - write the digit where the vowel was: `zho1ngyu2`, a number inside a syllable
@@ -331,7 +331,7 @@ export function traditionalOf(dictionary, word) {
  *
  * So the string is segmented against the real inventory of Mandarin syllables
  * first, then each syllable gets its digit at the end. That also makes the
- * conversion reversible, which is the point of numbered pinyin — it exists so a
+ * conversion reversible, which is the point of numbered pinyin, it exists so a
  * reading can be typed and searched.
  *
  * @param {string} reading
@@ -358,7 +358,7 @@ export function pinyinToNumbers(reading) {
   }
 
   // Runs of letters are split as a whole, because the boundaries between them are
-  // not visible in the string — see `splitSyllables`.
+  // not visible in the string, see `splitSyllables`.
   return numberRuns(plain, tones);
 }
 
@@ -391,7 +391,7 @@ function numberRuns(plain, tones) {
 
     const split = splitSyllables(run);
     if (!split) {
-      // No complete split exists — a shape the table does not know. Emitted whole
+      // No complete split exists, a shape the table does not know. Emitted whole
       // with its last tone, so an unexpected string degrades to one wrong digit
       // rather than to lost text.
       const digit = tones.slice(i, end).filter(Boolean).pop();
@@ -421,7 +421,7 @@ function numberRuns(plain, tones) {
  *
  * **Backtracking, not greedy, and the difference is the whole function.** Written
  * pinyin has no separator between syllables, so `fanu` is ambiguous: it could be
- * `fan` + `u` or `fa` + `nu`. Longest-match takes `fan` — the longer reading — and
+ * `fan` + `u` or `fa` + `nu`. Longest-match takes `fan`, the longer reading, and
  * then has an impossible `u` left over. The correct split is the shorter first
  * syllable, which greedy never tries, and which only a search finds.
  *
@@ -472,7 +472,7 @@ const SYLLABLE_LETTER = /[a-zü]/i;
 /**
  * Every Mandarin syllable, toneless.
  *
- * The inventory is closed — about 410 forms — which is what makes longest-match
+ * The inventory is closed, about 410 forms, which is what makes longest-match
  * segmentation exact rather than heuristic. Derived from the standard pinyin
  * table; `v` stands in for `ü`, as it does everywhere numbered pinyin is typed.
  */
@@ -489,7 +489,7 @@ export const PINYIN_SYLLABLES = new Set(
     'la lai lan lang lao le lei leng li lia lian liang liao lie lin ling liu lo long lou lu luan lun luo lv lve ' +
     'ma mai man mang mao me mei men meng mi mian miao mie min ming miu mo mou mu ' +
     'na nai nan nang nao ne nei nen neng ni nian niang niao nie nin ning niu nong nou nu nuan nun nuo nv nve ' +
-    // `nu`/`nv` were missing from the n row, so `nù` split as `n`+`u` — a         // one-letter fallback that still produced a digit, which is why only the
+    // `nu`/`nv` were missing from the n row, so `nù` split as `n`+`u`, a         // one-letter fallback that still produced a digit, which is why only the
     // exhaustive decomposition check could see it.
     'n ng hm hng m ' +
     'o ou pa pai pan pang pao pei pen peng pi pian piao pie pin ping po pou pu ' +
@@ -504,7 +504,7 @@ export const PINYIN_SYLLABLES = new Set(
     // FINALS, which are not standalone syllables but must be matchable, because
     // written pinyin has no separator between syllables: `bàngōng` is `bang` +
     // `ong`, and a table of standalone syllables alone splits it into `bang` +
-    // `o` + `ng` — digits in the wrong places, which is what the exhaustive
+    // `o` + `ng`, digits in the wrong places, which is what the exhaustive
     // check caught. Longest-match still prefers `bang` over `ba`+`ng`, so adding
     // these cannot steal a syllable that already matched whole.
     'ong uan iang uang iong uo ua ia iao ian ie iu in ing ui un ue uai ve er r ' +
@@ -535,7 +535,7 @@ const TONE_NUMBERS = {
  * The default ramp: easy to hard.
  *
  * A fixed perceptual gradient rather than a hue rotation. Rotating the hue
- * looks fine at six levels and breaks by twelve — the wheel wraps, so level 1
+ * looks fine at six levels and breaks by twelve, the wheel wraps, so level 1
  * and level 13 become the same colour. Interpolating between fixed stops
  * cannot do that, and stays readable whether a list has 6 levels or 40.
  *

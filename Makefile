@@ -1,11 +1,11 @@
-# IU — build and release tasks.
+# IU, build and release tasks.
 #
 # `npm test` is the primary entry point and this does not replace it. What lives
 # here is the PACKAGING work: producing the file that goes to the two stores, and
 # the checks that have to pass before it does.
 #
 # WHY A MAKEFILE AND NOT MORE npm SCRIPTS. The packaging steps are a dependency
-# graph — you cannot lint before staging, and you cannot build before linting —
+# graph, you cannot lint before staging, and you cannot build before linting,
 # and npm scripts express that as `&&` chains in one line, which is unreadable and
 # cannot be run partially. `make stage` and `make lint` are independently useful
 # while working a problem out.
@@ -37,13 +37,13 @@ ZIP     := $(BUILD)/$(SLUG)-$(VERSION).zip
 
 # WHAT SHIPS. Everything else in the repository is development material.
 #
-# This list is the single source of truth. It used to live in three places — the
+# This list is the single source of truth. It used to live in three places, the
 # store doc as prose, a shell pipeline in someone's history, and a note in the
-# README — which is how a `dist/` directory ends up shipping because nobody
+# README, which is how a `dist/` directory ends up shipping because nobody
 # remembered to exclude it.
 #
 # `web-ext build` is NOT used to assemble this. Its defaults exclude
-# `node_modules/` and dotfiles but happily include `docs/`, `test/` and `tools/` —
+# `node_modules/` and dotfiles but happily include `docs/`, `test/` and `tools/`,
 # measured, not assumed: building the repository root as-is put 88 development
 # files in the package. It is used below to LINT and to ZIP a directory that has
 # already been filtered.
@@ -55,7 +55,7 @@ SHIPPED := manifest.json icons src \
 
 .PHONY: help
 help: ## Show this help
-	@echo "IU $(VERSION) — $(NAME)"
+	@echo "IU $(VERSION), $(NAME)"
 	@echo
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'

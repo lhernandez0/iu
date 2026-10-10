@@ -4,7 +4,7 @@
  * The panel is where the last bug lived: it called `chrome.runtime.connect`
  * once, at startup, and had no recovery path when that failed. Nothing short of
  * running the module catches that, so this stub exists to make running it
- * possible. It is deliberately dumb — a real DOM would hide the very mistakes
+ * possible. It is deliberately dumb, a real DOM would hide the very mistakes
  * worth catching (an element that does not exist, a listener never registered).
  *
  * Anything the panel touches but this does not implement will throw, loudly,
@@ -62,8 +62,8 @@ export class FakeElement {
    * The real `<select>` does this, and a stub that only keeps whatever `value`
    * was last assigned drifts from it: options are rebuilt on every state push,
    * so reading a select afterwards returns a stale value the browser would never
-   * report. Anything depending on the selection — the swap carrying each
-   * translation with its slot, for instance — then cannot be tested honestly.
+   * report. Anything depending on the selection, the swap carrying each
+   * translation with its slot, for instance, then cannot be tested honestly.
    *
    * Keyed on having options rather than on `tagName`, because the fixture
    * creates every id as a plain element and never learns which are selects.
@@ -156,7 +156,7 @@ export class FakeElement {
    * Focus, recorded rather than performed.
    *
    * There is no focus model here, so the only thing worth modelling is WHICH
-   * element the panel asked to focus — which is a real assertion: closing the
+   * element the panel asked to focus, which is a real assertion: closing the
    * settings view must put focus back on the gear, or a keyboard user is left in
    * chrome that has just been hidden.
    */
@@ -178,7 +178,7 @@ export class FakeElement {
    *
    * Without this the stub keeps whatever `value` was last assigned, so reading
    * a select after its options were rebuilt returns a stale value that the real
-   * element would never report — and a test asserting on that passes or fails
+   * element would never report, and a test asserting on that passes or fails
    * for no reason connected to the code.
    *
    * @returns {string}
@@ -266,13 +266,13 @@ export function installDomStub(ids = [], { hidden = [] } = {}) {
      *
      * A property rather than something computed, because the panel's use of focus
      * is a DECISION it makes (put focus back on the gear) rather than a behaviour
-     * the DOM enforces — so recording it is enough to assert the decision.
+     * the DOM enforces, so recording it is enough to assert the decision.
      */
     activeElement: null,
     getElementById: (id) => byId.get(id) ?? null,
     /**
      * A class lookup, which the panel uses for the two REGIONS it hides as a unit
-     * — the reading bar and the footer — because neither has an id.
+     *, the reading bar and the footer, because neither has an id.
      *
      * Handles only the simple `.class` form, and returns the first match. That is
      * deliberately narrow: a stub that pretended to be a selector engine would
@@ -313,8 +313,8 @@ export function installDomStub(ids = [], { hidden = [] } = {}) {
    * A text node, which `append` accepts and `textContent` reads through.
    *
    * **This was missing, and its absence made a stub report a bug that was not
-   * there.** `renderTokens` emits a bare text node for a token it cannot define —
-   * which is every punctuation mark in a Chinese transcript — so its absence meant
+   * there.** `renderTokens` emits a bare text node for a token it cannot define,
+   * which is every punctuation mark in a Chinese transcript, so its absence meant
    * those characters vanished from `textContent`, and a test asserting the text of
    * a row came back empty while the real panel rendered it fine.
    */

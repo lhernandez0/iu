@@ -6,7 +6,7 @@
  * to this interface only, so swapping Web Speech <-> whisper.cpp <-> a cloud
  * API is a change in this folder and nowhere else.
  *
- * Contract — an engine is any object with:
+ * Contract, an engine is any object with:
  *
  *   start(stream: MediaStream, options?: object): Promise<void>
  *       Begin consuming `stream`. Resolve once started; reject on failure.

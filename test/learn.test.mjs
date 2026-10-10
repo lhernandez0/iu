@@ -70,7 +70,7 @@ section('the segmenter marks kanji and kana Japanese alike');
   // This was the measured boundary the Japanese plan was built on, and it has
   // MOVED. The segmenter used to try a word list only when a token's FIRST
   // character was Han, so a run beginning with kana passed through whole and was
-  // never looked up — which left a large share of ordinary Japanese unmarkable,
+  // never looked up, which left a large share of ordinary Japanese unmarkable,
   // because much of it is written in kana and nowhere else. The kana blocks are
   // now in the matcher, so this asserts the new behaviour.
   //
@@ -89,14 +89,14 @@ section('the segmenter marks kanji and kana Japanese alike');
   check('including a long kana word', known('いらっしゃい'), true);
 
   // Tokens must still reproduce the input exactly, or marks land on the wrong
-  // characters — the invariant the whole render depends on.
+  // characters, the invariant the whole render depends on.
   const toks = segment('私は学生です', JA_HEADWORDS, JA_MAX_LEN);
   check('tokenising still reproduces the line', toks.map((t) => t.text).join(''), '私は学生です');
   check('and the particles are looked up too', toks.some((t) => t.known && t.text === 'は'), true);
 
   // Inflection remains a SEPARATE, unfixed gap, and this is still the honest
   // account of it. The matcher is exact against headwords, so 食べました does not
-  // equal 食べる — but 食 IS a headword alone, so longest match takes the bare
+  // equal 食べる, but 食 IS a headword alone, so longest match takes the bare
   // character and marks it. The result is a colour on 食 carrying the meaning of
   // 食 while the line says 食べました: a confident wrong mark, not a missing one.
   check('the dictionary form is present', JA_HEADWORDS.has('食べる'), true);
@@ -191,7 +191,7 @@ section('longest match prefers the compound, which is the point');
 {
   // The characteristic case: the list holds both 岸 and 岸上, and 岸上 is the
   // better token. This is what made the measured accuracy a floor rather than a
-  // ceiling — a naive test looking for 岸 counts this as a failure.
+  // ceiling, a naive test looking for 岸 counts this as a failure.
   const tokens = segment('我们在岸上等你', HEADWORDS, MAX_LEN);
   const texts = tokens.map((t) => t.text);
   check('岸上 is kept whole', texts.includes('岸上'), true);
@@ -226,8 +226,8 @@ section('every multi-character Chinese token is a known word');
   // headword we can look up, or a single character we fall back on. Anything
   // else would be a multi-character run we could neither define nor classify.
   //
-  // Note the accuracy figure quoted in the docs — 97.9% of target words kept
-  // intact — was measured against the source corpus of example sentences, which
+  // Note the accuracy figure quoted in the docs, 97.9% of target words kept
+  // intact, was measured against the source corpus of example sentences, which
   // is deliberately NOT bundled (it would have more than doubled the payload for
   // data this layer does not use). That corpus is not available here, so this
   // checks the invariant instead of re-deriving accuracy it cannot measure.
@@ -267,7 +267,7 @@ section('a whole transcript segments per line, keeping cues separate');
 
 {
   // This is the function the worker calls. Segmenting each line on its own is
-  // what stops a word spanning two cues — which would attach it to the wrong
+  // what stops a word spanning two cues, which would attach it to the wrong
   // timestamp, and is the reason the obvious "join everything" is wrong.
   const segments = [
     { start: 0, duration: 2, text: '我们在岸上等你' },
@@ -330,7 +330,7 @@ section('the colour ramp maps level to a position, and cannot wrap');
   // A 40-level list is a ramp, not a palette: adjacent levels may blend, but the
   // ends must stay far apart and no two levels may be identical.
   check('a 40-level list still gives 40 values', forty.size, 40);
-  console.log(`        (40 distinct values across ${forty.size} levels — a ramp, not a palette)`);
+  console.log(`        (40 distinct values across ${forty.size} levels, a ramp, not a palette)`);
 }
 
 {
@@ -357,7 +357,7 @@ section('the learning layer does not depend on the browser');
   // `learn/` is the part that would be reused for another language, and the whole
   // point of the layering is that it is pure data and logic. It used to call
   // `chrome.runtime.getURL` itself, which made it unusable outside an extension
-  // and untestable without a `chrome` stub — so this guards the property rather
+  // and untestable without a `chrome` stub, so this guards the property rather
   // than trusting it, because reaching for a convenience is easy and invisible.
   //
   // Read as text rather than imported: an import would only prove that THIS
@@ -389,22 +389,22 @@ section('a word carries its reading and its other script, through canonical');
   check('Japanese kana', readingOf(ja, '日本語'), 'にほんご');
 
   // **The case that needs `canonical`.** The data is keyed by simplified form, so
-  // a traditional surface form is not a key and a direct lookup finds nothing —
+  // a traditional surface form is not a key and a direct lookup finds nothing,
   // which would look like missing data rather than a missing lookup, and would
   // give every traditional word no reading at all.
   //
   // `阿拉伯語` is traditional for `阿拉伯语`, and its reading is only reachable
-  // through `canonical` — a direct lookup misses.
+  // through `canonical`, a direct lookup misses.
   check('a traditional form resolves through canonical', readingOf(zh, '阿拉伯語'), 'ālābóyǔ');
   check('and calling it by its traditional name is impossible', Object.hasOwn(bundle.words, '阿拉伯語'), false);
 
-  // The reading is stored lowercase, so `Běijīng` is wrong in a test — the
+  // The reading is stored lowercase, so `Běijīng` is wrong in a test, the
   // capital comes from the dictionary's own casing, not from us.
   check('the reading keeps the data\'s own casing', readingOf(zh, '北京'), 'běijīng');
 
   check('the other script', traditionalOf(zh, '阿拉伯语'), '阿拉伯語');
   // Japanese has no traditional field to fill, so this is null rather than an
-  // empty string — one thing for a caller to check.
+  // empty string, one thing for a caller to check.
   check('and null when there is none', traditionalOf(ja, '日本語'), null);
 
   // A word we do not hold gives nothing, rather than throwing or inventing.
@@ -422,12 +422,12 @@ section('tone marks convert to numbers, per syllable');
   check('a toneless reading is unchanged', pinyinToNumbers('de'), 'de');
   check('an empty reading is empty', pinyinToNumbers(''), '');
 
-  // `ü` is in the data — 绿 is `lǜ` — and a table of the five plain vowels leaves
+  // `ü` is in the data, 绿 is `lǜ`, and a table of the five plain vowels leaves
   // it alone, which renders the tone as a literal `ǜ` beside a digit-less vowel.
   check('the ü vowel converts too', pinyinToNumbers('lǜ'), 'lv4');
   check('and without a tone', pinyinToNumbers('lü'), 'lv');
 
-  // Kana has no tone marks, so the same function must pass it through — which is
+  // Kana has no tone marks, so the same function must pass it through, which is
   // why the caller needs no language check.
   check('kana is left alone', pinyinToNumbers('にほんご'), 'にほんご');
   check('and romaji too', pinyinToNumbers('nihongo'), 'nihongo');
@@ -460,7 +460,7 @@ section('the syllable table covers every reading the dictionary ships');
 {
   // Three examples prove the algorithm; they do not prove the TABLE. A missing
   // syllable degrades to a single-character guess, so the output is still a
-  // string with digits in it — wrong, plausible, and invisible in any test that
+  // string with digits in it, wrong, plausible, and invisible in any test that
   // does not look at all of them.
   //
   // The check: marked and numbered readings must have the same LENGTH, because the
@@ -477,7 +477,7 @@ section('the syllable table covers every reading the dictionary ships');
     if (!marked) continue;
     const numbered = pinyinToNumbers(marked);
 
-    // Every MARKED syllable must end with a digit, except the neutral tone — so
+    // Every MARKED syllable must end with a digit, except the neutral tone, so
     // count the tone marks in the source and the digits in the output.
     const marks = [...marked].filter((c) => TONE_MARKED.test(c)).length;
     const digits = (numbered.match(/[1-4]/g) ?? []).length;
@@ -488,7 +488,7 @@ section('the syllable table covers every reading the dictionary ships');
     // Not "no run longer than six": numbered pinyin has no separator between
     // syllables, so `bushang` is a legitimate seven-letter run of `bu` + `shang`.
     // That version of this check failed on real data while the code was right,
-    // which is worth recording — a test that fails on correct output sends someone
+    // which is worth recording, a test that fails on correct output sends someone
     // to fix the wrong thing.
     //
     // Consuming a run greedily and requiring nothing to be left over does catch a
@@ -524,7 +524,7 @@ section('the conversion is reversible, which is why numbered pinyin exists');
 {
   // Numbered pinyin is a form you can TYPE. The point of converting is to make a
   // reading searchable and unambiguous, so a conversion that loses information is
-  // not doing the job — the tone has to be attached to the syllable it belongs to,
+  // not doing the job, the tone has to be attached to the syllable it belongs to,
   // and only that makes reading it back possible.
   check('a reader can tell which syllable owns the tone', pinyinToNumbers('zhōngyú'), 'zhong1yu2');
   check('and not by guessing', pinyinToNumbers('zhōngyú') !== 'zhongyu1', true);

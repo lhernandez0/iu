@@ -1,5 +1,5 @@
 /**
- * Side panel — a subscriber, not a controller.
+ * Side panel, a subscriber, not a controller.
  *
  * It holds no transcript cache and makes no decisions: the service worker owns
  * the table, resolves the video, and pushes STATE whenever anything changes.
@@ -18,7 +18,7 @@ import { providerNames } from '../common/providers.js';
 import { attachHover, showEntry, hide as hidePopover, renderTokens, renderReading, setReadingSettings } from '../common/marks.js';
 
 /**
- * The extension API namespace — `browser` where it exists (Chrome 148+, and
+ * The extension API namespace, `browser` where it exists (Chrome 148+, and
  * always in Firefox), `chrome` otherwise. Declared here rather than imported so
  * it reads the global where it is used; a module would snapshot it. See the
  * longer note in `src/background/service-worker.js`.
@@ -81,7 +81,7 @@ const els = {
   footer: /** @type {HTMLElement} */ (document.querySelector('footer.bar')),
 };
 
-/** Bookkeeping only — the transcript itself lives in the service worker. */
+/** Bookkeeping only, the transcript itself lives in the service worker. */
 const view = {
   /** @type {object[]} */ rows: [],
   /** @type {HTMLElement[]} */ elements: [],
@@ -112,7 +112,7 @@ const view = {
    * The last cue the worker reported, kept across a row rebuild.
    *
    * Rebuilding the rows resets the highlight, and the state push that caused the
-   * rebuild carries the cue anyway — but only when the cue CHANGED. On a refresh
+   * rebuild carries the cue anyway, but only when the cue CHANGED. On a refresh
    * or a language switch it has not, so the highlight and the scroll position
    * were both lost until the next cue boundary arrived, which on a paused video
    * is never.
@@ -136,7 +136,7 @@ let reconnectDelay = INITIAL_RECONNECT_MS;
 let reconnectTimer = 0;
 let reconnectAttempts = 0;
 
-// If the worker never answers — it crashed, or never woke — say so rather than
+// If the worker never answers, it crashed, or never woke, say so rather than
 // showing the startup placeholder indefinitely. A slow worker answers well
 // inside this window.
 let heardFromWorker = false;
@@ -263,7 +263,7 @@ function send(message) {
  * If the worker never answers, nudge it once before complaining.
  *
  * The worker resolves the video from whichever tab is active. When the panel is
- * opened, that can momentarily be the panel's own tab — there is no video in it,
+ * opened, that can momentarily be the panel's own tab, there is no video in it,
  * so the worker reports that and has no reason to look again. A retry once
  * things have settled recovers from that, and from a worker still waking up.
  *
@@ -297,13 +297,13 @@ function renderState(state) {
   // about from the state that is currently on screen.
   view.state = state;
   // Pushed before any row is built, so the first render of a transcript already
-  // has the right placement — a row built with the previous state's settings and
+  // has the right placement, a row built with the previous state's settings and
   // then rebuilt would flicker.
   //
   // Read from `state.learning`, NOT `state.settings`. There is no `settings` field
   // on a state payload: the presentation settings travel inside `learning` with
   // `view`, `fontSize` and `markStyle`, and reading a field that does not exist
-  // returned `undefined` for every push — so an explicit parameter was silently
+  // returned `undefined` for every push, so an explicit parameter was silently
   // ignored. Caught by the test asserting the placements actually differ.
   setReadingSettings(state.learning);
   view.studyTranslation = state.studyTranslation ?? null;
@@ -325,8 +325,8 @@ function renderPickers(state) {
   // Either line can be translated, independently. Each has its own checkbox beside
   // its picker, and they share the one target below.
   //
-  // A checkbox is disabled when its line's track cannot take a translation — or
-  // when there is no line on that side at all — and says why on hover, rather than
+  // A checkbox is disabled when its line's track cannot take a translation, or
+  // when there is no line on that side at all, and says why on hover, rather than
   // letting the learner tick it and see nothing happen.
   const translatable = (language) =>
     Boolean(language) && (state.translationAvailable ?? {})[language] !== false;
@@ -364,7 +364,7 @@ function renderPickers(state) {
   const wanted = Boolean(state.studyTranslated || state.glossTranslated);
   // Only offer targets a track can actually take. YouTube offers auto-translate
   // for any video, but applying it to a human-authored track silently returns the
-  // ORIGINAL text — so offering it would produce a menu that appears to work and
+  // ORIGINAL text, so offering it would produce a menu that appears to work and
   // changes nothing.
   //
   // Both languages in use are excluded, since translating either into itself is a
@@ -428,7 +428,7 @@ function fillSelect(select, tracks, selected, placeholder, { includeNone = false
  * A short readable name for a language code, for the status line.
  *
  * Both lists are consulted because a translation target is often not a track on
- * the video at all — "en" may only exist as something to translate into, and
+ * the video at all, "en" may only exist as something to translate into, and
  * looking in the track list alone would print the bare code.
  *
  * @param {object} state
@@ -493,14 +493,14 @@ function renderLearning(state) {
   );
   els.list.disabled = !learning.listOptions?.length;
 
-  fillSelectOptions(els.threshold, learning.thresholdOptions ?? [], learning.threshold, '—');
+  fillSelectOptions(els.threshold, learning.thresholdOptions ?? [], learning.threshold, '-');
 
   fillSelectOptions(els.viewMode, VIEW_OPTIONS, learning.view, 'Full');
 
   // Rebuilt from the schema, so an option added there appears here with no second
   // edit. Guarded because the preview harness renders this bar from its own copy
   // of the markup, and a control it has not been given is `null` rather than an
-  // error — the same arrangement `els.layout` uses.
+  // error, the same arrangement `els.layout` uses.
   if (els.reading) {
     fillSelectOptions(els.reading, optionsFor('romaji'), learning.romaji, 'Off');
   }
@@ -545,7 +545,7 @@ function renderLearning(state) {
  *
  * **Built from the registry, not from a hand-written list.** `forSettingsView()`
  * filters `SETTINGS` to the panel-side entries with no `quick` control, so adding a
- * setting is one object in `src/common/settings.js` and it appears here — no second
+ * setting is one object in `src/common/settings.js` and it appears here, no second
  * edit, and no chance of the view and the transcript bar disagreeing about which
  * settings exist.
  *
@@ -555,7 +555,7 @@ function renderLearning(state) {
  *
  * Rebuilt only when something it renders has changed. A state push arrives on every
  * cue change, and rebuilding the whole view then would reset focus and scroll while
- * the user is using it — the same reason the transcript bar's selects carry a
+ * the user is using it, the same reason the transcript bar's selects carry a
  * signature.
  *
  * @param {object} learning
@@ -652,7 +652,7 @@ function dynamicOptions(id, state) {
  *
  * A `select`, a `toggle` or a `number`, which are the types the registry uses. A
  * dynamic setting's options come from the state rather than the definition, so both
- * are accepted here — that is the whole difference between `listId` (options per
+ * are accepted here, that is the whole difference between `listId` (options per
  * state) and `markStyle` (options fixed in the registry).
  *
  * @param {object} setting
@@ -703,9 +703,9 @@ function buildSettingControl(setting, value, state) {
   select.setAttribute('aria-label', setting.label);
 
   if (!options.length) {
-    // Nothing to choose from yet — a word list that has not loaded, a video with no
+    // Nothing to choose from yet, a word list that has not loaded, a video with no
     // subtitles. A placeholder rather than an empty picker, which reads as broken.
-    select.append(new Option('—', ''));
+    select.append(new Option('-', ''));
     select.disabled = true;
     row.append(select);
     return row;
@@ -731,7 +731,7 @@ function buildSettingControl(setting, value, state) {
  *
  * A `<select>` value is always a string; a threshold is a number and a toggle is a
  * boolean. The registry's own `coerce` is the authority on what shape a setting
- * wants, so this defers to it rather than guessing — guessing is how `"4"` reaches
+ * wants, so this defers to it rather than guessing, guessing is how `"4"` reaches
  * a comparison written for `4`.
  *
  * @param {object} setting
@@ -756,7 +756,7 @@ function sendSetting(id, value) {
  * The transcript is REPLACED, not covered: at panel height there is not room for
  * both, and a settings sheet over the transcript would hide the thing you are
  * tuning. The status line hides with it, because its message ("4 lines · Chinese")
- * is about a transcript that is not on screen — the same reasoning the collapse
+ * is about a transcript that is not on screen, the same reasoning the collapse
  * already uses for that line.
  *
  * **The gear is the only way in and out.** There was a back arrow too, and it was
@@ -834,7 +834,7 @@ function fillSelectOptions(select, options, selected, placeholder, { leading = n
 /**
  * A text size as a number in range, from a control or from storage.
  *
- * Empty is not zero. `Number('')` is 0, which clamps to the 10px minimum — so
+ * Empty is not zero. `Number('')` is 0, which clamps to the 10px minimum, so
  * clearing the field would shrink the text as a side effect, which is not what a
  * person clearing a field means. An empty or unparseable value falls back to the
  * default instead.
@@ -859,7 +859,7 @@ function sizeFrom(raw) {
  * Text size is a single pixel size on the root element.
  *
  * Every other size in the stylesheet is expressed as a multiple of it, because
- * the alternative — one variable holding a size that other rules override —
+ * the alternative, one variable holding a size that other rules override,
  * cannot move nine separate sizes together.
  *
  * A px number rather than a preset or a multiplier: "18px" is what the browser's
@@ -876,7 +876,7 @@ function applyFontSize(pixels) {
  * How a marked word is drawn: an underline beneath it, or a highlight behind it.
  *
  * A class on the ROOT rather than on the transcript, so the choice reaches every
- * mark wherever one is rendered — including the definition popover, which is a
+ * mark wherever one is rendered, including the definition popover, which is a
  * fixed-position element attached to the body and not inside the transcript at
  * all.
  *
@@ -896,7 +896,7 @@ function applyMarkStyle(mode) {
  *
  * Applied as a class on the list rather than by re-rendering, so switching modes
  * is instant and the marks, hover handling and seek listeners all survive
- * untouched — the rows are the same rows.
+ * untouched, the rows are the same rows.
  *
  * @param {string} mode
  */
@@ -908,8 +908,8 @@ function applyView(mode) {
   if (view.focusMode) revealNearActive();
   // ...and when there is no current line to reveal, nothing would be shown at
   // all: the focus view hides every row except `.active` and `.next`, and both are
-  // decided by playback. On a fresh panel — or a paused video, where the worker
-  // may have sent no cue yet — that is an entirely blank panel, which is what
+  // decided by playback. On a fresh panel, or a paused video, where the worker
+  // may have sent no cue yet, that is an entirely blank panel, which is what
   // "Live mode is blank" was. Highlighting the first row is the honest fallback:
   // the transcript has to start somewhere, and starting at the top is what the
   // Full view does too.
@@ -921,7 +921,7 @@ function applyView(mode) {
  *
  * A class on the body rather than re-rendering, so switching is instant and no
  * control loses its value. `collapsed` hides the reading controls and the status
- * line, leaving the language row and the transcript — a side panel is around
+ * line, leaving the language row and the transcript, a side panel is around
  * 600px tall on a laptop, and three bars plus a status line is a large fraction
  * of that.
  *
@@ -932,7 +932,7 @@ function applyLayout(mode) {
   // `body` is not guaranteed: the audio path and the DOM stubs used by the tests
   // both construct a document without one. Guarded rather than assumed, because an
   // unguarded dereference here threw during the FIRST state render and took the
-  // whole panel down — no rows, no status, just the panel's error placeholder.
+  // whole panel down, no rows, no status, just the panel's error placeholder.
   document.body?.classList.toggle('collapsed', collapsed);
   // The button reflects the state immediately, rather than waiting for the worker
   // to echo it back. A round trip would make the arrow lag the click.
@@ -947,7 +947,7 @@ function applyLayout(mode) {
  * Scroll the current line into view.
  *
  * Centred rather than nearest, because the focus view keeps the next line
- * visible too — scrolling to the edge would leave the preview just below the
+ * visible too, scrolling to the edge would leave the preview just below the
  * fold.
  */
 function revealNearActive() {
@@ -1015,7 +1015,7 @@ if (els.reading) {
 
 // Only a complete, in-range value is applied live. Typing "18" passes through
 // "1", and applying that immediately clamped to 10 and re-rendered the whole
-// transcript mid-keystroke — the field fighting the person typing in it. An
+// transcript mid-keystroke, the field fighting the person typing in it. An
 // empty field is the same case: it is a value being typed, not a value, and
 // treating it as one would snap the size on every backspace.
 els.fontSize.addEventListener('input', () => {
@@ -1034,7 +1034,7 @@ els.fontSize.addEventListener('change', () => {
   applyFontSize(value);
   // Written back explicitly, because the live handler above deliberately leaves
   // an out-of-range or empty field alone and the browser does not rewrite it
-  // either — so "999" would otherwise sit on screen looking accepted while the
+  // either, so "999" would otherwise sit on screen looking accepted while the
   // panel showed 32.
   els.fontSize.value = String(value);
   send({ type: MSG.SET_SETTING, id: 'fontSize', value });
@@ -1108,7 +1108,7 @@ function renderRows(state) {
   view.levelCount = active?.levelCount ?? 0;
 
   // A row's tokens are attached after the transcript arrives, so the rows array
-  // is replaced rather than mutated — which is what makes this identity check
+  // is replaced rather than mutated, which is what makes this identity check
   // work for both the initial render and the later marked render.
   if (rows === view.rows && state.study === view.renderedStudy) return;
 
@@ -1133,8 +1133,8 @@ function renderRows(state) {
   els.transcript.append(fragment);
 
   // Rebuilding cleared the highlight, so put it back from the last cue we were
-  // told about. Without this a refresh — which rebuilds the rows without the cue
-  // changing — left the transcript scrolled to the top and nothing highlighted,
+  // told about. Without this a refresh, which rebuilds the rows without the cue
+  // changing, left the transcript scrolled to the top and nothing highlighted,
   // and on a paused video it stayed that way.
   if (view.lastActive >= 0) {
     setActive(view.lastActive, view.lastSpeaking);
@@ -1160,7 +1160,7 @@ function buildRow(row, index) {
   const lines = document.createElement('span');
   lines.className = 'lines';
 
-  // The study line. Machine output when this line is the one translated — the tag
+  // The study line. Machine output when this line is the one translated, the tag
   // belongs to whichever line is machine text, not to the second one by position.
   const study = document.createElement('span');
   study.className = 'primary';
@@ -1190,7 +1190,7 @@ function buildRow(row, index) {
 
   // The gloss. Marked when it is machine output rather than a real track: a
   // translated line is not a transcript, and machine translation of Chinese
-  // paraphrases rather than glosses — so it should not read as a human
+  // paraphrases rather than glosses, so it should not read as a human
   // translation of the spoken words. Only this line can be machine output, so
   // the tag does not have to say which line it belongs to.
   if (row.secondary) {
@@ -1224,8 +1224,8 @@ function buildRow(row, index) {
  *
  * `index` is the last cue that has STARTED, which is not the same as a cue being
  * in progress: between two lines there is a gap, and during it the honest answer
- * is "the line that finished". Returning -1 for those gaps — which is what the
- * worker used to do — made the highlight blink off after every line and blank
+ * is "the line that finished". Returning -1 for those gaps, which is what the
+ * worker used to do, made the highlight blink off after every line and blank
  * the Live view entirely, since it filters to the active row.
  *
  * @param {number} index
@@ -1277,7 +1277,7 @@ function setStatus(text, isError = false) {
   els.status.classList.toggle('error', isError);
 
   // Expose the code as its own attribute, so it can be read or copied without
-  // hunting through the sentence — and so `document.getElementById('status')
+  // hunting through the sentence, and so `document.getElementById('status')
   // .dataset.code` in the console answers "which error is this" directly. The
   // text already leads with the code; this makes it addressable.
   const code = /^([A-Z]{2,6}\d{3})\b/.exec(text ?? '');

@@ -1,14 +1,14 @@
 /**
  * The Matroska container parser, against REAL files.
  *
- * The fixtures are not hand-written byte sequences — they are produced by
+ * The fixtures are not hand-written byte sequences, they are produced by
  * `ffmpeg`, so they are files a real muxer wrote, with real EBML framing, real
  * seek heads and real cluster structure. That distinction is the whole
  * justification for hand-rolling this parser: a parser that only meets fixtures
  * the author also wrote proves very little, and a muxer is more honest about the
  * format than either of us.
  *
- * `test/mkv/` is gitignored because the files are GENERATED, not committed — they
+ * `test/mkv/` is gitignored because the files are GENERATED, not committed, they
  * are rebuilt in two seconds by `npm run fixtures`. That is a different reason from
  * `test/fixtures/`, which holds real captures and is ignored because a capture
  * contains a signed URL. Both are gitignored; only one is reproducible, which is
@@ -89,7 +89,7 @@ section('EBML variable-length integers');
   // failure looks like "the file has no tracks".
   check('an id keeps its marker', readVint(Uint8Array.from([0xd7]), 0, true)?.value, 0xd7);
 
-  // "All value bits set" is UNKNOWN SIZE — not a very large number. A real
+  // "All value bits set" is UNKNOWN SIZE, not a very large number. A real
   // Segment uses it, so reading it as a number skips the whole file.
   const unknown = Uint8Array.from([0xff]);
   check('all-ones is reported as unknown size', readVint(unknown, 0, false)?.unknown, true);
@@ -122,7 +122,7 @@ section('language codes are normalised to what the word lists use');
 {
   // THE integration bug this exists for. A Matroska track says `zho` and `jpn`;
   // `src/learn/data/index.json` says `zh` and `ja`. A track that reaches the panel
-  // as `zho` is matched by NO list, so every word renders unmarked — while the
+  // as `zho` is matched by NO list, so every word renders unmarked, while the
   // track is discovered, named and offered exactly as if it worked.
   check('ISO 639-2 Chinese maps to zh', normaliseLanguage('zho'), 'zh');
   check('the bibliographic form too', normaliseLanguage('chi'), 'zh');
@@ -150,7 +150,7 @@ section('language codes are normalised to what the word lists use');
 if (!HAVE_FIXTURES) {
   // A SKIP that reports green is worse than no test: it says the parser works
   // while proving nothing. `test/fixtures/` is gitignored, so on a fresh clone
-  // these files genuinely are absent — which makes `npm run fixtures` the fix, and
+  // these files genuinely are absent, which makes `npm run fixtures` the fix, and
   // this message the thing that tells you so.
   console.log('\n  FAIL  the MKV fixtures are not present.');
   console.log('        They are generated, not committed. Run:  npm run fixtures');
@@ -169,7 +169,7 @@ section('track discovery on a real three-track file');
 
   check('all three subtitle tracks are found', tracks.length, 3);
   check('they are identified as text', tracks.map((t) => t.kind), ['text', 'text', 'text']);
-  // The fixture's metadata says `eng`, `jpn`, `zho` — ISO 639-2, which is what
+  // The fixture's metadata says `eng`, `jpn`, `zho`, ISO 639-2, which is what
   // Matroska writes. These must arrive as `en`, `ja`, `zh`, which is what the
   // word lists use, or nothing would ever be marked.
   check('their languages are normalised for the word lists', tracks.map((t) => t.language), ['en', 'ja', 'zh']);
@@ -200,12 +200,12 @@ section('an ABSENT Language element is English, per the specification');
 
 {
   // **The case `ffmpeg` cannot produce.** Omitting the metadata does not omit the
-  // element — it writes `und` — so this is reached by editing a real file instead.
+  // element, it writes `und`, so this is reached by editing a real file instead.
   //
   // `Void` (0xEC) is the element Matroska provides for padding without meaning,
   // and a six-byte Void replaces `22 B5 9C 83 75 6E 64` (`Language`, 3 bytes,
   // "und") exactly. Nothing shifts, so every ancestor size and offset stays
-  // correct and the container remains valid — which is what makes this a real file
+  // correct and the container remains valid, which is what makes this a real file
   // with one field removed rather than a hand-built byte sequence.
   const original = readFileSync(join(FIXTURES, 'notag.mkv'));
   const language = Buffer.from([0x22, 0xb5, 0x9c, 0x83, 0x75, 0x6e, 0x64]);
@@ -214,7 +214,7 @@ section('an ABSENT Language element is English, per the specification');
 
   const patched = Buffer.from(original);
   // **The replacement must be exactly seven bytes**, or every offset after it
-  // shifts and the container stops being valid — which the first attempt at this
+  // shifts and the container stops being valid, which the first attempt at this
   // did, by one byte, and the symptom was a file that parsed to no tracks at all.
   //
   // `Language` is 3 (id) + 1 (size) + 3 (\"und\") = 7. `Void` is 1 (id `EC`) + 1
@@ -225,7 +225,7 @@ section('an ABSENT Language element is English, per the specification');
 
   // EVERY occurrence, not the first. The file has a video track and a subtitle
   // track and both carry `und`, so replacing only the first would strip the video
-  // track's language and leave the one under test intact — which is exactly what
+  // track's language and leave the one under test intact, which is exactly what
   // happened, and the test reported `null` while appearing to have patched.
   let patchedCount = 0;
   for (let i = 0; i < patched.length; ) {
@@ -253,7 +253,7 @@ section('an ABSENT Language element is English, per the specification');
   check('the track is present', tracks.length > 0, true);
   check('its language is English', tracks.map((t) => t.language), ['en']);
   // Flagged as an inference rather than a certainty, so a caller can tell the two
-  // apart — the CELLAR file relies on this default, and a file might not.
+  // apart, the CELLAR file relies on this default, and a file might not.
   check('and it is flagged as defaulted, not read', tracks.map((t) => t.languageDefaulted), [true]);
 }
 
@@ -269,7 +269,7 @@ section('cue extraction from a real file');
 
   const english = cues.get(names[0]);
   check('the English track has two cues', english.length, 2);
-  // The timing comes from the container's Block timestamp, not from the text —
+  // The timing comes from the container's Block timestamp, not from the text,
   // the SRT we muxed in had no end times the container kept, so the durations are
   // whatever `BlockDuration` or the next cue provides.
   check('the first cue starts at 0.5s', english[0].start, 0.5);
@@ -277,7 +277,7 @@ section('cue extraction from a real file');
   check('the second cue follows', english[1].text, 'Second line');
 
   // The Chinese track was GBK on disk as an .srt and is UTF-8 inside the
-  // container — the Matroska spec converts it. This asserts the conversion
+  // container, the Matroska spec converts it. This asserts the conversion
   // happened, which is a fact about the format worth pinning.
   const chinese = cues.get(names[2]);
   check('the Chinese track is readable', chinese.length, 1);
@@ -291,7 +291,7 @@ section('cue extraction from a real file');
 }
 
 {
-  // A file whose subtitle track is genuinely `S_TEXT/ASS` — not an SRT that
+  // A file whose subtitle track is genuinely `S_TEXT/ASS`, not an SRT that
   // passed through a conversion. This is the case a film actually has.
   const file = readerFor('ass-track.mkv');
   const tracks = await readMatroskaTracks(file);
@@ -304,8 +304,8 @@ section('cue extraction from a real file');
   const list = cues.get(tracks[0].number);
 
   check('its cues are extracted', list.length, 2);
-  // The block holds only the event FIELDS — the `[Script Info]` and style blocks
-  // live in the track's CodecPrivate — so the text is everything after the eighth
+  // The block holds only the event FIELDS, the `[Script Info]` and style blocks
+  // live in the track's CodecPrivate, so the text is everything after the eighth
   // comma, and the override block inside it is styling rather than words.
   check('override tags are stripped', list[0].text, 'Japanese line');
   check('and a comma in the text survives', list[1].text, 'Line with, a comma');
@@ -344,7 +344,7 @@ section('reading is bounded, so a film is never held in memory');
   const tracks = await readMatroskaTracks(instrumented);
   check('discovery found the tracks', tracks.length, 3);
   // ONE read, and that is the whole point. `Tracks` precedes the clusters, so
-  // discovery stops there rather than walking the media — which on this fixture
+  // discovery stops there rather than walking the media, which on this fixture
   // is measurable as "it never asked for a second window".
   //
   // Byte counts would NOT have shown this: the fixture is smaller than one window,
@@ -379,13 +379,13 @@ section("the file's own TimecodeScale is used, not an assumed millisecond");
 {
   // **The bug this pins.** Block timestamps are integer TICKS, and `TimecodeScale`
   // says how long a tick is. The parser used to divide by 1000, which is correct
-  // only for the default of one millisecond — so a file with a different scale had
+  // only for the default of one millisecond, so a file with a different scale had
   // every timestamp wrong by that factor, silently, with a complete-looking
   // transcript.
   //
   // `ffmpeg` cannot write a non-default scale, so the fixture is a REAL container
   // with that single field rewritten in place. Same byte width (3), so nothing
-  // shifts — the file stays valid and only the scale differs. That is more honest
+  // shifts, the file stays valid and only the scale differs. That is more honest
   // than a hand-built container, and it is the only way to reach this case without
   // downloading the conformance suite's `test2.mkv`.
   const original = readFileSync(join(FIXTURES, 'three-tracks.mkv'));
@@ -404,7 +404,7 @@ section("the file's own TimecodeScale is used, not an assumed millisecond");
   const standard = await readMatroska({ ...readerOf(original), trackNumbers: [] });
   check('the default scale is read as one millisecond', standard.timecodeScale, 1_000_000);
 
-  // Rewrite it to 100,000 — the value CELLAR's test2.mkv uses. A correct parser now
+  // Rewrite it to 100,000, the value CELLAR's test2.mkv uses. A correct parser now
   // reports timestamps TEN TIMES SMALLER, because each tick is a tenth as long.
   const patched = Buffer.from(original);
   patched.writeUIntBE(100_000, at + 4, 3);

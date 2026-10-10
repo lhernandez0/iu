@@ -6,7 +6,7 @@
  * point: adding a setting should be one object in this file and one control
  * rendered from it, not three edits in three places that can disagree.
  *
- * A definition is also a schema — `options` drives the control, `default`
+ * A definition is also a schema, `options` drives the control, `default`
  * supplies a value before anything is stored, and `coerce` protects against a
  * stored value that no longer makes sense (a list that was removed, a size that
  * is nonsense). Settings are read from storage in one place and written in one
@@ -33,7 +33,7 @@
  *                                  ONCE and belongs in the settings view.
  *                                  This is the line between the two, and it is a
  *                                  property of the setting rather than a list
- *                                  maintained in the panel — a second list is a
+ *                                  maintained in the panel, a second list is a
  *                                  thing that drifts.
  * @property {Array<'panel'|'viewer'>} audience  Which surfaces SHOW this setting.
  *                                  Distinct from `group`: group says where it sits
@@ -75,8 +75,8 @@ const VIEW_OPTIONS = [
  * How much of the panel's chrome is on screen.
  *
  * `full` keeps every control visible. `collapsed` reduces the bars to the two
- * language pickers and folds the reading controls away, so the transcript — which
- * is what the panel is for — gets the vertical space. A side panel is roughly
+ * language pickers and folds the reading controls away, so the transcript, which
+ * is what the panel is for, gets the vertical space. A side panel is roughly
  * 600px tall on a laptop, and three bars plus a status line is a large fraction
  * of it.
  *
@@ -93,7 +93,7 @@ const LAYOUT_OPTIONS = [
  * Where a word's reading (拼音 / Rōmaji) is drawn.
  *
  * Four options rather than a checkbox, because they are genuinely different
- * layouts rather than degrees of one — decided by looking at all four on real
+ * layouts rather than degrees of one, decided by looking at all four on real
  * content, not by argument. `off` first because it is the default.
  */
 const READING_OPTIONS = [
@@ -103,12 +103,12 @@ const READING_OPTIONS = [
   //
   // Labels are SHORT because this is a `<select>` in a 350px bar shared with three
   // other controls. "Above each word" rendered clipped, and a control whose text
-  // is cut off is worse than a terse one — the options themselves carry the
+  // is cut off is worse than a terse one, the options themselves carry the
   // explanation. ("Above" means "above the word also above", which is what the
   // CSS namespace calls ruby, so that is what the option says.)
   { value: 'above', label: 'Above' },
   // One line under the text. Cheapest to draw, and it reads as a conversion
-  // rather than as annotation — the eye travels between two lines instead of
+  // rather than as annotation, the eye travels between two lines instead of
   // staying on one.
   { value: 'below', label: 'Below' },
   // Only on words the highlight already covers. Row height unchanged, and the
@@ -141,7 +141,7 @@ const CAPTION_PLACEMENT_OPTIONS = [
   { value: 'below', label: 'Below the picture' },
 ];
 
-/** The speeds worth offering. Three, not a slider — this is a preference, not a fine control. */
+/** The speeds worth offering. Three, not a slider, this is a preference, not a fine control. */
 const SPEED_OPTIONS = [
   { value: '0.75', label: '0.75×' },
   { value: '1', label: '1×' },
@@ -219,7 +219,7 @@ export const SETTINGS = [
     // The four values are the four layouts the mock compared; three of them are
     // real choices rather than degrees of one, which is why this is not a boolean.
     //
-    // Defaults to `above` — ruby, the reading over its own word — because that is
+    // Defaults to `above`, ruby, the reading over its own word, because that is
     // the layout that keeps every glyph in place. `off` is still available and is
     // the first option, so a viewer who does not want it loses nothing.
     id: 'romaji',
@@ -253,8 +253,8 @@ export const SETTINGS = [
     // Whether to rewrite Chinese subtitles between scripts.
     //
     // **Wired but not exposed, and I would argue against shipping it.** The
-    // dictionary already resolves traditional text — `wordlist.js` maps traditional
-    // forms back to simplified keys and includes them as headwords — so unlike a
+    // dictionary already resolves traditional text, `wordlist.js` maps traditional
+    // forms back to simplified keys and includes them as headwords, so unlike a
     // reading, nothing is BROKEN without this. It is purely a display rewrite, and
     // it is lossy in one direction: 髮 and 發 both become 发, 後 and 后 both become
     // 后. Subtitles are the author's text, and quietly rewriting them is a
@@ -300,8 +300,8 @@ export const SETTINGS = [
     // Deliberately not a per-list "sensible default": the right starting point
     // depends on the person, and the only thing this app can know about someone
     // it has never met is that they have not chosen yet. It used to be a number
-    // carried by the list, and that number was 4 for both HSK lists — the level
-    // of whoever built it — so a stranger's first panel opened at somebody
+    // carried by the list, and that number was 4 for both HSK lists, the level
+    // of whoever built it, so a stranger's first panel opened at somebody
     // else's ability.
     default: 1,
     dynamic: true,
@@ -318,7 +318,7 @@ export const SETTINGS = [
     // is "upper intermediate" in a six-level list and something else entirely in
     // a five-level one. So switching list is not "keep my number" (it has
     // changed meaning) and not "reset" (which throws away a choice the learner
-    // made) — it is "restore what I chose here, or start at the top if I never
+    // made), it is "restore what I chose here, or start at the top if I never
     // chose".
     //
     // A map, and not rendered as a control: it is the memory BEHIND the
@@ -342,7 +342,7 @@ export const SETTINGS = [
     },
   },
   {
-    // NOT on the toolbar, and deliberately so — it is a real setting with no
+    // NOT on the toolbar, and deliberately so, it is a real setting with no
     // control, which is the shape every setting takes until there are enough of
     // them to deserve a settings page.
     //
@@ -378,7 +378,7 @@ export const SETTINGS = [
   {
     // The gloss: the line that explains the study line. Optional.
     //
-    // It may be the SAME language as the study line, and that is not a mistake —
+    // It may be the SAME language as the study line, and that is not a mistake,
     // it is the only way to ask for "English" with its translation underneath,
     // because a translation needs a source track to convert and "Off" has none.
     // The old model expressed that by putting one language in two slots, which
@@ -401,8 +401,8 @@ export const SETTINGS = [
     // `&tlang=` added, so cue timings are identical and only the text changes.
     // That is why it composes with alignment and seeking for free.
     //
-    // A GLOBAL target rather than one per line. It is a preference — a learner
-    // reading Chinese wants English every time — so the choice is made once
+    // A GLOBAL target rather than one per line. It is a preference, a learner
+    // reading Chinese wants English every time, so the choice is made once
     // instead of being a 156-item list attached to each line.
     id: 'translateInto',
     quick: true,
@@ -420,8 +420,8 @@ export const SETTINGS = [
     //
     // BOTH lines can be translated. An earlier version allowed only the second,
     // on the reasoning that the first is "the line being learned". That conflated
-    // two separate things — which line carries the learning MARKS, and which line
-    // can be TRANSLATED — and made a real feature look like a principle. The
+    // two separate things, which line carries the learning MARKS, and which line
+    // can be TRANSLATED, and made a real feature look like a principle. The
     // cases it broke are ordinary: a Chinese-only video where you want the
     // Chinese line translated with the original kept for reading, or an English
     // video where the first line is the one you want naturalised.
@@ -484,13 +484,13 @@ export const SETTINGS = [
     // Whether the playback position is remembered for a file.
     //
     // A toggle rather than always-on, because it is genuinely unwanted sometimes
-    // — a file being scrubbed through deliberately, or a shared machine. Default
+    //, a file being scrubbed through deliberately, or a shared machine. Default
     // on, since resuming is what most people want most of the time.
     //
     // Keyed by the file's own identity, `local:<name>:<size>:<lastModified>`,
     // which the worker already computes. Only the POSITION is remembered and not
-    // the file: the web platform does not expose a path (verified — `file.name`
-    // is a basename), and storing bytes copies them (measured — a 256MB file
+    // the file: the web platform does not expose a path (verified, `file.name`
+    // is a basename), and storing bytes copies them (measured, a 256MB file
     // measured 256MB on disk, and the same File stored twice measured 512MB).
     id: 'rememberPosition',
     label: 'Remember position',
@@ -538,7 +538,7 @@ export const SETTINGS = [
     // Whether the difficulty band is drawn under the scrubber.
     //
     // On by default, because it is the one piece of information a generic player
-    // cannot show — where the hard stretch of a file is, on the timeline, before you
+    // cannot show, where the hard stretch of a file is, on the timeline, before you
     // reach it. A toggle because a learner watching rather than studying may want a
     // clean bar, and the band is decoration to them.
     //
@@ -565,12 +565,12 @@ const STORAGE_KEY = 'settings';
  * **`local`, not the cross-device bucket, and that is a decision this project
  * already made.** `test/manifest.test.mjs` guards it: *"Settings do not leave the
  * machine."* The cross-device bucket would put every preference in the user's
- * Google account — their own account, but still not "your browser" — and an
+ * Google account, their own account, but still not "your browser", and an
  * extension that documents "no data collection" cannot quietly ship that. That
  * guard exists precisely so this cannot be changed by accident, and it caught this
  * change when the bucket had been switched without reading the guard first. The
- * architecture below — storage as the source of truth with a cross-context
- * listener — does not depend on which bucket is used.
+ * architecture below, storage as the source of truth with a cross-context
+ * listener, does not depend on which bucket is used.
  *
  * The PLAYBACK POSITION is in the same bucket, for the same reason plus one of
  * its own: it is written every few seconds, and the cross-device bucket throttles
@@ -582,7 +582,7 @@ export const SETTINGS_AREA = 'local';
  * The bucket for data that is written often and is nobody's preference.
  *
  * Named beside the settings bucket so the two are read as one decision rather
- * than discovered in two files. Currently the same bucket as settings — the split
+ * than discovered in two files. Currently the same bucket as settings, the split
  * exists so that if settings ever move, the position does not move with them.
  */
 export const TRANSIENT_AREA = 'local';
@@ -592,13 +592,13 @@ export const TRANSIENT_AREA = 'local';
  *
  * A structured clone of each default rather than the default itself. Object and
  * array defaults are shared by reference, so handing one out means every caller
- * — and every service-worker boot in a test process — receives the SAME object.
+ *, and every service-worker boot in a test process, receives the SAME object.
  * Writing to it then changes the default for everything that reads it
  * afterwards. That is not hypothetical: it silently carried one test's chosen
  * level into the next worker's settings, and would do the same to a real user
  * whose two contexts shared a module instance.
  *
- * Scalars are unaffected, which is exactly why the bug is easy to miss — it only
+ * Scalars are unaffected, which is exactly why the bug is easy to miss, it only
  * appears once a setting's default is a collection.
  */
 export function defaults() {
@@ -640,8 +640,8 @@ export function normalise(stored) {
   }
 
   // The two per-line translation targets collapse into one preference plus one
-  // bit. If either slot was being translated, the target becomes the gloss's —
-  // which is where a translation can live now — and the gloss is switched on so
+  // bit. If either slot was being translated, the target becomes the gloss's,
+  // which is where a translation can live now, and the gloss is switched on so
   // the choice is not lost.
   if (source.translateInto === undefined) {
     const target = source.translateSecondary ?? source.translatePrimary;
@@ -678,18 +678,18 @@ export function definition(id) {
  * The settings the settings VIEW renders: every panel-side setting a person can
  * change.
  *
- * **Everything, not only the ones without a bar control.** The alternative —
- * filtering out `quick` — was the first attempt and produced a view with two rows
+ * **Everything, not only the ones without a bar control.** The alternative,
+ * filtering out `quick`, was the first attempt and produced a view with two rows
  * in it, because the language and translation controls all live in the transcript
  * bar. A settings view that omits the settings you most often change is not a
  * settings view.
  *
- * So this is the full list and `quick` means "also has a control in the bar" — a
+ * So this is the full list and `quick` means "also has a control in the bar", a
  * shortcut, not an exclusive home. Both render from the same definitions and both
  * write through the same message, so a change in either shows up in the other on
  * the next state push; there is no synchronisation to maintain.
  *
- * `map` is excluded because it is not a setting a person edits — `listThresholds`
+ * `map` is excluded because it is not a setting a person edits, `listThresholds`
  * is the memory BEHIND the threshold picker, and rendering it as a control would
  * offer a raw object for editing.
  *
@@ -726,7 +726,7 @@ export const SURFACES = ['panel', 'viewer'];
  * business showing, rather than keeping its own parallel list that drifts from
  * this one.
  *
- * `hidden` settings are excluded — they are real and persisted but have no control,
+ * `hidden` settings are excluded, they are real and persisted but have no control,
  * which is the flag a surface is meant to filter on.
  *
  * @param {'panel'|'viewer'} surface
@@ -742,7 +742,7 @@ export function byAudience(surface) {
  * Every definition's audience must be a non-empty subset of the known surfaces.
  *
  * Exported rather than only asserted in a test because a wrong audience is a
- * setting that is invisible on a surface that needs it — a silent failure that
+ * setting that is invisible on a surface that needs it, a silent failure that
  * looks like a missing control, which is exactly the kind of thing that gets
  * diagnosed as a bug in the renderer.
  *

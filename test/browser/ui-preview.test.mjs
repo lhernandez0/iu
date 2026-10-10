@@ -10,7 +10,7 @@
  * So this boots the real dev server, loads the real panel in a real browser, and
  * asserts what would otherwise fail silently:
  *
- *   1. Every module the panel imports is served — a 404 is a blank page.
+ *   1. Every module the panel imports is served, a 404 is a blank page.
  *   2. The panel reached its rendered state (rows on screen), so the mock worker
  *      and the panel agree about the protocol.
  *   3. The scenario's distinctive feature is actually on screen: a gloss for the
@@ -82,7 +82,7 @@ function declaredIds(html) {
   const onlyPanel = [...panel].filter((id) => !preview.has(id));
   // Preview-only ids are expected: the switcher and the note are the shell around
   // the panel and have no counterpart in the shipped markup. What matters is the
-  // other direction — the panel needing something the preview does not declare.
+  // other direction, the panel needing something the preview does not declare.
   const onlyPreview = [...preview].filter((id) => !panel.has(id) && !id.startsWith('preview-'));
 
   check('the preview declares no panel id that the panel does not', onlyPreview, []);
@@ -140,7 +140,7 @@ const browser = await chromium.launch({
 let exitCode = 0;
 try {
   for (const scenario of SCENARIOS) {
-    console.log(`\n${scenario.id} — ${scenario.label}`);
+    console.log(`\n${scenario.id}, ${scenario.label}`);
 
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -161,8 +161,8 @@ try {
 
     // The panel renders from the first STATE push, which the mock sends on start.
     //
-    // A timeout here is the most likely failure — the page loaded but the panel
-    // never rendered — and the reason is almost always in the console. So the
+    // A timeout here is the most likely failure, the page loaded but the panel
+    // never rendered, and the reason is almost always in the console. So the
     // wait is caught rather than thrown: the console errors collected above are
     // the actual report, and a bare "Timeout 5000ms exceeded" would hide them.
     let renderedByPanel = true;
@@ -238,7 +238,7 @@ try {
       check('with words marked', rendered.marks > 0, true);
     }
     if (scenario.id === 'same-language') {
-      // One language on both lines, the second machine translated — the reported
+      // One language on both lines, the second machine translated, the reported
       // case, and the one that used to render the translation on both lines.
       check('the gloss is the translated rendering', rendered.gloss.startsWith('[zh-Hans]'), true);
       check('and the study line is not translated', rendered.first.startsWith('[zh-Hans]'), false);
@@ -269,11 +269,11 @@ try {
   // --- The mark comparison sheet --------------------------------------------
   //
   // `marks.html` had no coverage at all, and it is a page whose whole job is to
-  // render marks — so a mistake in it produces a convincing-looking empty sheet,
+  // render marks, so a mistake in it produces a convincing-looking empty sheet,
   // which is exactly the failure a person cannot distinguish from "the marks are
   // subtle". It also writes its own marking loop rather than reusing the panel's,
   // so nothing else exercises it.
-  console.log('\nmarks.html — the mark comparison sheet');
+  console.log('\nmarks.html, the mark comparison sheet');
 
   {
     const context = await browser.newContext();

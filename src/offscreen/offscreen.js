@@ -1,5 +1,5 @@
 /**
- * Offscreen document — owns the captured MediaStream and the active engine.
+ * Offscreen document, owns the captured MediaStream and the active engine.
  *
  * Coversheet for the whole capture path lives in ../background/service-worker.js.
  * Chrome makes the offscreen document for us; it talks back to the side panel

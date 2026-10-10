@@ -2,8 +2,8 @@
  * Styles for the preview SHELL only.
  *
  * The panel's own stylesheet is loaded unchanged, by its real path, so what is
- * previewed is the panel. Everything here decorates the shell around it — the
- * scenario switcher and the note — and must not leak into the panel's rules.
+ * previewed is the panel. Everything here decorates the shell around it, the
+ * scenario switcher and the note, and must not leak into the panel's rules.
  * Class names are prefixed `preview-` so a future panel class cannot collide.
  */
 
@@ -65,7 +65,7 @@
  * would put the footer off screen behind the preview chrome. The panel expects to
  * BE the viewport, which it is in a real side panel. Constraining it to a
  * side-panel-ish width here reproduces that, and makes the narrow-layout
- * behaviour visible — which is the thing most likely to be wrong and least likely
+ * behaviour visible, which is the thing most likely to be wrong and least likely
  * to be noticed when previewing full-width.
  */
 body {

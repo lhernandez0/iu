@@ -1,5 +1,5 @@
 /**
- * Page bridge — runs in the page's MAIN world on youtube.com.
+ * Page bridge, runs in the page's MAIN world on youtube.com.
  *
  * Why this exists: the caption tracks for the video you are watching live in
  * `window.ytInitialPlayerResponse`, which belongs to the page's JavaScript
@@ -10,7 +10,7 @@
  *
  * Declared in manifest.json as a content script with `"world": "MAIN"` and
  * `run_at: document_start`, so it is present before the page's own scripts set
- * the player response up. It is injected as a CLASSIC script — no imports, and
+ * the player response up. It is injected as a CLASSIC script, no imports, and
  * the message names below are duplicated in src/content/youtube-content.js.
  *
  * Protocol (all via window.postMessage, same-origin):
@@ -38,7 +38,7 @@
    * `ytInitialPlayerResponse` is only correct for the page as it was first
    * loaded. On an in-tab navigation to another video YouTube does NOT replace
    * it, so reading it alone pins the extension to the first video watched in a
-   * tab — the panel keeps the old transcript, and the highlight drifts because
+   * tab, the panel keeps the old transcript, and the highlight drifts because
    * it is matching old cue times against new playback.
    *
    * The player element exposes the live response, and that one does change.
@@ -126,7 +126,7 @@
    * tens of kilobytes and mostly irrelevant to us.
    *
    * The video id deliberately comes from the URL rather than from the response.
-   * They disagree after an in-tab navigation — the response is stale — and the
+   * They disagree after an in-tab navigation, the response is stale, and the
    * URL is the one that matches what is on screen, so it is what every
    * identity decision downstream should be made on.
    *
@@ -160,7 +160,7 @@
     // why the panel needs no built-in language list at all.
     //
     // Note these are rendered as `runs[0].text` rather than `simpleText`, which
-    // is the opposite of the track names above — an inconsistency in YouTube's
+    // is the opposite of the track names above, an inconsistency in YouTube's
     // own payload rather than a choice here.
     const translationLanguages = (renderer?.translationLanguages ?? []).map((language) => ({
       languageCode: language.languageCode,
@@ -171,7 +171,7 @@
     }));
 
     // True when the response describes a DIFFERENT video than the one in the
-    // URL — an in-tab navigation whose response we could not get fresh. The
+    // URL, an in-tab navigation whose response we could not get fresh. The
     // track list is then the previous video's, and fetching those URLs would
     // download the wrong captions, so the caller is told and can go through the
     // internal player API instead.

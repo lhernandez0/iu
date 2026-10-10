@@ -5,7 +5,7 @@
  * carries a copy because a classic script cannot `import`. That duplication is
  * safe only while the two agree, and the failure it permits is quiet: a code
  * raised by the content script that the registry does not define would be
- * reported as `CONN999 Unknown error` — specific-looking and meaningless.
+ * reported as `CONN999 Unknown error`, specific-looking and meaningless.
  *
  * So this suite does three things:
  *
@@ -70,7 +70,7 @@ section('every code is well formed, unique and explained');
   // than a typo that quietly creates a `CONM001`. Extracted as everything before
   // the three digits, so a 4-letter slug like CONN is read correctly.
   //
-  // VIEWER is the local video page — a source we host rather than a site we read,
+  // VIEWER is the local video page, a source we host rather than a site we read,
   // which is why its faults get their own slug: they are about the user's files,
   // where the honest answer names the file type rather than suggesting a retry.
   const known = new Set(['CONN', 'VIDEO', 'TRACK', 'DICT', 'PAGE', 'VIEWER']);
@@ -91,7 +91,7 @@ section('errorText renders the code first, and only appends a detail when allowe
 
   check('a missing detail is fine', errorText('CONN003'), 'CONN003 Could not reach the page.');
   // A code that is not in the registry must say so rather than rendering as an
-  // unexplained sentence — a report has to be able to say "this code is unknown".
+  // unexplained sentence, a report has to be able to say "this code is unknown".
   check('an unknown code names itself', errorText('ZZZ999').startsWith('ZZZ999 Unknown error'), true);
 }
 
@@ -126,7 +126,7 @@ section('the content script\'s copy of the codes matches the registry');
     check('every code it defines exists in the registry', unknown, []);
 
     // The messages must agree too, or the same code reads differently depending
-    // on which layer produced it — which defeats the point of a code.
+    // on which layer produced it, which defeats the point of a code.
     const mismatched = entries
       .filter(([code, message]) => ERRORS[code] && ERRORS[code].message !== message)
       .map(([code]) => code);
@@ -135,7 +135,7 @@ section('the content script\'s copy of the codes matches the registry');
     // THE CHECK THAT MATTERS, and the one that was missing: every code the script
     // RAISES must be one it also DEFINES. Defining a code and never using it is
     // harmless; using one that is not defined renders as `XXXXXX Unknown error`,
-    // which looks specific and means nothing — and it is silent, because the
+    // which looks specific and means nothing, and it is silent, because the
     // fallback is a valid string. Found a real instance of exactly this: VIDEO001
     // was raised by the fallback track path and was not in the table.
     const defined = new Set(entries.map(([code]) => code));
@@ -148,7 +148,7 @@ section('the content script\'s copy of the codes matches the registry');
 section('no extension source raises an uncoded error string');
 
 {
-  // The reach that matters. A new error added the old way — a bare sentence —
+  // The reach that matters. A new error added the old way, a bare sentence,
   // would show up as an unexplained message with no code, which is exactly the
   // situation this work exists to end.
   const FILES = [

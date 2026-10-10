@@ -3,11 +3,11 @@
  *
  * This exists because of a real defect: `manifest.json` declared no icon at all,
  * so Chrome drew a letter tile from the extension name and rendered only the
- * first character — `IU` became a toolbar tile reading `I`. Nothing failed; a
+ * first character, `IU` became a toolbar tile reading `I`. Nothing failed; a
  * missing icon is invisible in a directory listing and only shows up in Chrome.
  *
  * The checks here are deliberately shallow. They cannot judge whether the artwork
- * is legible at 16px — that is a visual question for a person — but they can
+ * is legible at 16px, that is a visual question for a person, but they can
  * catch the failure mode that actually happened: a manifest pointing at a path
  * that does not exist, or at a file that is not the size it claims.
  */
@@ -107,7 +107,7 @@ for (const [size, path] of Object.entries(manifest.action?.default_icon ?? {})) 
 section('the icon source is committed, so the PNGs can be regenerated');
 
 // The PNGs are committed because there is no build step, but a set of binaries
-// with no source is unmaintainable — nobody can recolour it. The SVG is what
+// with no source is unmaintainable, nobody can recolour it. The SVG is what
 // makes them reproducible.
 check('icons/icon.svg exists', existsSync(join(ROOT, 'icons', 'icon.svg')), true);
 check('the generator exists', existsSync(join(ROOT, 'tools', 'make-icons.mjs')), true);
@@ -116,7 +116,7 @@ section('package.json and the manifest describe the extension the same way');
 
 {
   // The store reads the manifest's description; everyone else reads package.json.
-  // They said different things for a while — the manifest had been rewritten for
+  // They said different things for a while, the manifest had been rewritten for
   // publication while package.json still called the project "Personal-use Chrome
   // extension", which is the framing that was deliberately removed everywhere
   // else. Two descriptions of one product drift because nothing compares them.
@@ -124,7 +124,7 @@ section('package.json and the manifest describe the extension the same way');
 
   check('the descriptions match', pkg.description, manifest.description);
   // The store rejects a description over 132 characters, and it reads the
-  // MANIFEST — so this is the one place the limit has to be enforced.
+  // MANIFEST, so this is the one place the limit has to be enforced.
   check('and fit the store limit', manifest.description.length <= 132, true);
   // A description that disagrees with the version is a description of a different
   // product. Both are bumped together at release time or not at all.
@@ -134,7 +134,7 @@ section('package.json and the manifest describe the extension the same way');
 section('shipped documents do not point at things a viewer cannot have');
 
 {
-  // `docs/` is gitignored — planning notes, ADRs, the roadmap. They are ours and
+  // `docs/` is gitignored, planning notes, ADRs, the roadmap. They are ours and
   // deliberately private, which means a tracked file that references one publishes
   // a pointer to something a viewer of the repository cannot open.
   //
@@ -191,7 +191,7 @@ section('shipped source can only reach youtube.com, and only over fetch');
   // all been wrong for a release. ADR 0008 is the decision; this is enforcement.
   //
   // Deliberately narrow. It does not try to prove there is no way to make a
-  // request — it checks the three things that actually change the answer:
+  // request, it checks the three things that actually change the answer:
   // which transport is used, which host appears, and how many call sites exist.
 
   const OUTBOUND = 'fetch(';
@@ -211,7 +211,7 @@ section('shipped source can only reach youtube.com, and only over fetch');
 
   /** Lines that are code, not prose about code. A comment naming `fetch` is not
    *  a call, and counting one would make the inventory below drift for no reason
-   *  — but blanking comments properly means parsing strings, and every URL here
+   *, but blanking comments properly means parsing strings, and every URL here
    *  contains `//`, so a naive stripper would truncate the line it is on. */
   function codeLines(text) {
     return text
@@ -236,10 +236,10 @@ section('shipped source can only reach youtube.com, and only over fetch');
 
   // 2. Every absolute URL named in OUR src/ resolves to youtube.com. A URL whose
   //    host is computed cannot be checked, so it fails rather than passing
-  //    unexamined — that is the whole point of listing hosts.
+  //    unexamined, that is the whole point of listing hosts.
   //
   //    `src/vendor/` is EXEMPT, and only for this check. It is generated
-  //    third-party code, so its hostnames are not ours to police — mediabunny
+  //    third-party code, so its hostnames are not ours to police, mediabunny
   //    cites the AV1 and WebCodecs specifications in its comments, and those
   //    citations are the reason a `https://www.w3.org/...` string exists there at
   //    all. The check above (no transport but `fetch`) still covers vendored code,
@@ -253,7 +253,7 @@ section('shipped source can only reach youtube.com, and only over fetch');
       .forEach((line, index) => {
         for (const match of line.matchAll(/https?:\/\/([A-Za-z0-9_.-]*)/g)) {
           const host = match[1];
-          // An empty host means the next character was `$` or `{` — a host built
+          // An empty host means the next character was `$` or `{`, a host built
           // from a variable at runtime, which this check cannot vouch for.
           if (host) hosts.add(host);
           else computed.push(`${relative(ROOT, file)}:${index + 1}`);
@@ -269,12 +269,12 @@ section('shipped source can only reach youtube.com, and only over fetch');
   //    accidentally satisfied, and it is honest about being a list rather than
   //    pretending to be dataflow analysis.
   //
-  //      wordlist.js        2 — bundled dictionary JSON, read through
+  //      wordlist.js        2, bundled dictionary JSON, read through
   //                            `runtime.getURL`. Local files, not the network.
-  //      youtube-content.js 1 — `fetchBounded()`, the caption track.
-  //      viewer/viewer.js   1 — the same bundled dictionary JSON. The viewer marks
+  //      youtube-content.js 1, `fetchBounded()`, the caption track.
+  //      viewer/viewer.js   1, the same bundled dictionary JSON. The viewer marks
   //                            its own captions with the shared marking rules, so
-  //                            it needs the dictionary too — and it fetches it from
+  //                            it needs the dictionary too, and it fetches it from
   //                            `runtime.getURL`, i.e. from the extension's own
   //                            package, never the network.
   const expected = {
@@ -295,7 +295,7 @@ section('shipped source can only reach youtube.com, and only over fetch');
   check('the fetch call sites are the ones we know about', ordered, expected);
 
   // 4. Settings do not leave the machine. `storage.sync` would put them in a
-  //    Google account — the user's own, but still not "your browser".
+  //    Google account, the user's own, but still not "your browser".
   const sync = [];
   for (const file of sources) {
     if (/\bstorage\.sync\b/.test(readFileSync(file, 'utf8'))) sync.push(relative(ROOT, file));
@@ -307,7 +307,7 @@ section('the permission list is exactly what the privacy claim describes');
 
 {
   // The check above scans `src/` for requests. It says nothing about what the
-  // extension is ALLOWED to do, which lives in the manifest — and the privacy
+  // extension is ALLOWED to do, which lives in the manifest, and the privacy
   // section makes claims about both. So the permission list needs its own check,
   // because without one it can grow silently: expanding `host_permissions` to
   // `https://*.example.com/*` and `file:///*` left this suite at 33/33.
@@ -319,14 +319,14 @@ section('the permission list is exactly what the privacy claim describes');
   // **Adding a provider means editing this list on purpose.** That is the
   // feature, not friction: "we read one host" is a promise, and a promise you
   // can widen by accident is not one. If you are here to add a second site, the
-  // edit is one line plus a note in README.md's privacy section — and the test
+  // edit is one line plus a note in README.md's privacy section, and the test
   // failing is what tells you to write it down.
   check('host_permissions is exactly the YouTube pattern', manifest.host_permissions, [
     'https://*.youtube.com/*',
   ]);
 
   // The README also says no page can reach into the extension, which is a
-  // statement about `web_accessible_resources` — the only thing that changes it.
+  // statement about `web_accessible_resources`, the only thing that changes it.
   // There is no need for one: the panel and any future reader are opened by the
   // extension, and `tabs.create(runtime.getURL(...))` does not require it.
   check('nothing is web_accessible', Boolean(manifest.web_accessible_resources), false);
@@ -341,7 +341,7 @@ section('the permission list is exactly what the privacy claim describes');
 
   // The whole list, pinned. This is the guard that would have caught the
   // `contextMenus` mistake: the design claimed the action menu cost no
-  // permission, the claim was wrong, and nothing here was asserting the list —
+  // permission, the claim was wrong, and nothing here was asserting the list,
   // so the only symptom was a menu item that was silently absent.
   //
   // A new permission now has to be added HERE, deliberately, which is the point.
@@ -365,7 +365,7 @@ section('every provider script is declared in the manifest, or it is never injec
   // There is a fourth copy of that knowledge, which is the risk: a provider's
   // scripts are ALSO named here, in `content_scripts[].js`. So adding a site
   // means editing two files, and forgetting the second gives a provider that
-  // resolves, injects nothing on a fresh load, and reports "no captions" — the
+  // resolves, injects nothing on a fresh load, and reports "no captions", the
   // same silent failure shape ADR 0003 was written to remove.
   //
   // Read from the source text rather than imported: `providers.js` is an ES

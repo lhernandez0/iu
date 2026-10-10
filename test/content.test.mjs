@@ -4,7 +4,7 @@
  *
  * The content script is the one place that turns YouTube's response into
  * segments. If the parser is wrong it returns an empty list, and the panel
- * reports "this video has no captions" — a wrong answer that looks like a
+ * reports "this video has no captions", a wrong answer that looks like a
  * legitimate one. That is worth a test.
  *
  * It is a classic IIFE with no exports, so it cannot be imported for its
@@ -50,7 +50,7 @@ console.warn = (...args) => warnings.push(args.join(' '));
  * A DOMParser good enough for the shapes YouTube emits.
  *
  * Entities ARE decoded here, matching the real parser. The real English track
- * carries 161 `&amp;` sequences — an earlier version of this stub left them raw on
+ * carries 161 `&amp;` sequences, an earlier version of this stub left them raw on
  * the grounds that entity handling was not what was being tested, which was true
  * right up until a real capture showed escaping is a routine part of the body. A
  * stub that is laxer than the platform turns every escaping bug into a passing
@@ -76,7 +76,7 @@ class StubDomParser {
       for (const attr of match[1].matchAll(/(\w+)="([^"]*)"/g)) attributes.set(attr[1], attr[2]);
       return {
         getAttribute: (name) => attributes.get(name) ?? null,
-        // Nested markup is flattened, as `textContent` does — so a body carrying a
+        // Nested markup is flattened, as `textContent` does, so a body carrying a
         // child element yields its text and not its tags.
         textContent: decodeEntities(match[2].replace(/<[^>]*>/g, '')),
       };
@@ -170,7 +170,7 @@ async function bootContent({
   });
   // Captured rather than scheduled, so a test can step playback deterministically
   // and the process does not stay alive on a real timer. `active` tracks which
-  // are still running, so stopping them can be observed — that is how the
+  // are still running, so stopping them can be observed, that is how the
   // orphaned-context teardown is tested.
   define('setInterval', (fn) => {
     const handle = intervals.length + 1;
@@ -187,7 +187,7 @@ async function bootContent({
     runtime: {
       // Present on a live context and absent once the extension is reloaded,
       // which is what the script reads to notice it has been orphaned. A stub
-      // without it looks dead, and the script correctly stops talking — so this
+      // without it looks dead, and the script correctly stops talking, so this
       // has to be here for anything to be reported at all.
       id: 'test-extension-id',
       onMessage: {
@@ -229,7 +229,7 @@ async function bootContent({
      * Simulate the extension being reloaded out from under this script.
      *
      * Chrome strips the id from an orphaned context; every call into it then
-     * throws. The throw is part of the simulation — a stub that quietly returned
+     * throws. The throw is part of the simulation, a stub that quietly returned
      * undefined would not exercise the same path.
      */
     orphan() {
@@ -259,7 +259,7 @@ function define(name, value) {
 //
 // Two kinds, and the distinction matters.
 //
-// SUMMARY / JSON3 / XML below are small inputs crafted to exercise PARSER LOGIC —
+// SUMMARY / JSON3 / XML below are small inputs crafted to exercise PARSER LOGIC,
 // whitespace-only cues being dropped, multi-part `segs` being joined, milliseconds
 // becoming seconds. They are not a claim about YouTube's shape, and their values
 // are arbitrary on purpose.
@@ -311,7 +311,7 @@ const XML = `<?xml version="1.0" encoding="utf-8" ?>
  *
  * Google answers a caption request it does not want to serve with an HTTP **200**
  * and this HTML page, so nothing about the status says failure. Trimmed to the
- * significant parts — it is a 1103-byte document and the middle is inline CSS — but
+ * significant parts, it is a 1103-byte document and the middle is inline CSS, but
  * the title, the opening tag and the head are exactly as received, because those
  * are what the detection keys on.
  *
@@ -372,7 +372,7 @@ section('parses the XML response, which is what arrives when JSON3 is unsupporte
 // --- 3b. The real-shaped corpus ----------------------------------------------
 //
 // Everything above uses small crafted inputs to check PARSER LOGIC. These use the
-// committed corpus — invented text in shapes measured from a real capture — to
+// committed corpus, invented text in shapes measured from a real capture, to
 // check the pipeline survives a REALISTIC one.
 //
 // This is the gap that mattered. Every fixture was tiny and started at zero, so
@@ -423,7 +423,7 @@ section('the same cues parse identically from JSON3 and from XML');
   );
 
   // Two serialisations of one track must produce one transcript. This is the check
-  // the XML branch never had against a realistic body — it had only ever seen two
+  // the XML branch never had against a realistic body, it had only ever seen two
   // hand-written cues in a fixture written to match my own parser.
   check('the same number of cues', viaXml.segments.length, viaJson.segments.length);
   check('with the same timings', viaXml.segments[0].start, viaJson.segments[0].start);
@@ -436,7 +436,7 @@ section('escaping survives the XML body, because the real one carries 161 entiti
 {
   // The real English XML track escapes genuine ampersands. If the two paths
   // disagreed on the cue that contains one, the transcript would show `&amp;`
-  // whenever a track arrived as XML — a bug no hand-written fixture would ever
+  // whenever a track arrived as XML, a bug no hand-written fixture would ever
   // have produced, because the fixtures did not contain an ampersand.
   const track = SYNTHETIC.tracks.find((t) => t.languageCode === 'en') ?? SYNTHETIC.tracks[0];
   const summary = summaryFrom(SYNTHETIC);
@@ -566,13 +566,13 @@ section('a refusal is reported as a refusal, not as an empty track');
   // The body is the REAL one, taken from a capture: Google's "Sorry..." block
   // page, which arrives as HTTP 200 with an HTML body. It is kept verbatim rather
   // than paraphrased, because the whole bug was that its shape was not recognised
-  // — a hand-written stand-in would encode my idea of the page instead of the page.
+  //, a hand-written stand-in would encode my idea of the page instead of the page.
   //
   // What used to happen: no `<text>` elements, so it parsed to zero cues, so the
   // failure was reported as "the caption track came back empty". That says the
   // VIDEO has no captions, which is a fact about the video. The truth was that the
   // server had stopped answering, which is temporary and clears on its own. Those
-  // need opposite responses from a reader — wait, versus give up — and one message
+  // need opposite responses from a reader, wait, versus give up, and one message
   // for both sent a whole session the wrong way.
   //
   // The block page is 1103 bytes, so `body.trim()` is truthy: this is not the
@@ -594,7 +594,7 @@ section('a refusal is reported as a refusal, not as an empty track');
   const result = await script.ask({ type: 'fetch-track', languageCode: 'en' });
 
   check('no segments', result?.segments?.length, 0);
-  check('and the error names a refusal', result?.error, 'TRACK005 The caption request was refused — likely too many requests.');
+  check('and the error names a refusal', result?.error, 'TRACK005 The caption request was refused, likely too many requests.');
   check('not an empty track', (result?.error ?? '').startsWith('TRACK002'), false);
 }
 
@@ -667,7 +667,7 @@ section('the reported language is the SOURCE, with the target reported separatel
 {
   // The worker keys its cache and its rows by the source track. Reporting the
   // TARGET as the language would file an English-to-Japanese translation under
-  // `ja`, where it would collide with a real Japanese track on the same video —
+  // `ja`, where it would collide with a real Japanese track on the same video,
   // and the two would silently overwrite each other.
   const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
   const result = await script.ask({ type: 'fetch-track', languageCode: 'en', translateTo: 'ja' });
@@ -680,7 +680,7 @@ section('translating a track that cannot be translated is refused, not faked');
 
 {
   // `de` is marked isTranslatable: false. Asking anyway returns the UNTRANSLATED
-  // German, which would be silently presented as Japanese — a wrong answer that
+  // German, which would be silently presented as Japanese, a wrong answer that
   // looks like a right one, which is the failure mode worth guarding.
   const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
   const result = await script.ask({ type: 'fetch-track', languageCode: 'de', translateTo: 'ja' });
@@ -719,7 +719,7 @@ section('a transcript handed over is what position reporting measures against');
 
 {
   // The worker skips the fetch entirely for a cached video, so the content
-  // script never gets segments — and it reports position BY looking at them. A
+  // script never gets segments, and it reports position BY looking at them. A
   // freshly loaded page therefore reported no cue at all, which is why the panel
   // neither highlighted nor scrolled until the next cue change.
   const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
@@ -741,8 +741,8 @@ section('a transcript handed over is what position reporting measures against');
   });
   check('the hand-over is acknowledged', handedOver?.ok, true);
 
-  // The very next tick must report. Suppressing the first one — the usual dedupe
-  // shape — would leave a paused video silent forever.
+  // The very next tick must report. Suppressing the first one, the usual dedupe
+  // shape, would leave a paused video silent forever.
   script.tick(0.5);
   check('a cue is reported straight away', script.posted.at(-1)?.index, 0);
   check('and it is being spoken', script.posted.at(-1)?.paused, false);
@@ -790,7 +790,7 @@ section('a gap between cues holds the last line, and says it is not speaking');
 {
   // The reported bug: nothing showed between lines in Live view, and nothing
   // was highlighted in Full view. The index alone cannot express this, because
-  // "the line that finished" and "the line being said" are the same index — so
+  // "the line that finished" and "the line being said" are the same index, so
   // the gap has to be reported separately.
   const script = await bootContent({ summary: SUMMARY, captionBody: JSON3 });
   await script.ask({ type: 'provide' });
@@ -837,7 +837,7 @@ section('re-evaluating does not stack up duplicate interval timers');
 // open tabs are orphaned. `chrome.runtime` is still an object but has lost its
 // id, and every call into it throws "Extension context invalidated." Both polling
 // loops keep waking, so the result was not one error but one every 250ms until
-// the tab was reloaded — and nothing could silence it.
+// the tab was reloaded, and nothing could silence it.
 
 section('a live context reports position as usual');
 
@@ -908,7 +908,7 @@ section('a reply to a request that outlived the context does not throw');
 
 {
   // Every branch answers asynchronously, so the extension can be reloaded while
-  // a caption fetch is in flight — and `sendResponse` then throws from inside a
+  // a caption fetch is in flight, and `sendResponse` then throws from inside a
   // promise, where nothing is listening for it.
   //
   // The reply never arrives, which is faithful: the worker's own timeout is what
@@ -920,7 +920,7 @@ section('a reply to a request that outlived the context does not throw');
   let thrown = null;
   warnings = [];
   try {
-    // Deliberately not awaited — it cannot settle.
+    // Deliberately not awaited, it cannot settle.
     void script.ask({ type: 'fetch-track', languageCode: 'en' }).catch(() => {});
     await settle();
     await settle();
@@ -940,11 +940,11 @@ section('no request in the content script can hang the reply');
   // The bug this pins: `fetch` has no default timeout, so a caption request that
   // STALLS rather than being refused never resolves. `provide()` then never
   // returns, the reply is never sent, and Chrome reports "the message channel
-  // closed before a response was received" — a sentence that names the channel
+  // closed before a response was received", a sentence that names the channel
   // and not the cause. The request has to reach a deadline so the reply is sent.
   const source = readFileSync(new URL('../src/content/youtube-content.js', import.meta.url), 'utf8');
 
-  // Exactly one raw fetch — the one inside the wrapper. Any second one is a
+  // Exactly one raw fetch, the one inside the wrapper. Any second one is a
   // request that can hang the reply, which is the whole failure being fixed.
   const rawFetch = source.match(/(?<![\w.])fetch\(/g) ?? [];
   check('exactly one raw fetch call exists', rawFetch.length, 1);

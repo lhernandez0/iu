@@ -8,7 +8,7 @@
  * ## Sizing, and why the first version was wrong
  *
  * The panel's whole type system is `calc(Npx * var(--text-scale))`, where
- * `--text-scale` is `calc(var(--font-size) / 13px)` — a plain number. The first
+ * `--text-scale` is `calc(var(--font-size) / 13px)`, a plain number. The first
  * version of this file used `em` off a 13px base for the reading, which measured
  * at **8.06px**: smaller than anything else on the page, at the smallest size the
  * panel offers. It was unreadable, and the measurement said so.
@@ -22,7 +22,7 @@
  * ## Colour
  *
  * The first version annotated in `#8fb4ff`, a saturated blue LOUDER than the text
- * it annotates — so the eye landed on the readings and the characters became the
+ * it annotates, so the eye landed on the readings and the characters became the
  * background. Annotation is secondary by definition: it is dimmer. Only the marks
  * keep a strong colour, because those are the thing being pointed at.
  */
@@ -33,8 +33,8 @@
  * The panel's own stylesheet sets `body { font: var(--font-size) / var(--line-height)
  * var(--font-reading) }`, which is what makes the text-size control work at all.
  * A `font: 13px/1.5 ...` on this selector has higher specificity (`body.class`
- * beats `body`), so it froze the body at 13px while the readings — which use
- * `calc(9.5px * var(--text-scale))` — kept scaling.
+ * beats `body`), so it froze the body at 13px while the readings, which use
+ * `calc(9.5px * var(--text-scale))`, kept scaling.
  *
  * The symptom was exactly backwards from what you would look for: the annotation
  * grew and the text it annotates did not, so at 24px the readings were larger than
@@ -200,7 +200,7 @@ body.reading-preview {
   background: #14171d;
 }
 
-/* 350px is the real panel. Not a round number chosen for looks — it is what a side
+/* 350px is the real panel. Not a round number chosen for looks, it is what a side
    panel actually gets, and a layout that only works wider is not a layout. */
 .rp-narrow {
   width: 350px;
@@ -216,7 +216,7 @@ body.reading-preview {
 
 /*
  * Ruby. A column so the reading and the glyph stack, and the GLYPH keeps its
- * horizontal position — that is the reason to prefer this over a line underneath:
+ * horizontal position, that is the reason to prefer this over a line underneath:
  * the text below does not move.
  *
  * `vertical-align: bottom` pins a stack and a plain word to the same baseline, so
@@ -238,8 +238,8 @@ body.reading-preview {
    *
    * **0.85 of the base, which is much larger than print ruby.** Furigana runs about
    * 50% because a Japanese reader already knows the character and only needs a
-   * reminder. Pinyin on a Chinese subtitle is doing more work than that — it IS the
-   * pronunciation, for a learner — so it has to be legible in its own right rather
+   * reminder. Pinyin on a Chinese subtitle is doing more work than that, it IS the
+   * pronunciation, for a learner, so it has to be legible in its own right rather
    * than decorative. 0.73 measured too small; this is a deliberate overshoot, to be
    * brought back down if it now competes with the characters.
    */
@@ -251,7 +251,7 @@ body.reading-preview {
      version annotated in a saturated blue that outshouted the characters. */
   color: #7f93b8;
   white-space: nowrap;
-  /* Pinyin runs long — `zhuāngzhòng` is wider than the characters under it — and
+  /* Pinyin runs long, `zhuāngzhòng` is wider than the characters under it, and
      a reading that wraps breaks the association it exists to make. */
   letter-spacing: -0.005em;
 }

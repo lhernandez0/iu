@@ -1,5 +1,5 @@
 /**
- * Stub engine — emits a placeholder partial/final pair on a timer.
+ * Stub engine, emits a placeholder partial/final pair on a timer.
  *
  * Purpose: prove the capture -> offscreen -> side panel pipeline end to end
  * without committing to a real recogniser. It consumes a MediaStream only to

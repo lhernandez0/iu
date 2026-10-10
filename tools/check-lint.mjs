@@ -2,7 +2,7 @@
  * Turn `web-ext lint`'s JSON into an exit code and a readable report.
  *
  * The Makefile pipes the linter through here rather than reading its exit code,
- * because the linter exits non-zero on WARNINGS as well as errors — and two of our
+ * because the linter exits non-zero on WARNINGS as well as errors, and two of our
  * warnings are permanent and expected (Firefox says itself that it ignores the
  * Chrome-only manifest keys). Failing on those would mean either living with a red
  * build or disabling the check, and both are worse than classifying the output.
@@ -10,7 +10,7 @@
  * ERRORS fail. WARNINGS are printed and pass, because a warning we have looked at
  * and accepted is not the same as one nobody has seen.
  *
- * @see Makefile — `make lint`
+ * @see Makefile, `make lint`
  */
 
 const chunks = [];
@@ -47,6 +47,6 @@ if (notices.length) {
 }
 
 if (!errors.length) {
-  console.log(`lint clean — ${errors.length} errors, ${warnings.length} warnings`);
+  console.log(`lint clean, ${errors.length} errors, ${warnings.length} warnings`);
 }
 process.exit(errors.length ? 1 : 0);

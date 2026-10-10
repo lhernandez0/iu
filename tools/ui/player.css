@@ -41,7 +41,7 @@ body.player-preview {
  * The caption text scale, separate from the mock's own chrome.
  *
  * INHERITED into the caption lines rather than set on them, which is what lets the
- * size control move both placements from one value — a rule setting a size on each
+ * size control move both placements from one value, a rule setting a size on each
  * element would need two of every change.
  */
 body.player-preview {
@@ -113,9 +113,9 @@ body.player-preview {
   flex: 1 1 auto;
   /* A floor, so the player cannot be squeezed to nothing by the chrome around it.
      `flex: 1` alone let the breakdown take whatever it wanted and left a sliver of
-     video — which is the opposite of the point of a player preview. */
+     video, which is the opposite of the point of a player preview. */
   min-height: 320px;
-  /* `min-height: 0` so this flex child can actually shrink — without it the
+  /* `min-height: 0` so this flex child can actually shrink, without it the
      video's intrinsic height wins and the caption strip is pushed off the bottom
      instead of shrinking the picture, which is the difference between a strip that
      is pinned and one that overflows. */
@@ -139,7 +139,7 @@ body.player-preview {
   height: 100%;
   object-fit: contain;
   background: #000;
-  /* The video is NOT the fullscreen target — `.pp-stage` is. See the fullscreen
+  /* The video is NOT the fullscreen target, `.pp-stage` is. See the fullscreen
      handler in player.mjs: fullscreening the media element would make an overlay
      bar impossible, because only the fullscreened element and its descendants are
      rendered. */
@@ -212,16 +212,16 @@ body.player-preview {
 }
 
 /*
- * OVERLAY — floats over the bottom of the picture.
+ * OVERLAY, floats over the bottom of the picture.
  *
  * **ONE card with the lines stacked inside it, not a card per line.** The first
  * version made each line its own `inline-block` with its own background and a margin
- * between them, so two lines drew as two separate boxes — "a second caption" beside
+ * between them, so two lines drew as two separate boxes, "a second caption" beside
  * the first rather than two lines of one subtitle. Real subtitles are one block: a
  * background behind the whole thing, with the lines left to stack inside it.
  *
  * So the CONTAINER is the card and the lines are plain blocks within it, and the card
- * is `inline-block` so it shrink-wraps to its widest line — which is what gives the
+ * is `inline-block` so it shrink-wraps to its widest line, which is what gives the
  * background its tight edges instead of a full-width gradient's hard seam.
  *
  * `--bar-offset` keeps the card clear of the control bar when that is showing. It is
@@ -257,14 +257,14 @@ body.player-preview {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
 
-/* The gloss sits just under the line being learned — closer than a paragraph gap,
+/* The gloss sits just under the line being learned, closer than a paragraph gap,
    because the two are one subtitle rather than two. */
 .pp-captions-overlay .pp-caption-secondary {
   margin-top: 1px;
 }
 
 /*
- * BELOW — its own row, and the picture shrinks above it.
+ * BELOW, its own row, and the picture shrinks above it.
  *
  * Deliberately not an overlay: an overlay covers the picture, and "I just want to
  * see the subs" is exactly the case where covering it is wrong. It also lives
@@ -275,7 +275,7 @@ body.player-preview {
   padding: 10px 18px;
   background: #14161c;
   border-top: 1px solid var(--pp-edge);
-  /* A long cue wraps and the strip scrolls rather than growing without bound — it
+  /* A long cue wraps and the strip scrolls rather than growing without bound, it
      is pinned, so unbounded growth would eat the picture. */
   max-height: 22vh;
   overflow-y: auto;
@@ -345,7 +345,7 @@ body.player-preview {
   gap: 6px;
   /* Extra top padding is the FADE, not spacing: the gradient needs room to reach
      full transparency before the element ends, or its top edge is a visible
-     horizontal seam over a bright frame — which is the artefact that shows up in
+     horizontal seam over a bright frame, which is the artefact that shows up in
      fullscreen once the browser chrome is out of the way. */
   padding: 26px 10px 6px;
   background: linear-gradient(
@@ -361,7 +361,7 @@ body.player-preview {
  * Hidden because the pointer is idle, NOT because anything collapsed.
  *
  * `opacity` plus `pointer-events` rather than `display: none`, so the controls keep
- * their place in the tab order — hiding them outright would break the `focusin`
+ * their place in the tab order, hiding them outright would break the `focusin`
  * rule that exists to get them back.
  */
 .pp-bar[data-hidden='true'] {
@@ -419,7 +419,7 @@ body.player-preview {
  * The audio track panel.
  *
  * Its own block INSIDE the caption row rather than a fourth row, because an audio
- * track is not a caption setting and should not look like one — but it is also not
+ * track is not a caption setting and should not look like one, but it is also not
  * worth a row of its own, which would be a whole strip of the bar for one select.
  * The border-left is what says "this is a different thing" without spending height.
  */
@@ -455,7 +455,7 @@ body.player-preview {
 /*
  * The count, on the button.
  *
- * An audio selector has no visible state of its own — unlike the caption toggle,
+ * An audio selector has no visible state of its own, unlike the caption toggle,
  * "audio is on" is not a thing. What a reader wants to know is whether a choice
  * EXISTS, and a bare speaker icon says nothing. A superscript count says it at a
  * glance without opening the panel.
@@ -484,7 +484,7 @@ body.player-preview {
  *
  * The slider is narrow on purpose. It shares the transport row with the transport,
  * the cue stepping, the speed select and five toggles, and a full-width slide would
- * push the row into wrapping on a modest window — a wrapped transport row is a worse
+ * push the row into wrapping on a modest window, a wrapped transport row is a worse
  * outcome than a short slider. It is a set-and-forget control; the mute button is the
  * one that gets used mid-playback.
  */
@@ -597,7 +597,7 @@ body.player-preview {
  *
  * `appearance: none` plus explicit pseudo-element rules, because the default range is
  * a different control in every browser and none of them match the bar. The pieces are
- * styled separately — track, then thumb — which is the only way to size them
+ * styled separately, track, then thumb, which is the only way to size them
  * independently.
  */
 .pp-scrubber {
@@ -665,7 +665,7 @@ body.player-preview {
   border-radius: 4px;
 }
 
-/* Tabular figures, so the counter does not jitter as the seconds tick — a
+/* Tabular figures, so the counter does not jitter as the seconds tick, a
    proportional font changes width every time `1` becomes `8`. */
 .pp-time {
   color: var(--pp-muted);
@@ -701,7 +701,7 @@ body.player-preview {
  * Icon buttons: a square target around an SVG.
  *
  * `display: grid; place-items: center` rather than padding, so every icon is the
- * same size regardless of how much of its 24x24 viewBox it uses — padding would
+ * same size regardless of how much of its 24x24 viewBox it uses, padding would
  * make a narrow glyph look like a narrower button.
  */
 .pp-icon-button {
@@ -759,7 +759,7 @@ body.player-preview {
 }
 
 /* The segmented control for caption placement: one binary choice, so a switch is
-   clearer than a select — the current value is visible without opening anything. */
+   clearer than a select, the current value is visible without opening anything. */
 .pp-seg {
   display: inline-flex;
   border: 1px solid #333844;
@@ -795,7 +795,7 @@ body.player-preview {
   max-width: 30ch;
 }
 
-/* Focus must be visible even when the bar is faded — the rule the `focusin`
+/* Focus must be visible even when the bar is faded, the rule the `focusin`
    listener exists to honour. */
 .pp-button:focus-visible,
 .pp-seg-button:focus-visible,
@@ -814,7 +814,7 @@ body.player-preview {
  * The explanation, as a collapsed disclosure.
  *
  * It was a full section always on screen, and at preview size it took most of the
- * page — the review artifact was eating the thing being reviewed. A `<details>`
+ * page, the review artifact was eating the thing being reviewed. A `<details>`
  * takes one row collapsed and none of the layout pretends otherwise.
  */
 .pp-breakdown {

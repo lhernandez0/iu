@@ -93,7 +93,7 @@ check('inside the second cue', findActiveIndex(timeline, 10.5), 1);
 //
 // This used to return -1, and that was a real bug rather than a design choice:
 // cue times do not tile the timeline, so after every single line the highlight
-// blinked off, and the Live view — which shows only the active row — went
+// blinked off, and the Live view, which shows only the active row, went
 // completely blank between every pair of lines.
 check('in a gap after a cue, the finished line still holds', findActiveIndex(timeline, 5), 0);
 check('inside the last cue', findActiveIndex(timeline, 21), 2);
@@ -103,7 +103,7 @@ check('a single cue', findActiveIndex([seg(0, 'only', 1)], 0.5), 0);
 
 // --- alignSecondary: the safety property -------------------------------------
 
-section('alignSecondary — the safe cases');
+section('alignSecondary, the safe cases');
 
 check(
   'identical timings pair one to one',
@@ -122,7 +122,7 @@ check('a sparse second track leaves gaps blank', alignSecondary([seg(0, 'a'), se
 check('no second track means all blank', alignSecondary([seg(0, 'a'), seg(4, 'b')], []), ['', '']);
 check('no primary means no rows', alignSecondary([], [seg(0, 'A')]), []);
 
-section('alignSecondary — the safety property');
+section('alignSecondary, the safety property');
 
 // Each of these must produce blanks. A wrong pairing here is the failure mode
 // that matters: the panel would show a confident, incorrect translation.
@@ -134,7 +134,7 @@ check(
   ['', ''],
 );
 
-section('alignSecondary — tolerance boundary');
+section('alignSecondary, tolerance boundary');
 
 // The threshold is 1500ms. Pinning both sides of it means a change to the
 // constant is a deliberate act rather than an accident.
@@ -144,14 +144,14 @@ check('exactly at the limit pairs', atLimit, ['A']);
 check('just past the limit does not', pastLimit, ['' ]);
 check('the limit is configurable', alignSecondary([seg(10, 'a')], [seg(16, 'A')], 10_000), ['A']);
 
-section('alignSecondary — no cue is used twice');
+section('alignSecondary, no cue is used twice');
 
 // A single secondary cue should not be copied onto several primary rows just
 // because it happens to be the nearest for each of them.
 const reused = alignSecondary([seg(0, 'a'), seg(1, 'b'), seg(2, 'c')], [seg(0, 'ONLY')]);
 check('one secondary cue fills at most one row', reused.filter((s) => s !== '').length, 1);
 
-section('alignSecondary — shape guarantees');
+section('alignSecondary, shape guarantees');
 
 const longPrimary = [seg(0, 'a'), seg(1, 'b'), seg(2, 'c'), seg(3, 'd')];
 check('output length always matches the primary', alignSecondary(longPrimary, [seg(0, 'A')]).length, longPrimary.length);
@@ -161,8 +161,8 @@ section('settings defaults are copied, not shared');
 
 {
   // A default that is an object is a single object living in the settings
-  // module, so handing it out unchanged gives every caller — and every service
-  // worker booted in one test process — the SAME reference. Writing to it then
+  // module, so handing it out unchanged gives every caller, and every service
+  // worker booted in one test process, the SAME reference. Writing to it then
   // changes the default for everyone who reads it afterwards.
   //
   // This was not hypothetical: the per-list threshold memory is an object
@@ -191,7 +191,7 @@ section('every setting declares which surfaces show it');
 {
   // `audience` is what lets the side panel and the video viewer render from ONE
   // registry instead of keeping a list each. A setting with a wrong audience is
-  // invisible on a surface that needs it — which looks like a missing control in
+  // invisible on a surface that needs it, which looks like a missing control in
   // the renderer, so the failure is a long way from the cause. Hence a guard on
   // the definitions themselves rather than only on a rendered screen.
   check('no definition has a missing or unknown audience', audienceProblems(), []);
@@ -216,12 +216,12 @@ section('every setting declares which surfaces show it');
     check(`no hidden setting is rendered on "${surface}"`, hiddens, []);
   }
 
-  // Reading and marks apply BOTH places — the captions are drawn with the same
+  // Reading and marks apply BOTH places, the captions are drawn with the same
   // renderer, so a viewer that could not set the reading placement would be
   // showing an annotation it had no control over.
   //
   // Checked on the DEFINITION rather than through `byAudience`, because
-  // `markStyle` is still `hidden` — it is tagged for both surfaces and will be
+  // `markStyle` is still `hidden`, it is tagged for both surfaces and will be
   // rendered once the settings view exists, and `byAudience` filters hidden
   // settings out by design. Asserting through `byAudience` here would be
   // asserting the flag, not the audience.
@@ -282,7 +282,7 @@ section('the video settings');
   check('a known placement survives', placement.coerce('below'), 'below');
 
   const speed = SETTINGS.find((s) => s.id === 'defaultSpeed');
-  // A number, not a string, is the realistic wrong input — a control that stored
+  // A number, not a string, is the realistic wrong input, a control that stored
   // `1.25` rather than `"1.25"` should not lose the choice.
   check('a numeric speed is accepted and normalised', speed.coerce(1.25), '1.25');
   check('an off-list speed falls back to 1x', speed.coerce('3'), '1');
@@ -298,7 +298,7 @@ section('the video settings');
   check('and rejects nonsense', size.coerce('big'), 20);
 
   // The four SHARED preferences must be readable by the viewer, not only by the
-  // panel — the viewer draws the same transcript, so a `panel`-only audience would
+  // panel, the viewer draws the same transcript, so a `panel`-only audience would
   // have left its captions grading against a list nobody chose.
   for (const id of ['listId', 'threshold', 'studyLanguage', 'glossLanguage']) {
     const setting = SETTINGS.find((s) => s.id === id);
@@ -327,11 +327,11 @@ section('the settings view and the transcript bar are two doors to one list');
 {
   // The view renders EVERY panel-side setting, not only the ones without a bar
   // control. The first attempt filtered `quick` out and produced a view with two
-  // rows in it, because the language and translation controls all live in the bar —
+  // rows in it, because the language and translation controls all live in the bar,
   // a settings view that omits what you most often change is not a settings view.
   const view = forSettingsView().map((s) => s.id);
   // `map` is excluded on purpose: it is internal memory (the threshold remembered
-  // per list), not something a person edits — rendering it would offer a raw object
+  // per list), not something a person edits, rendering it would offer a raw object
   // as a control. So the expected set is the panel-side settings minus the maps.
   const panel = byAudience('panel')
     .filter((s) => s.type !== 'map')
@@ -345,7 +345,7 @@ section('the settings view and the transcript bar are two doors to one list');
     true,
   );
 
-  // `quick` means "also has a control in the bar" — a shortcut, not an exclusive
+  // `quick` means "also has a control in the bar", a shortcut, not an exclusive
   // home. So the bar's set must be a SUBSET of the view's, never disjoint from it.
   const bar = forTranscriptBar().map((s) => s.id);
   const strays = bar.filter((id) => !view.includes(id));

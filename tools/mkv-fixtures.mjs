@@ -3,7 +3,7 @@
  * Generate the MKV test fixtures.
  *
  * `test/mkv/` is gitignored and GENERATED rather than committed, so these files
- * do not exist on a fresh clone — which means `mkv-container.test.mjs` would SKIP
+ * do not exist on a fresh clone, which means `mkv-container.test.mjs` would SKIP
  * rather than fail, and a skipped parser test is worse than no parser test: it
  * reports green while proving nothing.
  *
@@ -30,7 +30,7 @@ const OUT = join(ROOT, 'test', 'mkv');
 const force = process.argv.includes('--force');
 
 if (!force && existsSync(join(OUT, 'three-tracks.mkv'))) {
-  console.log('fixtures already present — pass --force to rebuild');
+  console.log('fixtures already present, pass --force to rebuild');
   process.exit(0);
 }
 
@@ -73,7 +73,7 @@ Second line
 `;
 
 // Chinese, written as UTF-8. The equivalent SIDECAR case is tested with GBK bytes
-// in `reader.test.mjs`, because a sidecar file is where that trap lives — inside a
+// in `reader.test.mjs`, because a sidecar file is where that trap lives, inside a
 // container the text is UTF-8 by specification.
 const CHINESE_SRT = `1
 00:00:00,500 --> 00:00:02,500
@@ -116,7 +116,7 @@ writeFileSync(join(OUT, 'untagged.srt'), UNTAGGED_SRT);
 const VIDEO = ['-f', 'lavfi', '-i', 'testsrc=duration=6:size=192x108:rate=5'];
 const SHORT_VIDEO = ['-f', 'lavfi', '-i', 'testsrc=duration=3:size=128x72:rate=5'];
 
-console.log('three-tracks.mkv — three text tracks with real language metadata');
+console.log('three-tracks.mkv, three text tracks with real language metadata');
 ffmpeg([
   ...VIDEO,
   '-i', 'en.srt',
@@ -134,7 +134,7 @@ ffmpeg([
   'three-tracks.mkv',
 ]);
 
-console.log('ass-track.mkv — a genuine S_TEXT/ASS track');
+console.log('ass-track.mkv, a genuine S_TEXT/ASS track');
 ffmpeg([
   '-f', 'lavfi', '-i', 'testsrc=duration=6:size=128x72:rate=5',
   '-i', 'ja.ass',
@@ -149,7 +149,7 @@ ffmpeg([
   'ass-track.mkv',
 ]);
 
-console.log('two-audio.mkv — two audio tracks, and LONG enough to seek into');
+console.log('two-audio.mkv, two audio tracks, and LONG enough to seek into');
 // The only fixture with audio, and the only one long enough for a position test.
 //
 // Both matter: `three-tracks.mkv` is SIX SECONDS, which cannot show a re-source losing a
@@ -167,7 +167,7 @@ ffmpeg([
   'two-audio.mkv',
 ]);
 
-console.log('no-subtitles.mkv — a file with no subtitle tracks at all');
+console.log('no-subtitles.mkv, a file with no subtitle tracks at all');
 ffmpeg([
   ...SHORT_VIDEO,
   '-c:v', 'libx264', '-preset', 'ultrafast',
@@ -175,7 +175,7 @@ ffmpeg([
   'no-subtitles.mkv',
 ]);
 
-console.log('notag.mkv — language=und, Matroska\'s own "undetermined"');
+console.log('notag.mkv, language=und, Matroska\'s own "undetermined"');
 ffmpeg([
   ...SHORT_VIDEO,
   '-i', 'untagged.srt',
@@ -189,7 +189,7 @@ ffmpeg([
 // **There is no `unnamed.mkv`, and that is deliberate.**
 //
 // The case worth testing is a track with NO `Language` element at all, which
-// Matroska defines as English — and `ffmpeg` cannot produce it. Omitting the
+// Matroska defines as English, and `ffmpeg` cannot produce it. Omitting the
 // metadata does not omit the element; it writes `und` instead, so an "unnamed"
 // fixture built this way is byte-for-byte a duplicate of `notag.mkv`. That was the
 // case until this comment existed, and the two were reported as separate coverage
@@ -197,9 +197,9 @@ ffmpeg([
 //
 // So the absent case is reached by editing a real file instead: `Void` (0xEC) is
 // the element the format provides for exactly this, and one of the same length
-// replaces the language without shifting a single byte — see the test.
+// replaces the language without shifting a single byte, see the test.
 
-// The source subtitle files are inputs, not fixtures — every one of them is
+// The source subtitle files are inputs, not fixtures, every one of them is
 // embedded in a container above, so leaving them loose would put four stray files
 // in the directory for no reason.
 for (const temp of ['en.srt', 'zh.srt', 'ja.ass', 'untagged.srt']) {

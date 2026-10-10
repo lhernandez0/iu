@@ -1,5 +1,5 @@
 /**
- * Browser integration tests — OFFLINE.
+ * Browser integration tests, OFFLINE.
  *
  * These run the real extension in real Chromium against a fixture YouTube
  * served from `context.route`. There is no network access: the browser is
@@ -177,7 +177,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // an emptied panel.
     //
     // A known good video is loaded first so this block does not depend on what
-    // earlier blocks happened to leave loaded — sections share one browser.
+    // earlier blocks happened to leave loaded, sections share one browser.
     await routeYouTube(context, { videoId: 'keepme1', tracks: [ENGLISH] });
     const watch = await openWatchPage(context, 'keepme1');
     const { page, errors } = await openPanel(context, extensionId, watch);
@@ -221,7 +221,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
   {
     // This is the case that broke, and the earlier version of this file could not
-    // catch it because it opened the second video in a NEW tab — a fresh page
+    // catch it because it opened the second video in a NEW tab, a fresh page
     // load with a correct player response. An in-tab switch is different:
     // YouTube does NOT update ytInitialPlayerResponse, so the extension kept
     // reporting the first video's captions while the highlight moved to the
@@ -333,7 +333,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('the mark has a coloured underline', marks.borderColour !== 'rgba(0, 0, 0, 0)', true);
     check('and no native tooltip competing with the popover', marks.hasNativeTooltip, false);
     // Only the lists that can mark the language on screen. This is a Chinese
-    // video, so the two HSK numberings are offered and JLPT is not — presenting a
+    // video, so the two HSK numberings are offered and JLPT is not, presenting a
     // list that could only end in "does not cover this language" is a dead option.
     check('only the lists for this language are offered', marks.listOptions, ['hsk2_0', 'hsk3_0']);
     // 2.0 has six levels, 3.0 has nine, so the count has to match the list in
@@ -342,7 +342,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check(`the threshold offers ${expectedLevels} levels for ${marks.chosenLabel}`,
       marks.thresholdOptions.length, expectedLevels);
     // The default must be the list that can mark the most words, not whichever
-    // happens to be first — otherwise most of the dictionary is invisible.
+    // happens to be first, otherwise most of the dictionary is invisible.
     check('the default list is HSK 3.0, the widest', marks.chosenList, 'hsk3_0');
 
     // The line must still read correctly with spans in it, which is the thing
@@ -379,7 +379,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     section('words the list cannot place are hoverable, not invisible');
 
     // The reported bug. On HSK 2.0, 这样 and 这么 have no level, so they must
-    // render as hoverable but unmarked — not as bare text with no hover at all,
+    // render as hoverable but unmarked, not as bare text with no hover at all,
     // which made whole sentences look dead.
     await page.selectOption('#list', 'hsk2_0');
     await page.waitForFunction(() => document.querySelectorAll('.row').length > 0, null, { timeout: 10000 });
@@ -406,7 +406,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('with their word recorded for lookup', unmarkedHoverable.words.every((w) => w && w.length > 0), true);
     console.log(`        unmarked but hoverable: ${unmarkedHoverable.words.slice(0, 6).join(', ')}`);
 
-    // Hovering one of those must still produce a definition — the whole point.
+    // Hovering one of those must still produce a definition, the whole point.
     await page.locator('.word').first().hover();
     await page.waitForFunction(
       () => {
@@ -428,7 +428,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // Two reported bugs, both about the same moment: nothing being said.
     //
     //   1. No highlight in the gap. Caused by `.row.paused` setting its own
-    //      background AFTER `.row.active` — equal specificity, later rule wins —
+    //      background AFTER `.row.active`, equal specificity, later rule wins,
     //      so the highlight was replaced by something very close to the page
     //      colour. Only a real cascade can show that, which is why this lives
     //      here and not in the hermetic tier.
@@ -451,7 +451,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const watch = await openWatchPage(context, 'gapvideo001');
 
     // Land in a gap before the panel opens: 1.5s is between lines one and two,
-    // which run 0-1s and 2-3s. Asserted rather than assumed — a seek that does
+    // which run 0-1s and 2-3s. Asserted rather than assumed, a seek that does
     // not hold would leave playback inside cue 0, and the gap assertions below
     // would then fail for a reason that has nothing to do with the panel.
     await watch.evaluate(() => {
@@ -470,13 +470,13 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     // The panel must place itself without waiting for a cue change, because on a
     // paused video none comes. The watch page is a BACKGROUND tab while the panel
-    // is open, so its 250ms poll is throttled — this waits for the state rather
+    // is open, so its 250ms poll is throttled, this waits for the state rather
     // than assuming a tick has already run, which is what made an earlier version
     // of this test look like a code failure when it was only timing.
     await page.waitForFunction(() => document.querySelector('.row.paused') !== null, null, { timeout: 20000 });
 
     const gap = await page.evaluate(() => {
-      // The reading is annotation, not line text — see `baseText` in the harness.
+      // The reading is annotation, not line text, see `baseText` in the harness.
       const inline = (node) => {
         if (!node) return '';
         const clone = node.cloneNode(true);
@@ -505,7 +505,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // Not the page background. This is the assertion the reported bug fails:
     // `.row.paused` used to set its own background, and being later in the file
     // at equal specificity it replaced the highlight with something close to the
-    // page colour — so the line looked unhighlighted.
+    // page colour, so the line looked unhighlighted.
     const pageBackground = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     check('but it is NOT painted like the page background', gap.background !== pageBackground, true);
     check('and it still reads as the highlighted row', gap.background, 'rgb(36, 48, 74)');
@@ -522,7 +522,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // Only a browser can prove this end to end: the URL is built by the content
     // script, fetched over a real route, and rendered by the real panel. A
     // hermetic test stubs the fetch, so it cannot show that `tlang` reaches
-    // YouTube — which is the entire mechanism.
+    // YouTube, which is the entire mechanism.
     const japanese = {
       languageCode: 'ja',
       name: '日本語',
@@ -538,7 +538,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // Wait for THIS video's text, not merely for two rows.
     //
     // The section above leaves its own rows on screen, and the panel keeps them
-    // until this video's transcript arrives — so a count-only wait returned
+    // until this video's transcript arrives, so a count-only wait returned
     // immediately and the assertion below read the PREVIOUS video's first line
     // ("First line"). It failed roughly one run in three, depending on whether
     // the rebuild beat the read.
@@ -549,7 +549,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('with no machine tag', await page.evaluate(() => document.querySelectorAll('.machine').length), 0);
 
     // Either line can be translated. This video has one subtitle, so the test
-    // translates the FIRST line by its own checkbox — which is the case that used
+    // translates the FIRST line by its own checkbox, which is the case that used
     // to be impossible, because translation was tied to the second slot.
     //
     // The target control appears only once something is asking to be translated,
@@ -626,8 +626,8 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
   {
     // The hermetic suite proves the class is applied. Whether the stylesheet then
-    // hides the right rows — and whether a calc() on a custom property survives
-    // the cascade — can only be settled by a browser laying it out. A typo in the
+    // hides the right rows, and whether a calc() on a custom property survives
+    // the cascade, can only be settled by a browser laying it out. A typo in the
     // selector would pass every other test in this file.
     const chinese = {
       languageCode: 'zh',
@@ -646,7 +646,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     /** How many rows a real layout is showing, plus the body font size. */
     const layout = () => page.evaluate(() => {
-      // The reading is annotation, not line text — see `baseText` in the harness.
+      // The reading is annotation, not line text, see `baseText` in the harness.
       const inline = (node) => {
         if (!node) return '';
         const clone = node.cloneNode(true);
@@ -746,7 +746,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     console.log(
       `        2000 lines / ${stats.rows} rows / ${stats.marks} marks / ` +
-        `${stats.nodes} DOM nodes — rows ${rowsMs}ms, marks +${markMs}ms`,
+        `${stats.nodes} DOM nodes, rows ${rowsMs}ms, marks +${markMs}ms`,
     );
 
     check('all lines rendered', stats.rows, 2000);
@@ -793,14 +793,14 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
   const captures = listCaptures();
   if (!captures.length) {
-    console.log('\n  (no captures on this machine — run `npm run capture -- <videoId>` to add one)');
+    console.log('\n  (no captures on this machine, run `npm run capture -- <videoId>` to add one)');
   }
 
   for (const captureId of captures) {
     const capture = captureFor(captureId);
     if (!capture?.tracks.length) continue;
 
-    // A capture whose tracks carry no cues is not a video to render — it is a
+    // A capture whose tracks carry no cues is not a video to render, it is a
     // capture that failed to collect any caption bodies, which happens when the
     // server refuses (Google answers a refused caption request with HTTP 200 and
     // an HTML block page, so the fetch "succeeds" and parses to nothing).
@@ -826,7 +826,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     // Wait for the CAPTURED video's own first line, not merely for rows to
     // exist. The browser context is shared across this whole suite, so the panel
-    // can render a previous video's rows first and swap afterwards — waiting on
+    // can render a previous video's rows first and swap afterwards, waiting on
     // "some rows" reads that as success and asserts against the wrong transcript.
     // This was intermittently failing for exactly that reason, and a stray
     // logging line was shifting the timing enough to hide it.
@@ -845,7 +845,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     const state = await panelState(page);
     // Which track the panel picked, rather than which one is longest. The two
-    // differ on the real vlog — English (392) and Chinese (393) — and the panel
+    // differ on the real vlog, English (392) and Chinese (393), and the panel
     // deliberately prefers English, so asserting the longest would be asserting
     // a track the panel never chose.
     const chosen = capture.tracks.find((track) => track.languageCode === state.study);
@@ -870,7 +870,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
   //
   // Not "the routes we remembered cover YouTube", but "nothing reached the
   // network". Before this, only four URL patterns were routed and anything else
-  // went to the real internet — silently, because the tests passed either way.
+  // went to the real internet, silently, because the tests passed either way.
   //
   // Asserted on recorded evidence rather than on the absence of a failure: the
   // harness refuses every unmatched request and records it, so a leak appears
@@ -884,11 +884,11 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     // The strongest form of the check: attempt a request the harness has no route
     // for, and observe it being refused. `route.abort()` means no data leaves the
-    // machine, so this is safe — and it proves the guard is doing something rather
+    // machine, so this is safe, and it proves the guard is doing something rather
     // than merely being present. Asserting only "no request was blocked" would
     // pass just as well with the guard deleted.
     // A path NO route covers, deliberately. The first version of this probe used
-    // `/api/timedtext?probe=…`, which the timedtext route happily served — so it
+    // `/api/timedtext?probe=…`, which the timedtext route happily served, so it
     // proved that specific routes take precedence, not that the guard refuses.
     //
     // And issued FROM a youtube.com page, not from `context.newPage()`. A fetch out
@@ -899,7 +899,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const before = registry.blockedRequests.length;
     const probePage = await openWatchPage(context, captures[0]);
     // AWAITED. A fire-and-forget fetch is killed when the page closes, so the
-    // request never reaches the router and the guard looks absent — which is what
+    // request never reaches the router and the guard looks absent, which is what
     // made the previous two attempts fail for a reason unrelated to routing.
     const outcome = await probePage
       .evaluate(async (href) => {
@@ -931,7 +931,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
   //
   // The capture replay above needs a local capture, so a fresh clone skips it.
   // This section runs from the COMMITTED corpus, so the realistic scale and shapes
-  // are exercised everywhere — which is the point of deriving it.
+  // are exercised everywhere, which is the point of deriving it.
   //
   // 403 cues is deliberately more than the real 393: it is enough to make the
   // transcript overflow the panel, which is the only way the follow-and-scroll path
@@ -956,7 +956,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // The suite shares one browser context, so the worker is attached to whichever
     // watch page was last brought to the front and the panel can render the
     // PREVIOUS video's rows first. Waiting on a row count then reads that as
-    // success and asserts against the wrong transcript — which is what produced an
+    // success and asserts against the wrong transcript, which is what produced an
     // intermittent "392 instead of 403", 392 being the capture's English track.
     // Nearly written off as flake twice; it is a real ordering bug in the test.
     const syntheticFirst = primary.segments[0].text;
@@ -980,7 +980,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const rows = await page.evaluate(() => document.querySelectorAll('.row').length);
     check('every cue rendered', rows, primary.segments.length);
     // The transcript has to actually overflow, or the scroll assertions below
-    // prove nothing — a short transcript fits and never scrolls either way.
+    // prove nothing, a short transcript fits and never scrolls either way.
     const overflow = await page.evaluate(() => {
       const box = document.getElementById('transcript');
       return box.scrollHeight > box.clientHeight + 50;
@@ -1011,7 +1011,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
         top: box.scrollTop,
         // Whether the row is between the box's top and bottom edges. This is the
         // real question; comparing the row's offset to the box's top was not,
-        // because `block: 'nearest'` scrolls to the CLOSEST edge — so an active row
+        // because `block: 'nearest'` scrolls to the CLOSEST edge, so an active row
         // legitimately sitting near the bottom is correct behaviour, not a failure.
         rowVisible: Boolean(rowRect && rowRect.top >= boxRect.top - 2 && rowRect.bottom <= boxRect.bottom + 2),
         rowTop: rowRect ? Math.round(rowRect.top) : -1,

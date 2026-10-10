@@ -65,7 +65,7 @@ async function bootBridge({
   const documentListeners = new Map();
 
   // Stands in for the player element. `getPlayerResponse` is the live source, so
-  // a test can make the page global stale while this stays current — which is
+  // a test can make the page global stale while this stays current, which is
   // exactly the state after an in-tab navigation.
   const playerElement = withVideoElement
     ? { getPlayerResponse: () => liveResponse ?? playerResponse }
@@ -91,7 +91,7 @@ async function bootBridge({
       documentListeners.get(type).push(handler);
     },
     // The bridge reads the live player and the page's heading. Both are absent
-    // by default here, so a test only gets them by asking for them — which is
+    // by default here, so a test only gets them by asking for them, which is
     // how the stale-response cases are exercised.
     getElementById: (id) => (id === 'movie_player' ? playerElement : null),
     querySelector: (selector) => (selector.includes('ytd-watch-metadata') ? domTitleElement : null),
@@ -139,7 +139,7 @@ function define(name, value) {
 //
 // Two players, for two jobs.
 //
-// The derived one (`SYNTHETIC`) is a real capture's player response — real language
+// The derived one (`SYNTHETIC`) is a real capture's player response, real language
 // codes, real names, all 156 translation languages, real renderer keys. Use it when
 // the question is "does the bridge read what YouTube actually sends", which is the
 // question this suite exists to answer.
@@ -244,8 +244,8 @@ section('reports a REAL player response, not a hand-written idea of one');
   const bridge = await bootBridge({
     playerResponse: playerResponseFrom(SYNTHETIC),
     // The URL has to carry the same id as the payload. The bridge takes the video
-    // id from the URL on purpose — that is the only signal that survives an in-tab
-    // navigation — so a test that leaves the default id here is testing a mismatch
+    // id from the URL on purpose, that is the only signal that survives an in-tab
+    // navigation, so a test that leaves the default id here is testing a mismatch
     // rather than the fixture.
     urlVideoId: SYNTHETIC.video.videoId,
     ytcfg: { get: (key) => (key === 'INNERTUBE_API_KEY' ? 'KEY123' : null) },

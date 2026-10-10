@@ -5,7 +5,7 @@ in your tab and shows them as a transcript you can look words up in.
 
 YouTube, in Chrome, Edge, Brave and Firefox. Free, open source, no account.
 
-> **IU** — *I* and *you*. 友 means **friend** in Hokkien (*iú*), Mandarin (*yǒu*)
+> **IU**, *I* and *you*. 友 means **friend** in Hokkien (*iú*), Mandarin (*yǒu*)
 > and Japanese (*tomo*).
 
 ## Status
@@ -20,7 +20,7 @@ justifications and privacy disclosure.
 
 ## Install from source
 
-Load the folder in either browser, from a clean copy of the source — **not your
+Load the folder in either browser, from a clean copy of the source, **not your
 working tree**, which also holds `node_modules/`, `docs/` and `test/fixtures/`.
 None of that belongs in an extension.
 
@@ -34,12 +34,12 @@ None of that belongs in an extension.
 
 1. `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on**.
 2. Select `manifest.json` in that folder.
-3. Open a video, then click the toolbar icon — the panel opens as a sidebar.
+3. Open a video, then click the toolbar icon, the panel opens as a sidebar.
 
 Firefox removes temporary add-ons when it closes; a permanent install needs the
 signed build from AMO.
 
-YouTube tabs that are **already open** work in both — the content scripts are
+YouTube tabs that are **already open** work in both, the content scripts are
 injected on demand, so there is nothing to reload.
 
 ## What it does
@@ -48,7 +48,7 @@ injected on demand, so there is nothing to reload.
   and the level you are working at. Words at or above it are underlined in a colour
   for their level; words you know are left plain.
 - **Defines any word on hover.** Reading and meaning. Chinese shows pinyin,
-  Japanese shows kana. A word shows every list that places it — HSK 2.0 and HSK 3.0
+  Japanese shows kana. A word shows every list that places it, HSK 2.0 and HSK 3.0
   frequently disagree, and both are shown.
 - **Shows two subtitle tracks at once.** The language you are learning with a
   second line beneath it. Either line can be a machine translation where the video
@@ -65,7 +65,7 @@ renders what it is sent; content scripts are stateless fetch providers. That spl
 is what makes tab switching instant, and it is why transcripts survive a panel
 being closed.
 
-Caption tracks are not in the DOM — they live in the page's own JS as
+Caption tracks are not in the DOM, they live in the page's own JS as
 `ytInitialPlayerResponse`. An isolated-world content script cannot read that, so a
 tiny MAIN-world bridge hands it over:
 
@@ -89,8 +89,8 @@ sequenceDiagram
 Captions are fetched by the content script with the page's own session. The
 internal player API is the fallback when a direct fetch is refused.
 
-All site-specific knowledge — the player response shape, the two timedtext
-formats, track selection, seeking — is confined to
+All site-specific knowledge, the player response shape, the two timedtext
+formats, track selection, seeking, is confined to
 `src/content/youtube-content.js`. Everything above it deals in
 `{ start, duration, text }`, so a second provider is a content script plus a
 registry entry.
@@ -117,7 +117,7 @@ scripts and cannot `import`, so they repeat the message names and the
 Chinese and Japanese work. **Korean is planned.**
 
 Levels are data, not code. Each list declares its own levels, names and language,
-and nothing in the extension knows what HSK or JLPT is — so adding a list is a
+and nothing in the extension knows what HSK or JLPT is, so adding a list is a
 data change, and adding a *language* is a dictionary plus a row in the generated
 index.
 
@@ -137,7 +137,7 @@ npm run test:browser   # real Chromium, fixture pages
 npm run ui             # Vite preview of the side panel, for layout work
 ```
 
-There are no runtime dependencies, and nothing is built — the repository is the
+There are no runtime dependencies, and nothing is built, the repository is the
 extension.
 
 ### Building the store package
@@ -152,7 +152,7 @@ Firefox. `make help` lists the individual steps (`stage`, `lint`, `zip`, `verify
 which are independently useful while working a problem out.
 
 The list of what ships lives in the Makefile, in one place, and `make verify`
-asserts the archive contains exactly that — a dotfile or a development directory
+asserts the archive contains exactly that, a dotfile or a development directory
 inside the package fails the build rather than reaching a reviewer.
 
 [`TESTING.md`](TESTING.md) covers the tiers, what each suite does and does not
@@ -184,16 +184,16 @@ for that browser; the rest is the same source.
 | `scripting`        | Inject the content scripts on demand.                    |
 | `webNavigation`    | Track which video the tab is on.                         |
 | `contextMenus`     | Put **Open video files…** on the extension's own toolbar menu. Adds nothing to the page right-click menu, and grants no access to any page. |
-| `host_permissions` | `https://*.youtube.com/*` — read captions from the page. |
+| `host_permissions` | `https://*.youtube.com/*`, read captions from the page. |
 
 That is the whole list, and it is pinned by a test, so a new one has to be added
-on purpose. There is no `activeTab`, no `tabs`, and no `web_accessible_resources`
-— the last of which means no page can reach into the extension.
+on purpose. There is no `activeTab`, no `tabs`, and no `web_accessible_resources`,
+ the last of which means no page can reach into the extension.
 
 ## Privacy
 
 **This extension collects nothing about you.** Not "we handle it responsibly",
-not "we only collect what we need" — nothing. That is a design constraint rather
+not "we only collect what we need", nothing. That is a design constraint rather
 than a policy, and it is enforced rather than promised:
 
 - **No account, no server of ours, no analytics, no telemetry, no crash
@@ -203,12 +203,12 @@ than a policy, and it is enforced rather than promised:
 - **No browsing history, no tab contents beyond the caption data**, no
   identifiers.
 - **One external host: `youtube.com`.** The extension reads the caption track of
-  the video in the tab you have open, using that page's own session — the same
+  the video in the tab you have open, using that page's own session, the same
   request the page's own subtitle button makes. The dictionaries are bundled, so
   looking a word up makes no request at all.
 
 That caption fetch is the only request the extension makes to anything outside
-itself, and it is not a promise — it is checked. The test suite scans shipped
+itself, and it is not a promise, it is checked. The test suite scans shipped
 source and fails if a request to any host other than `youtube.com` appears, if a
 transport other than `fetch` is used, or if `storage.sync` is reached for. Adding
 one is a deliberate decision, not a slip. See
@@ -216,26 +216,26 @@ one is a deliberate decision, not a slip. See
 
 ## Known limitations
 
-- **Marking covers Chinese and Japanese — kanji *and* kana.** Korean is not
+- **Marking covers Chinese and Japanese, kanji *and* kana.** Korean is not
   supported yet: Hangul is outside the segmenter's character class, and spaced
-  scripts (English, Spanish) cannot be marked at all — a sentence is one token to a
+  scripts (English, Spanish) cannot be marked at all, a sentence is one token to a
   word-list matcher.
 - **Inflected Japanese forms mark the dictionary headword, not the word on
   screen.** `食べました` does not match `食べる`; where the stem is itself a
   headword it marks that, carrying a narrower scope. Kanji forms mark correctly.
 - **A few Japanese words share one entry where JMdict splits homographs** (`私` is
   both わたし and あたし). 156 spellings are affected, so hover shows one reading.
-- **Bilingual alignment is approximate** — cues are matched by start time, and a
+- **Bilingual alignment is approximate**, cues are matched by start time, and a
   pair more than 1.5s apart is left blank rather than mismatched.
 - **Videos without captions show an error**, not a fallback. Auto-generated tracks
   cover most, but not all.
 - **Live streams** have unstable caption timing; seeking may not line up.
-- **Transcripts are not persisted** — they survive tab switches and a closed panel,
+- **Transcripts are not persisted**, they survive tab switches and a closed panel,
   but not a browser restart. The 6 most recent videos are cached.
 
 ## Parked: audio capture
 
-A tab-capture path exists — capturing tab audio and running a speech recogniser —
+A tab-capture path exists, capturing tab audio and running a speech recogniser,
 but it is behind `USE_AUDIO_CAPTURE = false` and has never been run end to end.
 
 > ⚠️ **Turning it on also means restoring two manifest permissions.** `tabCapture`
@@ -249,15 +249,15 @@ pipeline test and not a transcriber.
 
 ## Licence
 
-Our code — everything in `src/`, the icons, the tests — is **MIT**; see
+Our code, everything in `src/`, the icons, the tests, is **MIT**; see
 [`LICENSE`](LICENSE). No third-party code, fonts or images are bundled.
 
 The dictionaries are **not** ours and **not** MIT. Both are CC BY-SA 4.0 derived
 works:
 
-- `src/learn/data/chinese.json` — CC-CEDICT, with HSK levels from the official MOE
+- `src/learn/data/chinese.json`, CC-CEDICT, with HSK levels from the official MOE
   HSK 3.0 word list;
-- `src/learn/data/japanese.json` — JMdict (EDRDG), with JLPT levels from an
+- `src/learn/data/japanese.json`, JMdict (EDRDG), with JLPT levels from an
   MIT-licensed list.
 
 Full attribution, source revisions and content hashes are in

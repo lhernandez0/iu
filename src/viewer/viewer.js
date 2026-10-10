@@ -1,5 +1,5 @@
 /**
- * The video viewer — a SOURCE, one we host.
+ * The video viewer, a SOURCE, one we host.
  *
  * It speaks the same five messages as the YouTube content script, with the same
  * shapes, and nothing else:
@@ -15,7 +15,7 @@
  *
  * The service worker does not know this page exists. It finds it because the page
  * announces itself, because `tab.url` is empty for a `chrome-extension://` document
- * without the `tabs` permission — which this extension deliberately does not
+ * without the `tabs` permission, which this extension deliberately does not
  * request. Everything else is the ordinary content contract, which is why the
  * panel, the row model and the alignment need no changes to read a file instead of
  * a website.
@@ -28,9 +28,9 @@
  * ## What this file owns, and what it does not
  *
  * It owns playback, the control bar, the captions, and the file/track model. It does
- * NOT own the mark RULES — `src/learn/marking.js` does, shared with the worker, so
+ * NOT own the mark RULES, `src/learn/marking.js` does, shared with the worker, so
  * the captions and the panel's transcript cannot disagree about what a mark is. It
- * does not own the mark LOOK — `src/common/marks.css` does, for the same reason.
+ * does not own the mark LOOK, `src/common/marks.css` does, for the same reason.
  */
 
 import { MSG, TARGET } from '../common/messages.js';
@@ -46,7 +46,7 @@ import { renderReading, setReadingSettings, attachHover, showEntry, hide as hide
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
 
 /**
- * The extension API namespace — `browser` where it exists (Chrome 148+ and always
+ * The extension API namespace, `browser` where it exists (Chrome 148+ and always
  * in Firefox), `chrome` otherwise. Read here rather than imported so it reads the
  * global where it is used; a module would snapshot it at import time and the test
  * stubs reassign the global.
@@ -87,19 +87,19 @@ const els = {
 // --- Settings ----------------------------------------------------------------
 //
 // Read directly from `chrome.storage`, because this is our own page and storage is
-// the SOURCE OF TRUTH — the same arrangement the worker subscribes to. Writing goes
+// the SOURCE OF TRUTH, the same arrangement the worker subscribes to. Writing goes
 // the same way, so a change made here and a change made in the panel both land in
 // the bucket and both reach every listener, including the worker's.
 //
 // The bucket and key come from `settings.js` so there is one definition of where
-// settings live. The viewer does NOT import the registry's `defaults()` — it needs
+// settings live. The viewer does NOT import the registry's `defaults()`, it needs
 // six values and renders none of them as controls, and importing the whole thing
 // would pull in every option list for no use. The KEYS are the contract.
 //
 // **Every write is a MERGE, never a whole-object replace.** The viewer knows about
 // six settings; the panel has fourteen. Writing `settings` wholesale would delete
-// every one the viewer had never heard of — the word list, the threshold, the text
-// size — the moment anyone touched a caption control. So the bucket is read, the one
+// every one the viewer had never heard of, the word list, the threshold, the text
+// size, the moment anyone touched a caption control. So the bucket is read, the one
 // key is set, and the rest is carried across untouched.
 
 const DEFAULTS = {
@@ -111,7 +111,7 @@ const DEFAULTS = {
   defaultSpeed: '1',
   captionSize: 20,
   // Whether the difficulty band is drawn under the scrubber. Viewer-only, and in the
-  // registry because it is a preference that persists — unlike volume, which the
+  // registry because it is a preference that persists, unlike volume, which the
   // element keeps on its own and which the OS volume should really own.
   difficulty: true,
   // SHARED with the panel, not viewer-owned. The word list, the threshold and the two
@@ -164,7 +164,7 @@ void api.storage[SETTINGS_AREA]
   .catch(() => {});
 
 // **This is what makes the viewer and the panel agree.** The panel writes a
-// setting, the bucket changes, and this listener fires — because the storage API's
+// setting, the bucket changes, and this listener fires, because the storage API's
 // change event is cross-context. Without it a caption placement changed in the
 // panel would not reach the video, and the two would disagree until a reload.
 api.storage.onChanged.addListener((changes, areaName) => {
@@ -208,7 +208,7 @@ async function setSetting(id, value) {
 //
 // The captions are marked with the SAME rules the panel's transcript uses
 // (`src/learn/marking.js`) over the same dictionary, so a word looks the same in
-// both places. This is the viewer's own copy of the dictionary load — it does not
+// both places. This is the viewer's own copy of the dictionary load, it does not
 // ask the worker, because the viewer is a source, not a client of one, and a round
 // trip per caption would be a message per cue.
 
@@ -229,7 +229,7 @@ function loadJson(path) {
  * Load the dictionary and mark every cue.
  *
  * Fire-and-forget: the captions render UNMARKED first and gain their marks when the
- * dictionary arrives. That ordering is deliberate — a subtitle track that appears a
+ * dictionary arrives. That ordering is deliberate, a subtitle track that appears a
  * beat late is a bug, and one that appears plain and then gains underlines is the
  * intended behaviour of an annotation. The same order the panel uses.
  *
@@ -243,14 +243,14 @@ async function prepareMarks(languageCode) {
   try {
     if (!listIndex) listIndex = await loadIndex(api.runtime.getURL('src/learn/data/index.json'));
     // The list is an explicit choice when there is one, and the track's language
-    // otherwise — the same resolution the pickers show, through `resolvedList`, so
+    // otherwise, the same resolution the pickers show, through `resolvedList`, so
     // the control and the marking cannot disagree.
     void languageCode;
     const list = resolvedList();
     if (!list) return;
     listId = list.id;
     // A different language can mean a different dictionary, so it is reloaded rather
-    // than reused — the alternative marks Japanese text against Chinese headwords.
+    // than reused, the alternative marks Japanese text against Chinese headwords.
     if (dictionaryLanguage !== list.language) {
       const path = dictionaryPathFor(listIndex, listId);
       if (!path) return;
@@ -273,7 +273,7 @@ let dictionary = null;
 /**
  * Mark every cue, in place.
  *
- * Stores the TOKENS on each cue so a re-mark does not re-segment — segmentation is
+ * Stores the TOKENS on each cue so a re-mark does not re-segment, segmentation is
  * the expensive half and it does not depend on the settings, only on the text.
  */
 function markSegments() {
@@ -282,7 +282,7 @@ function markSegments() {
   const list = resolvedList();
   // A list that cannot grade this language would find nothing and render the
   // captions plain with no explanation, which reads as a broken feature. Skipping
-  // the work says the same thing more cheaply — and the captions being plain for a
+  // the work says the same thing more cheaply, and the captions being plain for a
   // language we have no list for is correct, not a failure.
   if (!listCoversLanguage(list, trackLanguage())) return;
 
@@ -298,7 +298,7 @@ function markSegments() {
   }
 
   renderCaptions(activeIndex());
-  // The band is painted FROM these marks, so it has to be repainted when they change —
+  // The band is painted FROM these marks, so it has to be repainted when they change,
   // otherwise switching word list or threshold recolours every word and leaves the
   // timeline showing the levels of the previous list.
   paintDifficulty();
@@ -309,7 +309,7 @@ function markSegments() {
  *
  * The first level, matching the panel's own default when the learner has not
  * chosen: nothing is guessed about their ability. The viewer has no threshold
- * control — that is a panel-side setting — so it marks from the bottom, which
+ * control, that is a panel-side setting, so it marks from the bottom, which
  * underlines the most and hides the least.
  *
  * @param {object|null} list
@@ -362,8 +362,8 @@ let videoObjectUrl = null;
  * Two sources feed this and the entries differ only in how their cues are produced,
  * which is what makes an embedded track and a sidecar look identical downstream:
  *
- *   - a SIDECAR file, parsed at pick time (cheap — it is a text file)
- *   - a track INSIDE the video, extracted lazily on first request (not cheap — it
+ *   - a SIDECAR file, parsed at pick time (cheap, it is a text file)
+ *   - a track INSIDE the video, extracted lazily on first request (not cheap, it
  *     walks the media, so a film's cues are read when a language is chosen)
  *
  * @type {Array<object>}
@@ -376,8 +376,8 @@ let segments = [];
 /**
  * The GLOSS line's text, aligned cue-for-cue to `segments`.
  *
- * A local file can carry more than one subtitle track — a Chinese traditional and an
- * English, say — so the viewer draws both lines exactly as the panel does. Alignment
+ * A local file can carry more than one subtitle track, a Chinese traditional and an
+ * English, say, so the viewer draws both lines exactly as the panel does. Alignment
  * is by START TIME with a drift tolerance, through the shared `alignSecondary`, so a
  * badly out-of-sync second track is left blank rather than paired with the wrong
  * line. That is the same guarantee the panel's dual subtitles have, and it comes from
@@ -436,7 +436,7 @@ function videoIdFor(file) {
 /**
  * A bounded `read(offset, length)` over a `File`, for the Matroska parser.
  *
- * `File.slice()` does not read anything — it is a view — and the `arrayBuffer()` it
+ * `File.slice()` does not read anything, it is a view, and the `arrayBuffer()` it
  * returns reads only that slice. So a multi-gigabyte film costs one window at a
  * time and never the whole file.
  *
@@ -509,7 +509,7 @@ async function acceptFiles(files) {
 }
 
 /**
- * "Look again" — the viewer's content changed.
+ * "Look again", the viewer's content changed.
  *
  * Sent fire-and-forget: the worker resolves the active tab, so there is nothing to
  * retry against and nothing to report if it is missed. The next cue change or the
@@ -524,8 +524,8 @@ function notifyChanged() {
 /**
  * Open a video file, and find whatever subtitles it carries.
  *
- * `async` because discovery reads the container. It is cheap — only the `Tracks`
- * element — but it is a read, and the video must be usable while it happens, so
+ * `async` because discovery reads the container. It is cheap, only the `Tracks`
+ * element, but it is a read, and the video must be usable while it happens, so
  * playback starts first and the track list fills in after.
  *
  * @param {File} file
@@ -534,7 +534,7 @@ async function loadVideo(file) {
   // A stream from the previous file has to be torn down before its source goes away,
   // or its MediaSource stays attached and its object URL keeps the blob alive.
   // `releaseStream` revokes the rebuild's URL, so this must NOT revoke `videoObjectUrl`
-  // as well — after a switch that variable holds the SAME MediaSource URL, and
+  // as well, after a switch that variable holds the SAME MediaSource URL, and
   // revoking it twice detaches a source the element may still be reading.
   if (releaseStream) {
     releaseStream();
@@ -561,7 +561,7 @@ async function loadVideo(file) {
   offerResume();
 
   // A file the browser cannot decode is the one failure it will not tell us about
-  // in advance. `canPlayType` is useless here — it answers about the CONTAINER, not
+  // in advance. `canPlayType` is useless here, it answers about the CONTAINER, not
   // the codecs inside, and returns empty even for files Chrome then plays. So the
   // only honest detection is the error event, after trying. This is also the limit
   // of MKV support: the CONTAINER is readable by us, but whether its video DECODES
@@ -580,7 +580,7 @@ async function loadVideo(file) {
     // message: the controls are right there.
   });
 
-  // A video dropped without a `.mkv` extension is still worth trying — the
+  // A video dropped without a `.mkv` extension is still worth trying, the
   // container, not the filename, decides whether there are tracks in it.
   try {
     await loadEmbeddedTracks(file);
@@ -598,11 +598,11 @@ async function loadVideo(file) {
   // Load a track for the CAPTIONS, without waiting for the worker to ask.
   //
   // The worker asks for a track when the side panel needs the transcript, and on a
-  // cache hit it hands the cues back with `SET_TRACK` rather than fetching — so the
+  // cache hit it hands the cues back with `SET_TRACK` rather than fetching, so the
   // usual flow does give us cues. But the viewer must also work with NO panel at
   // all, and then nothing ever asks, and the captions stayed blank while the film
   // played. So the default track is loaded here, and `SET_TRACK` later replaces it
-  // with whatever the worker chose — which is the same list in the ordinary case.
+  // with whatever the worker chose, which is the same list in the ordinary case.
   void loadDefaultTrack();
 
   render();
@@ -611,12 +611,12 @@ async function loadVideo(file) {
 /**
  * Load the track the viewer would pick, so the captions work with no panel open.
  *
- * The STUDY track first, then the gloss — the preference, or the next readable track
+ * The STUDY track first, then the gloss, the preference, or the next readable track
  * that is not the study one. Two lines when the file has two tracks, one when it has
  * one, which is what the panel does beside the video.
  *
  * Deliberately fire-and-forget and deliberately not reported as an error: a file
- * whose cues cannot be read still plays, and the panel — when there is one — will say
+ * whose cues cannot be read still plays, and the panel, when there is one, will say
  * why in its own status line.
  */
 async function loadDefaultTrack() {
@@ -647,13 +647,13 @@ async function loadDefaultTrack() {
 /**
  * Load the second subtitle track and align it to the first.
  *
- * **The viewer can show two lines because a local file can carry two tracks** —
+ * **The viewer can show two lines because a local file can carry two tracks**,
  * Chinese traditional and English in the same MKV, for instance. That is the same
  * arrangement the panel already has, drawn over the video instead of beside it, so
  * the alignment comes from the shared `alignSecondary` rather than a second
  * implementation with its own drift tolerance.
  *
- * A track that cannot be read, or a file with only one, leaves the gloss empty — and
+ * A track that cannot be read, or a file with only one, leaves the gloss empty, and
  * the CSS collapses the empty line rather than leaving a blank card.
  *
  * @param {object} study
@@ -767,7 +767,7 @@ async function loadEmbeddedTracks(file) {
 
   setStatus(`${tracks.length} subtitle track${tracks.length === 1 ? '' : 's'} in this video`);
   // The track pickers are populated only once the tracks are KNOWN, which is after
-  // the container has been read. Rendering them earlier left them empty — a picker
+  // the container has been read. Rendering them earlier left them empty, a picker
   // offering nothing to choose while the status line says there are three tracks is
   // the confusing half of the two being out of step.
   renderTrackPickers();
@@ -776,8 +776,8 @@ async function loadEmbeddedTracks(file) {
 /**
  * Read the cues for one embedded track, on first use.
  *
- * Deferred rather than done at load time because it walks the media — the only
- * expensive thing here — and a film with three subtitle tracks should not pay for
+ * Deferred rather than done at load time because it walks the media, the only
+ * expensive thing here, and a film with three subtitle tracks should not pay for
  * all three when one is chosen.
  *
  * @param {object} track
@@ -794,7 +794,7 @@ async function ensureSegments(track) {
   track.segments = cues.get(track.trackNumber) ?? [];
   if (truncated) {
     // A cluster too large to hold, or a region that could not be read. Reported
-    // rather than passed off as a complete transcript — a partial transcript that
+    // rather than passed off as a complete transcript, a partial transcript that
     // looks complete is worse than a named gap.
     track.error = 'some of this track could not be read';
   }
@@ -809,6 +809,24 @@ function render() {
   const names = [videoFile?.name, ...tracks.map((track) => track.name)].filter(Boolean);
   els.chosen.textContent = names.length ? names.join(' · ') : 'No files chosen';
   els.chosen.title = els.chosen.textContent;
+  document.title = titleFor(videoFile?.name);
+}
+
+/**
+ * The page title: our name, then the file, cut to fit.
+ *
+ * The tab is how someone tells one viewer window from another when several films
+ * are open, so the file name belongs in it. It is cut rather than allowed to run
+ * on, because a tab strip shows roughly this many characters before it elides
+ * anyway, and losing our own name entirely is worse than shortening theirs.
+ *
+ * @param {string | undefined} name
+ */
+const TITLE_NAME_MAX = 40;
+function titleFor(name) {
+  if (!name) return 'IU';
+  const short = name.length > TITLE_NAME_MAX ? `${name.slice(0, TITLE_NAME_MAX - 1)}…` : name;
+  return `IU · ${short}`;
 }
 
 // --- Captions ----------------------------------------------------------------
@@ -823,7 +841,7 @@ function activeIndex() {
  * How long a finished cue stays on screen.
  *
  * A subtitle whose cue has ENDED is not the current line, and leaving it up made a long
- * silent stretch show the last thing said — wrong for a film in a way it is not wrong
+ * silent stretch show the last thing said, wrong for a film in a way it is not wrong
  * for a side panel, where the row stays highlighted so it can be found again.
  *
  * The hold covers consecutive cues with a fraction of a second between them, so an
@@ -848,7 +866,7 @@ function cancelClear(primary) {
  * Empty a placement's caption after `delayMs`.
  *
  * Keyed by the primary element so a later cue cancels the clear a previous one
- * scheduled — without that, a line would vanish a second after it appeared.
+ * scheduled, without that, a line would vanish a second after it appeared.
  *
  * @param {HTMLElement} primary
  * @param {HTMLElement} secondary
@@ -869,11 +887,11 @@ function scheduleClear(primary, secondary, delayMs) {
 /**
  * Draw the current cue into BOTH placements.
  *
- * Both are written together so switching placement never shows a stale line — a
+ * Both are written together so switching placement never shows a stale line, a
  * switch that revealed the last cue from ten minutes ago would look like a bug in
  * the video. Only one is visible at a time; the other is `hidden`.
  *
- * The tokens are rendered by `renderReading` from `common/marks.js` — the SAME
+ * The tokens are rendered by `renderReading` from `common/marks.js`, the SAME
  * function the panel uses, so a word looks the same here as in the transcript and
  * the caption text cannot drift from it. Duplicating the rendering would have been
  * the obvious shortcut and is exactly the drift this shares instead.
@@ -884,7 +902,7 @@ function renderCaptions(index) {
   const cue = index >= 0 ? segments[index] : null;
   const levelCount = listLevelCount();
 
-  // `findActiveIndex` answers "which cue started most recently" — the right question
+  // `findActiveIndex` answers "which cue started most recently", the right question
   // for a transcript and the wrong one for a subtitle. A cue that STARTED is not a cue
   // that is still PLAYING, and without this check the last line of a scene stayed on
   // screen through every silent stretch that followed it, indefinitely.
@@ -896,7 +914,7 @@ function renderCaptions(index) {
     return;
   }
 
-  // A cue IS playing, so any pending clear is called off — otherwise the line would
+  // A cue IS playing, so any pending clear is called off, otherwise the line would
   // disappear a second after it appeared.
   cancelClear(els.overlayPrimary);
   cancelClear(els.belowPrimary);
@@ -925,7 +943,7 @@ function renderCaptions(index) {
  * Built here rather than asked of the worker: the viewer holds the whole dictionary
  * already, and a message per hover would be a round trip for data this page can read
  * directly. The SHAPE is the one `showEntry` expects, so the popover code does not
- * know which surface it is drawing for — the panel supplies the same shape from a
+ * know which surface it is drawing for, the panel supplies the same shape from a
  * worker reply.
  *
  * @param {string} word
@@ -966,7 +984,7 @@ function listLevelCount() {
  * Fill the two subtitle-track pickers.
  *
  * The same choices the panel's dropdowns offer, from the same `tracks` list, so the
- * two surfaces cannot disagree about what a file contains — and so a track chosen in
+ * two surfaces cannot disagree about what a file contains, and so a track chosen in
  * one is honoured by the other, since both write the same setting.
  *
  * "Off" on the second line is a real preference, not the absence of one: one line is
@@ -991,7 +1009,7 @@ function renderTrackChoosers() {
     select.replaceChildren();
     select.disabled = tracks.length === 0;
     if (!tracks.length) {
-      select.append(new Option('—', ''));
+      select.append(new Option('-', ''));
       continue;
     }
     if (includeOff) {
@@ -1012,7 +1030,7 @@ function renderTrackChoosers() {
  * Fill the word-list and threshold pickers in the caption row.
  *
  * Rebuilt only when their contents would differ, so a state change does not reset
- * the control the user is using — the same guard the panel's selects carry.
+ * the control the user is using, the same guard the panel's selects carry.
  *
  * The list options come from the loaded index and the threshold options from the
  * chosen list, so the two cannot offer a level the list does not have.
@@ -1028,7 +1046,7 @@ function renderTrackPickers() {
     listSelect.dataset.signature = listSignature;
     listSelect.replaceChildren();
     if (!lists.length) {
-      listSelect.append(new Option('—', ''));
+      listSelect.append(new Option('-', ''));
       listSelect.disabled = true;
     } else {
       listSelect.disabled = false;
@@ -1055,7 +1073,7 @@ function renderTrackPickers() {
     thresholdSelect.dataset.signature = thresholdSignature;
     thresholdSelect.replaceChildren();
     if (!levels.length) {
-      thresholdSelect.append(new Option('—', ''));
+      thresholdSelect.append(new Option('-', ''));
       thresholdSelect.disabled = true;
     } else {
       thresholdSelect.disabled = false;
@@ -1075,7 +1093,7 @@ function renderTrackPickers() {
  * The list the viewer grades against.
  *
  * An explicit choice wins; otherwise the list is matched to the track's language, and
- * the BROADEST one for it — a viewer with no other information should mark as much as
+ * the BROADEST one for it, a viewer with no other information should mark as much as
  * it honestly can. Resolved through the shared `listForLanguage` so the panel and the
  * viewer cannot disagree about which list covers a language.
  */
@@ -1111,7 +1129,7 @@ function applySettings() {
   document.getElementById('speed').value = settings.defaultSpeed;
   document.getElementById('caption-size').value = String(settings.captionSize);
   // The one thing the size control has to do: it sets the custom property the
-  // caption rules read. It was dead markup before — present, styled, and wired to
+  // caption rules read. It was dead markup before, present, styled, and wired to
   // nothing, so moving it changed nothing.
   document.documentElement.style.setProperty('--caption-size', `${settings.captionSize}px`);
   renderTrackPickers();
@@ -1123,7 +1141,7 @@ function applySettings() {
   applyDifficulty();
 
   // Pushed into the renderer, which reads the placement from the last settings it
-  // was given rather than taking it as an argument — the same arrangement the panel
+  // was given rather than taking it as an argument, the same arrangement the panel
   // uses, so the reading is drawn identically on both surfaces.
   setReadingSettings({ romaji: settings.romaji, toneStyle: settings.toneStyle });
 
@@ -1184,7 +1202,7 @@ els.bar.addEventListener('focusin', () => {
 
 els.bar.addEventListener('focusout', (event) => {
   // `focusout` fires when moving BETWEEN children too, so the test is whether focus
-  // left the bar entirely — `relatedTarget` is where it went.
+  // left the bar entirely, `relatedTarget` is where it went.
   if (els.bar.contains(event.relatedTarget)) return;
   focused = false;
   scheduleHide();
@@ -1198,7 +1216,7 @@ els.bar.addEventListener('focusout', (event) => {
 //
 // Moved here from the preview, where it was designed. The BAND is the one thing that
 // needed reworking: the preview read a synthetic `level` off each cue, while the viewer
-// marks real tokens — so the level comes off `cue.marked`, which `markSegments` fills
+// marks real tokens, so the level comes off `cue.marked`, which `markSegments` fills
 // with the same `markLine` the panel uses. Nothing new is computed; the same marks that
 // underline the words decide the colour of the band.
 //
@@ -1209,13 +1227,13 @@ els.bar.addEventListener('focusout', (event) => {
  * Paint the counter, the scrubber position and the played region.
  *
  * Driven from the same tick as the captions rather than from `timeupdate`, so the
- * three never disagree about where playback is — they are one reading of the clock.
+ * three never disagree about where playback is, they are one reading of the clock.
  */
 function paintTime() {
   const duration = els.video.duration;
   const now = els.video.currentTime;
   els.timeCurrent.textContent = timecode(now);
-  els.timeDuration.textContent = Number.isFinite(duration) ? timecode(duration) : '—';
+  els.timeDuration.textContent = Number.isFinite(duration) ? timecode(duration) : '-';
 
   if (!Number.isFinite(duration) || duration <= 0) return;
   // The range's MAX is the duration, set once known. A range on a fixed 0-100 scale
@@ -1238,7 +1256,7 @@ function paintTime() {
  *
  * **Runs, not one span per cue.** Adjacent cues of the same level drawn separately
  * leave hairline gaps from rounding, so the band comes out striped rather than
- * continuous — which reads as noise and hides the thing it is meant to show.
+ * continuous, which reads as noise and hides the thing it is meant to show.
  *
  * Coloured with `levelColour`, the same ramp the word underlines use, so a colour
  * means the same thing here as it does on a word in the transcript. That is what makes
@@ -1259,7 +1277,7 @@ function paintDifficulty() {
     return levels.length ? Math.max(...levels) : 0;
   };
 
-  // A cue carries `start` and `duration`, NOT `end` — the preview this was ported from
+  // A cue carries `start` and `duration`, NOT `end`, the preview this was ported from
   // used `end`, and reading the wrong field gave `NaN` for every width. CSS rejects
   // `NaN%`, so the assignment was silently dropped and every span rendered 0px wide:
   // a band that existed in the DOM and painted nothing.
@@ -1300,7 +1318,7 @@ let scrubbing = false;
  * Reflect the difficulty setting in the button and the band.
  *
  * The label is the ACTION ("Hide difficulty band"), matching the caption toggle, and it
- * carries the band's name — "Hide band" on its own is a mystery in a bar full of things
+ * carries the band's name, "Hide band" on its own is a mystery in a bar full of things
  * that hide.
  */
 function applyDifficulty() {
@@ -1352,7 +1370,7 @@ els.scrubber.addEventListener('keyup', () => {
 // ## The two paths, and why both
 //
 // `HTMLMediaElement.audioTracks` is the right way and is **not available in any
-// released browser** — measured 2026-10-09 on Chrome 148 and Firefox 155. It exists in
+// released browser**, measured 2026-10-09 on Chrome 148 and Firefox 155. It exists in
 // Blink behind `--enable-blink-features=AudioVideoTracks` (or the user-facing
 // `--enable-experimental-web-platform-features`), where it works correctly, and was
 // held back for years because switching froze playback. Fixed in M138.
@@ -1363,7 +1381,7 @@ els.scrubber.addEventListener('keyup', () => {
 //
 // **A third state is real and must be shown**: a file whose audio is AC-3, E-AC-3 or
 // DTS. The browser can neither decode those nor play them, so no amount of remuxing
-// helps, and the failure mode is SILENCE — no error, nothing to catch. The selector
+// helps, and the failure mode is SILENCE, no error, nothing to catch. The selector
 // says so instead.
 
 /** The file's audio tracks, as last listed. @type {Array<object>} */
@@ -1378,7 +1396,7 @@ let audioSourceFile = null;
  * Held rather than forgotten because both halves leak otherwise: the `MediaSource`
  * stays attached to an element that has moved on, and the object URL pins the blob it
  * was created from. Called before a new stream replaces it, and when the file is
- * closed — not immediately, because the element is still reading from it.
+ * closed, not immediately, because the element is still reading from it.
  *
  * @type {(() => void)|null}
  */
@@ -1389,22 +1407,22 @@ let audioBusy = false;
  * Whether the track select is showing.
  *
  * Shown whenever the file actually has more than one, in the transport row. The row is
- * full, so this only appears when it has something to offer — a select over a single
+ * full, so this only appears when it has something to offer, a select over a single
  * option is noise.
  */
 
 /**
  * Build the selector from the file's own track list.
  *
- * Hidden when there is no choice, which is the overwhelmingly common case — a control
+ * Hidden when there is no choice, which is the overwhelmingly common case, a control
  * over a single option is noise, and a one-track file has nothing to select.
  */
 function renderAudio() {
   const choice = audioTracks.length > 1;
-  // Shown whenever there is a choice, in the transport row — which is never hidden for
+  // Shown whenever there is a choice, in the transport row, which is never hidden for
   // a loaded file. It lived in the caption row once, and the caption row disappears when
   // the captions are off, so the control was unreachable for a viewer who wants the
-  // original audio without subtitles — the case this feature exists for.
+  // original audio without subtitles, the case this feature exists for.
   els.audioField.hidden = !choice;
 
   if (!choice) {
@@ -1423,7 +1441,7 @@ function renderAudio() {
   });
 
   // The note says only what a viewer could NOT work out by looking, which is now ONE
-  // case: a codec this browser cannot play. The other two were both noise —
+  // case: a codec this browser cannot play. The other two were both noise,
   // "switching rebuilds a copy of the file" described the implementation rather than
   // the film, and "Preparing…" announced a wait that is already visible in the disabled
   // select and is usually milliseconds long. Measured: 39 ms to a playable first frame,
@@ -1470,12 +1488,12 @@ async function describeAudio(file) {
  *
  * **`loadedmetadata` is too early for a Media Source stream, and that was the bug.**
  * Measured on a five-minute dual-audio file: it fires with `duration === Infinity` and
- * `readyState 1`, and setting `currentTime` there is silently DROPPED — `seekable` is
+ * `readyState 1`, and setting `currentTime` there is silently DROPPED, `seekable` is
  * empty, so the element has nowhere to seek to. The duration resolves a moment later and
  * playback starts from zero. Reported as "resume offered 13:05, switched the audio track,
  * landed at 0:02", and reproduced exactly: 240.95s became 2.54s.
  *
- * The arithmetic was never wrong — `Math.min(resumeAt, Infinity)` is `resumeAt`. Only the
+ * The arithmetic was never wrong, `Math.min(resumeAt, Infinity)` is `resumeAt`. Only the
  * moment was, which is why the position vanished with no error at all.
  *
  * So this waits for the RANGE rather than for an event that only means "the element
@@ -1501,7 +1519,7 @@ function restorePosition(target, onRestored) {
     if (settled) return;
     const { seekable, duration } = els.video;
 
-    // The rebuilt stream is SHORTER than the target — a track that ends earlier, or a
+    // The rebuilt stream is SHORTER than the target, a track that ends earlier, or a
     // container that lost its tail. Seeking past the end throws, so go to the end and
     // stop waiting for a range that will never cover it.
     if (Number.isFinite(duration) && duration <= target + 0.5) {
@@ -1518,7 +1536,7 @@ function restorePosition(target, onRestored) {
 
   for (const event of EVENTS) els.video.addEventListener(event, attempt);
   // A ceiling, so a stream that never becomes seekable does not leave four listeners on
-  // the element for the life of the page — and so `onRestored` runs either way, or a
+  // the element for the life of the page, and so `onRestored` runs either way, or a
   // playback that should have continued would stay paused forever.
   const ceiling = setTimeout(finish, 15000);
   attempt();
@@ -1535,11 +1553,11 @@ async function selectAudioTrack(index) {
   audioChoice = index;
 
   // Path 1: the browser can do it. Preferred, because the browser then handles every
-  // codec it can play — including the ones we cannot decode at any price we would pay.
+  // codec it can play, including the ones we cannot decode at any price we would pay.
   //
   // Only usable when the element is actually playing the ORIGINAL file. After a switch
   // the source is a rebuilt stream, and the browser's own track list there is a list of
-  // one — so this has to fall through to rebuilding again, or the UI would claim a
+  // one, so this has to fall through to rebuilding again, or the UI would claim a
   // track change that never happened.
   if (audioTracksSupported() && !releaseStream) {
     const list = [...els.video.audioTracks];
@@ -1568,7 +1586,7 @@ async function selectAudioTrack(index) {
     // been copied, and memory stays near a segment rather than near the file size.
     // Measured at 39 ms to a playable first frame on a small fixture.
     // The previous rebuilt stream is released BEFORE the new one is built, so two
-    // MediaSources are never open against the same element — which throws.
+    // MediaSources are never open against the same element, which throws.
     if (releaseStream) {
       releaseStream();
       releaseStream = null;
@@ -1577,7 +1595,7 @@ async function selectAudioTrack(index) {
     const { url, revoke, done } = await streamTrack(audioSourceFile, index);
 
     // The element must attach BEFORE production has anywhere to put its output, and
-    // `streamTrack` deliberately does not wait for that — see its contract. Swapping
+    // `streamTrack` deliberately does not wait for that, see its contract. Swapping
     // `src` is what makes `sourceopen` fire.
     if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
     videoObjectUrl = url;
@@ -1597,7 +1615,7 @@ async function selectAudioTrack(index) {
 
     // Production is awaited, so `audioBusy` covers the whole rebuild rather than only
     // the setup. Releasing it when `streamTrack` returned would allow a second switch
-    // while the first stream was still being produced — and the second would revoke the
+    // while the first stream was still being produced, and the second would revoke the
     // first's URL out from under the element.
     await done;
   } catch (error) {
@@ -1618,7 +1636,7 @@ els.audioSelect.addEventListener('change', (event) => {
 // that the slider and the button compose.
 //
 // NOT a setting. The element keeps its volume across a file change, and the OS volume
-// is the real preference — a second one stored here would fight it. That is why this
+// is the real preference, a second one stored here would fight it. That is why this
 // differs from `difficulty`, which IS stored: the band is ours, the volume is not.
 
 /**
@@ -1730,8 +1748,8 @@ els.video.addEventListener('seeked', () => {
 // --- The resume position -----------------------------------------------------
 //
 // Only the POSITION is remembered, never the file: the web platform does not expose
-// a path (verified — `file.name` is a basename), and storing the bytes copies them
-// (measured — a 256MB file measured 256MB on disk, and the same File twice measured
+// a path (verified, `file.name` is a basename), and storing the bytes copies them
+// (measured, a 256MB file measured 256MB on disk, and the same File twice measured
 // 512MB). So the offer is what makes a re-pick feel like resuming.
 
 const POSITION_KEY = 'playback-positions';
@@ -1769,7 +1787,7 @@ function forgetPosition() {
  * Whether the next `loadedmetadata` is from OUR OWN source swap rather than a new file.
  *
  * Switching audio track replaces `els.video.src` with the rebuilt stream, and that fires
- * `loadedmetadata` again — so the handler offered to resume a film the viewer is already
+ * `loadedmetadata` again, so the handler offered to resume a film the viewer is already
  * watching, at a position they are already at. The offer is for a file being OPENED; an
  * internal re-source is not that, and the switch restores its own position anyway.
  *
@@ -1783,7 +1801,7 @@ let resourcingInternally = false;
  *
  * A banner that sits on the picture until it is dismissed is a modal nobody asked for,
  * and this one covers the video. Ten seconds is long enough to read a timestamp and
- * decide, and short enough not to be in the way — the same reasoning as any toast.
+ * decide, and short enough not to be in the way, the same reasoning as any toast.
  */
 const RESUME_TIMEOUT_MS = 10000;
 
@@ -1839,13 +1857,13 @@ els.resume.addEventListener('click', (event) => {
     // Seeking is not resuming, but calling `play()` straight after a seek does not
     // resume either: the seek aborts the pending play, the promise rejects with
     // `AbortError`, and a `.catch(() => {})` turns that into a film that sits paused at
-    // the right position — the exact symptom this was meant to fix. Measured: the
+    // the right position, the exact symptom this was meant to fix. Measured: the
     // element reported `paused: true` after the click while a plain `play()` outside the
     // handler succeeded, so the policy was never the problem. Wait for the seek to land.
     els.video.addEventListener('seeked', () => void els.video.play().catch(() => {}), { once: true });
   } else {
     // "Start over" did NOTHING but hide the banner. It fell through both branches, so the
-    // playhead stayed where it was and the offer was simply gone — the button's whole
+    // playhead stayed where it was and the offer was simply gone, the button's whole
     // promise unkept, and unrecoverable, because `offerResume` only fires on metadata.
     els.video.currentTime = 0;
     // And the stored position has to go with it, or the offer returns on the next load
@@ -1869,7 +1887,7 @@ function reply(sendResponse, payload) {
   try {
     sendResponse(payload);
   } catch {
-    // The port closed while we were working — the worker restarted, or the panel
+    // The port closed while we were working, the worker restarted, or the panel
     // went away. Nothing to do about it and nothing worth logging.
   }
 }
@@ -1885,12 +1903,12 @@ function trackFor(languageCode) {
  *
  * **This is the fix for "no subtitles appear at all".** `settings.studyLanguage`
  * defaults to `null`, so the FIRST request for a video is always
- * `PROVIDE { languageCode: null }` — and a viewer that answered "no such track"
+ * `PROVIDE { languageCode: null }`, and a viewer that answered "no such track"
  * produced no transcript for any file, ever, no matter how many tracks were found.
  *
  * The preference order is deliberate:
  *
- *   1. **A track in a language this extension can mark** — Chinese or Japanese,
+ *   1. **A track in a language this extension can mark**, Chinese or Japanese,
  *      because marking is the point.
  *   2. **Any readable text track**, so a French film still opens with its French
  *      subtitles.
@@ -1902,7 +1920,7 @@ function pickDefaultTrack() {
   const usable = tracks.filter((track) => track.kind !== 'image' && !(track.segments === null && track.error));
   if (!usable.length) return null;
 
-  // `zh` and `ja` are `src/learn/data/index.json`'s languages — the ones with a word
+  // `zh` and `ja` are `src/learn/data/index.json`'s languages, the ones with a word
   // list, and therefore the only ones that mark anything.
   const markable = usable.find((track) => {
     const base = track.languageCode.split('-')[0];
@@ -1921,7 +1939,7 @@ function resolveTrack(languageCode) {
   const named = trackFor(languageCode);
   if (named) return { track: named, fellBack: false };
   // Only fall back when nothing was ASKED for. A named language that does not exist
-  // is a genuine miss — the worker holds a stale choice — and silently substituting
+  // is a genuine miss, the worker holds a stale choice, and silently substituting
   // another language would put different text under a heading that says otherwise.
   if (languageCode) return { track: null, fellBack: false };
   return { track: pickDefaultTrack(), fellBack: true };
@@ -1943,7 +1961,7 @@ function resolveTrack(languageCode) {
  * @param {boolean} fellBack
  */
 function fetchTrack(track, languageCode, fellBack = false) {
-  // The language reported back is the TRACK's, not the one requested — the worker
+  // The language reported back is the TRACK's, not the one requested, the worker
   // adopts it as `studyLang`, and adopting the request (`null`) would leave the
   // choice unset so every later refresh fell back again.
   const code = track?.languageCode ?? languageCode;
@@ -1997,7 +2015,7 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const needsReading = track && !track.segments && track.kind === 'text' && videoFile;
 
       if (needsReading) {
-        // Reading a film's cues takes real time — it walks the media — so the reply
+        // Reading a film's cues takes real time, it walks the media, so the reply
         // is deferred. This is the one genuinely slow request in the viewer, and why
         // the worker gives these two messages the long timeout.
         ensureSegments(track)
@@ -2027,7 +2045,7 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       // change that may never come on a paused video.
       lastIndex = -2;
       lastRendered = -2;
-      // The worker chose this track, so the list and dictionary follow it — the same
+      // The worker chose this track, so the list and dictionary follow it, the same
       // path the viewer's own default-track load takes.
       void prepareMarks(activeTrackLanguage).then(() => {
         for (const cue of segments) delete cue.marked;
@@ -2089,7 +2107,7 @@ click('forward', () => {
 });
 
 /**
- * Cue stepping — the control a generic player cannot have.
+ * Cue stepping, the control a generic player cannot have.
  *
  * `+0.05` on the step so landing "on" a boundary is INSIDE the cue rather than a
  * hair before it, where float rounding puts you in the previous one. This is the
@@ -2138,7 +2156,7 @@ document.getElementById('caption-size').addEventListener('change', (event) => {
 });
 
 document.getElementById('word-list').addEventListener('change', (event) => {
-  // An empty value means "choose for me", which is `null` — a real choice rather than
+  // An empty value means "choose for me", which is `null`, a real choice rather than
   // a missing one, so it is stored as such.
   setSetting('listId', event.target.value || null);
 });
@@ -2166,7 +2184,7 @@ document.getElementById('threshold').addEventListener('change', (event) => {
  *
  * Recorded on ENTRY, not read on exit, and that distinction is the whole fix: the browser
  * drops element fullscreen the moment PiP opens, so by the time anyone leaves PiP the
- * answer is always "no". Reading it at exit is a condition that can never be true — which
+ * answer is always "no". Reading it at exit is a condition that can never be true, which
  * is what the first version of this did.
  */
 let fullscreenBeforePip = false;
@@ -2175,7 +2193,7 @@ click('pip', () => {
   if (document.pictureInPictureElement) {
     // Leaving PiP RESTORES fullscreen, if the viewer was in it when PiP started.
     //
-    // It has to happen HERE, in the click handler, and that is not a preference — a user
+    // It has to happen HERE, in the click handler, and that is not a preference, a user
     // gesture is required and `leavepictureinpicture` is not one. Measured both ways:
     //
     //   from the LEAVE event:     refused (no gesture)  -> stayed not-fullscreen
@@ -2208,7 +2226,7 @@ click('pip', () => {
  *
  * **The Fullscreen API describes elements, not windows.** When the user presses F11, or
  * maximises a window, or PiP closes back into a fullscreen tab, `document.fullscreenElement`
- * stays `null` — the page was not asked, it is simply displayed larger. There is no API
+ * stays `null`, the page was not asked, it is simply displayed larger. There is no API
  * for that state and no reliable way to detect it, so the button does not try. It manages
  * ELEMENT fullscreen and labels itself honestly for what it will do.
  *
@@ -2216,7 +2234,7 @@ click('pip', () => {
  *
  * It compared `window.innerHeight` against `window.screen.height` to guess the window's
  * state, and refused to request fullscreen when they matched. That heuristic cannot tell
- * "the window is fullscreen" from "there is no browser chrome" — and the second is true
+ * "the window is fullscreen" from "there is no browser chrome", and the second is true
  * in ANY maximised window, where those values differ by a few pixels of title bar. So the
  * button reported "Exit fullscreen" while nothing was fullscreen and did nothing when
  * pressed. Measured in a headless browser, which has no chrome at all:
@@ -2229,7 +2247,7 @@ click('pip', () => {
  */
 function syncFullscreenButton() {
   // The BUTTON'S OWN action is the label: element fullscreen in, element fullscreen out.
-  // `innerHeight === screen.height` is deliberately not part of it — see above.
+  // `innerHeight === screen.height` is deliberately not part of it, see above.
   const on = Boolean(document.fullscreenElement);
   const label = on ? 'Exit fullscreen' : 'Fullscreen';
   els.fullscreenButton.setAttribute('aria-pressed', String(on));
@@ -2243,7 +2261,7 @@ click('fullscreen', () => {
     return;
   }
   // Unconditionally, because `fullscreenElement === null` means element fullscreen is
-  // available — that is exactly what the check above established. Refusing here is how
+  // available, that is exactly what the check above established. Refusing here is how
   // the button became a no-op in a maximised window.
   void els.picture.requestFullscreen().catch(() => {
     setStatus('This browser refused fullscreen for this page.', true);
@@ -2257,7 +2275,7 @@ click('fullscreen', () => {
 //     exited PiP:          fsElement null      <- and does not put it back
 //
 // The restore lives in the PiP button's handler rather than in `leavepictureinpicture`,
-// because the latter is not a user gesture and `requestFullscreen` is refused there —
+// because the latter is not a user gesture and `requestFullscreen` is refused there,
 // tried first, and measured failing. See the handler above.
 
 document.addEventListener('fullscreenchange', () => {
@@ -2283,7 +2301,7 @@ window.addEventListener('resize', () => {
  */
 els.stage.addEventListener('click', (event) => {
   // A control, or a caption word being hovered for its definition. Neither should
-  // toggle playback — pressing a button and pausing the film underneath it is the
+  // toggle playback, pressing a button and pausing the film underneath it is the
   // obvious bug, and pausing because you pointed at a word is the subtle one.
   if (event.target.closest('.bar') || event.target.closest('.captions')) return;
   if (els.video.paused) void els.video.play();
@@ -2322,14 +2340,14 @@ window.addEventListener('pagehide', () => {
   if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
 });
 
-// Announce. This is how the worker learns which tab is a source — it cannot discover
+// Announce. This is how the worker learns which tab is a source, it cannot discover
 // the page by URL, because our own pages have no readable `tab.url`.
 //
 // Retried once, later, because the FIRST attempt can legitimately fail: the service
 // worker may be starting up, and on an extension reload this page can outlive the
 // worker that would receive it. A single failed announcement leaves the panel
 // reporting "no supported video" while this page plays perfectly, so one retry is
-// worth it — and the worker looks for open viewer tabs itself, so even a lost
+// worth it, and the worker looks for open viewer tabs itself, so even a lost
 // announcement is recoverable.
 function announce(attempt = 0) {
   api.runtime.sendMessage({ type: MSG.VIEWER_READY, target: TARGET.BACKGROUND }).catch(() => {
@@ -2365,11 +2383,11 @@ els.video.addEventListener('loadedmetadata', () => {
 // Hover a caption word for its definition, with the same popover the panel draws.
 //
 // Attached to BOTH placements, because only one is visible at a time and the handler
-// is delegated — one listener per container rather than one per token, which for a
+// is delegated, one listener per container rather than one per token, which for a
 // film's captions would be thousands.
 //
 // The overlay is `pointer-events: none` so it cannot swallow clicks meant for the
-// picture, which also means it cannot RECEIVE hover — hence the listener on the
+// picture, which also means it cannot RECEIVE hover, hence the listener on the
 // below strip and on the picture, and `pointer-events: auto` restored on the tokens
 // themselves in the stylesheet.
 attachHover(els.picture, definitionFor);

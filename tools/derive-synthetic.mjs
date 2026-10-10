@@ -20,13 +20,13 @@
  *
  * So the DIMENSIONS are measured, not chosen:
  *
- *   cue count      403 — the real 393, plus margin, so a scroll-into-view test
+ *   cue count      403, the real 393, plus margin, so a scroll-into-view test
  *                  has somewhere to scroll
  *   durations      0.27s to 4.72s, median 1.77s
  *   gaps           0.00s to 31.71s, because the real track has a 31s silence in
  *                  it and a fixture that tiles its cues perfectly would never
  *                  exercise the paused-in-a-gap path at all
- *   timings        3 decimal places, starting at 37.933s — the real track does not
+ *   timings        3 decimal places, starting at 37.933s, the real track does not
  *                  start at zero, and code that assumes it does is wrong
  *   track kinds    null, because on this video BOTH tracks report null even though
  *                  `caps=asr` is in their URLs. A fixture claiming `kind: 'asr'`
@@ -50,8 +50,8 @@ const SYNTHETIC = join(ROOT, 'test', 'synthetic');
 /**
  * The title every synthetic fixture carries.
  *
- * One constant, because two files hold a title — `video.json` and
- * `player-response.json` — and they disagreed: the response held the REAL video's
+ * One constant, because two files hold a title, `video.json` and
+ * `player-response.json`, and they disagreed: the response held the REAL video's
  * title while `video.json` said this. A corpus whose files contradict each other
  * about whether it is synthetic is worse than either answer on its own, and the
  * real title is someone else's words in a committed file.
@@ -172,7 +172,7 @@ const ENGLISH_LINES = [
   'Could not resist buying one',
   'Crisp outside, soft inside',
   'Just right with an americano',
-  // The real English track carries 161 `&amp;` entities — genuine ampersands that
+  // The real English track carries 161 `&amp;` entities, genuine ampersands that
   // YouTube escapes in XML and leaves bare in JSON3. A cue containing `&` (and the
   // less-than that must survive as text) is what makes the entity-decoding path
   // testable at all; without one, both serialisations agree trivially and prove
@@ -219,7 +219,7 @@ function buildCues(lines, count, seed) {
     // Duration spread across the FULL measured range, not clustered near the
     // median. An earlier version weighted everything toward 1.5–2.8s, which looked
     // plausible and quietly meant the fixture never contained a cue as short as the
-    // real 0.27s or as long as its 4.72s — so nothing that breaks on very short or
+    // real 0.27s or as long as its 4.72s, so nothing that breaks on very short or
     // very long cues could have been caught. The range is the finding; the shape
     // has to cover it.
     //
@@ -244,13 +244,13 @@ function buildCues(lines, count, seed) {
 /**
  * The player response a capture actually contains, reduced to the fields we read.
  *
- * Shape comes from the capture's own renderer keys — `audioTracks`,
- * `captionTracks`, `defaultAudioTrackIndex`, `translationLanguages` — because a
+ * Shape comes from the capture's own renderer keys, `audioTracks`,
+ * `captionTracks`, `defaultAudioTrackIndex`, `translationLanguages`, because a
  * fixture missing `defaultAudioTrackIndex` describes a payload YouTube does not
  * send, and nothing would notice.
  *
  * The title is OURS, not the capture's. It used to be copied verbatim, which put a
- * real video's title — someone else's words, naming a specific trip — into a
+ * real video's title, someone else's words, naming a specific trip, into a
  * committed file, while the sibling `video.json` said "Synthetic fixture derived
  * from a real capture". The corpus is our invented text wearing a real shape; the
  * title should follow the same rule as the cues.
@@ -270,7 +270,7 @@ function buildPlayerResponse(capture) {
     captions: {
       playerCaptionsTracklistRenderer: {
         // Present in the real renderer. Empty here because we have no real audio
-        // track data, but the KEY has to exist — its absence is a shape difference.
+        // track data, but the KEY has to exist, its absence is a shape difference.
         audioTracks: [],
         defaultAudioTrackIndex: 0,
         captionTracks: capture.tracks.map((track) => ({
@@ -308,7 +308,7 @@ const videoIds = requested.length
 // A failed capture leaves `<id>.partial/` beside the good one. It is not a
 // capture: it holds however much was fetched before the failure. Deriving a corpus
 // from it would bake a truncated run into the committed fixtures, so it is left
-// out of the automatic list — but it is reported, because its existence means a
+// out of the automatic list, but it is reported, because its existence means a
 // shot was spent and its bodies are worth looking at.
 const partials = videoIds.filter((id) => id.endsWith('.partial'));
 const complete = videoIds.filter((id) => !id.endsWith('.partial'));
@@ -318,12 +318,12 @@ if (!complete.length) {
   console.error('This tool reads test/fixtures/ and writes test/synthetic/.');
   if (partials.length) {
     console.error(`\nOnly partial results are present: ${partials.join(', ')}.`);
-    console.error('A partial is a failed run, not a capture — derive from a complete one.');
+    console.error('A partial is a failed run, not a capture, derive from a complete one.');
   }
   process.exit(1);
 }
 
-console.log(`\nDeriving synthetic fixtures — reads local captures, opens nothing\n`);
+console.log(`\nDeriving synthetic fixtures, reads local captures, opens nothing\n`);
 if (partials.length) {
   console.log(`  note: partial results present, not used: ${partials.join(', ')}`);
   console.log('        a partial is a failed run; inspect it, but do not derive from it.\n');
@@ -371,8 +371,8 @@ for (const videoId of complete) {
   // The reader reconstructs the raw filename from the normalised entry's own
   // fields (language, client, format), so nothing extra has to be captured.
   //
-  // Per track, not just the first. The two tracks differ in a way that matters —
-  // one carries entities and the other does not — and reporting only the first
+  // Per track, not just the first. The two tracks differ in a way that matters,
+  // one carries entities and the other does not, and reporting only the first
   // would hide exactly the evidence that tells us what the parser must handle.
   const xmlShape = sawRealXml
     ? {
@@ -429,7 +429,7 @@ for (const videoId of complete) {
   // This matters more than it looks. Reusing the real id meant the synthetic
   // fixture and the local capture registered the SAME video in the browser tier's
   // route registry, so both sections fought over one key and the panel could
-  // render either — which showed up as an intermittent "392 cues instead of 403"
+  // render either, which showed up as an intermittent "392 cues instead of 403"
   // and very nearly got written off as flake. A synthetic fixture is not the
   // video it was derived from, and giving it the same id says otherwise.
   const fixtureId = `iuSynthetic${videoId.slice(-3)}`;
@@ -473,7 +473,7 @@ for (const videoId of complete) {
         derivedAt: new Date().toISOString(),
         // The real values, kept because they ARE the shape: the language codes,
         // the track names, and all 156 translation languages. None of that is
-        // content — it is the vocabulary YouTube used.
+        // content, it is the vocabulary YouTube used.
         trackList: tracks.map((t) => ({
           languageCode: t.languageCode,
           name: t.name,
@@ -531,9 +531,9 @@ for (const videoId of complete) {
     const perTrack = Object.entries(xmlShape.tracks)
       .map(([lang, s]) => `${lang}: ${s.cueCount} cues, ${s.entityCount} entities`)
       .join('; ');
-    console.log(`    real XML body: <${xmlShape.rootTag}>/<${xmlShape.cueTag}> attrs [${xmlShape.attributes.join(', ')}] — ${perTrack}`);
+    console.log(`    real XML body: <${xmlShape.rootTag}>/<${xmlShape.cueTag}> attrs [${xmlShape.attributes.join(', ')}], ${perTrack}`);
   }
   console.log(`    wrote test/synthetic/${name}/`);
 }
 
-console.log('\nDone — synthetic fixtures are committed; the captures they came from are not.\n');
+console.log('\nDone, synthetic fixtures are committed; the captures they came from are not.\n');

@@ -2,14 +2,14 @@
  * Vite config for the side panel preview (`npm run ui`).
  *
  * Vite, not Storybook: this is one 57-line panel, not a component library. What
- * was actually needed was a dev server with hot module replacement — so a
- * stylesheet edit lands in the browser without a reload — and a build tool that
+ * was actually needed was a dev server with hot module replacement, so a
+ * stylesheet edit lands in the browser without a reload, and a build tool that
  * understands the panel's ES modules. Storybook would have brought an isolated
  * component model this does not have components for.
  *
  * Root is the REPOSITORY, not `tools/ui/`, so the page can import the panel by
  * the same paths the extension uses (`/src/sidepanel/sidepanel.js`). Serving the
- * real file paths is what keeps the preview honest — a bad import here is a bad
+ * real file paths is what keeps the preview honest, a bad import here is a bad
  * import in the extension.
  *
  * DEVELOPMENT ONLY. Vite cannot serve a `chrome-extension://` page, so this is a
@@ -18,7 +18,7 @@
  * it is needed by `npm test`.
  *
  * Deliberately short. Options that were not needed were removed rather than
- * written down "in case" — a config nobody has verified is a config that can be
+ * written down "in case", a config nobody has verified is a config that can be
  * wrong without anyone noticing.
  */
 
@@ -35,11 +35,11 @@ const PORT = Number(process.env.IU_UI_PORT ?? 8099);
  *
  * The scenarios read the synthetic corpus from disk, so the browser cannot import
  * them: it would try to fetch the filesystem and fail with a CORS message that
- * says nothing about the cause. A dev-server endpoint is the right home — it runs
+ * says nothing about the cause. A dev-server endpoint is the right home, it runs
  * in Node, and the page fetches the result.
  *
- * This is the one piece of server behaviour the preview needs. Everything else —
- * module resolution, CSS injection, HMR — is why Vite is here instead of a
+ * This is the one piece of server behaviour the preview needs. Everything else,
+ * module resolution, CSS injection, HMR, is why Vite is here instead of a
  * hand-written server.
  *
  * @returns {import('vite').Plugin}
@@ -67,7 +67,7 @@ function scenariosPlugin() {
  *
  * **Vite's static server does not know `.mkv`, and serves it with an EMPTY
  * `Content-Type`.** Chromium then refuses to decode it and reports `media error 4`
- * (`SRC_NOT_SUPPORTED`) with `net::ERR_ABORTED` — a failure that reads as a codec
+ * (`SRC_NOT_SUPPORTED`) with `net::ERR_ABORTED`, a failure that reads as a codec
  * problem and is not one. `canPlayType('video/x-matroska; codecs="avc1..."')`
  * answers "probably" throughout, which makes the wrong diagnosis very convincing.
  *

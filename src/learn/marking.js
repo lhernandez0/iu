@@ -3,8 +3,8 @@
  *
  * **Extracted from the service worker because the viewer needs the same rules.**
  * The worker marks the panel's transcript; the viewer marks its own captions. Both
- * must agree about what a mark IS — which words are definable, what a level means,
- * when a reading is attached — or the two surfaces would show different annotations
+ * must agree about what a mark IS, which words are definable, what a level means,
+ * when a reading is attached, or the two surfaces would show different annotations
  * for the same line, which is the kind of divergence nobody would notice until a
  * learner compared them.
  *
@@ -45,7 +45,7 @@ export function listCoversLanguage(list, languageCode) {
   const scriptA = restA.find((part) => part.length === 4);
   const scriptB = restB.find((part) => part.length === 4);
 
-  // The list is vague about the script, so it covers any script — true here because
+  // The list is vague about the script, so it covers any script, true here because
   // the index holds both forms.
   if (!scriptA) return true;
   // The list states a script and the text does not: unknown, so try rather than
@@ -61,7 +61,7 @@ export function listCoversLanguage(list, languageCode) {
  * **The BROADEST list for the language**, not the first one in the index. The index
  * happens to lead with HSK 2.0, which places 4,993 words; HSK 3.0 places 10,969. So
  * "first" would leave 56% of the dictionary unmarked for a viewer with no list
- * picker — and the symptom is a transcript that looks barely marked rather than a
+ * picker, and the symptom is a transcript that looks barely marked rather than a
  * visibly wrong choice, which is the worst way for it to be wrong.
  *
  * `levelled` is the count the index carries for exactly this: how many words the list
@@ -92,7 +92,7 @@ export function listForLanguage(lists, languageCode) {
  * `defined` is separate from `level` on purpose, and the distinction is the whole
  * point of keeping the dictionary independent of the graded lists. A word can be
  * perfectly ordinary, absent from the list being used, and still be a word the
- * learner wants defined — 这样 has no HSK 2.0 level but is HSK 3.0 level 2, so on
+ * learner wants defined, 这样 has no HSK 2.0 level but is HSK 3.0 level 2, so on
  * HSK 2.0 it is "definition yes, colour no", not invisible.
  *
  * Conflating the two is what made whole sentences look unmarked.
@@ -140,7 +140,7 @@ export function markLine(tokens, dictionary, list, threshold, withReading = fals
  * The extra fields a token carries when readings are being shown.
  *
  * Empty when `withReading` is false, so the payload is byte-identical to what it was
- * before readings existed when the setting is off — which means nobody who has not
+ * before readings existed when the setting is off, which means nobody who has not
  * asked for this pays for it.
  *
  * @param {boolean} defined

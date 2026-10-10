@@ -10,7 +10,7 @@
  *      dictionary still declares its licence where the artefact can be checked.
  *
  * It does NOT attempt to interpret licences. It compares strings against a list a
- * human maintained, and says so when something is not on it — a check that guesses
+ * human maintained, and says so when something is not on it, a check that guesses
  * would be worse than none.
  *
  * Offline and dependency-free: reads `node_modules` and files, nothing else.
@@ -69,7 +69,7 @@ const ALLOWED = new Set([
  * Every package.json under node_modules, read directly.
  *
  * Walked rather than resolved through `npm ls` so this needs no network and no
- * dependency of its own — and so it sees the transitive packages, which is where a
+ * dependency of its own, and so it sees the transitive packages, which is where a
  * surprise would actually come from.
  *
  * @param {string} dir
@@ -122,7 +122,7 @@ section('every installed dependency carries a licence we have accepted');
 
   if (!found.size) {
     // A fresh clone runs `npm test` before `npm i`, and that must not be a failure.
-    console.log('  (no node_modules — nothing to check)');
+    console.log('  (no node_modules, nothing to check)');
   } else {
     const unexpected = [...found.entries()]
       .filter(([, info]) => !ALLOWED.has(info.licence))
@@ -144,13 +144,13 @@ section('the extension itself ships no dependencies');
   // the one vendored bundle, and that bundle carries an obligation.
   //
   // It used to read "our code and nothing else", which was true when it was written.
-  // `src/vendor/mediabunny.js` makes it false — a tree-shaken MPL-2.0 bundle, committed
+  // `src/vendor/mediabunny.js` makes it false, a tree-shaken MPL-2.0 bundle, committed
   // because the release ZIP is built from `src/` alone and cannot resolve
   // `node_modules`. So the guard changes with the fact rather than being deleted: it
   // now checks that the vendored code is NAMED where the obligation says it must be.
   //
   // `dependencies` staying empty is still worth asserting. It is what keeps the
-  // shipped code from acquiring modules the packaging step would silently drop —
+  // shipped code from acquiring modules the packaging step would silently drop,
   // anything the extension needs at runtime has to be committed, not resolved.
   const manifest = JSON.parse(readFileSync(join(ROOT, 'manifest.json'), 'utf8'));
   const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
@@ -240,7 +240,7 @@ section('the index names every dictionary, and every dictionary declares its pro
 
     // Finding A4. The input is not committed, so reproducibility depends on the
     // artefact naming the exact revision it was built from. A commit alone can be
-    // rewritten; the content hash cannot, so a hash is required — and for the
+    // rewritten; the content hash cannot, so a hash is required, and for the
     // Chinese source, whose upstream is a git repo, a commit as well.
     check(`[${language}] it pins a source content hash`, /^[0-9a-f]{64}$/.test(String(meta.sourceSha256)), true);
     if (language === 'zh') {
@@ -248,7 +248,7 @@ section('the index names every dictionary, and every dictionary declares its pro
     }
 
     // Every list the dictionary offers must be a list the index promises, and
-    // vice versa — otherwise a list could exist in one place and not the other.
+    // vice versa, otherwise a list could exist in one place and not the other.
     const inDict = new Set((data.lists ?? []).map((l) => l.id));
     const inIndex = new Set((index.lists ?? []).filter((l) => l.dictionary === language).map((l) => l.id));
     check(
@@ -270,7 +270,7 @@ section('every dictionary carries the fields the app reads from a list');
   // Reproducibility has a second half that a hash check cannot see. Pinning the
   // input only helps if the BUILD is faithful: a field hand-added to the JSON and
   // never taught to `tools/build-wordlist.mjs` disappears the moment anyone
-  // rebuilds — which is exactly what happened to `defaultThreshold`, silently
+  // rebuilds, which is exactly what happened to `defaultThreshold`, silently
   // moving the starting level.
   //
   // So every field the code reads off a list is asserted to be present here,
@@ -293,7 +293,7 @@ section('every dictionary carries the fields the app reads from a list');
     // The starting level is NOT data. It is the learner's own choice, remembered
     // per list by the app, defaulting to the first level.
     //
-    // It used to travel with the list, and it was `4` for both HSK lists — the
+    // It used to travel with the list, and it was `4` for both HSK lists, the
     // personal level of whoever built this, shipped as a constant to everybody.
     // The midpoint of the range replaced it and was no better: still the app
     // deciding how good a stranger is at a language it has never seen them read.
@@ -304,7 +304,7 @@ section('every dictionary carries the fields the app reads from a list');
     check(`[${language}] no list carries a starting level`, stray.map((l) => l.id), []);
 
     // Every list names its own levels, ascending in difficulty. JLPT runs N5->N1
-    // while HSK runs 1->N, so the label cannot be derived from the level number —
+    // while HSK runs 1->N, so the label cannot be derived from the level number,
     // printing the number rendered JLPT's easiest level (internal 1) as "JLPT 1",
     // which a human reads as N1, the hardest.
     const wrongNames = lists.filter((l) => (l.levelNames ?? []).length !== l.levelCount);

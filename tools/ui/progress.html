@@ -2,15 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>IU — progress bar options</title>
+    <title>IU, progress bar options</title>
     <link rel="icon" href="/icons/icon-32.png" />
     <style>
       /*
        * A COMPARISON SHEET for the video progress bar. Not part of the extension:
        * nothing here ships, and the page exists to pick a design by looking at it.
        *
-       * Every option draws the SAME timeline — the same cue boundaries and the same
-       * marked-word positions — so the only thing that differs between the cards is
+       * Every option draws the SAME timeline, the same cue boundaries and the same
+       * marked-word positions, so the only thing that differs between the cards is
        * how that information is presented. A sheet where each option had its own made
        * up data would be comparing the data, not the design.
        *
@@ -226,7 +226,7 @@
 
       /* ---- 6. chapters / spans ---------------------------------------------- */
       /* Cue spans drawn as segments rather than ticks, so short cues are visible as
-         gaps — which is where the silence is. */
+         gaps, which is where the silence is. */
 
       #spans .spans { position: relative; height: 8px; }
       #spans .spans i {
@@ -241,7 +241,7 @@
 
       /* ---- 7. thumb with a preview pip --------------------------------------- */
       /* The most "modern player" shape: a fat thumb, and a small bubble above it
-         showing the time — which is what makes scrubbing precise without looking at
+         showing the time, which is what makes scrubbing precise without looking at
          the counter at the far end of the bar. */
 
       #pip .track { height: 5px; }
@@ -277,8 +277,8 @@
   <body>
     <h1>Progress bar options</h1>
     <p class="sub">
-      Every card draws the <b>same timeline</b> — the same cue boundaries, the same
-      marked-word density — so what differs is only how it is presented. The accent
+      Every card draws the <b>same timeline</b>, the same cue boundaries, the same
+      marked-word density, so what differs is only how it is presented. The accent
       colour is the played region; the amber is where the <b>unknown words</b> cluster,
       which is information a generic player cannot show and this one can. Move the
       shared playhead and hover a bar to compare the resting and active states.
@@ -307,7 +307,7 @@
 
       const DURATION = 46;
 
-      // Where the marked words sit, as spans of the timeline. Deliberately lumpy —
+      // Where the marked words sit, as spans of the timeline. Deliberately lumpy,
       // an evenly spread density would make every option look equally informative.
       const DENSE = [
         [4, 8], [9, 12], [18, 21], [19.5, 23], [22, 25], [30, 33],
@@ -358,7 +358,7 @@
           id: 'grow',
           name: '3. Grows, thumb appears on hover',
           note: 'A 3px resting track that grows to 9px and sprouts a thumb only under the pointer.',
-          why: 'Quiet when you are watching and precise when you are not. <b>Cost:</b> a moving target is harder to hit deliberately — you have to aim, let it grow, then grab.',
+          why: 'Quiet when you are watching and precise when you are not. <b>Cost:</b> a moving target is harder to hit deliberately, you have to aim, let it grow, then grab.',
           screen: `<div class="track"><div class="played"></div><div class="head"></div></div>`,
         },
         {
@@ -375,21 +375,21 @@
           id: 'ticks',
           name: '5. Cue ticks on the bar',
           note: 'One bar, with a hairline tick at every cue boundary. Positions are exact; the ticks tell you how far a line is.',
-          why: 'Cheap and precise, and cue stepping suddenly has a visual anchor. <b>Cost:</b> a dense transcript becomes a grey smear — 400 ticks on a 900px bar is not information.',
+          why: 'Cheap and precise, and cue stepping suddenly has a visual anchor. <b>Cost:</b> a dense transcript becomes a grey smear, 400 ticks on a 900px bar is not information.',
           screen: `<div class="track"><div class="played"></div>${cueTicks()}<div class="head"></div></div>`,
         },
         {
           id: 'spans',
           name: '6. Cue spans (gaps visible)',
           note: 'Each cue drawn as a segment, so the GAPS between them show up as breaks in the bar.',
-          why: 'Shows the shape of the speech — where it is dense and where there is silence — which is genuinely useful for finding a passage again. <b>Cost:</b> short cues on a long film are sub-pixel; it works here because this file is 46s, and would not on a 2-hour film.',
+          why: 'Shows the shape of the speech, where it is dense and where there is silence, which is genuinely useful for finding a passage again. <b>Cost:</b> short cues on a long film are sub-pixel; it works here because this file is 46s, and would not on a 2-hour film.',
           screen: `<div class="spans" id="span-row"></div><div class="head" style="bottom:-8px;top:auto"></div>`,
         },
         {
           id: 'pip',
           name: '7. Thumb with a time bubble',
           note: 'A larger thumb, with a bubble above it showing the time under the pointer.',
-          why: 'Makes scrubbing precise without looking away to the counter at the far end — which is the thing that actually slows down "go back to that bit". <b>Cost:</b> the bubble is in the way when you are watching, so it should only appear while dragging.',
+          why: 'Makes scrubbing precise without looking away to the counter at the far end, which is the thing that actually slows down "go back to that bit". <b>Cost:</b> the bubble is in the way when you are watching, so it should only appear while dragging.',
           screen: `<div class="bubble">0:15</div><div class="track"><div class="played"></div><div class="head"></div></div>`,
         },
       ];
@@ -430,7 +430,7 @@
         out.textContent = `${timecode(at)} / ${timecode(DURATION)}`;
 
         // The bubble in option 7 follows the thumb, and the cue spans fill in behind
-        // the playhead — the two bits of state that live in the DOM rather than in a
+        // the playhead, the two bits of state that live in the DOM rather than in a
         // custom property.
         const bubble = document.querySelector('#pip .bubble');
         if (bubble) bubble.textContent = timecode(at);

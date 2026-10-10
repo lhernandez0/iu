@@ -2,8 +2,8 @@
 # This file is assembled from the GitHub gitignore templates
 # (https://github.com/github/gitignore):
 #
-#   Node.gitignore                  — the primary template for this project
-#   Global/macOS.gitignore          — contributors are not all on Linux
+#   Node.gitignore, the primary template for this project
+#   Global/macOS.gitignore, contributors are not all on Linux
 #   Global/Linux.gitignore
 #   Global/Windows.gitignore
 #   Global/VisualStudioCode.gitignore
@@ -32,20 +32,20 @@ docs/
 test/fixtures/
 
 # Partial captures from a run that failed mid-collection. Kept on disk so a spent
-# open still yields evidence, never as a fixture — derive-synthetic refuses them.
+# open still yields evidence, never as a fixture, derive-synthetic refuses them.
 test/fixtures/*.partial/
 
-# Generated MKV test fixtures for the container parser — real containers written
+# Generated MKV test fixtures for the container parser, real containers written
 # by `ffmpeg`, rebuilt in two seconds by `npm run fixtures`.
 #
 # A SEPARATE directory from test/fixtures/ on purpose, because the two are
 # gitignored for different reasons and only one is reproducible:
-#   test/fixtures/  real captures — ignored because a capture carries a signed URL
-#   test/mkv/       generated — ignored because generating is cheaper than storing
+#   test/fixtures/  real captures, ignored because a capture carries a signed URL
+#   test/mkv/       generated, ignored because generating is cheaper than storing
 # Collapsing them would hide that difference.
 test/mkv/*.mkv
 
-# The Matroska conformance suite — a DEVELOPMENT dependency, not a test fixture.
+# The Matroska conformance suite, a DEVELOPMENT dependency, not a test fixture.
 # Real films (Big Buck Bunny, Elephants Dream), CC-BY, hundreds of megabytes, so
 # they are downloaded rather than committed: `npm run conformance:fetch`.
 #
@@ -53,12 +53,12 @@ test/mkv/*.mkv
 # ignored directory again. Nothing in `src/` reads these and they are never
 # packaged.
 #
-# The runner lives in test/conformance/ so the top-level runner does not scan it —
+# The runner lives in test/conformance/ so the top-level runner does not scan it,
 # a contributor without the files must still be able to run `npm test`.
 test/conformance/*.mkv
 
 # ============================================================================
-# Node.gitignore — https://github.com/github/gitignore/blob/main/Node.gitignore
+# Node.gitignore, https://github.com/github/gitignore/blob/main/Node.gitignore
 # ============================================================================
 
 # Logs
@@ -133,7 +133,7 @@ web_modules/
 .env.*
 # The negation matters: .env.example is the documented starting point ("copy
 # .env.example to .env") and is meant to be committed, but `.env.*` matched it
-# too — so it was ignored while the file's own header claimed it was committed.
+# too, so it was ignored while the file's own header claimed it was committed.
 !.env.example
 
 # parcel-bundler cache (https://parceljs.org/)
@@ -215,7 +215,7 @@ vite.config.ts.timestamp-*
 .turbo
 
 # ============================================================================
-# Global/Linux — https://github.com/github/gitignore/blob/main/Global/Linux.gitignore
+# Global/Linux, https://github.com/github/gitignore/blob/main/Global/Linux.gitignore
 # ============================================================================
 
 *~
@@ -236,7 +236,7 @@ vite.config.ts.timestamp-*
 nohup.out
 
 # ============================================================================
-# Global/macOS — https://github.com/github/gitignore/blob/main/Global/macOS.gitignore
+# Global/macOS, https://github.com/github/gitignore/blob/main/Global/macOS.gitignore
 # ============================================================================
 
 # General
@@ -272,7 +272,7 @@ Temporary Items
 .apdisk
 
 # ============================================================================
-# Global/Windows — https://github.com/github/gitignore/blob/main/Global/Windows.gitignore
+# Global/Windows, https://github.com/github/gitignore/blob/main/Global/Windows.gitignore
 # ============================================================================
 
 # Windows thumbnail cache files
@@ -301,7 +301,7 @@ $RECYCLE.BIN/
 *.lnk
 
 # ============================================================================
-# Global/VisualStudioCode — https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
+# Global/VisualStudioCode, https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
 # ============================================================================
 
 # Visual Studio Code
@@ -317,7 +317,7 @@ $RECYCLE.BIN/
 *.vsix
 
 # ============================================================================
-# Chrome extension — written by hand.
+# Chrome extension, written by hand.
 #
 # There is no extension template in the github/gitignore repository, so these are
 # ours. This project has no build step: the extension is loaded unpacked straight

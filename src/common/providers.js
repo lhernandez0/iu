@@ -3,7 +3,7 @@
  *
  * A provider is everything this codebase knows about ONE video site: how to
  * recognise its pages, and which scripts to inject to read a transcript from
- * them. Nothing else in the code should name a site — the service worker talks
+ * them. Nothing else in the code should name a site, the service worker talks
  * about "the video in the active tab" and asks here who can read it.
  *
  * This mirrors `src/engines/engine.js`, and the parallel is deliberate: an
@@ -13,7 +13,7 @@
  *
  * Why the content scripts are not the seam themselves: they are injected as
  * classic scripts and cannot `import`, so each is necessarily site-specific.
- * The seam is the *decision* — which script, for which URL — and that lives
+ * The seam is the *decision*, which script, for which URL, and that lives
  * here, in a module the worker can import.
  *
  * Adding a site:

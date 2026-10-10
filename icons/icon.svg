@@ -16,7 +16,7 @@
       I        x 3.05..5.05
       gap      1.7px between the I and the U
       U        x 6.75..12.95
-      margins  3.05 left, 3.05 right — the lockup is optically centred
+      margins  3.05 left, 3.05 right, the lockup is optically centred
       tops     3.4, bottoms 12.6
 
     The I and U are the same weight and are kerned tight enough to read as one

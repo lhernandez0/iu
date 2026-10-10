@@ -15,7 +15,7 @@ relicensed.
 
 ---
 
-## `src/learn/data/chinese.json` — the Chinese dictionary
+## `src/learn/data/chinese.json`, the Chinese dictionary
 
 **Licence: CC BY-SA 4.0**
 
@@ -48,13 +48,13 @@ shared under the same licence. The changes made here are:
 Those changes are in the committed file, so the derived work is available. The
 build is `tools/build-wordlist.mjs`; see the section below on its input.
 
-**HSK levels — provenance resolved.** The levels come from a word list upstream
+**HSK levels, provenance resolved.** The levels come from a word list upstream
 names `hsk31-words-pleco.txt`. Despite the filename, **Pleco is the OCR tool, not
 the author.** The list is the *official HSK 3.0 word list* published by the Chinese
 Ministry of Education (MOE); the file was extracted from the official MOE PDF and
 OCR'd using [Pleco OCR](https://www.pleco.com/). The same MOE source is mirrored and
 re-typed under **MIT** by [`elkmovie/hsk30`](https://github.com/elkmovie/hsk30),
-whose README states: *"Extracted from the official PDF and OCR'ed using Pleco OCR"* —
+whose README states: *"Extracted from the official PDF and OCR'ed using Pleco OCR"*,
 so the "Pleco" attribution in the TeaPearce filename is describing the extraction
 method, not a claim of authorship.
 
@@ -63,12 +63,12 @@ What this means for us:
 - The levels are drawn from a **government-published exam standard**, and a
   freely-redistributable (MIT) transcription of the identical data exists. There is
   no proprietary Pleco work in this file.
-- A word list — words paired with their exam level — is factual reference data and,
+- A word list, words paired with their exam level, is factual reference data and,
   independently, is published by the MOE for public use. Either way, the exposure
   flagged in the audit as *unverified* is now closed: the source is the official
   standard, not Pleco's authorship.
 - We carry **no** MIT obligation from `elkmovie/hsk30` itself, because we do not
-  consume that repository — the levels reached us via TeaPearce's CC BY-SA 4.0
+  consume that repository, the levels reached us via TeaPearce's CC BY-SA 4.0
   redistribution, and that is the licence we honour on the derived file.
 
 ### Rebuilding the dictionary
@@ -88,7 +88,7 @@ byte-for-byte:
 | Path | `data/parsed_hsk_enriched.json` (5,092,448 bytes) |
 
 **Verified 2026-10-06:** fetching that exact revision and rebuilding reproduces
-the committed `chinese.json` exactly — the same 11,470 words, identical levels,
+the committed `chinese.json` exactly, the same 11,470 words, identical levels,
 **zero differing entries**. So the pin is not a claim, it is a tested fact.
 
 The blob hash is recorded *as well as* the commit, because a commit can be
@@ -101,7 +101,7 @@ from, and the vendored copy would carry the same CC BY-SA obligation anyway.
 
 ---
 
-## `src/learn/data/japanese.json` — the Japanese dictionary
+## `src/learn/data/japanese.json`, the Japanese dictionary
 
 **Licence: CC BY-SA 4.0**
 
@@ -157,7 +157,7 @@ Pinned to an exact revision, like the Chinese source:
 
 **Verified 2026-10-06** by downloading that asset, confirming its size and SHA-256,
 and building from it. The asset hash is recorded rather than copied from
-documentation — a first draft of the build notes quoted the **full** `jmdict-eng`
+documentation, a first draft of the build notes quoted the **full** `jmdict-eng`
 asset's hash while naming the `common` file, which the download check caught.
 
 The JLPT CSVs need care that the pin does not cover: the `expression` column uses
@@ -168,7 +168,7 @@ and strips `～`, whitespace and parentheticals.
 ## Development dependencies
 
 Not shipped, except as noted below. The extension itself ships **one** third-party
-file — the vendored bundle documented in the next section — and nothing else.
+file, the vendored bundle documented in the next section, and nothing else.
 
 | Package | Licence | Note |
 | --- | --- | --- |
@@ -183,7 +183,7 @@ and imposes nothing on this project. It is not a concern here because they are
 development-only, never bundled, and unmodified. Recorded so that the next person
 does not have to rediscover it.
 
-## `src/vendor/mediabunny.js` — MPL-2.0, and this attribution is required
+## `src/vendor/mediabunny.js`, MPL-2.0, and this attribution is required
 
 **The one third-party file that ships inside the extension.** Everything else in
 `src/` is ours.
@@ -204,21 +204,21 @@ needs before they can package anything.
 ### Why the licence is not a problem
 
 MPL-2.0 is file-level (weak) copyleft. It obliges publishing modifications to
-**mediabunny's own files** — which we do not modify — and imposes nothing on the
+**mediabunny's own files**, which we do not modify, and imposes nothing on the
 surrounding project. `licence.test.mjs` asserts that any file in `src/vendor/` is
 named here, so a second bundle cannot be added without this document changing.
 
 ### Why `esbuild` is a dependency but not a shipped one
 
 It exists only to produce the file above. Nothing in the extension imports it, and
-`licence.test.mjs` still asserts that `package.json` has no runtime `dependencies` —
+`licence.test.mjs` still asserts that `package.json` has no runtime `dependencies`,
 which is what keeps a module from being resolved at runtime that the packaging step
 would silently drop.
 
 ## Test fixtures
 
 `test/synthetic/` is committed and is **our own invented text**, wearing shapes
-measured from a real capture — real cue counts, timings, silences and renderer
+measured from a real capture, real cue counts, timings, silences and renderer
 keys, with our own sentences. It contains no third-party text.
 
 `test/fixtures/` holds the real captures. It is **gitignored and never committed**:
@@ -226,14 +226,14 @@ a capture contains a signed caption URL and the real video's own title, neither 
 which belongs in a repository.
 
 `test/mkv/*.mkv` is generated locally by `npm run fixtures` from an `ffmpeg` test
-pattern — no third-party media at all, and nothing to attribute.
+pattern, no third-party media at all, and nothing to attribute.
 
-## Conformance suite — CC BY, and this attribution is required
+## Conformance suite, CC BY, and this attribution is required
 
 `test/conformance/` holds the [IETF CELLAR working group's Matroska test
 files](https://github.com/ietf-wg-cellar/matroska-test-files), a development
 dependency downloaded by `npm run conformance:fetch`. **Not committed, not
-packaged, and not part of the extension** — nothing in `src/` reads them.
+packaged, and not part of the extension**, nothing in `src/` reads them.
 
 They contain real film samples, both **CC BY**, which obliges attribution:
 
@@ -244,7 +244,7 @@ They contain real film samples, both **CC BY**, which obliges attribution:
 
 The suite itself is authored by the mkvmerge and libmatroska maintainers and
 exists to check a parser against files written by the people who define the
-format. It found two real parser bugs on its first run — a missing `TimecodeScale`
+format. It found two real parser bugs on its first run, a missing `TimecodeScale`
 read, and an absent `Language` element being treated as unknown rather than as the
 specification's English default. Both are the kind of mistake a single fixture
 generator cannot see.

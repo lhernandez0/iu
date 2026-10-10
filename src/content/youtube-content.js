@@ -1,5 +1,5 @@
 /**
- * YouTube content script — runs in the ISOLATED world.
+ * YouTube content script, runs in the ISOLATED world.
  *
  * This is a FETCH PROVIDER, not the owner of anything. The service worker holds
  * the transcript table and decides what is wanted; this script:
@@ -30,7 +30,7 @@
   // --- The extension API namespace -----------------------------------------
   //
   // Copied from `src/common/api.js` rather than imported, because this is a
-  // CLASSIC script — it is injected as a content script and cannot `import`.
+  // CLASSIC script, it is injected as a content script and cannot `import`.
   // The same one line appears in the offscreen document and the side panel for
   // files that can import, which is the arrangement MSG, TARGET and ERR below
   // already use. `browser` is the standard namespace and Chrome has had it since
@@ -58,7 +58,7 @@
   // --- Duplicated error codes ----------------------------------------------
   //
   // The canonical registry is `src/common/errors.js`. A content script is a
-  // CLASSIC script and cannot `import`, so this is a copy — the same arrangement
+  // CLASSIC script and cannot `import`, so this is a copy, the same arrangement
   // MSG and TARGET above use. `test/errors.test.mjs` asserts the two agree, so a
   // code that exists here and not there (or vice versa) fails the suite rather
   // than shipping a report that resolves to nothing.
@@ -77,7 +77,7 @@
     // A refusal, kept distinct from TRACK002 because they mean opposite things:
     // one is temporary and clears on its own, the other is a fact about the
     // video. See the note in `src/common/errors.js`.
-    TRACK005: 'The caption request was refused — likely too many requests.',
+    TRACK005: 'The caption request was refused, likely too many requests.',
     PAGE001: 'The page bridge did not understand a request.',
   };
 
@@ -85,7 +85,7 @@
    * The full text for a code, mirroring `errorText` in `src/common/errors.js`.
    *
    * The code goes FIRST so it survives the panel clipping the status line to one
-   * row — a code at the end of a long sentence is the part that gets cut, which
+   * row, a code at the end of a long sentence is the part that gets cut, which
    * is the part worth keeping.
    *
    * @param {string} code
@@ -109,19 +109,19 @@
   /**
    * How long a caption request may hang before it is abandoned.
    *
-   * A request that STALLS — rather than being refused — is the one failure this
+   * A request that STALLS, rather than being refused, is the one failure this
    * script could not previously survive, and it is the reason a transcript
    * sometimes never arrived. `fetch` has no default timeout, so an unanswered
    * request waits forever: `provide()` never returns, the reply to the worker is
    * never sent, and the message channel closes with nothing on it. Chrome
    * reports that as "a listener indicated an asynchronous response by returning
-   * true, but the message channel closed before a response was received" — a
+   * true, but the message channel closed before a response was received", a
    * sentence that names the channel and not the cause, which is why it took a
    * real browser and a slow endpoint to surface at all.
    *
    * A deadline converts that into an ordinary rejection: the fetch aborts, the
-   * existing TRACK003 / VIDEO004 path reports it, and — the point of the exercise
-   * — the reply still reaches the worker. Deliberately shorter than the worker's
+   * existing TRACK003 / VIDEO004 path reports it, and, the point of the exercise
+   *, the reply still reaches the worker. Deliberately shorter than the worker's
    * own fetch budget (CONTENT_FETCH_TIMEOUT_MS), so this script reports its own
    * timeout with a real cause rather than being cut off from outside with none.
    */
@@ -201,7 +201,7 @@
     }
 
     if (data.direction === 'event' && data.type === 'navigated') {
-      // Single-page app navigation. Do not discard the cached tracks here — the
+      // Single-page app navigation. Do not discard the cached tracks here, the
       // worker decides whether the video actually changed, and re-requesting
       // on every navigation event would refetch needlessly.
       post({ type: MSG.CONTENT_VIDEO_CHANGED, target: TARGET.BACKGROUND });
@@ -292,7 +292,7 @@
    * The important case is the quiet one: a refusal arrives as HTTP **200** with an
    * HTML body (Google's "Sorry..." block page). Nothing about the status says
    * failure, so it is parsed like any other body, finds no `<text>` elements, and
-   * is reported as an empty track — which reads as "this video has no captions"
+   * is reported as an empty track, which reads as "this video has no captions"
    * when the truth is "stop asking".
    *
    * An HTML document is never a caption body in any format we request, so the
@@ -401,7 +401,7 @@
     if (!track) return fetchTrackViaInnertube(languageCode, translateTo);
 
     // Only some tracks carry translations. Asking anyway returns the untranslated
-    // text, which would be silently wrong — a "Japanese" line that is actually
+    // text, which would be silently wrong, a "Japanese" line that is actually
     // English. Better to say so.
     if (translateTo && !track.isTranslatable) {
       return {
@@ -422,8 +422,8 @@
       };
     } catch (error) {
       // A REFUSAL passes through as itself. Wrapping it in TRACK003 would nest
-      // one code inside another — "TRACK003 Could not load captions. (TRACK005 The
-      // request was refused)" — and bury the only part that tells the viewer what
+      // one code inside another, "TRACK003 Could not load captions. (TRACK005 The
+      // request was refused)", and bury the only part that tells the viewer what
       // to do about it. The worker applies the same rule for its own codes.
       const message = String(error?.message ?? error);
       return {
@@ -448,8 +448,8 @@
    * @returns {Promise<{languageCode: string, translateTo: string|null, segments: object[], error: string|null}>}
    */
   async function fetchTrackViaInnertube(languageCode, translateTo = null) {
-    // This can be reached without a prior sync — the worker asks for a specific
-    // track on its own — so make sure we know which video we are asking about.
+    // This can be reached without a prior sync, the worker asks for a specific
+    // track on its own, so make sure we know which video we are asking about.
     if (!video.videoId) await sync();
 
     const summary = await askBridge('get-player-response');
@@ -496,8 +496,8 @@
       };
     } catch (error) {
       // A REFUSAL passes through as itself. Wrapping it in TRACK003 would nest
-      // one code inside another — "TRACK003 Could not load captions. (TRACK005 The
-      // request was refused)" — and bury the only part that tells the viewer what
+      // one code inside another, "TRACK003 Could not load captions. (TRACK005 The
+      // request was refused)", and bury the only part that tells the viewer what
       // to do about it. The worker applies the same rule for its own codes.
       const message = String(error?.message ?? error);
       return {
@@ -511,7 +511,7 @@
 
   /**
    * Prefer a human-authored track over machine-generated ones, and English
-   * over anything else — the same default ordering YouTube's own panel uses.
+   * over anything else, the same default ordering YouTube's own panel uses.
    *
    * @param {object[]} tracks
    * @returns {object|undefined}
@@ -568,8 +568,8 @@
    * Ask the page which video is loaded, and adopt it if it changed.
    *
    * This, not the page's navigation events, is the authority on which video this
-   * script is looking at. YouTube's SPA events are unreliable — switching video
-   * within a tab does not always fire one the content script hears — and the
+   * script is looking at. YouTube's SPA events are unreliable, switching video
+   * within a tab does not always fire one the content script hears, and the
    * failure is ugly: the script would keep reporting the previous video's cues
    * while reading the new video's currentTime, so the panel would show the old
    * transcript advancing against the new video.
@@ -634,7 +634,7 @@
       stale: Boolean(video.needsInnertube),
       // Reported with the description because the position poll only fires on a
       // CHANGE. If the worker restarts while this script keeps running, it would
-      // otherwise never hear where playback is — and a panel opened mid-video
+      // otherwise never hear where playback is, and a panel opened mid-video
       // would sit at the top of the transcript.
       activeIndex: active,
       // Whether that cue is being spoken or is a gap between lines. Travels with
@@ -660,7 +660,7 @@
    * Answer the worker, tolerating a context that died mid-request.
    *
    * Every branch below answers asynchronously, so the extension can be reloaded
-   * while a caption fetch is in flight — and `sendResponse` then throws the same
+   * while a caption fetch is in flight, and `sendResponse` then throws the same
    * invalidation error, from inside a promise, where nothing is listening for it.
    *
    * @param {Function} sendResponse
@@ -706,13 +706,13 @@
       case MSG.SET_TRACK: {
         // The worker already has this transcript, so nothing is fetched. It is
         // handed over only so the position poll below has something to measure
-        // against — without it a cached video reports no cue at all, and the
+        // against, without it a cached video reports no cue at all, and the
         // panel cannot follow or scroll to the line being spoken.
         //
         // The video id comes with it, and adopting it is what makes this safe
         // whatever order it arrives in: `sync()` treats a changed id as a new
         // video and clears the segments, so a hand-over that arrived BEFORE the
-        // first sync would be wiped by the very next tick — the transcript would
+        // first sync would be wiped by the very next tick, the transcript would
         // vanish a quarter-second after being given.
         if (message.videoId) video.videoId = message.videoId;
         video.segments = Array.isArray(message.segments) ? message.segments : [];
@@ -745,7 +745,7 @@
    * in open tabs are orphaned: `chrome.runtime` survives as an object but loses
    * its id, and every call into it throws "Extension context invalidated." A
    * YouTube tab left open across a reload therefore keeps running this script
-   * against a dead context — and the result is not one error but an endless
+   * against a dead context, and the result is not one error but an endless
    * stream of them, because both polling loops keep waking.
    *
    * Reading the id is cheap and, unlike the calls it guards, does not throw.
@@ -766,7 +766,7 @@
    * Clearing the intervals is the important part: without it both loops keep
    * waking and keep throwing, and nothing can silence them. Chrome does not
    * re-inject into pages that were already open, so there is nothing to recover
-   * — the tab has to be reloaded, and this says so once rather than failing
+   *, the tab has to be reloaded, and this says so once rather than failing
    * forever.
    */
   function teardown() {
@@ -776,7 +776,7 @@
 
     // Free the page for a fresh copy. Whether a later injection can SEE this
     // depends on how Chrome handles isolated worlds across an extension reload,
-    // so the tab may still need reloading — but if the flag is shared, the
+    // so the tab may still need reloading, but if the flag is shared, the
     // worker's next injection takes the page back instead of being skipped by
     // the re-entry guard as though a live copy were still here.
     try {
@@ -811,7 +811,7 @@
   //
   //   1. Has this tab moved to a different video? Polled every second against
   //      the page. Cheap (one bridge message, no fetch) but it is the only
-  //      reliable way to notice — YouTube's own navigation events do not always
+  //      reliable way to notice, YouTube's own navigation events do not always
   //      fire on an in-tab video switch, and missing one means the panel shows
   //      the previous video's transcript.
   //   2. Which cue is playing? Reported only when the active cue changes.
@@ -848,8 +848,8 @@
       const index = findActiveIndex(video.segments, seconds);
       const paused = isPaused(index, seconds);
       // The gap has to be part of the dedupe, not just the cue. A line ending
-      // does not change which cue is current — it is still the one that just
-      // finished — so deduping on the index alone meant the panel was never told
+      // does not change which cue is current, it is still the one that just
+      // finished, so deduping on the index alone meant the panel was never told
       // playback had entered a gap, and the dimming never appeared.
       if (index === lastActiveIndex && paused === lastActivePaused) return;
       lastActiveIndex = index;
@@ -861,7 +861,7 @@
   /**
    * Whether playback sits in a gap between two cues.
    *
-   * YouTube's own cue times do not tile the timeline — one line ends and the next
+   * YouTube's own cue times do not tile the timeline, one line ends and the next
    * begins a variable fraction of a second later. That gap is real silence, and
    * the panel shows it by dimming rather than by dropping the highlight.
    *

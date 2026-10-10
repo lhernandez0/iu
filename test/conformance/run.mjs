@@ -24,7 +24,7 @@
  * A file we cannot read is asserted as a KNOWN limitation with its reason, not
  * skipped and not failed. A silent skip reports green while proving nothing; a
  * blanket failure makes the suite useless as a signal. Naming it means the day the
- * parser improves, the assertion has to be updated — which is the point at which
+ * parser improves, the assertion has to be updated, which is the point at which
  * someone notices.
  */
 
@@ -84,7 +84,7 @@ console.log(`\nconformance suite: ${REQUIRED.length} files, ${totalMb.toFixed(0)
 
 // --- test2: the non-default TimecodeScale ------------------------------------
 
-section('test2 — non-default TimecodeScale (the bug this suite found)');
+section('test2, non-default TimecodeScale (the bug this suite found)');
 
 {
   // The file sets `TimecodeScale` to 100,000 rather than the default 1,000,000.
@@ -92,7 +92,7 @@ section('test2 — non-default TimecodeScale (the bug this suite found)');
   // large, with no error: a two-minute film's subtitles land at twenty minutes.
   //
   // Our own fixtures could not have caught this, because `ffmpeg` cannot write a
-  // non-default scale — which is the whole argument for this suite existing.
+  // non-default scale, which is the whole argument for this suite existing.
   const file = readerFor('test2.mkv');
   const { timecodeScale, tracks } = await readMatroska({ ...file, trackNumbers: [] });
 
@@ -101,13 +101,13 @@ section('test2 — non-default TimecodeScale (the bug this suite found)');
 
   // Sanity on what the file contains, so a timestamp assertion below means
   // something. test2 carries H264 video and stereo AAC and no subtitles, so there
-  // is nothing to extract — the scale is the only thing being proven here.
+  // is nothing to extract, the scale is the only thing being proven here.
   check('the file has no subtitle tracks', tracks.length, 0);
 }
 
 // --- test1: the minimum a compliant player handles ---------------------------
 
-section('test1 — the basic file, which must parse');
+section('test1, the basic file, which must parse');
 
 {
   const tracks = await readMatroskaTracks(readerFor('test1.mkv'));
@@ -118,7 +118,7 @@ section('test1 — the basic file, which must parse');
 
 // --- test5: seven subtitle languages -----------------------------------------
 
-section('test5 — a file with many subtitle languages');
+section('test5, a file with many subtitle languages');
 
 {
   // **The suite's README says seven languages. The file has EIGHT subtitle
@@ -128,7 +128,7 @@ section('test5 — a file with many subtitle languages');
   // unselectable.
   //
   // The English part is the interesting one. Matroska defines an ABSENT `Language`
-  // as English, and this file relies on that — its English track carries no
+  // as English, and this file relies on that, its English track carries no
   // language element at all. Our parser previously collapsed "absent" with "und"
   // and reported null, which meant the English subtitles were offered and never
   // marked. `ffprobe` was the reference for what the file really contains.
@@ -139,7 +139,7 @@ section('test5 — a file with many subtitle languages');
   check('and all of them are text', tracks.every((t) => t.kind === 'text'), true);
 
   const languages = tracks.map((t) => t.language);
-  // English is present, via the format default rather than a tag — and flagged as
+  // English is present, via the format default rather than a tag, and flagged as
   // such, so a caller can tell an inference from a certainty.
   check('English is present, from the format default', languages.includes('en'), true);
   const inferred = tracks.filter((t) => t.languageDefaulted);
@@ -150,7 +150,7 @@ section('test5 — a file with many subtitle languages');
   check('Japanese is normalised to ja', languages.includes('ja'), true);
   check('and no language came back as the raw 639-2 form', languages.includes('jpn'), false);
 
-  // One track is genuinely `und` — the file SAYING it does not know. That stays
+  // One track is genuinely `und`, the file SAYING it does not know. That stays
   // null, because it is knowledge rather than absence and must not be defaulted.
   check('und stays null rather than becoming English', languages.includes(null), true);
 
@@ -167,7 +167,7 @@ section('test5 — a file with many subtitle languages');
 
 // --- test6: unusual element sizes --------------------------------------------
 
-section('test6 — sizes coded in 1 or 8 bytes, and no Cues');
+section('test6, sizes coded in 1 or 8 bytes, and no Cues');
 
 {
   // A parser of the EBML variable-length integer format. A reader that only
@@ -181,12 +181,12 @@ section('test6 — sizes coded in 1 or 8 bytes, and no Cues');
 
 // --- test7: junk and damage --------------------------------------------------
 
-section('test7 — unknown elements and a damaged region');
+section('test7, unknown elements and a damaged region');
 
 {
   // Junk elements before and after clusters, and an invalid element partway
   // through. Real files are like this, and the parser's rule is that anything it
-  // does not recognise is skipped BY SIZE — so this should parse rather than throw.
+  // does not recognise is skipped BY SIZE, so this should parse rather than throw.
   const file = readerFor('test7.mkv');
   let threw = null;
   let tracks = null;
@@ -210,7 +210,7 @@ section('known limitations of this parser, asserted rather than hidden');
   // has no subtitle track, so the observable outcome is the same as test1.
   //
   // Asserted as a limitation rather than as a success, because "it did not throw"
-  // is a weaker claim than "it read the cues" — and pretending the two are the same
+  // is a weaker claim than "it read the cues", and pretending the two are the same
   // is how a gap stops being visible.
   if (existsSync(join(HERE, 'test4.mkv'))) {
     const file = readerFor('test4.mkv');

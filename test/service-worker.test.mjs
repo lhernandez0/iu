@@ -2,7 +2,7 @@
  * Boots the service worker against a chrome stub and drives it the way the
  * browser would. Run with `npm test`.
  *
- * The value here is not coverage — it is that the worker is *evaluated*. Static
+ * The value here is not coverage, it is that the worker is *evaluated*. Static
  * checks prove imports and names line up; only running the module proves it does
  * not throw on the way up, which is the failure that makes the panel sit on its
  * placeholder with nothing to go on.
@@ -51,7 +51,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
  * Marking, refetching and lookup all happen across asynchronous hops, so none of
  * them can be awaited directly. This used to be handled by sleeping: first 50ms,
  * then 100, then 200, each bump fixing one flaky test and together totalling
- * 3.5s of a 3.9s suite. A sleep is a guess in both directions — too short and the
+ * 3.5s of a 3.9s suite. A sleep is a guess in both directions, too short and the
  * test is intermittently wrong, too long and every run pays for the worst case.
  *
  * Returns as soon as the predicate holds, so a condition that is already true
@@ -107,7 +107,7 @@ async function waitForState(received, predicate, description) {
  *
  * Only safe for a FIRST marking. `rebuildRows` carries tokens over by text, so
  * after a settings change every row already has tokens from the previous
- * marking — this would return immediately and hand back stale levels. Waiting
+ * marking, this would return immediately and hand back stale levels. Waiting
  * for a re-mark has to assert what actually changed.
  *
  * @param {object[]} received
@@ -130,7 +130,7 @@ function waitForFirstState(received) {
  * Install a stub and evaluate the worker against it, with the panel connected.
  *
  * A unique query string defeats the module cache, so each call gets a fresh
- * evaluation of the worker — which is what makes the sections independent.
+ * evaluation of the worker, which is what makes the sections independent.
  *
  * @param {object} [options] Passed through to installChromeStub.
  * @returns {Promise<{listeners: object, calls: object, storage: object, received: object[], sendFromPanel: Function, disconnect: Function}>}
@@ -156,7 +156,7 @@ async function boot(options = {}) {
  * Attach a panel port to an already-evaluated worker.
  *
  * Booting again would evaluate a fresh worker with fresh state, which is not
- * what reopening a panel does — the worker persists and only the port
+ * what reopening a panel does, the worker persists and only the port
  * reconnects. Testing the wrong one of those would prove nothing.
  *
  * @param {object} stub
@@ -175,7 +175,7 @@ function connectPanel(stub) {
  *
  * Chinese, because the bundled word list is Chinese and the marking gate refuses a
  * line no list covers. An English fixture here would be refused before marking ran,
- * so every marking assertion would fail for a reason unrelated to what it tests —
+ * so every marking assertion would fail for a reason unrelated to what it tests,
  * which is exactly what happened when this was English text.
  */
 const CHINESE = {
@@ -415,7 +415,7 @@ section('a language choice survives moving to another video');
 section('a language choice is kept for the video that has it, and restored later');
 
 {
-  // A video that lacks the chosen track must fall back rather than fail — but
+  // A video that lacks the chosen track must fall back rather than fail, but
   // the preference itself has to survive, or returning to a video that has the
   // language would come up in the wrong one.
   const portugueseOnly = {
@@ -518,7 +518,7 @@ section('translating the second line shows machine text there, and only there');
   // overlay on a text the learner cannot see.
   check('and the study line is untouched', state?.rows?.[0]?.text, '大家早安');
   // The cache is keyed on the SOURCE track, so this must not have become a `ja`
-  // track — that would collide with a real Japanese track on the same video.
+  // track, that would collide with a real Japanese track on the same video.
   check('the gloss language is still the source', state?.gloss, 'de');
   check('and the target is reported apart from it', state?.glossTranslation, 'ja');
   check('no error', state?.error, null);
@@ -529,7 +529,7 @@ section('the study line is not translated even when the gloss is');
 {
   // A rule rather than a preference. The old model allowed it, because a
   // translation was a property of a slot and the first slot was always the study
-  // line — which is how a machine translation ended up wearing HSK marks.
+  // line, which is how a machine translation ended up wearing HSK marks.
   //
   // The gloss is deliberately the SAME language as the study line, so a
   // translation IS happening and the only question is which line it lands on.
@@ -697,7 +697,7 @@ section('a cached track still refetches when the translation target changed');
 section('an untranslatable gloss is not asked again on every refresh');
 {
   // The preference stays set, so without the translatability check every refresh
-  // would re-request a translation that cannot exist — a wasted round trip and a
+  // would re-request a translation that cannot exist, a wasted round trip and a
   // permanent error on screen.
   const untranslatable = {
     ...VIDEO,
@@ -730,8 +730,8 @@ section('one language on both lines: itself, and its translation');
 
 {
   // The reported case. A video whose only subtitle is English, and the wish to
-  // read English with a translation underneath it. "Off" cannot be translated —
-  // a translation needs a source track to convert — so the gloss has to hold
+  // read English with a translation underneath it. "Off" cannot be translated,
+  // a translation needs a source track to convert, so the gloss has to hold
   // English as well, and that is a legitimate state rather than a mistake.
   //
   // The cache was keyed by language code alone, so the translated fetch
@@ -760,7 +760,7 @@ section('one language on both lines: itself, and its translation');
   // The point of the whole arrangement: one line original, one line translated.
   check('the study line stays the original', state?.rows?.[0]?.text, '大家早安');
   check('and only the gloss is translated', state?.rows?.[0]?.secondary, '[ko] 大家早安');
-  // Every row, not just the first — a collision would affect all of them.
+  // Every row, not just the first, a collision would affect all of them.
   check('the last row keeps its original too', state?.rows?.[2]?.text, '欢迎回来');
   check('and its translation', state?.rows?.[2]?.secondary, '[ko] 欢迎回来');
 
@@ -782,7 +782,7 @@ section('a cached video still hands its transcript to the content script');
   // The regression this pins: on a cache hit nothing is fetched, so the content
   // script was never given the segments it reports position FROM. A freshly
   // loaded page therefore reported no cue at all, and the panel sat at the top of
-  // the transcript with nothing highlighted — no auto-scroll, no follow.
+  // the transcript with nothing highlighted, no auto-scroll, no follow.
   //
   // Only visible from here: the content script's own suite calls set-track
   // directly, so it cannot see whether anything ever calls it.
@@ -790,7 +790,7 @@ section('a cached video still hands its transcript to the content script');
   const sends = () => stub.calls.sendMessage.filter((c) => c?.message?.type === 'set-track');
   check('nothing handed over before a cache hit', sends().length, 0);
 
-  // Second refresh: the video is cached, so no fetch happens — which is exactly
+  // Second refresh: the video is cached, so no fetch happens, which is exactly
   // when the hand-over has to occur.
   stub.sendFromPanel({ type: 'refresh' });
   await settle();
@@ -807,7 +807,7 @@ section('a cached video still hands its transcript to the content script');
 section('a hand-over that fails does not break the refresh');
 
 {
-  // A value that made sense when it was stored may not make sense now — a size
+  // A value that made sense when it was stored may not make sense now, a size
   // of 40px would blow the panel apart, and an unknown word list has no levels.
   // The schema's coerce is what turns that into something renderable.
   //
@@ -825,7 +825,7 @@ section('a hand-over that fails does not break the refresh');
     storageDelay: 5,
   });
   // The restore is deliberately slow here (storageDelay), and the first refresh
-  // waits on it — so this waits for the restored value rather than for a
+  // waits on it, so this waits for the restored value rather than for a
   // duration. Reading too early sees no state at all, not default settings.
   const learning = (
     await waitForState(stub.received, (s) => s.learning?.view === 'focus', 'the settings to be restored')
@@ -1072,7 +1072,7 @@ section('the panel is told which word lists exist, and a default is chosen');
   const state = received.at(-1)?.state;
   const lists = state?.lists ?? [];
   // Three lists now: two HSK numberings and JLPT. The count is asserted because a
-  // build that drops a language from the index would otherwise go unnoticed —
+  // build that drops a language from the index would otherwise go unnoticed,
   // the dropdown would simply offer fewer choices, with nothing reporting it.
   check('every list from the index is offered', lists.length, 3);
   check('with the 2.0 list', lists[0]?.id, 'hsk2_0');
@@ -1085,14 +1085,14 @@ section('the panel is told which word lists exist, and a default is chosen');
   // The default must be the list that can mark the most, not whichever is first
   // in the data. HSK 2.0 places 4,993 of 11,470 words; the other 6,477 exist
   // only in 3.0, so defaulting to 2.0 makes most of the dictionary silently
-  // invisible — which looks exactly like the highlighting being broken.
+  // invisible, which looks exactly like the highlighting being broken.
   //
   // And "most" is within the PRIMARY language. JLPT places more words than HSK
   // 3.0 (11,158 vs 10,969), so widest-overall made Japanese the default for a
-  // fresh install — and on a Chinese video that list covers nothing, which is
+  // fresh install, and on a Chinese video that list covers nothing, which is
   // the very symptom the widest-list rule exists to prevent.
   check('the widest list is chosen by default', state?.learning?.listId, 'hsk3_0');
-  // Nothing is chosen yet, so marking starts at the FIRST level of the list —
+  // Nothing is chosen yet, so marking starts at the FIRST level of the list,
   // everything marked until the learner narrows it. Asserted against the list's
   // own numbering rather than a literal, so the test does not encode a policy.
   //
@@ -1115,7 +1115,7 @@ section('the default list is the one that can mark the most words');
 
   const lists = received.at(-1)?.state?.lists ?? [];
   const chosen = lists.find((l) => l.id === received.at(-1)?.state?.learning?.listId);
-  // Widest WITHIN the default language, not widest overall — JLPT places more
+  // Widest WITHIN the default language, not widest overall, JLPT places more
   // words than any HSK list, and choosing it would leave a Chinese video unmarked.
   const primary = lists.filter((l) => l.language === lists[0]?.language);
   const widest = [...primary].sort((a, b) => (b.levelled ?? 0) - (a.levelled ?? 0))[0];
@@ -1149,7 +1149,7 @@ section('switching to a Japanese list loads Japanese words and marks them');
   });
   // Wait for the initial state before switching. `sendFromPanel` throws if the
   // worker has not subscribed to the port yet, and a switch sent before the
-  // startup marking has settled is dropped — which looked like a marking bug
+  // startup marking has settled is dropped, which looked like a marking bug
   // rather than a test that asked too early.
   await waitForState(received, (s) => Array.isArray(s.lists) && s.lists.length > 0, 'startup');
   await waitForState(received, (s) => s.learning?.listId !== null, 'a default list to be chosen');
@@ -1166,17 +1166,17 @@ section('switching to a Japanese list loads Japanese words and marks them');
 
   check('the list is now JLPT', state.learning.listId, 'jlpt');
   // The learner has never chosen a level for JLPT, so it starts at the first.
-  // NOT carried over from the Chinese list, and not a guessed "sensible" middle —
+  // NOT carried over from the Chinese list, and not a guessed "sensible" middle,
   // a threshold only means something against its own list's numbering.
   check('the Japanese list starts at its own first level, not a carried number', state.learning.threshold, 1);
-  // `markedReason` lives on the STATE, not on a row — it explains the whole
+  // `markedReason` lives on the STATE, not on a row, it explains the whole
   // transcript, not one line. Null means the list covers the language on screen.
   check('the list covers Japanese, so no reason is given', state.markedReason, null);
 
   const row = state.rows?.[0];
   const texts = (row?.tokens ?? []).map((t) => t.text);
   // 勉強 is a single JLPT word. If the Japanese dictionary had not loaded, the
-  // text would segment into bare characters instead — this is the assertion that
+  // text would segment into bare characters instead, this is the assertion that
   // distinguishes "words loaded" from "the row merely exists".
   check('the row segments into Japanese words, not bare characters', texts.includes('勉強'), true);
 
@@ -1199,7 +1199,7 @@ section('switching to a Japanese list loads Japanese words and marks them');
 section('a level is shown by its own list\'s name, not its stored number');
 
 {
-  // The reported bug: 私 — the simplest word in the language, JLPT N5 — was shown
+  // The reported bug: 私, the simplest word in the language, JLPT N5, was shown
   // as "JLPT 1", which a viewer takes for N1, the HARDEST level. The stored level
   // is an ordering (1 = easiest); JLPT names its levels backwards from there, so
   // printing the number as a name inverts the meaning.
@@ -1226,7 +1226,7 @@ section('a level is shown by its own list\'s name, not its stored number');
   sendFromPanel({ type: 'set-list', listId: 'jlpt' });
   // Keep the state from this wait rather than reading the newest message later.
   // The lookup below adds an `entry` message, and `waitForState` only inspects
-  // the most recent message — so asking for the threshold options afterwards
+  // the most recent message, so asking for the threshold options afterwards
   // would never be satisfied and would time out, which reads as a code failure.
   const state = await waitForState(received, (s) => s.learning?.listId === 'jlpt', 'JLPT to be adopted');
 
@@ -1236,7 +1236,7 @@ section('a level is shown by its own list\'s name, not its stored number');
   // Easiest first, so choosing the top of the range marks the hardest words.
   check('with the stored numbers still ascending for the comparison', state?.learning?.thresholdOptions?.map((o) => o.value), [1, 2, 3, 4, 5]);
 
-  // 私 is JLPT N5 — stored level 1. The badge must say N5.
+  // 私 is JLPT N5, stored level 1. The badge must say N5.
   sendFromPanel({ type: 'lookup', word: '私' });
   const reply = await waitForMessage(received, (m) => m.type === 'entry' && m.word === '私', 'the 私 definition');
 
@@ -1260,8 +1260,8 @@ section('a Japanese video offers only the Japanese list');
   // a Chinese list is never offered alongside Japanese text.
   //
   // The three variants are called out because they are different TRACKS that mean
-  // the same thing — an auto-generated track has `kind: 'asr'`, and a machine
-  // translation is the same track with a target language — and the filter must
+  // the same thing, an auto-generated track has `kind: 'asr'`, and a machine
+  // translation is the same track with a target language, and the filter must
   // treat all three as Japanese. It does so without naming any of them, because
   // the choice is made on the language CODE, which is shared.
   const variants = [
@@ -1298,7 +1298,7 @@ section('a Japanese video offers only the Japanese list');
 
     check(`${label}: only the JLPT list is offered`, state.learning.listOptions.map((o) => o.value), ['jlpt']);
     check(`${label}: it is selected without the learner choosing it`, state.learning.listId, 'jlpt');
-    // Never chosen for this list, so it begins at the first level of JLPT — not a
+    // Never chosen for this list, so it begins at the first level of JLPT, not a
     // number carried from the Chinese list, whose numbering means something else.
     check(`${label}: the Japanese list starts at its own first level`, state.learning.threshold, 1);
   }
@@ -1321,7 +1321,7 @@ section('a Chinese video offers only the Chinese lists');
   check('the stored default is unchanged', state.learning.listId, 'hsk3_0');
   // Nothing has been chosen yet, so it starts at the first level. For HSK 3.0
   // that is level 1, which is what takes the patch above to a whole transcript
-  // of marks — the point is that the NUMBER comes from the list, not that it is
+  // of marks, the point is that the NUMBER comes from the list, not that it is
   // any particular value.
   check('and its own threshold applies', state.learning.threshold, 1);
 }
@@ -1348,7 +1348,7 @@ section('a word only the 3.0 list knows is marked once the learner sets a level'
 
   // 啊 is HSK 3.0 level 2 and 哎 is level 7, and 啊哎 is not a headword, so it
   // segments into the two characters. A threshold between them must mark exactly
-  // the harder one — "surface the unknown", with the known half staying quiet.
+  // the harder one, "surface the unknown", with the known half staying quiet.
   sendFromPanel({ type: 'set-threshold', threshold: 5 });
   await waitForState(received, (s) => s.learning?.threshold === 5, 'the threshold to apply');
 
@@ -1399,7 +1399,7 @@ section('rows carry tokens, and only words at or beyond the threshold are marked
   check('and some are not, since they are below the threshold', unmarked.length > 0, true);
 
   // 我们 is HSK 2.0 level 1, so at threshold 4 it must stay unmarked. Note the
-  // token is the whole word, not 我 and 们 separately — longest match prefers
+  // token is the whole word, not 我 and 们 separately, longest match prefers
   // the compound, which is why an assertion about a bare character would be
   // asking about a token that does not exist.
   const early = row.tokens.find((t) => t.text === '我们');
@@ -1424,7 +1424,7 @@ section('lowering the threshold marks more');
   await waitForMarks(received);
 
   // Start from a narrowed threshold, because marking now BEGINS at the first
-  // level — so "lowering" from the default would test nothing.
+  // level, so "lowering" from the default would test nothing.
   sendFromPanel({ type: 'set-threshold', threshold: 4 });
   await waitForState(received, (s) => s.learning?.threshold === 4, 'the narrow threshold to apply');
   const high = received.at(-1).state.rows[0].tokens.filter((t) => t.level !== null).length;
@@ -1432,7 +1432,7 @@ section('lowering the threshold marks more');
   sendFromPanel({ type: 'set-threshold', threshold: 1 });
   // A threshold change re-marks. Since `rebuildRows` now DISCARDS tokens built
   // under different settings, there is a real interval where the rows have no
-  // tokens at all — so a predicate that only compares mark counts matches that
+  // tokens at all, so a predicate that only compares mark counts matches that
   // empty state and hands back rows with `tokens: undefined`. It has to require
   // tokens to be present AND to differ, which is what "re-marked" actually means.
   const lowState = await waitForState(
@@ -1494,7 +1494,7 @@ section('the reported cue does not drift when the video is paused');
   // so every poll legitimately reports the same cue.
   //
   // What matters is CONTAINMENT, not a frozen value. The exact second is not the
-  // contract — the panel must not accumulate drift, which is what a rounding or
+  // contract, the panel must not accumulate drift, which is what a rounding or
   // interpolation bug would look like over 403 cues.
   const synthetic = fixture();
   const track = synthetic.tracks[0];
@@ -1530,7 +1530,7 @@ section('a word the list cannot place is still hoverable, just unmarked');
 
 {
   // The reported bug: "the whole zhe yang le didn't get highlighted". 这样 and
-  // 这么 have no HSK 2.0 level at all — they are HSK 3.0 level 2 — so on HSK 2.0
+  // 这么 have no HSK 2.0 level at all, they are HSK 3.0 level 2, so on HSK 2.0
   // they carried no mark. Rendering unmarked tokens as bare text then meant no
   // span, so no hover either, and a whole sentence looked dead.
   //
@@ -1574,7 +1574,7 @@ section('a word the list cannot place is still hoverable, just unmarked');
   // absent from the other, so the same text marks differently. 挨着 is HSK 3.0
   // level 6; HSK 2.0 does not place it at all. (这样 would not work: it is HSK
   // 3.0 level 2, which is below the default threshold of 4, so it is correctly
-  // unmarked in both lists — a reminder that "no level" and "below threshold"
+  // unmarked in both lists, a reminder that "no level" and "below threshold"
   // both render as unmarked and only the `defined` flag distinguishes them.)
   sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
   // Both conditions: the setting adopted AND the rows re-marked. A settings
@@ -1593,7 +1593,7 @@ section('a word the list cannot place is still hoverable, just unmarked');
 
   // The threshold is set explicitly now rather than relied on. Marking starts at
   // the first level, so nothing is "below the threshold" until the learner places
-  // it — this test is about WHERE the line falls, not about where it starts, so it
+  // it, this test is about WHERE the line falls, not about where it starts, so it
   // draws the line itself. 这样 is HSK 3.0 level 2.
   sendFromPanel({ type: 'set-threshold', threshold: 4 });
   const narrowed = await waitForState(
@@ -1615,7 +1615,7 @@ section('the same word marks differently in the two lists');
 
 {
   // 挨着 is HSK 3.0 level 6 and absent from HSK 2.0 entirely. At threshold 4 it
-  // must be marked under 3.0 and unmarked under 2.0 — while remaining hoverable
+  // must be marked under 3.0 and unmarked under 2.0, while remaining hoverable
   // in both, which is the bug that was reported.
   const { received, sendFromPanel } = await boot({
     describePayload: DESCRIBE(VIDEO),
@@ -1681,8 +1681,8 @@ section('opening the panel mid-video knows where playback is');
 
 {
   // The reported bug: on an ongoing video, Follow is ticked but the transcript
-  // does not start at the live line. POSITION is an *event* — the content script
-  // fires it once per cue change and dedupes — so a panel that opens afterwards
+  // does not start at the live line. POSITION is an *event*, the content script
+  // fires it once per cue change and dedupes, so a panel that opens afterwards
   // never hears about the cue already playing, and sits at the top until the
   // next change, which on a paused video never comes.
   //
@@ -1699,7 +1699,7 @@ section('opening the panel mid-video knows where playback is');
   await settle();
   check('the panel is told about a cue change', received.at(-1)?.type, 'position');
 
-  // Now the panel goes away and the SAME worker is reopened — booting again
+  // Now the panel goes away and the SAME worker is reopened, booting again
   // would build a fresh worker with fresh state, which is not what reopening a
   // panel does and would make this test prove nothing.
   stub.disconnect();
@@ -1755,7 +1755,7 @@ section('switching video clears the remembered cue');
 {
   // An index is only meaningful against the transcript it was measured on. Two
   // transcripts have different lengths, so carrying an index across would
-  // highlight an unrelated line — or run off the end.
+  // highlight an unrelated line, or run off the end.
   const stub = await boot(TRACK(GERMAN));
   await waitForFirstState(stub.received);
 
@@ -1764,7 +1764,7 @@ section('switching video clears the remembered cue');
     { tab: { id: 1 } },
   );
   await settle();
-  // A cue report is a `position` message, not a `state` one — it carries `index`
+  // A cue report is a `position` message, not a `state` one, it carries `index`
   // rather than `state.activeIndex`. Asking the worker for state afterwards is
   // what shows the cue was remembered as well as relayed.
   check('the cue arrived as a position event', stub.received.at(-1)?.index, 2);
@@ -1791,7 +1791,7 @@ section('switching language keeps the marks');
 
 {
   // The other reported bug. Choosing a second subtitle track rebuilds the rows,
-  // which discarded the tokens — and because the "already marked" flag was still
+  // which discarded the tokens, and because the "already marked" flag was still
   // set, nothing re-attached them. The transcript came back unmarked until a
   // learning control was touched by hand, which changed the flag and forced it.
   const { received, sendFromPanel } = await boot({
@@ -1813,7 +1813,7 @@ section('switching language keeps the marks');
   check('marked to begin with', markedBefore > 0, true);
 
   // Choose a second subtitle language, which rebuilds every row. The marks have
-  // to survive that — the bug was that the rebuild discarded the tokens while
+  // to survive that, the bug was that the rebuild discarded the tokens while
   // the "already marked" flag stayed set, so nothing re-attached them.
   sendFromPanel({ type: 'set-gloss', languageCode: 'de' });
   const after = await waitForState(
@@ -1844,14 +1844,14 @@ section('a level chosen for one list is remembered, and never leaks into another
   await waitForMarks(received);
 
   // The learner narrows HSK 2.0 to its top level. This is the ONLY thing that
-  // ever sets a starting level — the app does not guess one, and the data does
+  // ever sets a starting level, the app does not guess one, and the data does
   // not carry one.
   sendFromPanel({ type: 'set-list', listId: 'hsk2_0' });
   await waitForState(received, (s) => s.learning?.listId === 'hsk2_0', 'HSK 2.0 to be adopted');
   sendFromPanel({ type: 'set-threshold', threshold: 6 });
   await waitForState(received, (s) => s.learning?.threshold === 6, 'the chosen level to apply');
 
-  // HSK 3.0 has never been narrowed, so it starts fresh at its first level — the
+  // HSK 3.0 has never been narrowed, so it starts fresh at its first level, the
   // number is NOT carried over, because 6 in a six-level list is not 6 in a
   // nine-level one.
   sendFromPanel({ type: 'set-list', listId: 'hsk3_0' });
@@ -1879,7 +1879,7 @@ section('marks appear without the learner having to touch the controls');
 {
   // The reported bug: subs render, but no highlighting until a dropdown is
   // changed by hand. Changing a control calls rebuildRows, so the symptom means
-  // the marks were never applied on their own — the dictionary finished loading
+  // the marks were never applied on their own, the dictionary finished loading
   // and nothing re-marked the rows that were already on screen.
   const { received } = await boot({
     describePayload: DESCRIBE(VIDEO),
@@ -1892,7 +1892,7 @@ section('marks appear without the learner having to touch the controls');
     trackPayload: GERMAN,
   });
 
-  // Wait for the marks themselves, which is what this test is about — the bug
+  // Wait for the marks themselves, which is what this test is about, the bug
   // was that the dictionary loaded and nothing re-marked the rows already on
   // screen. A fixed sleep here was both slower and a guess.
   const state = await waitForState(
@@ -1955,7 +1955,7 @@ section('a slow caption download is not timed out like a local question');
   // The bug this pins: every worker->content request shared one flat 4000ms
   // budget, so a PROVIDE that was downloading (and possibly translating) a
   // caption track was killed mid-flight on a slow video and reported as
-  // "provide did not answer within 4000ms" — a false failure that reads
+  // "provide did not answer within 4000ms", a false failure that reads
   // exactly like a wedged content script.
   //
   // The worker exports nothing, so the budget is checked at the source, the
@@ -1985,7 +1985,7 @@ section('the action menu is registered, because a missing item is invisible');
 
 {
   // The bug this pins: the toolbar icon's menu is how a source is opened, and
-  // when it is absent there is NOTHING to see — no error, no placeholder, just a
+  // when it is absent there is NOTHING to see, no error, no placeholder, just a
   // menu that does not list the item. It was shipped absent twice: first because
   // the `contextMenus` permission was missing entirely (the API does not exist
   // without it), and the design had claimed it cost no permission.
@@ -2006,7 +2006,7 @@ section('the action menu is registered, because a missing item is invisible');
   // A module-scope throw is fatal, and this registration happens at module scope
   // on purpose: an unpacked extension reloaded from chrome://extensions does not
   // reliably fire `onInstalled`, and a menu created only there is silently absent
-  // on reload — which is exactly how it looked to the person testing it.
+  // on reload, which is exactly how it looked to the person testing it.
   const source = readFileSync(new URL('../src/background/service-worker.js', import.meta.url), 'utf8');
   const atTopLevel = /^ensureActionMenu\(\);/m.test(source);
   check('the menu is created at module scope, not only on install', atTopLevel, true);
@@ -2020,7 +2020,7 @@ section('a viewer tab is resolvable even when its announcement never arrives');
   // and `sender.tab` is not guaranteed for an extension PAGE (as opposed to a
   // content script). When it was absent the tab never registered, `isReadable`
   // said no, and the panel reported "no supported video is open in the active tab"
-  // **while the film was playing in the next tab** — a failure that is both silent
+  // **while the film was playing in the next tab**, a failure that is both silent
   // and exactly backwards.
   //
   // So registration must not depend on the announcement. `runtime.getContexts` is
@@ -2029,7 +2029,7 @@ section('a viewer tab is resolvable even when its announcement never arrives');
   const READER_TAB = { id: 7, active: true, url: '' }; // no url, as Chrome reports ours
   const { received } = await boot({
     tabs: [READER_TAB],
-    // The viewer is open in tab 7 — and NO VIEWER_READY message is sent, which is
+    // The viewer is open in tab 7, and NO VIEWER_READY message is sent, which is
     // the whole point.
     contexts: [
       { contextType: 'TAB', tabId: 7, documentUrl: 'chrome-extension://test/src/viewer/viewer.html' },
@@ -2102,7 +2102,7 @@ section('settings are stored, and never leave the machine');
   // The BUCKET is a decision this project already made and guards elsewhere:
   // `manifest.test.mjs` fails the build if anything touches `storage.sync`, because
   // that would put preferences in the user's Google account. So this asserts the
-  // positive half — a setting is genuinely persisted — and leaves the "not sync"
+  // positive half, a setting is genuinely persisted, and leaves the "not sync"
   // half to the guard that owns it.
   //
   // Asserted here rather than assumed because the storage path moved: the worker
@@ -2120,8 +2120,8 @@ section('a change made elsewhere is not lost by a live worker');
 
 {
   // **This is the whole point of the change.** The worker used to read settings
-  // once at boot and keep them, so a write made by another surface — the viewer,
-  // a settings page, another window — never reached it. It kept serving the value
+  // once at boot and keep them, so a write made by another surface, the viewer,
+  // a settings page, another window, never reached it. It kept serving the value
   // it started with, and the panel showed a setting the user had already changed.
   //
   // The storage area's own cross-context event is what fixes that, and it is also
@@ -2149,7 +2149,7 @@ section('a change that affects the rows rebuilds them');
 {
   // Storing the new value is not enough. The reading placement is applied when
   // the rows are BUILT, so a worker that stored `below` and did not rebuild would
-  // push a state whose rows still carried the old annotation — the setting would
+  // push a state whose rows still carried the old annotation, the setting would
   // look like it did nothing, which is exactly the bug the local write path
   // guards against. The external path needs the same guard.
   const stub = await boot(TRACK(CHINESE));
@@ -2181,7 +2181,7 @@ section('a presentation-only change does not rebuild');
   });
   await settle();
 
-  // A state is still pushed — the panel needs the new value — but the rows are
+  // A state is still pushed, the panel needs the new value, but the rows are
   // carried over rather than re-marked, which is the observable difference.
   const states = stub.received.filter((m) => m.type === 'state');
   check('a state is still pushed', states.length > statesBefore, true);
@@ -2193,7 +2193,7 @@ section('the worker does not re-broadcast its own write');
 {
   // A write this worker made echoes back on the change event. Treating that echo
   // as news would rebuild twice for every change and broadcast twice, which
-  // would show up as a stutter on every control, not as a wrong value — so a
+  // would show up as a stutter on every control, not as a wrong value, so a
   // value assertion would not catch it.
   const stub = await boot(TRACK(CHINESE));
   await waitForMarks(stub.received);

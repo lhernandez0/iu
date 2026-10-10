@@ -1,14 +1,14 @@
 /**
  * The viewer's subtitle parsing.
  *
- * Pure functions, so these run hermetically with nothing installed — no browser,
+ * Pure functions, so these run hermetically with nothing installed, no browser,
  * no network, no fixtures on disk. That matters because this is where the
  * correctness risk is concentrated: the wiring either works or throws, but a
  * parser can be wrong in a way that produces a complete, plausible transcript of
  * the wrong thing.
  *
  * The case that justifies the whole file is the ENCODING one. A Chinese `.srt` is
- * very often GBK, and decoded as UTF-8 it does not fail — it yields U+FFFD that
+ * very often GBK, and decoded as UTF-8 it does not fail, it yields U+FFFD that
  * parses cleanly into garbage. Everything looks like it worked. So the encoding
  * checks are written as "must NOT silently produce replacement characters" rather
  * than "must produce text", because producing text was never the hard part.
@@ -58,7 +58,7 @@ section('timestamps parse in every separator the formats use');
 
   // The digit-count trap: `.5` is half a second, not five milliseconds. Padding
   // rather than truncating is what gets this right, and getting it wrong shifts a
-  // cue by 495ms — small enough to look like a timing bug in the video.
+  // cue by 495ms, small enough to look like a timing bug in the video.
   check('one fractional digit is tenths', parseTimestamp('00:00:01.5'), 1.5);
   check('two fractional digits are hundredths', parseTimestamp('00:00:01.05'), 1.05);
   check('three are milliseconds', parseTimestamp('00:00:01.005'), 1.005);
@@ -150,7 +150,7 @@ section('WebVTT');
   check('the format is recognised', format, 'vtt');
   check('the NOTE block is not a cue', segments.length, 2);
   // Cue settings after the end timestamp must not become part of the time, and
-  // inline markup must not reach the text — angle brackets would break the word
+  // inline markup must not reach the text, angle brackets would break the word
   // segmenter on every affected line.
   check('cue settings are stripped from the timing', segments[0].duration, 2);
   check('inline tags are removed but the words stay', segments[0].text, 'Hello world');
@@ -188,7 +188,7 @@ section('ASS / SSA');
   check('the format is recognised', format, 'ass');
   check('both dialogue lines are cues', segments.length, 2);
   // `0:02:40.65` is 2 minutes 40.65 seconds. The hour field is ONE digit in ASS,
-  // and reading it with the SRT/WebVTT parser would give 2 seconds and 40.65 —
+  // and reading it with the SRT/WebVTT parser would give 2 seconds and 40.65,
   // a factor-of-60 error on every single line.
   check('ASS centiseconds are not milliseconds', segments[0].start, 160.65);
   check('and the duration follows', Math.round(segments[0].duration * 100) / 100, 1.14);
@@ -249,10 +249,10 @@ section('ASS / SSA');
   check('and the dialogue survives', segments[0].text, 'real subtitle');
 }
 
-section('the encoding trap — a wrong guess must be loud, not silent');
+section('the encoding trap, a wrong guess must be loud, not silent');
 
 {
-  // THE case this file exists for. These bytes are GBK for "你好，世界" — the
+  // THE case this file exists for. These bytes are GBK for "你好，世界", the
   // kind of text a Chinese learner's subtitle files are full of. Decoded as
   // UTF-8 they do not throw: they become replacement characters, which parse
   // into a transcript of U+FFFD that looks like a successfully loaded file.
