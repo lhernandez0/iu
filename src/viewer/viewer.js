@@ -1820,12 +1820,26 @@ function offerResume() {
   if (!videoFile) return;
   const saved = positions[videoIdFor(videoFile)];
   if (typeof saved !== 'number' || !Number.isFinite(saved)) return;
-  // Under two seconds is the start, not a position worth offering. And a position
-  // in the last few seconds means the film finished, so resuming there would drop
-  // you at the end.
+
+  // Two ways a stored position is not worth offering: it is barely into the film,
+  // or it is past the end of it. Both need the duration.
+  //
+  // The duration is NOT always known here. `loadVideo` calls this before the new
+  // source has reported anything, so `els.video.duration` reads as NaN then.
+  // `Number.isFinite(NaN)` is false, so the end test was SKIPPED and only the
+  // two-second floor remained, which let an offer through for a position at the
+  // very end of a short file: measured at 5.39s into a 6-second one, reported as
+  // "Resume at 0:05?". It also made `switching audio offers no modal` fail
+  // intermittently, because the offer can arrive from the pre-metadata call and
+  // still be on screen ten seconds later when the test looked.
+  //
+  // An unknown duration is a reason to WAIT, not a reason to allow. The metadata
+  // handler calls this again once the duration is real, so nothing is lost by
+  // returning here.
   const duration = els.video.duration;
   if (saved <= 2) return;
-  if (Number.isFinite(duration) && saved > duration - 5) return;
+  if (!Number.isFinite(duration) || duration <= 0) return;
+  if (saved > duration - 5) return;
 
   els.resumeText.textContent = `Resume at ${timecode(saved)}?`;
   els.resume.hidden = false;

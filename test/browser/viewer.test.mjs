@@ -469,15 +469,34 @@ section('the audio track selector');
   // asking a question with one sensible answer, for the most ordinary thing the control
   // does.
   //
-  // `three-tracks.mkv` is SIX SECONDS, which is too short to show the position bug at
-  // all, its `offerResume` refuses any position later than `duration - 5` and anything
-  // at or under 2s, so no position on that file can produce an offer. Verified by
-  // removing the guard: the assertion below stayed green, because the modal was absent
-  // for an unrelated reason.
+  // NOTE, and this paragraph used to say something that was WRONG: it claimed that
+  // no position on a short file could produce an offer, "verified by removing the
+  // guard". Removing the guard did keep this assertion green, and the reason was
+  // not the file's length. `offerResume` SKIPPED its end-of-file test whenever
+  // `duration` was unknown, which is exactly the case at the moment `loadVideo`
+  // calls it, so a position near the end of any file could produce an offer. The
+  // guard's absence was hidden by the same bug it was meant to expose.
+  //
+  // Confirmed by measurement, not by reading: with the bug present, a stored 5.39s
+  // position in a six-second file shows "Resume at 0:05?", and the real end test
+  // refuses it the moment the duration is known.
   const afterSwitchOffer = await reader.evaluate(() => ({
     resumeHidden: document.getElementById('resume').hidden,
     currentTime: Number(document.getElementById('video').currentTime.toFixed(2)),
+    // Reported WITH the failure, because this is the assertion that failed
+    // intermittently for a day while every attempt to explain it from the outside
+    // was wrong. The cause was `offerResume` treating an unknown duration as no
+    // end to be past, so the offer appeared for a position a second into the
+    // file; see the note in `viewer.js`. These fields say which of the two
+    // reasons would have shown it, so the next failure is readable.
+    offerSeconds: document.getElementById('resume').dataset.seconds ?? null,
+    offerText: document.getElementById('resume-text').textContent,
+    duration: String(document.getElementById('video').duration),
   }));
+  if (!afterSwitchOffer.resumeHidden) {
+    console.log(`  NOTE the offer was "${afterSwitchOffer.offerText}" at ${afterSwitchOffer.offerSeconds}s; ` +
+      `video currentTime ${afterSwitchOffer.currentTime}, duration ${afterSwitchOffer.duration}`);
+  }
   check('switching audio offers no modal', afterSwitchOffer.resumeHidden, true);
   check('and the playhead is where it was, not reset', afterSwitchOffer.currentTime > 0, true);
 
@@ -666,20 +685,29 @@ section('The resume offer behaves like a toast');
   const page5 = await context.newPage();
   await page5.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   await page5.waitForTimeout(800);
-  await page5.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  // `two-audio.mkv` (300s), NOT `three-tracks.mkv` (6s).
+  //
+  // The offer refuses a position later than `duration - 5`, which on a six-second
+  // file is anything past one second. This test used to run on `three-tracks` and
+  // set the playhead to 3s, so it was asserting an offer that the rule says must
+  // NOT be made. It passed only because `duration` is NaN at the moment
+  // `loadVideo` asks, `Number.isFinite(NaN)` is false, and the end test was
+  // skipped. Repaired there, this test had to move to a file long enough for a
+  // mid-file position to be a real one.
+  await page5.setInputFiles('#pick-files', join(FIXTURES, 'two-audio.mkv'));
   await page5.waitForFunction(() => document.getElementById('video')?.readyState >= 2, null, {
-    timeout: 15000,
+    timeout: 20000,
   });
   // Play a moment so the position is remembered, then reload so the offer fires.
   await page5.evaluate(() => {
-    document.getElementById('video').currentTime = 3;
+    document.getElementById('video').currentTime = 30;
     document.getElementById('video').play().catch(() => {});
   });
   await page5.waitForTimeout(5200);
   await page5.evaluate(() => document.getElementById('video').pause());
   await page5.reload();
   await page5.waitForTimeout(1200);
-  await page5.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await page5.setInputFiles('#pick-files', join(FIXTURES, 'two-audio.mkv'));
 
   const appeared = await page5
     .waitForFunction(() => !document.getElementById('resume').hidden, null, { timeout: 15000 })

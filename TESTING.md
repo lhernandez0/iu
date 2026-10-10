@@ -461,3 +461,49 @@ is required, and `harness.mjs` looks in this order:
 If none is found the browser tiers report `SKIP` and exit zero, so a machine
 without one can still run everything else. `--headless` with a full Chromium is
 used rather than the headless shell, which is why this works in a container.
+
+## Running against CI, in a container
+
+```bash
+tools/ci/run-in-ci.sh npm test
+tools/ci/run-in-ci.sh npm run test:browser
+tools/ci/run-in-ci.sh --shell          # poke at it
+tools/ci/run-in-ci.sh --rebuild ...    # after changing the Dockerfile
+```
+
+**This is the first thing to reach for when CI and the local machine disagree.**
+That situation cost three wrong fixes in one day: a test failed roughly one run in
+six locally and nearly every run in CI, and every diagnosis made from the local
+machine was wrong. The three attempts were all plausible and all unverifiable,
+because the environment that failed was not available to test against.
+
+The image is Ubuntu 24.04, which is what `ubuntu-latest` maps to, with the Node
+version read from `.nvmrc` (the same file the workflow reads, so the two cannot
+disagree), plus `ffmpeg`, `make` and Playwright's Chromium with its system
+dependencies. The repository is mounted, not copied, so it always tests the
+working tree.
+
+Two details that are the difference between a faithful container and a
+misleading one, both of which produced a green result that meant nothing:
+
+- **`PLAYWRIGHT_BROWSERS_PATH` must not be set.** `findChrome` looks only in
+  `$HOME/.cache/ms-playwright`, because that is where `playwright install` puts
+  the browser on every machine and every runner. Pointing it elsewhere made the
+  whole tier `SKIP` and report green.
+- **The mount needs `git config --global --add safe.directory /repo`.** The
+  mounted `.git` belongs to the host user, so git refuses it as *dubious
+  ownership*, and `history.test.mjs` silently skipped its nine checks and
+  reported `0/0`, which looks identical to passing. CI checks out as the runner
+  user and never hits this.
+
+Neither is in `npm test`, deliberately: this is a debugging tool, run by hand.
+
+### A suite that skips is not a suite that passes
+
+Both problems above share a shape worth naming, because the browser tier already
+guards against it and `history.test.mjs` does not. A skip that reports green is
+worse than a failure, because the failure is visible. The workflow asserts the
+browser tier did **not** skip for exactly this reason; `history.test.mjs` prints
+`(no git repository, history checks skipped)` and returns `0/0`, which the runner
+reports as `ok`. A future pass should make that a failure or an explicit
+`SKIP` line, so the count cannot be mistaken for coverage.

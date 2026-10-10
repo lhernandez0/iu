@@ -13,11 +13,18 @@ npm run test:conformance  # Matroska conformance; needs `npm run conformance:fet
 npm run fixtures          # regenerate test/mkv/*.mkv (needs ffmpeg)
 npm run ui                # Vite preview of the panel at 127.0.0.1:8099, for layout work
 make release              # stage, lint, zip, verify -> build/*.zip
+tools/ci/run-in-ci.sh npm test   # the same, in a container matching the CI runner
 ```
 
 Only the first tier is in the default loop, on purpose. The others need a browser
 or 190 MB of downloaded files, and putting them in `npm test` would make the fast
 loop something to avoid.
+
+**When CI fails and the local machine passes, reproduce it in the container
+first.** `tools/ci/run-in-ci.sh <command>` runs the command in Ubuntu 24.04 with
+the Node version from `.nvmrc`. A CI-only failure diagnosed from a machine that
+does not reproduce it produces a confident wrong fix; see the note in `TESTING.md`
+for the day that happened three times.
 
 ## Rules a test enforces, so they are decisions and not style
 
