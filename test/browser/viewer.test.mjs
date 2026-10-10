@@ -367,7 +367,11 @@ section('the audio track selector');
   check('no selector before a file is opened', beforeLoad.fieldHidden, true);
   check('and no button to reveal it either', beforeLoad.hasButton, false);
 
-  await reader.setInputFiles('#pick-files', join(FIXTURES, '..', '..', 'tools', 'ui', 'assets', 'two-audio.mkv'));
+  // `test/mkv/two-audio.mkv`, which `npm run fixtures` generates, NOT a copy under
+  // `tools/ui/assets/`. That directory is gitignored, so the file exists on a
+  // developer's machine and nowhere else, and CI failed with ENOENT on it while
+  // every other suite passed.
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'two-audio.mkv'));
   const appeared = await reader
     .waitForFunction(() => !document.getElementById('audio-field').hidden, null, { timeout: 15000 })
     .then(() => true)
