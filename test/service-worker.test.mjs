@@ -1092,13 +1092,13 @@ section('the panel is told which word lists exist, and a default is chosen');
   check('with the 2.0 list', lists[0]?.id, 'hsk2_0');
   check('and the 3.0 list', lists[1]?.id, 'hsk3_0');
   check('and the JLPT list', lists[2]?.id, 'jlpt');
-  check('and the TOPIK list', lists[3]?.id, 'topik');
-  check('and the NIKL list', lists[4]?.id, 'nikl');
+  check('and the NIKL list', lists[3]?.id, 'nikl');
+  check('and the Yonsei list', lists[4]?.id, 'yonsei');
   check('each declares its level count', lists[0]?.levelCount, 6);
   check('and 3.0 declares nine', lists[1]?.levelCount, 9);
   check('and JLPT declares five', lists[2]?.levelCount, 5);
-  check('and TOPIK declares two, which is its own granularity', lists[3]?.levelCount, 2);
-  check('and NIKL declares three', lists[4]?.levelCount, 3);
+  check('and NIKL declares three', lists[3]?.levelCount, 3);
+  check('and Yonsei declares six, one per volume', lists[4]?.levelCount, 6);
 
   // The default must be the list that can mark the most, not whichever is first
   // in the data. HSK 2.0 places 4,993 of 11,470 words; the other 6,477 exist

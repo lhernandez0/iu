@@ -156,25 +156,30 @@ const JAPANESE_LISTS = [
 /**
  * The Korean lists.
  *
- * TWO lists over one vocabulary, the way HSK 2.0 and HSK 3.0 are two numberings of
- * the same words. Source A tags every row with BOTH an NIKL 등급 and a TOPIK 수준,
- * so both are available at no extra cost, and they disagree often enough to be
- * worth offering separately.
+ * TWO lists, from two sources that are complementary rather than redundant. Measured
+ * over their union (7,738 words) they overlap by only about 25%: NIKL contributes
+ * 1,019 words the other does not place, Yonsei 1,913. Keeping both is what recovers
+ * those 2,932 words.
  *
- * `topik` has TWO levels because the data has two: TOPIK I (초급) and TOPIK II
- * (중급, "from intermediate on"). The six TOPIK *grades* are score cutoffs from the
- * exam, not a classification of vocabulary, so they are not invented here. The
- * aggregator's own notes make the same point.
+ * `nikl` is a graded lemma list with THREE levels: A (beginner), B (intermediate),
+ * C (advanced).
  *
- * `nikl` has THREE: A (beginner), B (intermediate), C (advanced).
+ * `yonsei` is a six-volume course, and its volume is used as the level. That is a
+ * deliberate choice, not a convenience: measured, mean difficulty rises at EVERY
+ * volume on both external measures, so the course ordering is a real difficulty
+ * ordering rather than a table of contents. It is also the only list whose words all
+ * carry a definition, since it is the source of them.
+ *
+ * TOPIK is not offered, and that is a licence decision. Its terms of use reserve the
+ * rights a shipped dictionary would need; see the note in `buildKorean`.
  *
  * Both ascend 1..N as difficulty rises, which is what the ramp and the threshold
- * comparison require. The NAMES are what a learner reads, and neither numbering is
- * a bare digit, so `levelNames` matters here as much as it does for JLPT.
+ * comparison require. The NAMES are what a learner reads, so `levelNames` matters
+ * as much here as it does for JLPT.
  */
 const KOREAN_LISTS = [
-  { id: 'topik', label: 'TOPIK', language: 'ko', levelCount: 2, levelNames: ['TOPIK I', 'TOPIK II'], field: 'topikLevel' },
   { id: 'nikl', label: 'NIKL', language: 'ko', levelCount: 3, levelNames: ['A', 'B', 'C'], field: 'niklLevel' },
+  { id: 'yonsei', label: 'Yonsei', language: 'ko', levelCount: 6, levelNames: ['1', '2', '3', '4', '5', '6'], field: 'yonseiLevel' },
 ];
 
 /**
@@ -622,39 +627,35 @@ function niklLevel(cell) {
 }
 
 /**
- * The TOPIK level for a cell, as an ascending 1..2, or null.
- *
- * The source has two bands: 초급 (TOPIK I) and 중급 ("from intermediate on", TOPIK
- * II). This deliberately does not invent more. TOPIK's six exam grades are score
- * cutoffs, not a classification of vocabulary, so they cannot be derived from this
- * column without making them up, and the aggregator's own notes say the same.
- *
- * @param {string} cell
- * @returns {number|null}
- */
-function topikLevel(cell) {
-  const byName = { 초급: 1, 중급: 2 };
-  return byName[String(cell).trim()] ?? null;
-}
-
-/**
- * Definitions and readings from the Yonsei companion, keyed by the word.
+ * Definitions, readings and COURSE LEVELS from the Yonsei companion.
  *
  * FIRST VOLUME WINS, which is why the volumes are read in order and an existing key
  * is never replaced. The six volumes are a course, so the earliest volume a word
- * appears in is where the learner meets it, and that is the sense worth showing. A
- * word recurring later is revision, not a second definition.
+ * appears in is where the learner meets it, and that is both the sense worth showing
+ * and the difficulty to record. A word recurring later is revision, not a second
+ * definition.
  *
- * Only two fields are taken: `english` (the meaning) and `pronunciation` (text, on
- * 40.6% of rows). The source also carries `chinese`, `pos_zh`, `origin_type` and a
- * per-row `review_status`. None belong in a dictionary entry: `origin_type` is
- * etymology for a different UI, and `review_status` describes the source's own
- * confidence in its editing rather than anything a learner should see.
+ * The volume is used as a LEVEL, which is a deliberate decision and not a
+ * convenience. Measured: mean difficulty rises at EVERY volume on both external
+ * measures (NIKL and TOPIK), so the course ordering is a real difficulty ordering
+ * and not just a table of contents. It is also NOT a restatement of NIKL: rank
+ * correlation with NIKL is about 0.71, and the middle volumes overlap heavily, so
+ * it carries information the levelled list does not.
+ *
+ * What this buys is coverage. Pages from this source carry a definition by
+ * construction, so every word it contributes can be looked up, which is not true of
+ * the level list, where most words have no gloss at all.
+ *
+ * Only three fields are taken: `english` (the meaning), `pronunciation` (text, on
+ * 40.6% of rows), and `pos`. The source also carries `chinese`, `pos_zh`,
+ * `origin_type` and a per-row `review_status`. None belong in a dictionary entry:
+ * `origin_type` is etymology for a different UI, and `review_status` describes the
+ * source's own confidence in its editing rather than anything a learner should see.
  *
  * @param {string} dir
- * @returns {Promise<Map<string, {m: string, p: string, pos: string}>>}
+ * @returns {Promise<Map<string, {m: string, p: string, pos: string, level: number}>>}
  */
-async function readYonseiDefinitions(dir) {
+async function readYonsei(dir) {
   const byWord = new Map();
 
   for (let v = 1; v <= 6; v++) {
@@ -667,6 +668,7 @@ async function readYonseiDefinitions(dir) {
         m: row.english ?? '',
         p: row.pronunciation ?? '',
         pos: row.pos ?? '',
+        level: v,
       });
     }
   }
@@ -675,24 +677,31 @@ async function readYonseiDefinitions(dir) {
 }
 
 /**
- * Korean: levels from NIKL and TOPIK, definitions from the Yonsei companion.
+ * Korean: NIKL levels and Yonsei course levels, with definitions from Yonsei.
  *
- * The join is the whole problem, and it covers only 32% of the level list, because
- * the two sources describe different objects. The level list is dictionary lemmas;
- * the definition list is course vocabulary, which includes phrases, honorific
- * forms, particles and compounds (`안녕하십니까`, `에서`, `은행원`). Stripping verb
- * endings recovered 2 of 1,913 failures when measured, so this is not a morphology
- * problem and one line of stemming will not fix it. Match rate by volume runs 82%
- * in volume 1 down to 19% in volume 6, because beginner content is lemmas while
- * advanced content is expressions.
+ * TWO sources, two lists, and they are complementary rather than redundant.
+ * Measured over their union (7,738 words): NIKL contributes 1,019 words no other
+ * list places and Yonsei 1,913, while the two overlap by only about 25%. Yonsei is
+ * every word of a six-volume course; NIKL is a graded lemma list.
  *
- * THE UNJOINED WORDS STILL SHIP, with an empty `m`. This is the load-bearing
- * decision here. `indexDictionary()` builds `headwords` from the keys of `words`,
- * so a word present in `levels` but absent from `words` can never be marked at all:
- * 4,558 words would silently vanish from a Korean video with nothing to say why.
- * Emitting the entry keeps every levelled word markable, and the popover already
- * renders "No definition for this word yet." for an empty `m` (marks.js), so the
- * limit is visible to the learner rather than hidden.
+ * TOPIK is NOT used, and that is a licence decision rather than a data one. TOPIK's
+ * own terms of use (Article 15) assign copyright in all site content to TOPIK,
+ * make unauthorised reproduction or distribution punishable, and require permission
+ * to use the content for profit "or a corresponding benefit". Its operator NIIED
+ * limits free use to personal, academic and research purposes. NIKL, by contrast,
+ * publishes under KOGL Type 1, which permits derivatives and commercial use with
+ * attribution. Shipping TOPIK would be shipping data whose owner asks for exactly
+ * what this would do. The `topik_level` column in the source is therefore ignored.
+ *
+ * THE JOIN. Only words present in the level list AND the definition list have a
+ * definition, but that is now a much smaller gap than it was, because Yonsei is
+ * itself a list and every word it contributes has a gloss by construction. A word
+ * known only to NIKL still ships, with an empty `m`. This is load-bearing:
+ * `indexDictionary()` builds `headwords` from the keys of `words`, so a word in
+ * `levels` but absent from `words` can never be marked at all and would silently
+ * vanish from a Korean video. Emitting the entry keeps every levelled word
+ * markable, and the popover already renders "No definition for this word yet." for
+ * an empty `m` (marks.js), so the limit is visible rather than hidden.
  *
  * @param {string} sourcePath
  * @param {string} yonseiDirPath
@@ -700,10 +709,10 @@ async function readYonseiDefinitions(dir) {
  */
 async function buildKorean(sourcePath, yonseiDirPath) {
   const tsv = await readFile(sourcePath, 'utf8');
-  const definitions = await readYonseiDefinitions(yonseiDirPath);
+  const yonsei = await readYonsei(yonseiDirPath);
 
   /** @type {Record<string, Record<string, number>>} */
-  const levels = { topik: {}, nikl: {} };
+  const levels = { nikl: {}, yonsei: {} };
 
   /** @type {Record<string, {p: string, m: string, t: string, pos: string}>} */
   const words = {};
@@ -711,14 +720,15 @@ async function buildKorean(sourcePath, yonseiDirPath) {
   const dropped = { noWord: 0, noLevel: 0 };
   let suffixed = 0;
   let mergedSenses = 0;
-  const joinedWords = new Set();
+
+  // --- The level list: NIKL grades, and the words it holds -------------------
 
   const lines = tsv.split('\n');
   for (let i = 0; i < lines.length; i++) {
     // Drop the header, and any trailing blank the file may end with.
     if (i === 0 || !lines[i].trim()) continue;
 
-    const [, rawWord, partOfSpeech, , , nikl, topik] = splitTsv(lines[i]);
+    const [, rawWord, partOfSpeech, , , nikl] = splitTsv(lines[i]);
 
     if (!rawWord) {
       dropped.noWord++;
@@ -727,13 +737,11 @@ async function buildKorean(sourcePath, yonseiDirPath) {
     if (/\d{1,2}$/.test(rawWord)) suffixed++;
     const word = stripHomographSuffix(rawWord);
 
-    // A row with no level at all cannot colour anything, and its definition, if the
-    // join found one, would come from elsewhere. The current revision has none of
-    // these, but the guard means a future one cannot introduce a word with no way
-    // to be placed on the ramp.
-    const ko = topikLevel(topik);
-    const ni = niklLevel(nikl);
-    if (ko === null && ni === null) {
+    const grade = niklLevel(nikl);
+    // A row with no NIKL level contributes a word with no level and no reliable
+    // definition, since this source has no usable gloss. Skipped rather than
+    // emitted, unless the definition source knows the word (below).
+    if (grade === null) {
       dropped.noLevel++;
       continue;
     }
@@ -741,58 +749,70 @@ async function buildKorean(sourcePath, yonseiDirPath) {
     // EASIEST WINS across merged homograph senses, so a word is never placed higher
     // than any list says it is. The senses are one entry in our model, and taking
     // the harder of two would overstate what the learner needs.
-    for (const [id, level] of [['topik', ko], ['nikl', ni]]) {
-      if (level === null) continue;
-      const existing = levels[id][word];
-      if (existing === undefined) levels[id][word] = level;
-      else if (level < existing) levels[id][word] = level;
-      else mergedSenses++;
-    }
+    const existing = levels.nikl[word];
+    if (existing === undefined) levels.nikl[word] = grade;
+    else if (grade < existing) levels.nikl[word] = grade;
+    else mergedSenses++;
 
-    // The definition, from the other source. Absent is the common case and is not
-    // an error: `m` stays empty and the word still marks.
-    const found = definitions.get(word);
-    if (found) joinedWords.add(word);
-
-    // FIRST ROW WINS for the definition and reading. A word appears once per part of
-    // speech in the level list (`일곱` is a numeral and a noun), and the entry is one
-    // object, so the first row fills the fields and later rows contribute levels.
     if (!(word in words)) {
       // `explanation` is a collocation hint rather than a definition (`~에 가다`
       // for 가게, "to go to a shop") and is empty on 18% of rows. It is Korean
       // guidance for a Korean learner, so used as the meaning it would read as a
-      // non-answer next to a real gloss, and it is not used.
+      // non-answer next to a real gloss, and it is not used. The meaning comes
+      // from the definition source, where there is one.
+      const d = yonsei.get(word);
       words[word] = {
-        p: found?.p ?? '',
-        m: found?.m ?? '',
+        p: d?.p ?? '',
+        m: d?.m ?? '',
         // Unused, as for Japanese. Korean has no second script for a word.
         t: '',
-        pos: partOfSpeech ?? '',
+        pos: partOfSpeech || d?.pos || '',
       };
     }
   }
+
+  // --- The course source: a level for every word, and the definitions --------
+
+  for (const [word, d] of yonsei) {
+    levels.yonsei[word] = d.level;
+    if (word in words) {
+      // Already present from the level list, which may have had no definition for
+      // it. Fill the gap rather than replacing the entry, so the part of speech
+      // from the level list is kept when it exists.
+      if (!words[word].m) words[word].m = d.m;
+      if (!words[word].p) words[word].p = d.p;
+      if (!words[word].pos) words[word].pos = d.pos;
+      continue;
+    }
+    // A course word the graded list does not place. It ships with a definition and
+    // a course level, which is the whole point of adding this source.
+    words[word] = { p: d.p, m: d.m, t: '', pos: d.pos };
+  }
+
+  const total = Object.keys(words).length;
+  const withDefinition = Object.keys(words).filter((w) => words[w].m !== '').length;
 
   const payload = {
     meta: buildMeta({
       sources: [
         {
-          name: 'NIKL 한국어 학습용 어휘 목록 (National Institute of Korean Language) and TOPIK 어휘 목록, combined by julienshim/combined_korean_vocabulary_list',
+          name: 'NIKL 한국어 학습용 어휘 목록 (National Institute of Korean Language), via julienshim/combined_korean_vocabulary_list',
           licence: 'KOGL Type 1',
           url: 'https://github.com/julienshim/combined_korean_vocabulary_list',
           sha256: 'bb5789e46d818842ed6cc15c7946805ad1aed9fd1d0912d884cc48a8556b9a3c',
-          note: 'results.tsv. The aggregator is MIT for its code and states it does not host the source lists. NIKL publishes its list under KOGL Type 1 (공공누리 제1유형), which permits commercial and derivative use with attribution. Levels only; the `explanation` column is a collocation hint and is unused.',
+          note: 'results.tsv, `nikl_level` column only. The aggregator is MIT for its code and states it does not host the source lists; the data is NIKL\'s, published under KOGL Type 1 (공공누리 제1유형), which permits derivatives and commercial use with attribution. The `topik_level` column is NOT used: TOPIK\'s own terms reserve those rights. The `explanation` column is a collocation hint, not a gloss, and is unused.',
         },
         {
           name: 'Open Yonsei Korean Vocabulary (Amulopapa67), a community companion to the six-volume Yonsei course, not affiliated with Yonsei University',
           licence: 'CC BY-SA 3.0',
           url: 'https://github.com/Amulopapa67/open-yonsei-korean-vocabulary',
           tag: 'v0.1.0',
-          note: 'vol-01.json … vol-06.json. Definitions and text readings only. The project licenses its data CC BY-SA 3.0 and excludes textbook lessons, examples, audio and official artwork.',
+          note: 'vol-01.json … vol-06.json. Definitions, text readings, and the course level (the first volume a word appears in). The project licenses its data CC BY-SA 3.0 and excludes textbook lessons, examples, audio and official artwork.',
         },
       ],
-      wordCount: Object.keys(words).length,
-      compiledBy: 'National Institute of Korean Language and TOPIK (levels); Open Yonsei Korean Vocabulary (definitions and readings)',
-      note: 'Korean words are joined to definitions on the word. Where the join misses, the word still marks and has no definition, which the popover states. Homograph senses (가구03, 가구04) merge into one entry at the easiest level.',
+      wordCount: total,
+      compiledBy: 'National Institute of Korean Language (levels); Open Yonsei Korean Vocabulary (definitions, readings, course levels)',
+      note: 'Two lists. NIKL grades words A to C; Yonsei places them by the volume of the course that introduces them. Where a word has no definition the popover says so, and the word still marks. Homograph senses (가구03, 가구04) merge into one entry at the easiest grade.',
     }),
     lists: KOREAN_LISTS.map((list) => listMeta(list, levels[list.id])),
     levels,
@@ -801,17 +821,16 @@ async function buildKorean(sourcePath, yonseiDirPath) {
 
   await writeFile(KOREAN_OUT, JSON.stringify(payload), 'utf8');
 
-  const total = Object.keys(words).length;
   console.log(`wrote ${KOREAN_OUT}`);
   console.log(`  words: ${total}`);
+  console.log(`  with a definition: ${withDefinition} (${Math.round((withDefinition / total) * 100)}%)`);
+  console.log(`  markable with no definition: ${total - withDefinition}`);
   console.log(`  homograph-suffixed rows: ${suffixed}`);
   console.log(`  merged senses (easiest kept): ${mergedSenses}`);
   console.log(`  dropped (no word): ${dropped.noWord}`);
-  console.log(`  dropped (no level): ${dropped.noLevel}`);
-  console.log(`  joined to a definition: ${joinedWords.size} (${Math.round((joinedWords.size / total) * 100)}%)`);
-  console.log(`  markable with no definition: ${total - joinedWords.size}`);
-  console.log(`  topik levelled: ${Object.keys(levels.topik).length}`);
+  console.log(`  dropped (no NIKL level, not in the course): ${dropped.noLevel}`);
   console.log(`  nikl levelled: ${Object.keys(levels.nikl).length}`);
+  console.log(`  yonsei levelled: ${Object.keys(levels.yonsei).length}`);
 
   return payload.lists;
 }

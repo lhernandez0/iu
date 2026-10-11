@@ -4,14 +4,20 @@ What this project uses from elsewhere, under what licence, and what that obliges
 us to do. Kept in the repository root and committed, because attribution that
 exists only inside a data file is attribution nobody finds.
 
-Two bundled dictionaries, both **CC BY-SA 4.0** derivative works. The licence on
-this project's own code (MIT) does **not** cover them, and neither may be
+Three bundled dictionaries, all **share-alike derivative works**. The licence on
+this project's own code (MIT) does **not** cover any of them, and none may be
 relicensed.
 
-| File | Words | Sources |
-| --- | --- | --- |
-| `src/learn/data/chinese.json` | 11,470 | CC-CEDICT + the official MOE HSK 3.0 word list |
-| `src/learn/data/japanese.json` | 28,690 | JMdict (EDRDG) + the JLPT lists |
+| File | Words | Sources | Licence |
+| --- | --- | --- | --- |
+| `src/learn/data/chinese.json` | 11,470 | CC-CEDICT + the official MOE HSK 3.0 word list | CC BY-SA 4.0 |
+| `src/learn/data/japanese.json` | 28,690 | JMdict (EDRDG) + the JLPT lists | CC BY-SA 4.0 |
+| `src/learn/data/korean.json` | 7,738 | NIKL word list + Open Yonsei Korean Vocabulary | CC BY-SA 3.0 |
+
+Each file declares its own licence in its `meta.licence`, derived by the build from
+the sources it lists in `meta.sources`. Korean is 3.0 because its definitions
+layer is, and share-alike compatibility takes the lower version number when both
+appear.
 
 ---
 
@@ -164,6 +170,115 @@ The JLPT CSVs need care that the pin does not cover: the `expression` column use
 `;` for multi-form words (`足; 脚`) and `～` for counters (`～円`). Treating a cell
 as one literal key silently loses about 10% of levels, so the build splits on `;`
 and strips `～`, whitespace and parentheticals.
+
+---
+
+## `src/learn/data/korean.json`, the Korean dictionary
+
+**Licence: CC BY-SA 3.0**
+
+A **derived** work and **must remain share-alike**. Two upstreams, and they are
+unrelated projects that happen to overlap usefully:
+
+| Source | What came from it | Licence |
+| --- | --- | --- |
+| 한국어 학습용 어휘 목록 (National Institute of Korean Language, 2003) | NIKL levels A/B/C | **KOGL Type 1** |
+| [Open Yonsei Korean Vocabulary](https://github.com/Amulopapa67/open-yonsei-korean-vocabulary) | English definitions, text readings, course level | **CC BY-SA 3.0** |
+
+**How the NIKL levels reached us.** Through
+[`julienshim/combined_korean_vocabulary_list`](https://github.com/julienshim/combined_korean_vocabulary_list),
+whose `results.tsv` merges the NIKL and TOPIK lists. That repository is **MIT for
+its code only** and says so plainly: it does not host the source lists, and all
+rights in them remain with their publishers. So the MIT licence does **not** cover
+the level data we consume, and we do not claim it does.
+
+**The NIKL list is licensed, and this is the clause.** The NIKL page for 한국어
+학습용 어휘 목록 ends:
+
+> 공공저작물 자유이용허락 표시 기준(공공누리, KOGL) 제1 유형 조건에 따라
+> 저작물의 출처를 구체적으로 표시한 후 이용할 수 있습니다.
+
+That is **KOGL Type 1** (공공누리 제1유형). Verified against the official KOGL
+certificate, it grants attribution, **derivative works, and commercial use**. It is
+the least restrictive of the KOGL types, not a restricted one, so the obligation is
+the attribution this section provides. KOGL also forbids implying that the public
+body sponsors or endorses this project, which is why nothing here is described as
+endorsed by NIKL or the Ministry of Culture, Sports and Tourism.
+
+**TOPIK is deliberately NOT used.** The level list carries a `topik_level` column
+and we do not read it, which is a licence decision. TOPIK's own terms of use
+(`이용약관`, Article 15, 저작권) state that copyright in all site content belongs to
+TOPIK, that unauthorised reproduction or distribution may be punished under
+copyright law, and that using the content to profit **or to enjoy a corresponding
+benefit** requires TOPIK's permission. Its operator, the National Institute for
+International Education (NIIED), limits free use of its material to personal,
+academic and research purposes. A distributed extension that ships the vocabulary
+is outside that grant, so the column is ignored and no TOPIK list is offered.
+
+**Attribution for the definitions and the course levels.** Open Yonsei Korean
+Vocabulary is an independently maintained community project, **not affiliated with,
+sponsored by or endorsed by Yonsei University** or its Korean Language Institute;
+the name is used only to identify the textbook series it indexes. Its README states:
+project code MIT, **data and generated PDFs CC BY-SA 3.0**, project documentation
+and logo CC BY 4.0. It excludes textbook lessons, example sentences, exercises,
+audio, scanned pages and official visual assets, all of which we likewise do not
+carry.
+
+**Share-alike.** The changes made here are:
+
+- homograph senses merged (NIKL writes `가구03` and `가구04` for two senses of one
+  spelling), keyed on the word without the trailing number;
+- merged senses placed at the **easiest** NIKL grade, never the harder;
+- NIKL grades stored as an ascending `1..3` with the list's own names (`A`, `B`,
+  `C`), the same shape as JLPT's `N5..N1`;
+- the course level taken from the **first volume** a word appears in, stored as
+  `1..6`, and the volume names carried separately;
+- reshaped into the same keyed-object form as the other two dictionaries, with
+  `t` unused and empty;
+- NIKL words with no definition emitted with an empty meaning rather than dropped.
+
+Those changes are in the committed file, so the derived work is available.
+
+**Two lists, because they cover different words.** Measured over the union of the
+two (7,738 words) they overlap by only about 25%: NIKL contributes 1,019 words the
+other does not place, and Yonsei 1,913. Shipping both is what recovers those 2,932
+words, and it is a materially different case from HSK 2.0 and 3.0, which overlap by
+64%.
+
+**Why the course volume is a level, and not just a chapter number.** Measured
+against both NIKL and TOPIK, the mean difficulty of a volume rises at **every one**
+of the six volumes, so the course ordering is a real difficulty ordering. It is also
+not a restatement of NIKL: rank correlation with NIKL is about 0.71, and the middle
+volumes overlap heavily, so it carries information the graded list does not. It is
+additionally the only Korean list whose words all carry a definition, since it is
+the source of them.
+
+**Known gap, recorded because it is a limitation of the build, not a bug:** about
+half of Korean words carry a definition. Words known only to NIKL ship without one,
+because NIKL grades a word but does not gloss it, and its `explanation` column is a
+collocation hint in Korean rather than a meaning. Those words still mark, and the
+popover says it has no definition yet, rather than the word silently vanishing.
+
+### Rebuilding the Korean dictionary
+
+`node tools/build-wordlist.mjs --ko <results.tsv> --ko-yonsei <dir>`
+
+| | |
+| --- | --- |
+| NIKL level list | `julienshim/combined_korean_vocabulary_list`, `results.tsv`, 7,497 rows |
+| SHA-256 | `bb5789e46d818842ed6cc15c7946805ad1aed9fd1d0912d884cc48a8556b9a3c` |
+| Definitions and course levels | `Amulopapa67/open-yonsei-korean-vocabulary` @ `v0.1.0`, `vol-01.json … vol-06.json` |
+
+The aggregator's README documents a history of **swapped `nikl_level`/`topik_level`
+columns**, fixed upstream by tagging entries with their source. The build reads the
+NIKL level only, so a future swap that put letter grades in the wrong column would
+be read here as an absent grade and skipped, rather than mis-levelling a word.
+
+Two columns of the level list are deliberately unused. `explanation` is a
+collocation hint in Korean rather than a definition (`~에 가다` for 가게, "to go to a
+shop") and is empty on 18% of rows, so used as a meaning it would read as a
+non-answer. `rank` is a frequency number and is absent for TOPIK-only words; it is a
+different axis from the level the ramp, the threshold and the badge all read.
 
 ## Development dependencies
 

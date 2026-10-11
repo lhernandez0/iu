@@ -198,6 +198,20 @@ section('attribution is where a person would find it');
     check('it names EDRDG, the JMdict origin', /EDRDG/.test(text), true);
     check('it names the JLPT level source', /open-anki-jlpt-decks/.test(text), true);
     check('and pins the Japanese asset hash', /956cb65b95d12d2b81fa550716d53163dbd3c70ca171a9c7dce97d7238c9d87a/.test(text), true);
+    // The Korean sources, for the same reason. These are the ones most likely to
+    // be missed, because the level data arrives through an MIT aggregator whose
+    // licence does NOT cover the data, and the actual grant (KOGL Type 1) is on a
+    // separate government page. Naming it here is the whole obligation.
+    check('it names the NIKL level source', /National Institute of Korean Language/.test(text), true);
+    check('and records the KOGL grant, not the aggregator licence', /KOGL/.test(text), true);
+    check('it names the Yonsei definitions source', /Open Yonsei Korean Vocabulary/.test(text), true);
+    check('and disclaims Yonsei University affiliation', /not affiliated/i.test(text), true);
+    check('it pins the Korean level-list hash', /bb5789e46d818842ed6cc15c7946805ad1aed9fd1d0912d884cc48a8556b9a3c/.test(text), true);
+    // TOPIK is deliberately excluded, and the REASON must be recorded rather than
+    // the absence left to look like an oversight. If someone revisits this, they
+    // need to find why the column is ignored.
+    check('it records why TOPIK is excluded', /TOPIK/.test(text), true);
+    check('and that the reason is its reserved licence', /corresponding\s+benefit|reserved|requires TOPIK/i.test(text), true);
   }
 
   // The notices file existing is not enough: the README is where a reader looks

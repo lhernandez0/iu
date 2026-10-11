@@ -17,9 +17,9 @@ IU Language Companion
 
 **Short Description**
 
-A Chinese and Japanese dictionary for video: unknown words marked in the subtitles, meanings on hover.
+A Chinese, Japanese and Korean dictionary for video: unknown words marked in the subtitles, meanings on hover.
 
-<!-- 102 characters, within the 132 limit. MUST match manifest.json
+<!-- 110 characters, within the 132 limit. MUST match manifest.json
      "description" exactly, the store reads that field, and a mismatch between
      this file and the manifest is the kind of thing that is only noticed at
      submission. The manifest test asserts the two files agree, so this cannot
@@ -27,7 +27,7 @@ A Chinese and Japanese dictionary for video: unknown words marked in the subtitl
 
 **Detailed Description**
 
-A dictionary for the video you are watching, if you are reading Chinese or Japanese.
+A dictionary for the video you are watching, if you are reading Chinese, Japanese or Korean.
 
 The subtitles become text you can look words up in. Every word you do not know yet
 is picked out and explained, beside the video rather than in another tab. On
@@ -35,16 +35,16 @@ YouTube, or on a video from your own computer.
 
 EVERY WORD YOU DON'T KNOW, MARKED
 
-Choose HSK for Chinese or JLPT for Japanese, then the level you are working at.
-Every word above it is marked in the transcript, so you can see at a glance how
-much of a sentence is already in reach. Each list names its own levels: JLPT reads
-N5 to N1, HSK reads 1 upward.
+Choose HSK for Chinese, JLPT for Japanese, or NIKL or Yonsei for Korean, then the
+level you are working at. Every word above it is marked in the transcript, so you
+can see at a glance how much of a sentence is already in reach. Each list names its
+own levels: JLPT reads N5 to N1, HSK reads 1 upward, Korean reads A to C or course
+volumes 1 to 6.
 
 READING AND MEANING ON HOVER
 
 Chinese shows pinyin, Japanese shows kana, and a word appears under every list
 that knows it. HSK 2.0 and HSK 3.0 often disagree, and both are shown.
-
 TWO SUBTITLES AT ONCE
 
 Your target language with a second line beneath it, another subtitle track or a
@@ -250,7 +250,7 @@ From the store review checklist. The ones that apply to this extension:
 
 ## Language Claim, and Why It Is Worded Carefully
 
-The description says **Chinese and Japanese**, names **YouTube**, and does not say
+The description says **Chinese, Japanese and Korean**, names **YouTube**, and does not say
 "any video". All three are deliberate:
 
 - **"Any video" is gone.** It was in the short description and the first line of
@@ -258,11 +258,13 @@ the detailed one, and it was FALSE, `host_permissions` is `https://*.youtube.com
 The video source sits behind a provider seam, so another site is a registry entry
 plus a content script rather than a rewrite, but one provider is implemented today
 and a store can test a claim like that.
-- **Only the languages that work are named.** Chinese (HSK) and Japanese (JLPT)
-ship. **Korean is planned and is deliberately not named in the listing**, because
-it is not a data addition, Hangul is outside the segmenter's character class, so
-it needs code before a dictionary would help. An extension that claimed "any
-language" would fail the first reviewer who tried Spanish.
+- **Only the languages that work are named.** Chinese (HSK), Japanese (JLPT), and
+Korean (NIKL and the Yonsei course levels) ship. This bullet used to say Korean was
+planned and deliberately unnamed, because Hangul was outside the segmenter's
+character class and would need code before a dictionary would help; that code is
+now in the segmenter and the dictionary ships, so the claim moved with it. An
+extension that claimed "any language" would still fail the first reviewer who tried
+Spanish.
 - **"Dictionary", not "lesson".** This is a dictionary that marks what you do not
 know, not a course. The data agrees, 88% of Chinese entries carry more than one
 sense, and Japanese carries 50 parts of speech; a lesson product would not need

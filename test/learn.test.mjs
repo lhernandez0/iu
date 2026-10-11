@@ -596,22 +596,33 @@ section('the Korean dictionary is internally consistent');
 
 {
   const words = Object.keys(korean.words);
-  check('it has words', words.length > 6000, true);
+  check('it has words', words.length > 7000, true);
 
   // Every levelled word MUST also be a `words` key. `headwords` is built from the
   // keys of `words`, so a word present only in `levels` can never be matched by the
   // segmenter and would be invisible with nothing to say why. This is the check
   // that makes the "emit the entry even with no definition" decision load-bearing
-  // rather than a preference: 4,558 of these words have no definition and all of
-  // them must still be here.
-  const levelled = new Set([...Object.keys(korean.levels.topik), ...Object.keys(korean.levels.nikl)]);
+  // rather than a preference: thousands of these words have no definition and all
+  // of them must still be here.
+  const levelled = new Set([...Object.keys(korean.levels.nikl), ...Object.keys(korean.levels.yonsei)]);
   const orphaned = [...levelled].filter((word) => !KO_WORDS.has(word));
   check('every levelled word is also a definable word', orphaned, []);
 
+  // The Yonsei list is the source of the definitions, so every word it holds has a
+  // gloss by construction. That is what adding it bought: the words the graded list
+  // could not define now carry one. Asserted with a generous threshold rather than
+  // an exact count, so a source refresh does not fail here for no reason.
+  const yonseiWords = Object.keys(korean.levels.yonsei);
+  const yonseiDefined = yonseiWords.filter((w) => korean.words[w].m !== '');
+  check('every Yonsei word has a definition', yonseiDefined.length, yonseiWords.length);
+
   // The other direction is allowed and expected: a word can have a definition and
-  // no level, which is what "definition yes, colour no" means.
+  // no level, or a level and no definition, which is what "definition yes, colour
+  // no" means. Both counts are asserted to be non-trivial so neither source can
+  // silently stop contributing.
   const undefinedWords = words.filter((word) => korean.words[word].m === '');
-  check('most words have no definition, which is the known limit', undefinedWords.length > 4000, true);
+  check('some words have no definition, which is the known limit', undefinedWords.length > 2000, true);
+  check('and most words do have one', words.length - undefinedWords.length > 3000, true);
   check('but every word has the full entry shape', words.every((w) => ['p', 'm', 't', 'pos'].every((f) => f in korean.words[w])), true);
   // `t` is the traditional-Chinese field and is unused for Korean, as it is for
   // Japanese. Asserted so a copy-paste from the Chinese builder shows up.
@@ -622,8 +633,8 @@ section('the Korean levels are the source\'s own, and ascend');
 
 {
   for (const [id, count, names] of [
-    ['topik', 2, ['TOPIK I', 'TOPIK II']],
     ['nikl', 3, ['A', 'B', 'C']],
+    ['yonsei', 6, ['1', '2', '3', '4', '5', '6']],
   ]) {
     const list = korean.lists.find((l) => l.id === id);
     check(`${id} is declared with ${count} levels`, list?.levelCount, count);
@@ -634,6 +645,13 @@ section('the Korean levels are the source\'s own, and ascend');
     check(`${id} has no level above its count`, Math.max(...Object.values(korean.levels[id])) <= count, true);
   }
 
+  // TOPIK is deliberately NOT shipped, and this asserts the absence. Its terms of
+  // use reserve the rights a redistributed dictionary needs, unlike NIKL's KOGL
+  // Type 1 grant. A list reappearing here without the licence being revisited would
+  // be the exact mistake this checks against.
+  check('no TOPIK list is shipped', korean.lists.some((l) => l.id === 'topik'), false);
+  check('and no TOPIK level data is present', 'topik' in korean.levels, false);
+
   // The homograph merge, which is the transform most likely to be wrong. 가구03 and
   // 가구04 are two senses of one spelling; stripping the suffix merges them, and the
   // EASIEST of the merged rows must win so a word is never placed harder than any
@@ -643,6 +661,35 @@ section('the Korean levels are the source\'s own, and ascend');
   check('and the numbered spelling is not a key', KO_WORDS.has('가구03'), false);
 }
 
+section('the two Korean lists are complementary, not redundant');
+
+{
+  const nikl = new Set(Object.keys(korean.levels.nikl));
+  const yonsei = new Set(Object.keys(korean.levels.yonsei));
+  const union = new Set([...nikl, ...yonsei]);
+  const shared = [...nikl].filter((w) => yonsei.has(w));
+
+  // The measured claim that justifies shipping both: they cover substantially
+  // different words. If a future source change made one a near-subset of the other
+  // (as HSK 2.0 is of HSK 3.0), this fails and says so.
+  const overlap = shared.length / union.size;
+  check('the overlap is well under half the union', overlap < 0.5, true);
+  check('NIKL contributes words Yonsei does not', [...nikl].filter((w) => !yonsei.has(w)).length > 500, true);
+  check('and Yonsei contributes words NIKL does not', [...yonsei].filter((w) => !nikl.has(w)).length > 500, true);
+
+  // Yonsei volume is used as a level, which only makes sense if difficulty actually
+  // ascends. Measured on NIKL: the mean grade rises at every volume. Asserted as
+  // "not decreasing" over the whole run, tolerant of a flat step but not a reversal.
+  const meanGrade = [];
+  for (let v = 1; v <= 6; v++) {
+    const at = [...yonsei].filter((w) => korean.levels.yonsei[w] === v && nikl.has(w));
+    meanGrade.push(at.length ? at.reduce((s, w) => s + korean.levels.nikl[w], 0) / at.length : 0);
+  }
+  const reversed = meanGrade.some((m, i) => i > 0 && m > 0 && meanGrade[i - 1] > 0 && m < meanGrade[i - 1]);
+  check('Yonsei volume ascends in difficulty, never reverses', reversed, false);
+  check('and the first volume is the easiest', meanGrade[0] < meanGrade[meanGrade.length - 1], true);
+}
+
 section('the Korean join is what it is, measured and not hoped');
 
 {
@@ -650,12 +697,11 @@ section('the Korean join is what it is, measured and not hoped');
   const withDefinition = words.filter((word) => korean.words[word].m !== '');
   const ratio = withDefinition.length / words.length;
 
-  // A range rather than an exact count, because the count depends on the source
-  // revision and pinning it would make a data refresh fail for no good reason. The
-  // MEANING is that the join covers roughly a third, which is the fact the README
-  // states and the reason the limitation is documented rather than hidden. If a
-  // future change makes this much better or much worse, this fails and says so.
-  check('about a third of words joined to a definition', ratio > 0.25 && ratio < 0.45, true);
+  // A range rather than an exact count, so a source revision does not fail here for
+  // no good reason. The MEANING is that this is well past half now: adding Yonsei as
+  // a LIST, not only as a definition source, is what recovered the roughly 1,900
+  // words that used to be dropped for having a definition but no level.
+  check('more than half the words have a definition', ratio > 0.45 && ratio < 0.6, true);
   check('and joined words are a real subset', withDefinition.length > 0, true);
 }
 // --- Result ------------------------------------------------------------------
