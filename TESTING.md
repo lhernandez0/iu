@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1: hermetic (`npm test`, 1171 checks)
+## Tier 1: hermetic (`npm test`, 1253 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies, plain Node scripts,
@@ -38,24 +38,34 @@ so they run with nothing installed.
 | Suite | Boots | Checks |
 | --- | --- | --- |
 | `manifest.test.mjs` | nothing | 39 |
-| `unit.test.mjs` | nothing | 104 |
+| `unit.test.mjs` | nothing | 110 |
 | `errors.test.mjs` | the error registry | 20 |
-| `learn.test.mjs` | segmenter + word list | 142 |
+| `learn.test.mjs` | segmenter + word list | 144 |
+| `readings.test.mjs` | the generated reading tables | 41 |
 | `licence.test.mjs` | the licence files on disk | 82 |
 | `providers.test.mjs` | the provider seam | 15 |
 | `mkv-container.test.mjs` | the container parser, on generated fixtures | 72 |
 | `viewer.test.mjs` | subtitle parsing, encoding, the viewer's messages | 71 |
 | `marking.test.mjs` | the word-marking renderer | 21 |
 | `service-worker.test.mjs` | worker + `chrome` stub | 260 |
-| `sidepanel.test.mjs` | panel + DOM stub | 150 |
+| `sidepanel.test.mjs` | panel + DOM stub | 152 |
 | `page-bridge.test.mjs` | bridge + page stub | 50 |
 | `content.test.mjs` | content script | 106 |
 | `history.test.mjs` | the transcript cache | 9 |
 
+`readings.test.mjs` is the one that pins a **generated** file against the library
+that generated it: the Korean table against `koroman` for all 11,172 syllables, and
+the kana table against `wanakana` across all 28,690 readings with the 12 documented
+differences named. That is what makes shipping a table instead of a library safe,
+and it caught four separate bugs while it was being written, each of which produced
+a plausible-looking wrong romaji.
+
 One suite is hermetic but is **not** in `npm test`, because it reaches the network:
 `tools/check-wordlists.mjs`, run as `npm run wordlists:check`. It fetches the pinned
 word-list sources, rebuilds every dictionary into a scratch directory, and compares
-bytes with what is committed. A mismatch fails.
+bytes with what is committed. A mismatch fails. It also **regenerates the reading
+tables** and compares, because a wrong romaji is invisible: it looks like a reading,
+so nothing about the page appears broken.
 
 That check exists because none of the suites above can see the failure it catches.
 `japanese.json` shipped with two glosses no JMdict release contains, because a
@@ -63,10 +73,17 @@ copy-edit renaming the UI's "reader" to "viewer" swept across the committed data
 file. Every test passed. The file was valid, correctly shaped, and wrong, and the
 only thing that could reveal it was rebuilding from source and comparing.
 
+**And the check itself was written wrong first.** It compared the file before and
+after regenerating it, which always passes, because the generator overwrites the
+very edit being looked for. Found by editing a value by hand and watching it report
+success. It now holds the committed copy aside and compares against a fresh
+generation, and it restores the tree rather than leaving the regenerated file
+behind.
+
 Each file is spawned as its own process, because they all grab the same globals
 (`chrome`, `document`, the module cache) and a shared process lets one suite's
 stubs leak into another's, which has already produced a misleading result once.
-The counts above are the runner's own per-suite lines; 1030 is their sum, kept here
+The counts above are the runner's own per-suite lines; 1253 is their sum, kept here
 so a suite quietly losing cases is visible in the diff of this file.
 
 **A stub that ignores its request cannot test behaviour that depends on it.**

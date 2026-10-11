@@ -408,7 +408,10 @@ section('the learning layer does not depend on the browser');
   // Read as text rather than imported: an import would only prove that THIS
   // process could evaluate it, and Node has no `chrome` either way. The rule is
   // about the source.
-  for (const file of ['segment.js', 'wordlist.js']) {
+  // `marking.js` is deliberately NOT in this list: it imports from `wordlist.js`,
+  // which is a sibling in the same layer rather than a reach outside it. The rule
+  // is about the layer having no dependencies, not about a file having no imports.
+  for (const file of ['segment.js', 'wordlist.js', 'readings.js']) {
     const source = await readFile(resolve(here, '../src/learn', file), 'utf8');
     // Comments are stripped first, or the many comments explaining WHY chrome is
     // absent would fail the check for saying the word.

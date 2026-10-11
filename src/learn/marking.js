@@ -12,7 +12,7 @@
  * `chrome.*`, the DOM, or settings storage.
  */
 
-import { lookup, levelOf, readingOf, alternateReadingOf, traditionalOf } from './wordlist.js';
+import { lookup, levelOf, readingOf, traditionalOf } from './wordlist.js';
 
 /**
  * Whether a word list can grade a language at all.
@@ -106,12 +106,11 @@ export function listForLanguage(lists, languageCode) {
  * @param {object} dictionary
  * @param {object|undefined} list
  * @param {number} threshold
- * @param {boolean} [withReading] Attach `reading` and `traditional`.
- * @param {string} [koreanReading] `sound` or `spelling`; only Korean is affected.
+ * @param {boolean} [withReading] Attach the reading forms.
  * @returns {Array<{text: string, defined: boolean, level: number|null,
  *   reading?: string|null, traditional?: string|null}>}
  */
-export function markLine(tokens, dictionary, list, threshold, withReading = false, koreanReading = 'sound') {
+export function markLine(tokens, dictionary, list, threshold, withReading = false) {
   return tokens.map((token) => {
     // Only words we hold a definition for are worth making interactive. An unknown
     // token has nothing to show, so it stays plain text.
@@ -122,7 +121,7 @@ export function markLine(tokens, dictionary, list, threshold, withReading = fals
         text: token.text,
         defined,
         level: null,
-        ...annotations(defined, withReading, dictionary, token.text, koreanReading),
+        ...annotations(defined, withReading, dictionary, token.text),
       };
     }
 
@@ -132,7 +131,7 @@ export function markLine(tokens, dictionary, list, threshold, withReading = fals
       text: token.text,
       defined,
       level: marked ? level : null,
-      ...annotations(defined, withReading, dictionary, token.text, koreanReading),
+      ...annotations(defined, withReading, dictionary, token.text),
     };
   });
 }
@@ -144,25 +143,31 @@ export function markLine(tokens, dictionary, list, threshold, withReading = fals
  * before readings existed when the setting is off, which means nobody who has not
  * asked for this pays for it.
  *
+ * **It carries the forms, it does not choose between them.** Which script a reading
+ * is drawn in is a presentation choice, decided at render time in `marks.js`, so a
+ * script change is a repaint rather than a re-mark. Choosing here instead would put
+ * the choice in the worker, which is what made the Korean reading control require a
+ * cache key it did not have.
+ *
  * @param {boolean} defined
  * @param {boolean} withReading
  * @param {object} dictionary
  * @param {string} text
- * @param {string} [koreanReading] `sound` (default) or `spelling`. Only Korean has
- *   two romanization forms; for the other two languages this changes nothing,
- *   because `alternateReadingOf` returns null and the primary reading stands.
  */
-export function annotations(defined, withReading, dictionary, text, koreanReading = 'sound') {
+export function annotations(defined, withReading, dictionary, text) {
   if (!withReading || !defined) return {};
 
-  // The alternate form ONLY where one exists, so a reader who has not asked for it
-  // pays nothing and the other languages are untouched.
-  const alternate = koreanReading === 'spelling' ? alternateReadingOf(dictionary, text) : null;
+  const entry = lookup(dictionary, text);
   return {
-    reading: alternate ?? readingOf(dictionary, text),
-    // The other script's form, used by the script-conversion display. Kept
-    // alongside the reading because both come from the same entry and looking it up
-    // twice would be a second lookup for no reason.
+    // The primary reading, which is what every language shows by default.
+    reading: readingOf(dictionary, text),
+    // The alternate romanization form, which only Korean has: 종로 is `jongno` said
+    // aloud and `jongro` as written. Null for the other two.
+    alternate: entry?.pr || null,
+    // The source's own Hangul respelling, only Korean. Kept because it is the
+    // source's data and shows the sound changes, but not drawn as the default.
+    respelling: entry?.s || null,
+    // The other script's form, used by the script-conversion display.
     traditional: traditionalOf(dictionary, text),
   };
 }

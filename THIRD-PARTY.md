@@ -290,7 +290,8 @@ file, the vendored bundle documented in the next section, and nothing else.
 | `playwright` | Apache-2.0 | Browser test tier and icon rasterising |
 | `vite` | MIT | The side-panel design preview only |
 | `esbuild` | MIT | Bundles `src/vendor/mediabunny.js`; not shipped |
-| `koroman` | MIT | Korean Romanization, run by `tools/build-wordlist.mjs`; not shipped |
+| `koroman` | MIT | Korean Romanization, generates and verifies the Korean table; not shipped |
+| `wanakana` | MIT | Kana to romaji, generates and verifies the Japanese table; not shipped |
 | `lightningcss`, `lightningcss-linux-x64-gnu` | **MPL-2.0** | Pulled in transitively by Vite |
 
 The two MPL-2.0 packages are the only non-permissive licences in the dependency
@@ -299,23 +300,29 @@ and imposes nothing on this project. It is not a concern here because they are
 development-only, never bundled, and unmodified. Recorded so that the next person
 does not have to rediscover it.
 
-**`koroman` is why the Korean readings are generated rather than copied.**
-`src/learn/data/korean.json` carries a Latin reading for every word, and none of
-that comes from a source: the definition source's `pronunciation` field holds a
-Hangul respelling (`가깝다` -> `가깝따`), which is written in the script the learner
-is trying to learn and so is useless as a reading. `koroman` (MIT, no dependencies)
-implements the National Institute of Korean Language's Revised Romanization,
-including the sound-change rules, and the build runs it over each word to produce
-the reading. It reproduces **all 25 of the examples published in the standard**,
-which `test/learn.test.mjs` asserts directly, because a naive character-mapping
-romanizer reproduces only 11 of them: Revised Romanization is a set of rules, not a
-character map.
+**`koroman` and `wanakana` are why the readings are generated rather than
+copied.** Two of the three scripts can be read without a dictionary entry, because
+they are algorithmic, and the readings for text the dictionary does not hold come
+from a small table produced by these libraries at build time.
 
-It is a **development dependency** and is not shipped. The extension reads the
-finished string, so no romanization code runs in the browser and nothing is added
-to the release ZIP. The second Romanization form (the spelling rather than the
-pronunciation, `종로` as `jongro` against `jongno`) is produced by the same library
-and stored only on the words where it differs.
+- **Korean.** `koroman` (MIT, no dependencies) implements the National Institute of
+  Korean Language's Revised Romanization including the sound-change rules. The
+  generator reads the three Hangul jamo tables out of it, and a test asserts the
+  result matches the library for **all 11,172 syllables**. A syllable table is
+  exact for a lone syllable and wrong across a boundary (종로 is `jongno`, not
+  `jongro`), so a dictionary entry always wins and the table is only the fallback.
+- **Japanese.** `wanakana` (MIT, no dependencies) converts kana to romaji. The
+  generator reads a table of the kana that occur in the corpus, plus the contracted
+  pairs, and a test asserts the result against the library across all 28,690
+  readings, with the 12 documented differences pinned by name.
+- **Chinese has no table, deliberately.** A hanzi's reading is lexical and context
+  dependent: 阿姨 is `āyí`, not `yí`, and 4,828 of 9,899 multi-character words fail
+  naive concatenation. A character table would be wrong about half the time, so a
+  Chinese word with no entry genuinely has no reading to show.
+
+Both are **development dependencies and are not shipped**. The tables they produce
+are committed as `src/learn/readings.js`, about 7 KB, and a check regenerates it and
+fails on any difference, so a hand-edited table cannot survive.
 
 ## `src/vendor/mediabunny.js`, MPL-2.0, and this attribution is required
 

@@ -235,45 +235,87 @@ export const SETTINGS = [
     coerce: (value) => (READING_OPTIONS.some((o) => o.value === value) ? value : 'above'),
   },
   {
-    // How a reading is written, not where it goes. Separate from `romaji`
-    // because they are independent: tone numbers are a Chinese convention with no
-    // Japanese equivalent, and both placements can show either form.
-    id: 'toneStyle',
+    // Which SCRIPT a Chinese reading is written in, which for Chinese means which
+    // NOTATION: pinyin with tone marks, pinyin with tone numbers, or nothing.
+    //
+    // This absorbs the old `toneStyle`, rather than sitting beside it. They were
+    // always one question, "how is a Chinese reading written", and having two
+    // settings meant the pair could describe a state neither wanted: pinyin off
+    // with a tone style chosen. One list of three options cannot.
+    //
+    // Marks by default, because that is what a dictionary prints and what a learner
+    // meets first. Numbers are for typing and searching.
+    //
+    // There is no romanization choice here beyond notation, because a hanzi has no
+    // derivable reading: 阿姨 is `āyí`, not `yí`, and 4,828 of 9,899
+    // multi-character words fail naive concatenation. So unlike Japanese and Korean
+    // there is nothing to compute for a word with no entry.
+    id: 'chineseScript',
     audience: ['panel', 'viewer'],
-    label: 'Pinyin tones',
+    label: 'Chinese reading',
     group: 'reading',
     type: 'select',
-    options: TONE_OPTIONS,
-    // Marks, because that is what a dictionary prints and what a learner meets
-    // first. Numbers are for typing and searching.
+    options: [
+      { value: 'marks', label: 'Pinyin' },
+      { value: 'numbers', label: 'Pinyin (numbers)' },
+      { value: 'none', label: 'Off' },
+    ],
     default: 'marks',
-    coerce: (value) => (TONE_OPTIONS.some((o) => o.value === value) ? value : 'marks'),
+    coerce: (value) =>
+      ['marks', 'numbers', 'none'].includes(value) ? value : 'marks',
   },
   {
-    // How a KOREAN reading is written, and it is the same kind of choice as
-    // `toneStyle`: a property of the reading, not of where it goes.
+    // Which SCRIPT a Japanese reading is written in: KANA or RŌMAJI.
     //
-    // Romanization has two modes and they answer different questions. The sound
-    // form says how a word is SAID; the spelling form says how it is WRITTEN, and
-    // is the one that converts back to Hangul. They differ on about 16% of words,
-    // 종로 being `Jongno` against `Jongro`, so this is a real choice rather than
-    // two names for one thing.
+    // **This did not exist, and its absence was invisible.** The dictionary holds
+    // kana, so a kana-only word showed its reading as ITSELF: `とても -> とても`, the
+    // same string twice, which looks like a working annotation and is useless to
+    // anyone who cannot yet read kana, which is exactly the person who needs it.
+    // Rōmaji is also the only option that helps before kana is learned.
     //
-    // Sound by default, because that is what a dictionary prints as a reading and
-    // what all 25 examples in the National Institute of Korean Language's standard
-    // use. Chinese and Japanese have no such pair, so this setting has no effect on
-    // them.
-    id: 'koreanReading',
+    // Kana by default, because that is what a Japanese dictionary prints and what
+    // a learner meets first. Rōmaji is for the stage before that.
+    id: 'japaneseScript',
+    audience: ['panel', 'viewer'],
+    label: 'Japanese reading',
+    group: 'reading',
+    type: 'select',
+    options: [
+      { value: 'kana', label: 'Kana' },
+      { value: 'romaji', label: 'Rōmaji' },
+      { value: 'none', label: 'Off' },
+    ],
+    default: 'kana',
+    coerce: (value) => (['kana', 'romaji'].includes(value) ? value : value === 'none' ? 'none' : 'kana'),
+  },
+  {
+    // Which SCRIPT a Korean reading is written in, and this is three real choices
+    // rather than two names for one thing:
+    //
+    //   romaja    종로 -> `jongno`, how it is SAID. What a dictionary prints, and
+    //             what all 25 examples in the National Institute of Korean
+    //             Language's standard use.
+    //   spelling  종로 -> `jongro`, how it is WRITTEN. The form that converts back
+    //             to Hangul. The two differ on about 16% of words.
+    //   hangul    the SOURCE's own respelling, 가깝다 -> 가깝따, which shows the sound
+    //             changes and the vowel length but stays in Hangul, so it is for a
+    //             learner who already reads it and wants the pronunciation detail.
+    //
+    // Romaja by default, for the reason above.
+    id: 'koreanScript',
     audience: ['panel', 'viewer'],
     label: 'Korean reading',
     group: 'reading',
     type: 'select',
     options: [
-      { value: 'sound', label: 'Pronunciation (Jongno)' },
-      { value: 'spelling', label: 'Spelling (Jongro)' },
+      { value: 'romaja', label: 'Rōmaja (jongno)' },
+      { value: 'spelling', label: 'Spelling (jongro)' },
+      { value: 'hangul', label: 'Hangul respelling' },
+      { value: 'none', label: 'Off' },
     ],
-    default: 'sound',
-    coerce: (value) => (value === 'spelling' ? 'spelling' : 'sound'),
+    default: 'romaja',
+    coerce: (value) =>
+      ['romaja', 'spelling', 'hangul', 'none'].includes(value) ? value : 'romaja',
   },
   {
     // Whether to rewrite Chinese subtitles between scripts.

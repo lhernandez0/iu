@@ -105,6 +105,45 @@ async function main() {
 
   await rm(scratch, { recursive: true, force: true });
 
+  // The reading tables, checked the same way. They are generated from a different
+  // input (a reference implementation rather than a data file), so they are a
+  // separate step, but the failure they guard against is identical: a generated
+  // file edited by hand, or drifted from what produced it.
+  //
+  // Worth checking rather than leaving to `readings.test.mjs` alone, because a
+  // WRONG romaji is invisible. It looks like a reading, so nothing about the page
+  // appears broken, which is the same property that let the `japanese.json` gloss
+  // drift go unnoticed.
+  //
+  // The committed copy is moved ASIDE first, because the generator writes in place.
+  // Comparing before-and-after around the run would always pass: the generator
+  // would have overwritten the edit being looked for. That mistake was made here
+  // and only found by hand-editing a value and watching the check report success.
+  try {
+    const readingsPath = join(ROOT, 'src/learn/readings.js');
+    const committed = await readFile(readingsPath, 'utf8');
+    await run(process.execPath, [join(here, 'build-readings.mjs')], { cwd: ROOT });
+    const regenerated = await readFile(readingsPath, 'utf8');
+
+    if (committed === regenerated) {
+      console.log('  ok    readings.js reproduces exactly');
+    } else {
+      let i = 0;
+      while (i < committed.length && i < regenerated.length && committed[i] === regenerated[i]) i++;
+      console.error(`  FAIL  readings.js differs from a fresh generation at byte ${i}`);
+      console.error(`        committed  : ${JSON.stringify(committed.slice(Math.max(0, i - 30), i + 60))}`);
+      console.error(`        regenerated: ${JSON.stringify(regenerated.slice(Math.max(0, i - 30), i + 60))}`);
+      // Put the committed copy back, so the check does not leave a different file
+      // behind than it found. A verifier that mutates what it verifies is worse than
+      // no verifier.
+      await writeFile(readingsPath, committed, 'utf8');
+      failures++;
+    }
+  } catch (error) {
+    console.error(`  FAIL  readings.js could not be regenerated: ${error.message}`);
+    failures++;
+  }
+
   if (failures) {
     console.error(
       `\n${failures} file(s) do not reproduce. Either the data was edited by hand, or a\n` +

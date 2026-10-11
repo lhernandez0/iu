@@ -294,7 +294,7 @@ function markSegments() {
       // output goes straight to `markLine` with nothing rewritten in between.
       cue.tokens = segment(cue.text, dictionary.headwords, dictionary.maxWordLength);
     }
-    cue.marked = markLine(cue.tokens, dictionary, list, thresholdFor(list), withReading, settings.koreanReading);
+    cue.marked = markLine(cue.tokens, dictionary, list, thresholdFor(list), withReading);
   }
 
   renderCaptions(activeIndex());
@@ -1143,7 +1143,16 @@ function applySettings() {
   // Pushed into the renderer, which reads the placement from the last settings it
   // was given rather than taking it as an argument, the same arrangement the panel
   // uses, so the reading is drawn identically on both surfaces.
-  setReadingSettings({ romaji: settings.romaji, toneStyle: settings.toneStyle });
+  // Passed field by field rather than wholesale because the viewer's `settings` is
+  // its own storage shape, not the worker's `learning` payload. `language` is the
+  // track's, which is what the reader is actually showing.
+  setReadingSettings({
+    romaji: settings.romaji,
+    chineseScript: settings.chineseScript,
+    language: trackLanguage(),
+    japaneseScript: settings.japaneseScript,
+    koreanScript: settings.koreanScript,
+  });
 
   measureBar();
 }

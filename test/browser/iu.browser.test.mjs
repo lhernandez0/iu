@@ -511,7 +511,48 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     console.log(`        popover: ${popover}`);
   }
 
-  section('the Korean reading control switches between the two Romanization forms');
+  section('a token with no dictionary entry still gets a reading');
+
+  {
+    // **The measurement this whole feature exists for.** In realistic Korean
+    // subtitles, 38% of on-screen tokens have no dictionary entry: particles and
+    // verb endings. They are real words a learner cannot read, and before this they
+    // got nothing at all.
+    //
+    // The fixture is deliberately full of them: 는, 를, 가, 입니다.
+    const korean = {
+      languageCode: 'ko',
+      name: '한국어',
+      segments: [{ start: 0, duration: 3, text: '저는 학생 입니다' }],
+    };
+
+    await routeYouTube(context, { videoId: 'korean03', title: 'Coverage', tracks: [korean] });
+    const watch = await openWatchPage(context, 'korean03');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 1, { text: '저는' });
+    await page.waitForFunction(() => document.querySelectorAll('.row .primary rt').length > 0, null, { timeout: 20000 });
+
+    const shape = await page.evaluate(() => {
+      const rt = [...document.querySelectorAll('.row .primary rt')].map((r) => r.textContent);
+      // Which words are marked is separate from which have a reading: a particle is
+      // readable and not clickable, which is the design.
+      const bases = [...document.querySelectorAll('.row .primary ruby')].map((r) => {
+        const base = r.firstChild?.textContent ?? '';
+        const reading = r.querySelector('rt')?.textContent ?? '';
+        return `${base}=${reading}`;
+      });
+      return { rt, bases, marks: document.querySelectorAll('.row .primary .mark').length };
+    });
+
+    // `저` and `학생` are dictionary words. `는` and `니다` are not, and this is the
+    // assertion that they are annotated anyway.
+    check('every rendering is annotated, including the words with no entry', shape.bases.length > 3, true);
+    check('the particle 는 carries a reading', shape.bases.some((b) => b.startsWith('는=')), true);
+    check('and it is romaja', shape.bases.find((b) => b.startsWith('는=')), '는=neun');
+    console.log(`        ${shape.bases.join('  ')}`);
+  }
+
+  section('the Korean reading control switches between the Romanization forms');
 
   {
     // The two forms differ on about 16% of words, so a control that did nothing
@@ -556,7 +597,7 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // click-confirm races the rebuild and reports "did not change its state" while
     // the control works.
     const switched = await page.evaluate(() => {
-      const select = [...document.querySelectorAll('.settings-view select, #settings-view select, select')]
+      const select = [...document.querySelectorAll('select')]
         .find((s) => s.getAttribute('aria-label') === 'Korean reading');
       if (!select) return false;
       select.value = 'spelling';
@@ -577,6 +618,65 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     // The other words are unaffected, which is the point of storing the alternate
     // only where it differs: the control must not churn the whole page.
     check('words whose forms agree are unchanged', spelling.includes('eseo'), true);
+
+    // And the compound: a token with NO dictionary entry still gets a reading in the
+    // spelling form, computed from its syllables. `를` is the particle here.
+    check('a wordless token is still annotated', spelling.some((r) => r === 'reul'), true);
+  }
+
+  section('Japanese can show romaji, which it could not before');
+
+  {
+    // **The gap this closes was invisible.** The dictionary holds kana, so the
+    // "reading" of a kana-only word was the word itself: `とても -> とても`, the same
+    // string twice. It looked like a working annotation and was useless to anyone
+    // who cannot yet read kana, which is exactly the person a reading is for.
+    //
+    // とても is in the fixture on purpose. It is the case that makes the bug visible,
+    // since a kanji-only fixture would have looked perfectly correct.
+    const japanese = {
+      languageCode: 'ja',
+      name: '日本語',
+      segments: [{ start: 0, duration: 3, text: 'とても 難しい です' }],
+    };
+
+    await routeYouTube(context, { videoId: 'japanese02', title: 'Romaji', tracks: [japanese] });
+    const watch = await openWatchPage(context, 'japanese02');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 1, { text: 'とても' });
+    await page.waitForFunction(() => document.querySelectorAll('.row .primary rt').length > 0, null, { timeout: 20000 });
+
+    const readings = () =>
+      page.evaluate(() => [...document.querySelectorAll('.row .primary rt')].map((r) => r.textContent));
+
+    // Kana is the default, and that is a real choice rather than a placeholder: a
+    // learner who reads kana wants the kana.
+    const kana = await readings();
+    check('kana is the default', kana.includes('とても'), true);
+
+    // Switch to romaji through the control the panel wires.
+    const switched = await page.evaluate(() => {
+      const select = [...document.querySelectorAll('select')]
+        .find((s) => s.getAttribute('aria-label') === 'Japanese reading');
+      if (!select) return false;
+      select.value = 'romaji';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    });
+    check('the Japanese reading control is in the settings view', switched, true);
+
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.row .primary rt')].some((r) => r.textContent === 'totemo'),
+      null,
+      { timeout: 20000 },
+    );
+
+    const romaji = await readings();
+    check('and romaji is the useful reading for a kana word', romaji.includes('totemo'), true);
+    // `難しい` is kanji, so its reading comes from the dictionary and is CONVERTED,
+    // which is what makes romaji work for a mixed line rather than only for kana.
+    check('a kanji word is converted too', romaji.some((r) => /^[a-z]+$/.test(r)), true);
+    console.log(`        kana: ${kana.join(' ')}  |  romaji: ${romaji.join(' ')}`);
   }
 
   section('a gap between lines stays highlighted, and the panel scrolls to it on load');

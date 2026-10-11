@@ -48,8 +48,9 @@ injected on demand, so there is nothing to reload.
   or NIKL or Yonsei for Korean, and the level you are working at. Words at or above
   it are underlined in a colour for their level; words you know are left plain.
 - **Defines any word on hover.** Reading and meaning. Chinese shows pinyin,
-  Japanese shows kana, Korean shows Romanization. A word shows every list that
-  places it, HSK 2.0 and HSK 3.0 frequently disagree, and both are shown.
+  Japanese shows kana or rōmaji, Korean shows rōmaja or the Hangul respelling. A
+  word shows every list that places it, HSK 2.0 and HSK 3.0 frequently disagree,
+  and both are shown.
 - **Shows two subtitle tracks at once.** The language you are learning with a
   second line beneath it. Either line can be a machine translation where the video
   offers one; translated lines are tagged so they are not mistaken for a real
@@ -139,11 +140,22 @@ offered, but only the course source glosses what it holds, so **about half of
 Korean words have no definition yet**. Those words still mark, and the hover says
 so. See the known limitations below.
 
-Korean readings are **Romanization**, generated at build time rather than copied
-from the source, because the definition source's pronunciation field is written in
-Hangul and so is no help to someone who cannot yet read Hangul. The **Korean
-reading** setting switches between the pronunciation form (종로 as `jongno`) and the
-spelling form (종로 as `jongro`).
+**Readings are available in more than one script, because a learner's script ability
+is not the same as their vocabulary level.** Each language has its own reading
+setting, so a beginner who cannot yet read the script is not stuck and a fluent
+reader can turn the annotation off:
+
+| Language | Readings offered |
+| --- | --- |
+| Chinese | Pinyin, Pinyin with tone numbers, off |
+| Japanese | Kana, Rōmaji, off |
+| Korean | Rōmaja, the spelling form, the Hangul respelling, off |
+
+A reading is shown for **anything on screen**, not only for words the dictionary
+holds. Korean `는` and Japanese `とても` have no useful dictionary reading, so they are
+read from the script itself: Hangul composes into rōmaja, and kana maps to rōmaji.
+Chinese is the exception and stays lexical, because a hanzi's reading cannot be
+derived from the character.
 
 ## Development
 

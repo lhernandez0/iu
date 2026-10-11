@@ -44,23 +44,24 @@ import { segmentSegments } from '../../src/learn/segment.js';
  * @param {boolean} withReading
  * @returns {object[]}
  */
-function markLine(text, dictionary, list, threshold, withReading, koreanReading) {
+function markLine(text, dictionary, list, threshold, withReading) {
   const [tokens] = segmentSegments([{ start: 0, text }], dictionary.headwords, dictionary.maxWordLength);
   return tokens.map((token) => {
     const defined = token.known && Boolean(lookup(dictionary, token.text));
-    // Mirrors the worker: the reading is attached only when a placement asks for
-    // it, and only to a word we can define. A preview that always attached one
-    // would show the feature working on a setting that turns it off.
+    // Mirrors the worker: the reading forms are attached only when a placement
+    // asks for them, and only to a word we can define. A preview that always
+    // attached one would show the feature working on a setting that turns it off.
     //
-    // The Korean mode is applied here too, and it has to be: the two romanization
-    // forms differ on about 16% of Korean words, so a preview that ignored the
-    // setting would look identical whichever way it was set, which is exactly the
-    // kind of thing this preview exists to catch.
-    const alternate = koreanReading === 'spelling'
-      ? (lookup(dictionary, token.text)?.pr ?? null)
-      : null;
+    // BOTH forms are carried, and the SCRIPT is chosen at render time in
+    // `marks.js`, so the preview exercises the same path the real surfaces do.
+    const entry = lookup(dictionary, token.text);
     const extra = defined && withReading
-      ? { reading: alternate ?? readingOf(dictionary, token.text), traditional: traditionalOf(dictionary, token.text) }
+      ? {
+          reading: readingOf(dictionary, token.text),
+          alternate: entry?.pr || null,
+          respelling: entry?.s || null,
+          traditional: traditionalOf(dictionary, token.text),
+        }
       : {};
     if (!defined || !list) return { text: token.text, defined, level: null, ...extra };
     const level = levelOf(dictionary, list.id, token.text);
@@ -266,7 +267,7 @@ export function createMockWorker(scenario) {
   /** Mark every token, with the real dictionary and segmenter. */
   const markTokens = (text) =>
     dictionary && list
-      ? markLine(text, dictionary, list, threshold(), settings.romaji !== 'off', settings.koreanReading)
+      ? markLine(text, dictionary, list, threshold(), settings.romaji !== 'off')
       : undefined;
 
   const buildRows = () => {
