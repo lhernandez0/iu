@@ -1501,6 +1501,11 @@ function rebuildRows(entry) {
   // stored one: crossing languages changes which list is in force without the
   // learner having chosen anything, and a stored id would leave the old tokens
   // looking reusable.
+  //
+  // The reusable-key is redundant here because `applyMarks` below re-checks the
+  // rows against its own key and re-marks when the reading form changed. Kept out
+  // deliberately rather than by omission, so the two keys do not both claim to be
+  // the guard.
   const wanted = `${effectiveListId(entry)}:${effectiveThreshold(entry)}`;
   const reusable = entry.markedWith === wanted;
 
@@ -1562,6 +1567,12 @@ async function applyMarks(entry) {
   // check is on the rows rather than on a remembered flag, because a flag can
   // claim marks that are no longer there, which is precisely how the transcript
   // came back unmarked after a language switch.
+  //
+  // **No script setting appears in this key, deliberately.** Which script a reading
+  // is drawn in is decided at RENDER time in `marks.js`, so changing it is a
+  // repaint rather than a re-mark. That is what removed the class of bug where a
+  // new setting did nothing until this key was taught about it: there were three
+  // such places, and two were missed when the setting was first added.
   const wanted = `${effectiveListId(entry)}:${effectiveThreshold(entry)}`;
   const allMarked = entry.rows.every((row) => Array.isArray(row.tokens));
   if (entry.markedWith === wanted && allMarked) return;
@@ -1806,8 +1817,19 @@ function learningState(entry = null) {
     // All three default to their `off`-equivalent, so a viewer who has never
     // touched them gets the panel they had before any of this existed.
     romaji: settings.romaji,
-    toneStyle: settings.toneStyle,
     scriptConversion: settings.scriptConversion,
+    // Which SCRIPT each language's reading is drawn in. Sent here rather than read
+    // from storage by the renderer because they are presentation settings and
+    // `marks.js` has no storage access, and because they are chosen at RENDER time
+    // so a change is a repaint rather than a re-mark.
+    chineseScript: settings.chineseScript,
+    japaneseScript: settings.japaneseScript,
+    koreanScript: settings.koreanScript,
+    // The language of the list actually in force, which is what the renderer
+    // switches on to know which script setting applies. Sent as the list's LANGUAGE
+    // rather than its id, because the renderer cares that Japanese is on screen, not
+    // which JLPT-shaped list grades it.
+    language: active?.language ?? null,
     // The list actually in force, not the raw stored id. A stored value can name
     // a list that no longer exists (data changed under it), one that never did, or
     // one that does not cover this video's language, and reporting the raw id
@@ -1902,13 +1924,12 @@ api.storage.onChanged.addListener((changes, areaName) => {
   settings = next;
 
   // Rebuild only when something that affects the ROWS moved. A pure presentation
-  // change (text size, view mode) is applied by whichever surface made it, and
-  // rebuilding here would throw away work for no visible difference.
+  // change (text size, view mode, which script a reading is drawn in) is applied by
+  // whichever surface made it, and rebuilding here would throw away work for no
+  // visible difference.
   const affectsRows = previous.listId !== settings.listId
     || previous.threshold !== settings.threshold
-    || previous.romaji !== settings.romaji
-    || previous.toneStyle !== settings.toneStyle;
-
+    || previous.romaji !== settings.romaji;
   if (affectsRows) {
     if (previous.listId !== settings.listId) {
       // A different list may be a different language, and `rebuildRows` reads the
@@ -2006,14 +2027,16 @@ async function applySetting(id, value) {
     }
 
     case 'romaji':
-    case 'toneStyle':
-      // The reading is attached to each TOKEN by `markLine`, and the tone style is
-      // applied when it is drawn, so a change here has to rebuild the rows, not
-      // just repaint them. Without this the setting appeared to do nothing until
-      // the next video, because the tokens already in hand carried the old answer.
+      // `romaji` is the reading PLACEMENT, and whether a reading is drawn at all
+      // changes what each token carries, because `annotations()` only attaches the
+      // forms when a reading is being shown. So this one still has to rebuild.
       //
-      // Not the same as `view` or `fontSize`, which are pure presentation and are
-      // applied by the panel with nothing to send.
+      // **The script settings are NOT here, and that is the improvement.** Which
+      // script a reading is drawn in (Chinese notation, Japanese kana or rōmaji,
+      // Korean rōmaja or spelling) is decided at RENDER time in `marks.js`, so
+      // changing one is a repaint. Listing them here would also mean listing them in
+      // `affectsRows` and in `applyMarks`'s cache key, which is three places for a
+      // presentation choice, and two of those were missed the first time.
       rebuildRows(currentEntry());
       break;
 

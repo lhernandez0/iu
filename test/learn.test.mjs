@@ -105,6 +105,51 @@ section('the segmenter marks kanji and kana Japanese alike');
   check('leaving the inflected tail unmarked', segment('食べました', JA_HEADWORDS, JA_MAX_LEN).some((t) => !t.known && t.text === 'べ'), true);
 }
 
+// --- Korean: the same boundary, before the data lands ------------------------
+
+section('the segmenter sees Hangul, without which nothing Korean can mark');
+
+{
+  // The measured blocker the Korean plan was built on. Hangul was not in the
+  // matcher, so  not a single Korean character  was ever looked at, and a whole
+  // Korean sentence came through as ONE token. This asserts the class now covers
+  // it, which is the precondition for any Korean word being markable at all.
+  //
+  // Synthetic headwords on purpose: this is a test of the segmenter, not of the
+  // Korean word list, and it must hold before that list is generated and after.
+  const KO_HEADWORDS = new Set(['안녕', '학교', '한국어', '가요', '저', '학생']);
+  const KO_MAX_LEN = 4;
+  const known = (text) => segment(text, KO_HEADWORDS, KO_MAX_LEN).some((t) => t.known);
+
+  // The regression, stated as the thing that was true: a sentence with no space
+  // between matched words is one token, so nothing inside it could ever match.
+  check('a Korean sentence is no longer a single token', segment('안녕하세요', KO_HEADWORDS, KO_MAX_LEN).length > 1, true);
+  check('a headword inside it is matched', known('안녕하세요'), true);
+  check('and the match is the headword, not a fragment', segment('안녕하세요', KO_HEADWORDS, KO_MAX_LEN)[0].text, '안녕');
+
+  // Korean is space-separated, unlike Chinese and Japanese, and this relies on a
+  // space not being in the class so a run already breaks on it. Asserted because
+  // if the class ever gained whitespace, the walk would cross word boundaries and
+  // the tokens would stop reproducing the line.
+  const spaced = segment('안녕하세요 학교에 가요', KO_HEADWORDS, KO_MAX_LEN);
+  check('tokenising reproduces the line with its spaces', spaced.map((t) => t.text).join(''), '안녕하세요 학교에 가요');
+  check('the space survives as its own token', spaced.some((t) => t.text === ' '), true);
+  check('so a word after a space is matched too', spaced.some((t) => t.known && t.text === '학교'), true);
+
+  // Compatibility jamo (ㄱ, ㄴ, ㅏ) and conjoining jamo are in the class as well.
+  // Asserted directly, because they are the ranges a reader is most likely to
+  // assume are unnecessary and quietly drop.
+  check('compatibility jamo are matched', segment('ㄱㄴ', KO_HEADWORDS, KO_MAX_LEN).length > 1, true);
+  check('conjoining jamo are matched', segment('\u1100\u1161', KO_HEADWORDS, KO_MAX_LEN).length > 1, true);
+
+  // Widening the class must not change Chinese or Japanese, the guarantee the
+  // change is only acceptable under. Neither language contains Hangul, so a run
+  // of either must tokenise exactly as it did before.
+  check('Chinese is untouched', segment('我们在岸上等你', HEADWORDS, MAX_LEN).map((t) => t.text).join(''), '我们在岸上等你');
+  check('Japanese is untouched', segment('私は学生です', JA_HEADWORDS, JA_MAX_LEN).map((t) => t.text).join(''), '私は学生です');
+  check('and Chinese still matches its own headwords', segment('我们在岸上等你', HEADWORDS, MAX_LEN).some((t) => t.known), true);
+}
+
 section('the Japanese dictionary is internally consistent');
 
 {
@@ -363,7 +408,10 @@ section('the learning layer does not depend on the browser');
   // Read as text rather than imported: an import would only prove that THIS
   // process could evaluate it, and Node has no `chrome` either way. The rule is
   // about the source.
-  for (const file of ['segment.js', 'wordlist.js']) {
+  // `marking.js` is deliberately NOT in this list: it imports from `wordlist.js`,
+  // which is a sibling in the same layer rather than a reach outside it. The rule
+  // is about the layer having no dependencies, not about a file having no imports.
+  for (const file of ['segment.js', 'wordlist.js', 'readings.js']) {
     const source = await readFile(resolve(here, '../src/learn', file), 'utf8');
     // Comments are stripped first, or the many comments explaining WHY chrome is
     // absent would fail the check for saying the word.
@@ -537,6 +585,240 @@ section('the conversion is reversible, which is why numbered pinyin exists');
   check('a capitalised proper noun keeps its capital', pinyinToNumbers('Běijīng'), 'Bei3jing1');
   check('and an ordinary word stays lowercase', pinyinToNumbers('shénme'), 'shen2me');
   check('an apostrophe is kept as written', pinyinToNumbers("Xī'ān"), "Xi1'an1");
+}
+// --- Korean: the data, as it ships -------------------------------------------
+
+// The third language, and the first with TWO upstreams: levels from NIKL and
+// TOPIK, definitions from the unrelated Yonsei companion. Loaded here rather than
+// asserted about, because the interesting properties are all about what the join
+// did and did not produce.
+const korean = JSON.parse(await readFile(resolve(here, '../src/learn/data/korean.json'), 'utf8'));
+const KO_WORDS = new Set(Object.keys(korean.words));
+
+section('the Korean dictionary is internally consistent');
+
+{
+  const words = Object.keys(korean.words);
+  check('it has words', words.length > 7000, true);
+
+  // Every levelled word MUST also be a `words` key. `headwords` is built from the
+  // keys of `words`, so a word present only in `levels` can never be matched by the
+  // segmenter and would be invisible with nothing to say why. This is the check
+  // that makes the "emit the entry even with no definition" decision load-bearing
+  // rather than a preference: thousands of these words have no definition and all
+  // of them must still be here.
+  const levelled = new Set([...Object.keys(korean.levels.nikl), ...Object.keys(korean.levels.yonsei)]);
+  const orphaned = [...levelled].filter((word) => !KO_WORDS.has(word));
+  check('every levelled word is also a definable word', orphaned, []);
+
+  // The Yonsei list is the source of the definitions, so every word it holds has a
+  // gloss by construction. That is what adding it bought: the words the graded list
+  // could not define now carry one. Asserted with a generous threshold rather than
+  // an exact count, so a source refresh does not fail here for no reason.
+  const yonseiWords = Object.keys(korean.levels.yonsei);
+  const yonseiDefined = yonseiWords.filter((w) => korean.words[w].m !== '');
+  check('every Yonsei word has a definition', yonseiDefined.length, yonseiWords.length);
+
+  // The other direction is allowed and expected: a word can have a definition and
+  // no level, or a level and no definition, which is what "definition yes, colour
+  // no" means. Both counts are asserted to be non-trivial so neither source can
+  // silently stop contributing.
+  const undefinedWords = words.filter((word) => korean.words[word].m === '');
+  check('some words have no definition, which is the known limit', undefinedWords.length > 2000, true);
+  check('and most words do have one', words.length - undefinedWords.length > 3000, true);
+  check('but every word has the full entry shape', words.every((w) => ['p', 'm', 't', 'pos'].every((f) => f in korean.words[w])), true);
+  // `t` is the traditional-Chinese field and is unused for Korean, as it is for
+  // Japanese. Asserted so a copy-paste from the Chinese builder shows up.
+  check('the traditional field is left empty', [...new Set(words.map((w) => korean.words[w].t))], ['']);
+}
+
+section('the Korean levels are the source\'s own, and ascend');
+
+{
+  for (const [id, count, names] of [
+    ['nikl', 3, ['A', 'B', 'C']],
+    ['yonsei', 6, ['1', '2', '3', '4', '5', '6']],
+  ]) {
+    const list = korean.lists.find((l) => l.id === id);
+    check(`${id} is declared with ${count} levels`, list?.levelCount, count);
+    check(`${id} names them`, list?.levelNames, names);
+
+    const values = [...new Set(Object.values(korean.levels[id]))].sort((a, b) => a - b);
+    check(`${id} uses 1..${count}`, values, Array.from({ length: count }, (_, i) => i + 1));
+    check(`${id} has no level above its count`, Math.max(...Object.values(korean.levels[id])) <= count, true);
+  }
+
+  // TOPIK is deliberately NOT shipped, and this asserts the absence. Its terms of
+  // use reserve the rights a redistributed dictionary needs, unlike NIKL's KOGL
+  // Type 1 grant. A list reappearing here without the licence being revisited would
+  // be the exact mistake this checks against.
+  check('no TOPIK list is shipped', korean.lists.some((l) => l.id === 'topik'), false);
+  check('and no TOPIK level data is present', 'topik' in korean.levels, false);
+
+  // The homograph merge, which is the transform most likely to be wrong. 가구03 and
+  // 가구04 are two senses of one spelling; stripping the suffix merges them, and the
+  // EASIEST of the merged rows must win so a word is never placed harder than any
+  // list says it is. Asserted through the key rather than the source: the merged
+  // word is spelled without its number.
+  check('a homograph suffix is stripped from the key', KO_WORDS.has('가구'), true);
+  check('and the numbered spelling is not a key', KO_WORDS.has('가구03'), false);
+}
+
+section('the two Korean lists are complementary, not redundant');
+
+{
+  const nikl = new Set(Object.keys(korean.levels.nikl));
+  const yonsei = new Set(Object.keys(korean.levels.yonsei));
+  const union = new Set([...nikl, ...yonsei]);
+  const shared = [...nikl].filter((w) => yonsei.has(w));
+
+  // The measured claim that justifies shipping both: they cover substantially
+  // different words. If a future source change made one a near-subset of the other
+  // (as HSK 2.0 is of HSK 3.0), this fails and says so.
+  const overlap = shared.length / union.size;
+  check('the overlap is well under half the union', overlap < 0.5, true);
+  check('NIKL contributes words Yonsei does not', [...nikl].filter((w) => !yonsei.has(w)).length > 500, true);
+  check('and Yonsei contributes words NIKL does not', [...yonsei].filter((w) => !nikl.has(w)).length > 500, true);
+
+  // Yonsei volume is used as a level, which only makes sense if difficulty actually
+  // ascends. Measured on NIKL: the mean grade rises at every volume. Asserted as
+  // "not decreasing" over the whole run, tolerant of a flat step but not a reversal.
+  const meanGrade = [];
+  for (let v = 1; v <= 6; v++) {
+    const at = [...yonsei].filter((w) => korean.levels.yonsei[w] === v && nikl.has(w));
+    meanGrade.push(at.length ? at.reduce((s, w) => s + korean.levels.nikl[w], 0) / at.length : 0);
+  }
+  const reversed = meanGrade.some((m, i) => i > 0 && m > 0 && meanGrade[i - 1] > 0 && m < meanGrade[i - 1]);
+  check('Yonsei volume ascends in difficulty, never reverses', reversed, false);
+  check('and the first volume is the easiest', meanGrade[0] < meanGrade[meanGrade.length - 1], true);
+}
+
+section('the Korean join is what it is, measured and not hoped');
+
+{
+  const words = Object.keys(korean.words);
+  const withDefinition = words.filter((word) => korean.words[word].m !== '');
+  const ratio = withDefinition.length / words.length;
+
+  // A range rather than an exact count, so a source revision does not fail here for
+  // no good reason. The MEANING is that this is well past half now: adding Yonsei as
+  // a LIST, not only as a definition source, is what recovered the roughly 1,900
+  // words that used to be dropped for having a definition but no level.
+  check('more than half the words have a definition', ratio > 0.45 && ratio < 0.6, true);
+  check('and joined words are a real subset', withDefinition.length > 0, true);
+}
+
+// --- Korean readings: Romanization, checked against the standard -------------
+
+section('the Korean readings are Romanization, and they match the published standard');
+
+{
+  // The 25 examples the National Institute of Korean Language publishes in the
+  // Revised Romanization standard ITSELF, as the worked cases for the rules. Using
+  // the standard's own list rather than examples of our own is the difference
+  // between testing that the romanizer is self-consistent and testing that it is
+  // RIGHT: it is what catches 백마 -> baekma (a character map) against baengma (the
+  // nasal assimilation rule).
+  //
+  // The expected strings are the standard's, lowercased because the data stores
+  // lowercase and an initial capital is a naming convention rather than part of the
+  // romanization.
+  const OFFICIAL = [
+    ['구미', 'gumi'], ['영동', 'yeongdong'], ['백암', 'baegam'], ['옥천', 'okcheon'],
+    ['합덕', 'hapdeok'], ['호법', 'hobeop'], ['월곶', 'wolgot'], ['벚꽃', 'beotkkot'],
+    ['한밭', 'hanbat'], ['구리', 'guri'], ['설악', 'seorak'], ['칠곡', 'chilgok'],
+    ['임실', 'imsil'], ['울릉', 'ulleung'], ['대관령', 'daegwallyeong'],
+    ['백마', 'baengma'], ['신문로', 'sinmunno'], ['종로', 'jongno'],
+    ['왕십리', 'wangsimni'], ['별내', 'byeollae'], ['신라', 'silla'],
+    ['학여울', 'hangnyeoul'], ['해돋이', 'haedoji'], ['같이', 'gachi'],
+    ['굳히다', 'guchida'],
+  ];
+
+  // **Tested against the ROMANIZER, not only against the data.** The standard
+  // draws its examples from place names, and only 5 of the 25 are vocabulary we
+  // ship (벚꽃, 종로, 신라, 같이, 굳히다). Asserting through the data alone would
+  // therefore check a fifth of the rules and quietly pass on the other twenty,
+  // including every one that exercises assimilation.
+  const { romanize } = await import('koroman');
+  const wrong = [];
+  for (const [word, expected] of OFFICIAL) {
+    const got = romanize(word);
+    if (got !== expected) wrong.push(`${word}: got "${got}", standard says "${expected}"`);
+  }
+  check('the romanizer reproduces all 25 examples in the standard', wrong, []);
+
+  // And some of those ARE shipped vocabulary, so the build is connected to the
+  // romanizer rather than the two merely existing side by side. Without this, a
+  // build that stopped calling it would still pass the check above.
+  const inData = OFFICIAL.filter(([word]) => word in korean.words);
+  check('some of the standard\'s examples are shipped vocabulary', inData.length >= 5, true);
+  const mismatched = inData.filter(([word, expected]) => korean.words[word].p !== expected);
+  check('and they carry the romanization in the data', mismatched.map(([w]) => w), []);
+}
+
+section('the Korean reading replaced a respelling that was not a reading');
+
+{
+  const words = Object.keys(korean.words);
+
+  // Coverage is the point of generating the reading rather than copying one. The
+  // source only fills its pronunciation field on a fraction of rows, and it is not
+  // filled at all for the graded word list, so before this the reading existed on
+  // about a fifth of words.
+  const withReading = words.filter((w) => korean.words[w].p);
+  check('every Korean word has a reading', withReading.length, words.length);
+
+  // Every reading is Latin. The source's field held Hangul, which is what made it
+  // useless as a reading: a learner who cannot yet read Hangul cannot use a Hangul
+  // respelling. Asserted over the whole corpus rather than a sample, because a
+  // single non-Latin reading would render as a second copy of the word.
+  const nonLatin = words.filter((w) => /[\uac00-\ud7a3]/u.test(korean.words[w].p));
+  check('no reading is left in Hangul', nonLatin.slice(0, 5), []);
+
+  // The source's respelling is KEPT, in its own field, because it is the source's
+  // data and it carries the vowel length and the actual sound changes. It is just
+  // not what the reading control draws.
+  const withRespell = words.filter((w) => korean.words[w].s);
+  check('the source respelling is kept rather than discarded', withRespell.length > 1000, true);
+  // And where it exists it is Hangul, which is the property that made it unusable
+  // as a reading and is the reason for the separate field.
+  const badRespell = withRespell.filter((w) => !/[\uac00-\ud7a3]/u.test(korean.words[w].s));
+  check('and it is Hangul, which is why it is not the reading', badRespell.slice(0, 5), []);
+}
+
+section('the two romanization forms are stored without storing the same string twice');
+
+{
+  const words = Object.keys(korean.words);
+  const alternate = words.filter((w) => korean.words[w].pr);
+
+  // The alternate form exists ONLY where it differs, which is the point: storing
+  // both on every word would double the reading for no gain, since most words
+  // romanize the same either way.
+  const identical = alternate.filter((w) => korean.words[w].pr === korean.words[w].p);
+  check('the alternate form is never a duplicate of the primary', identical.slice(0, 5), []);
+
+  // It is a real minority, which is what makes the "only where it differs" storage
+  // worth the branch. If this ever rose toward every word, the delta is no longer a
+  // saving and the shape should be revisited.
+  check('and it is a minority of words', alternate.length > 0 && alternate.length < words.length / 2, true);
+
+  // Both forms are Latin. The entry key can be a phrase (`하십니까?`), a pair
+  // (`을/를`) or a parenthesised gloss (`월(월요일)`), so punctuation is expected and
+  // is carried through; what must NOT appear is Hangul, which would mean the
+  // romanizer was bypassed for that word.
+  const badForm = alternate.filter((w) => /[\uac00-\ud7a3]/u.test(korean.words[w].pr));
+  check('no alternate form is left in Hangul', badForm.slice(0, 5), []);
+
+  // A worked case, named because it is the one every guide uses: 종로 is `jongno`
+  // said aloud and `jongro` as written, the ㄹ+ㄴ assimilation being exactly the
+  // difference the two modes disagree about.
+  check('종로 is jongno as a pronunciation', korean.words['종로']?.p, 'jongno');
+  check('and jongro as a spelling', korean.words['종로']?.pr, 'jongro');
+  // 신라 is the other one guides use, and it is a different rule (ㄴ+ㄹ
+  // lateralisation), so the two together cover more than either alone.
+  check('신라 is silla as a pronunciation', korean.words['신라']?.p, 'silla');
+  check('and sinra as a spelling', korean.words['신라']?.pr, 'sinra');
 }
 
 // --- Result ------------------------------------------------------------------

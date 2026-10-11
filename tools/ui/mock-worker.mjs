@@ -48,11 +48,20 @@ function markLine(text, dictionary, list, threshold, withReading) {
   const [tokens] = segmentSegments([{ start: 0, text }], dictionary.headwords, dictionary.maxWordLength);
   return tokens.map((token) => {
     const defined = token.known && Boolean(lookup(dictionary, token.text));
-    // Mirrors the worker: the reading is attached only when a placement asks for
-    // it, and only to a word we can define. A preview that always attached one
-    // would show the feature working on a setting that turns it off.
+    // Mirrors the worker: the reading forms are attached only when a placement
+    // asks for them, and only to a word we can define. A preview that always
+    // attached one would show the feature working on a setting that turns it off.
+    //
+    // BOTH forms are carried, and the SCRIPT is chosen at render time in
+    // `marks.js`, so the preview exercises the same path the real surfaces do.
+    const entry = lookup(dictionary, token.text);
     const extra = defined && withReading
-      ? { reading: readingOf(dictionary, token.text), traditional: traditionalOf(dictionary, token.text) }
+      ? {
+          reading: readingOf(dictionary, token.text),
+          alternate: entry?.pr || null,
+          respelling: entry?.s || null,
+          traditional: traditionalOf(dictionary, token.text),
+        }
       : {};
     if (!defined || !list) return { text: token.text, defined, level: null, ...extra };
     const level = levelOf(dictionary, list.id, token.text);

@@ -884,11 +884,11 @@ section('tone style changes how a reading is written, not where');
 {
   const byClass = (dom, name) => dom.created.filter((el) => el.classList.contains(name));
   const { lastPort, dom } = await bootPanel();
-  const push = (toneStyle) =>
+  const push = (chineseScript) =>
     lastPort().emit({
       type: 'state',
       state: stateWithSettings(
-        { romaji: 'above', toneStyle },
+        { romaji: 'above', chineseScript },
         {
           rows: [
             {
@@ -954,7 +954,12 @@ section('the settings view replaces the transcript and comes back');
   // `markStyle` is one of the two that were parked behind `hidden` until this view
   // existed; if the view stops rendering it, this is where that shows up.
   check('and includes the settings that only it renders', labels.includes('Marks'), true);
-  check('and the tone style too', labels.includes('Pinyin tones'), true);
+  // The per-language reading settings, which replaced the old `toneStyle`. One
+  // per language, because a learner's script ability differs per language and a
+  // single control could not express that.
+  check('and the Chinese reading too', labels.includes('Chinese reading'), true);
+  check('and the Japanese reading too', labels.includes('Japanese reading'), true);
+  check('and the Korean reading too', labels.includes('Korean reading'), true);
 
   // A group heading per group, so the list is navigable rather than flat.
   const groups = body.find((el) => el.classList.contains('settings-group-title')).map((el) => el.textContent);

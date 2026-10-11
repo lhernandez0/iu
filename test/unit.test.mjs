@@ -225,7 +225,7 @@ section('every setting declares which surfaces show it');
   // rendered once the settings view exists, and `byAudience` filters hidden
   // settings out by design. Asserting through `byAudience` here would be
   // asserting the flag, not the audience.
-  for (const id of ['romaji', 'markStyle', 'toneStyle']) {
+  for (const id of ['romaji', 'markStyle', 'chineseScript', 'japaneseScript', 'koreanScript']) {
     const definition = SETTINGS.find((s) => s.id === id);
     check(`"${id}" is tagged for the viewer`, definition.audience.includes('viewer'), true);
     check(`and for the panel`, definition.audience.includes('panel'), true);
@@ -263,7 +263,9 @@ section('the video settings');
       'romaji',
       'studyLanguage',
       'threshold',
-      'toneStyle',
+      'chineseScript',
+      'japaneseScript',
+      'koreanScript',
     ].sort(),
   );
 
@@ -355,7 +357,7 @@ section('the settings view and the transcript bar are two doors to one list');
   // The two parked settings are now live, which is what the view existing changed.
   // Asserted because "hidden until there is a surface" was the recorded reason, and
   // leaving the flag on would silently keep them invisible.
-  for (const id of ['toneStyle', 'markStyle']) {
+  for (const id of ['chineseScript', 'japaneseScript', 'koreanScript', 'markStyle']) {
     check(`"${id}" is no longer hidden`, SETTINGS.find((s) => s.id === id).hidden, undefined);
   }
   // And the one that stays hidden stays hidden, deliberately.

@@ -361,3 +361,10 @@ build/
 # Screenshots written by the preview capture scripts, for visual review. They are
 # regenerated on demand and are large; the review itself is not a source artifact.
 tools/ui/assets/
+
+# Downloaded word-list source revisions, and the scratch directory the
+# reproduction check rebuilds into. About 30 MB of upstream data, obtained by
+# `npm run wordlists:fetch`. Never committed: the whole point of pinning a content
+# hash is that the input is not in the repository, so a committed copy would be a
+# second source of truth that can drift from the pin.
+.cache/

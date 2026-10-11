@@ -26,6 +26,7 @@
  */
 
 import { levelColour, pinyinToNumbers } from '../learn/wordlist.js';
+import { romanizeKana, romanizeHangul } from '../learn/readings.js';
 
 /**
  * @typedef {Object} Token
@@ -121,11 +122,16 @@ export function renderReading(tokens, levelCount, palette) {
     // word and this is a single run.
     let first = true;
     for (const token of tokens) {
-      if (!token.reading) continue;
+      // The computing entry point, so a token with no dictionary reading still
+      // contributes one when its script allows it. This is the whole point of the
+      // fallback: the `below` line and the ruby annotation must agree, and they
+      // would not if one consulted the table and the other did not.
+      const reading = readingFor(token);
+      if (!reading) continue;
       if (!first) line.append(document.createTextNode(' '));
       first = false;
       const span = document.createElement('span');
-      span.textContent = formatReading(token.reading);
+      span.textContent = formatReading(reading);
       line.append(span);
     }
     fragment.append(line);
@@ -144,8 +150,12 @@ export function renderReading(tokens, levelCount, palette) {
   // pinyin interleaved with the characters. The browser suite caught exactly that.
   const fragment = document.createDocumentFragment();
   for (const token of tokens) {
+    // Computed here rather than read off the token, so a token the dictionary
+    // cannot define still gets a reading when its script allows one. See
+    // `readingFor`.
+    const reading = readingFor(token);
     const wanted =
-      token.reading &&
+      reading &&
       (placement === 'above' || (token.level !== null && token.level !== undefined));
 
     if (!wanted) {
@@ -164,7 +174,7 @@ export function renderReading(tokens, levelCount, palette) {
     ruby.append(renderTokens([token], levelCount, palette));
     const rt = document.createElement('rt');
     rt.className = 'rt';
-    rt.textContent = formatReading(token.reading);
+    rt.textContent = formatReading(reading);
     ruby.append(rt);
     fragment.append(ruby);
   }
@@ -178,22 +188,106 @@ export function renderReading(tokens, levelCount, palette) {
  * which would be a circular import, and rather than a global, which would be a
  * second place for the truth to live.
  *
- * Two fields because they are independent: WHERE a reading goes and HOW it is
- * written. Defaults match the settings' own defaults, so a render arriving before
- * the first state push behaves the same as one arriving after.
+ * Three fields, because they are independent questions: WHERE a reading goes, HOW
+ * a Chinese reading is written, and which SCRIPT each language's reading is drawn
+ * in. `language` is not a setting at all; it is which language is on screen, and
+ * the script fields are read through it.
  *
- * @type {{romaji: string, toneStyle: string}}
+ * @type {{romaji: string, chineseScript: string, language: string,
+ *   japaneseScript: string, koreanScript: string}}
  */
-let readingSettings = { romaji: 'off', toneStyle: 'marks' };
+let readingSettings = {
+  romaji: 'off',
+  chineseScript: 'marks',
+  language: '',
+  japaneseScript: 'kana',
+  koreanScript: 'romaja',
+};
 
 /**
- * @param {{romaji?: string, toneStyle?: string}|undefined} settings
+ * @param {{romaji?: string, chineseScript?: string, language?: string,
+ *   japaneseScript?: string, koreanScript?: string}|undefined} settings
  */
 export function setReadingSettings(settings) {
   readingSettings = {
     romaji: settings?.romaji ?? 'off',
-    toneStyle: settings?.toneStyle ?? 'marks',
+    chineseScript: settings?.chineseScript ?? 'marks',
+    language: settings?.language ?? '',
+    japaneseScript: settings?.japaneseScript ?? 'kana',
+    koreanScript: settings?.koreanScript ?? 'romaja',
   };
+}
+
+/**
+ * The reading to DRAW for a token, or null when there is none to draw.
+ *
+ * **Two sources, in order of authority:**
+ *
+ *   1. The dictionary entry, which is lexical and correct: 종로 is `jongno`
+ *      because the sound rules cross the syllable boundary, and only the entry
+ *      knows that.
+ *   2. A script-level fallback, COMPUTED from the text, for whatever the
+ *      dictionary has no entry for: particles, verb endings, lone syllables.
+ *      Measured on realistic subtitles, that is 38% of Korean tokens and 35% of
+ *      Japanese tokens, so it is the common case rather than an edge one.
+ *
+ * **Why the fallback lives here and not in the worker.** It is a presentation
+ * choice, so computing it at render time means switching scripts is a repaint
+ * rather than a re-mark: no worker round trip, no re-segmentation, and none of
+ * the cache keys in `service-worker.js` that a new marking-time setting has to be
+ * registered in. That is not just less code, it removes the class of bug where a
+ * setting appears to do nothing because a cache key was not updated.
+ *
+ * Hanzi and kanji have no fallback on purpose. A character's reading is lexical
+ * (阿姨 is `āyí`, not `yí`), so a table would be wrong about half the time; a
+ * Chinese token with no entry genuinely has no reading to show.
+ *
+ * @param {{text: string, reading?: string|null, alternate?: string|null,
+ *   respelling?: string|null}} token
+ * @returns {string|null}
+ */
+function readingFor(token) {
+  const language = readingSettings.language;
+  const entry = token.reading ?? null;
+
+  if (language === 'ja') {
+    if (readingSettings.japaneseScript === 'none') return null;
+    // `kana` shows what the entry holds, and NOTHING when there is no entry: a kana
+    // word's text is already kana, so showing the text as its own "reading" is the
+    // same string twice, which is what made this look like it worked.
+    if (readingSettings.japaneseScript === 'kana') return entry;
+    // Rōmaji CONVERTS, so it works for anything kana, entry or not. That is the
+    // whole gain: とても has no useful kana reading but does have `totemo`.
+    return romanizeKana(entry ?? token.text);
+  }
+
+  if (language === 'ko') {
+    if (readingSettings.koreanScript === 'none') return null;
+    if (readingSettings.koreanScript === 'hangul') {
+      // The source's own respelling, which shows the sound changes and the vowel
+      // length but stays in Hangul. Null when the source has none, because a
+      // Hangul text shown as its own Hangul "reading" is the duplicate problem
+      // again.
+      return token.respelling ?? null;
+    }
+    if (readingSettings.koreanScript === 'spelling') {
+      // The spelling form where the entry has one, and the syllable table
+      // otherwise. The table is a pronunciation form, so this is approximate for a
+      // word with no entry, which is honest: there is no spelling form to know.
+      return token.alternate ?? entry ?? romanizeHangul(token.text);
+    }
+    // The entry is authoritative where there is one; otherwise the syllable table,
+    // which is exact for a LONE syllable and wrong across a boundary, so it is only
+    // ever consulted when no entry exists.
+    return entry ?? romanizeHangul(token.text);
+  }
+
+  // Chinese and anything else: the entry or nothing. A hanzi has no derivable
+  // reading, so there is no fallback to compute. `none` is handled by the caller
+  // through the placement, and `numbers` is a rewrite applied when the reading is
+  // WRITTEN rather than here, because it is the same string in another notation.
+  if (readingSettings.chineseScript === 'none') return null;
+  return entry;
 }
 
 /**
@@ -209,14 +303,15 @@ function readingPlacement() {
  * A reading as it should be written.
  *
  * Tone numbers are a Chinese convention with no Japanese equivalent, and the
- * conversion leaves kana alone either way, so this needs no language check.
+ * conversion leaves kana alone either way, so this needs no language check. The
+ * notation is carried by `chineseScript`, which absorbed the old `toneStyle`.
  *
  * @param {string} reading
  * @returns {string}
  */
 function formatReading(reading) {
   if (!reading) return '';
-  return readingSettings.toneStyle === 'numbers' ? pinyinToNumbers(reading) : reading;
+  return readingSettings.chineseScript === 'numbers' ? pinyinToNumbers(reading) : reading;
 }
 
 /** Where the hover panel sits, created once. */

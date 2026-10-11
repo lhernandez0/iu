@@ -422,6 +422,263 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     console.log(`        popover: ${unmarkedPopover}`);
   }
 
+  section('Korean marks in a real browser, which is the only place Hangul was ever broken');
+
+  {
+    // **This section exists because no other tier could have caught the bug it
+    // covers.** Hangul was outside the segmenter's character class, so a Korean
+    // sentence came through as ONE opaque token and nothing could mark. Every
+    // hermetic test passed the whole time: they exercised the segmenter with the
+    // characters it already knew, and a Korean line was not one of them. The
+    // failure was only visible with real text in a real page, and even then only
+    // if you looked at Korean specifically, which is why `ja` had this coverage and
+    // `ko` did not until now.
+    const korean = {
+      languageCode: 'ko',
+      name: '한국어',
+      segments: [
+        { start: 0, duration: 2, text: '저는 학생 입니다' },
+        { start: 2, duration: 2, text: '한국어 를 공부 합니다' },
+        { start: 4, duration: 2, text: '종로 에서 신라 를 만나다' },
+      ],
+    };
+
+    await routeYouTube(context, { videoId: 'korean01', title: 'Korean', tracks: [korean] });
+    const watch = await openWatchPage(context, 'korean01');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 3, { text: '저는' });
+
+    // Wait for marking, not merely for rows. The rows arrive from the transcript
+    // first and are re-rendered once the Korean dictionary and list resolve, so an
+    // immediate read can catch the unmarked intermediate state. This is the same
+    // wait the Chinese section does above, and the first version of this section
+    // omitted it, which made the mark assertion pass or fail depending on timing.
+    await page.waitForFunction(() => document.querySelectorAll('.row .primary .mark').length > 1, null, { timeout: 20000 });
+
+    // The line must still read as its own text. This is the invariant that a
+    // single-token segmentation broke: with the whole sentence as one token there
+    // were no marks, but ALSO the panel had nothing to hang a lookup on.
+    const lineText = await page.evaluate(baseText, '.row .primary');
+    check('the Korean line reads as its original text', lineText.includes('저는'), true);
+
+    // The core claim: Hangul marks. Asserted as "more than one mark", because a
+    // single mark would be consistent with the sentence still being one token that
+    // happened to match a headword.
+    const marks = await page.evaluate(() => ({
+      marks: document.querySelectorAll('.row .primary .mark').length,
+      text: document.querySelector('.row .primary')?.dataset.text ?? '',
+    }));
+    check('Korean words are marked', marks.marks > 1, true);
+
+    // And the list offered is the Korean one. The panel filters by the track's
+    // language, so a Korean video must offer NIKL and Yonsei and nothing else,
+    // which also proves the two Korean lists reached the index intact.
+    const lists = await page.evaluate(() => {
+      const select = document.getElementById('list');
+      return {
+        options: [...(select?.options ?? [])].map((o) => o.value),
+        chosen: select?.value ?? '',
+      };
+    });
+    check('only the Korean lists are offered', lists.options, ['nikl', 'yonsei']);
+    check('and one of them is chosen', ['nikl', 'yonsei'].includes(lists.chosen), true);
+
+    // The level control must read the list's own names, A to C for NIKL, which is
+    // the same property that made JLPT render N5 to N1 rather than 1 to 5.
+    const levelNames = await page.evaluate(() =>
+      [...document.querySelectorAll('#threshold option')].map((o) => o.textContent),
+    );
+    const expectedNames = lists.chosen === 'nikl' ? ['A', 'B', 'C'] : ['1', '2', '3', '4', '5', '6'];
+    check(`the level control names ${lists.chosen} levels`, levelNames, expectedNames);
+
+    section('hovering a Korean word shows a Romanized reading');
+
+    await page.locator('.row .primary .mark').first().hover();
+    await page.waitForFunction(
+      () => {
+        const pop = document.querySelector('.popover');
+        return pop && !pop.hidden && (pop.textContent ?? '').length > 0;
+      },
+      null,
+      { timeout: 10000 },
+    );
+
+    const popover = await page.evaluate(() => document.querySelector('.popover')?.textContent ?? '');
+    // Latin characters in the popover are the reading. Before this, the "reading"
+    // the source carried was Hangul, so a Hangul-only assertion would have passed
+    // against the broken state, the same trap as the kana-only Japanese screenshot.
+    check('the popover carries a Latin reading, not the Hangul respelling', /[a-z]{2,}/i.test(popover), true);
+    console.log(`        popover: ${popover}`);
+  }
+
+  section('a token with no dictionary entry still gets a reading');
+
+  {
+    // **The measurement this whole feature exists for.** In realistic Korean
+    // subtitles, 38% of on-screen tokens have no dictionary entry: particles and
+    // verb endings. They are real words a learner cannot read, and before this they
+    // got nothing at all.
+    //
+    // The fixture is deliberately full of them: 는, 를, 가, 입니다.
+    const korean = {
+      languageCode: 'ko',
+      name: '한국어',
+      segments: [{ start: 0, duration: 3, text: '저는 학생 입니다' }],
+    };
+
+    await routeYouTube(context, { videoId: 'korean03', title: 'Coverage', tracks: [korean] });
+    const watch = await openWatchPage(context, 'korean03');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 1, { text: '저는' });
+    await page.waitForFunction(() => document.querySelectorAll('.row .primary rt').length > 0, null, { timeout: 20000 });
+
+    const shape = await page.evaluate(() => {
+      const rt = [...document.querySelectorAll('.row .primary rt')].map((r) => r.textContent);
+      // Which words are marked is separate from which have a reading: a particle is
+      // readable and not clickable, which is the design.
+      const bases = [...document.querySelectorAll('.row .primary ruby')].map((r) => {
+        const base = r.firstChild?.textContent ?? '';
+        const reading = r.querySelector('rt')?.textContent ?? '';
+        return `${base}=${reading}`;
+      });
+      return { rt, bases, marks: document.querySelectorAll('.row .primary .mark').length };
+    });
+
+    // `저` and `학생` are dictionary words. `는` and `니다` are not, and this is the
+    // assertion that they are annotated anyway.
+    check('every rendering is annotated, including the words with no entry', shape.bases.length > 3, true);
+    check('the particle 는 carries a reading', shape.bases.some((b) => b.startsWith('는=')), true);
+    check('and it is romaja', shape.bases.find((b) => b.startsWith('는=')), '는=neun');
+    console.log(`        ${shape.bases.join('  ')}`);
+  }
+
+  section('the Korean reading control switches between the Romanization forms');
+
+  {
+    // The two forms differ on about 16% of words, so a control that did nothing
+    // would look correct on most of the page. 종로 is the named case: `jongno` said
+    // aloud against `jongro` as written, and it is in the fixture above.
+    const korean = {
+      languageCode: 'ko',
+      name: '한국어',
+      segments: [{ start: 0, duration: 3, text: '종로 에서 신라 를 만나다' }],
+    };
+
+    await routeYouTube(context, { videoId: 'korean02', title: 'Romanize', tracks: [korean] });
+    const watch = await openWatchPage(context, 'korean02');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 1, { text: '종로' });
+
+    // Readings render inside `<rt>`, the annotation element, so reading them from
+    // there is what a person sees above the word.
+    const readings = () =>
+      page.evaluate(() => [...document.querySelectorAll('.row .primary rt')].map((r) => r.textContent));
+
+    // The default is the pronunciation form. Wait for both rows to be marked and
+    // annotated before reading, for the same reason as the section above: the
+    // transcript arrives before the dictionary does.
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.row .primary rt')].some((r) => r.textContent === 'jongno'),
+      null,
+      { timeout: 20000 },
+    );
+    const sound = await readings();
+    check('the pronunciation form is the default', sound.includes('jongno'), true);
+    check('and 신라 reads silla', sound.includes('silla'), true);
+
+    // Switch to the spelling form through the control the panel actually wires.
+    //
+    // Found by its aria-label, because the settings controls carry no id: they are
+    // built from the registry, so the label IS the stable handle, and an id would
+    // be a second name for the same thing that could drift from it.
+    //
+    // Dispatched rather than clicked, for the same reason as the translation
+    // checkbox above: the panel re-renders on every state push, so Playwright's
+    // click-confirm races the rebuild and reports "did not change its state" while
+    // the control works.
+    const switched = await page.evaluate(() => {
+      const select = [...document.querySelectorAll('select')]
+        .find((s) => s.getAttribute('aria-label') === 'Korean reading');
+      if (!select) return false;
+      select.value = 'spelling';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    });
+    check('the Korean reading control is in the settings view', switched, true);
+
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.row .primary rt')].some((r) => r.textContent === 'jongro'),
+      null,
+      { timeout: 20000 },
+    );
+
+    const spelling = await readings();
+    check('the spelling form reads jongro', spelling.includes('jongro'), true);
+    check('and sinra', spelling.includes('sinra'), true);
+    // The other words are unaffected, which is the point of storing the alternate
+    // only where it differs: the control must not churn the whole page.
+    check('words whose forms agree are unchanged', spelling.includes('eseo'), true);
+
+    // And the compound: a token with NO dictionary entry still gets a reading in the
+    // spelling form, computed from its syllables. `를` is the particle here.
+    check('a wordless token is still annotated', spelling.some((r) => r === 'reul'), true);
+  }
+
+  section('Japanese can show romaji, which it could not before');
+
+  {
+    // **The gap this closes was invisible.** The dictionary holds kana, so the
+    // "reading" of a kana-only word was the word itself: `とても -> とても`, the same
+    // string twice. It looked like a working annotation and was useless to anyone
+    // who cannot yet read kana, which is exactly the person a reading is for.
+    //
+    // とても is in the fixture on purpose. It is the case that makes the bug visible,
+    // since a kanji-only fixture would have looked perfectly correct.
+    const japanese = {
+      languageCode: 'ja',
+      name: '日本語',
+      segments: [{ start: 0, duration: 3, text: 'とても 難しい です' }],
+    };
+
+    await routeYouTube(context, { videoId: 'japanese02', title: 'Romaji', tracks: [japanese] });
+    const watch = await openWatchPage(context, 'japanese02');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 1, { text: 'とても' });
+    await page.waitForFunction(() => document.querySelectorAll('.row .primary rt').length > 0, null, { timeout: 20000 });
+
+    const readings = () =>
+      page.evaluate(() => [...document.querySelectorAll('.row .primary rt')].map((r) => r.textContent));
+
+    // Kana is the default, and that is a real choice rather than a placeholder: a
+    // learner who reads kana wants the kana.
+    const kana = await readings();
+    check('kana is the default', kana.includes('とても'), true);
+
+    // Switch to romaji through the control the panel wires.
+    const switched = await page.evaluate(() => {
+      const select = [...document.querySelectorAll('select')]
+        .find((s) => s.getAttribute('aria-label') === 'Japanese reading');
+      if (!select) return false;
+      select.value = 'romaji';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    });
+    check('the Japanese reading control is in the settings view', switched, true);
+
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('.row .primary rt')].some((r) => r.textContent === 'totemo'),
+      null,
+      { timeout: 20000 },
+    );
+
+    const romaji = await readings();
+    check('and romaji is the useful reading for a kana word', romaji.includes('totemo'), true);
+    // `難しい` is kanji, so its reading comes from the dictionary and is CONVERTED,
+    // which is what makes romaji work for a mixed line rather than only for kana.
+    check('a kanji word is converted too', romaji.some((r) => /^[a-z]+$/.test(r)), true);
+    console.log(`        kana: ${kana.join(' ')}  |  romaji: ${romaji.join(' ')}`);
+  }
+
   section('a gap between lines stays highlighted, and the panel scrolls to it on load');
 
   {

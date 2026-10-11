@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "A Chinese and Japanese dictionary for video: unknown words marked in the subtitles, meanings on hover.",
+  "description": "A Chinese, Japanese and Korean dictionary for video: unknown words marked in the subtitles, meanings on hover.",
   "license": "MIT",
   "engines": {
     "node": ">=22"
@@ -13,6 +13,10 @@
     "conformance:fetch": "node tools/fetch-conformance.mjs",
     "derive-synthetic": "node tools/derive-synthetic.mjs",
     "fixtures": "node tools/mkv-fixtures.mjs",
+    "wordlists:fetch": "node tools/fetch-wordlists.mjs",
+    "wordlists:build": "node tools/build-wordlist.mjs",
+    "wordlists:check": "node tools/check-wordlists.mjs",
+    "readings:build": "node tools/build-readings.mjs",
     "icons": "node tools/make-icons.mjs",
     "ui": "vite --config tools/ui/vite.config.mjs",
     "package": "make release",
@@ -26,8 +30,11 @@
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
+    "hepburn": "^1.3.0",
+    "koroman": "^1.0.16",
     "mediabunny": "^1.61.3",
     "playwright": "^1.63.0",
-    "vite": "^8.3.3"
+    "vite": "^8.3.3",
+    "wanakana": "^5.3.1"
   }
 }

@@ -106,7 +106,7 @@ export function listForLanguage(lists, languageCode) {
  * @param {object} dictionary
  * @param {object|undefined} list
  * @param {number} threshold
- * @param {boolean} [withReading] Attach `reading` and `traditional`.
+ * @param {boolean} [withReading] Attach the reading forms.
  * @returns {Array<{text: string, defined: boolean, level: number|null,
  *   reading?: string|null, traditional?: string|null}>}
  */
@@ -143,6 +143,12 @@ export function markLine(tokens, dictionary, list, threshold, withReading = fals
  * before readings existed when the setting is off, which means nobody who has not
  * asked for this pays for it.
  *
+ * **It carries the forms, it does not choose between them.** Which script a reading
+ * is drawn in is a presentation choice, decided at render time in `marks.js`, so a
+ * script change is a repaint rather than a re-mark. Choosing here instead would put
+ * the choice in the worker, which is what made the Korean reading control require a
+ * cache key it did not have.
+ *
  * @param {boolean} defined
  * @param {boolean} withReading
  * @param {object} dictionary
@@ -150,11 +156,18 @@ export function markLine(tokens, dictionary, list, threshold, withReading = fals
  */
 export function annotations(defined, withReading, dictionary, text) {
   if (!withReading || !defined) return {};
+
+  const entry = lookup(dictionary, text);
   return {
+    // The primary reading, which is what every language shows by default.
     reading: readingOf(dictionary, text),
-    // The other script's form, used by the script-conversion display. Kept
-    // alongside the reading because both come from the same entry and looking it up
-    // twice would be a second lookup for no reason.
+    // The alternate romanization form, which only Korean has: 종로 is `jongno` said
+    // aloud and `jongro` as written. Null for the other two.
+    alternate: entry?.pr || null,
+    // The source's own Hangul respelling, only Korean. Kept because it is the
+    // source's data and shows the sound changes, but not drawn as the default.
+    respelling: entry?.s || null,
+    // The other script's form, used by the script-conversion display.
     traditional: traditionalOf(dictionary, text),
   };
 }
