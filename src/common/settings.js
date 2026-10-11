@@ -250,6 +250,32 @@ export const SETTINGS = [
     coerce: (value) => (TONE_OPTIONS.some((o) => o.value === value) ? value : 'marks'),
   },
   {
+    // How a KOREAN reading is written, and it is the same kind of choice as
+    // `toneStyle`: a property of the reading, not of where it goes.
+    //
+    // Romanization has two modes and they answer different questions. The sound
+    // form says how a word is SAID; the spelling form says how it is WRITTEN, and
+    // is the one that converts back to Hangul. They differ on about 16% of words,
+    // 종로 being `Jongno` against `Jongro`, so this is a real choice rather than
+    // two names for one thing.
+    //
+    // Sound by default, because that is what a dictionary prints as a reading and
+    // what all 25 examples in the National Institute of Korean Language's standard
+    // use. Chinese and Japanese have no such pair, so this setting has no effect on
+    // them.
+    id: 'koreanReading',
+    audience: ['panel', 'viewer'],
+    label: 'Korean reading',
+    group: 'reading',
+    type: 'select',
+    options: [
+      { value: 'sound', label: 'Pronunciation (Jongno)' },
+      { value: 'spelling', label: 'Spelling (Jongro)' },
+    ],
+    default: 'sound',
+    coerce: (value) => (value === 'spelling' ? 'spelling' : 'sound'),
+  },
+  {
     // Whether to rewrite Chinese subtitles between scripts.
     //
     // **Wired but not exposed, and I would argue against shipping it.** The

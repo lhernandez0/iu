@@ -76,8 +76,65 @@ const jaEn = {
   ],
 };
 
+/**
+ * A Korean track, written here because the corpus has none.
+ *
+ * Same convention as the Japanese one: hand-written text in real shapes, so the
+ * Korean path can be previewed at all. Every word is checked against the shipped
+ * dictionary, so the marks are real rather than decorative.
+ *
+ * The cues are chosen to exercise what is specific to Korean:
+ *
+ *   - **Hangul had to be added to the segmenter** before any of this could mark,
+ *     and Korean is space-separated, which the longest-match walk handles because a
+ *     space breaks a run.
+ *   - **The reading is generated at build time**, not read from the source. The
+ *     source's `pronunciation` field is a Hangul respelling (학생 -> 학쌩), which is
+ *     no use to someone who cannot yet read Hangul, so it is kept aside and a real
+ *     Revised Romanization is produced instead.
+ *   - **The two romanization forms differ on some of these words**, which is the
+ *     point of the Korean reading control: 종로 is `jongno` as a pronunciation and
+ *     `jongro` as a spelling, 신라 is `silla` against `sinra`, 한국어 `hangugeo`
+ *     against `hangukeo`.
+ */
+const ko = {
+  languageCode: 'ko',
+  name: 'Korean',
+  kind: null,
+  isTranslatable: true,
+  segments: [
+    { start: 0, duration: 2.4, text: '저는 학생 입니다.' },
+    { start: 2.4, duration: 2.8, text: '한국어 를 공부 합니다.' },
+    { start: 5.2, duration: 2.6, text: '오늘 날씨 가 좋습니다.' },
+    { start: 7.8, duration: 2.4, text: '종로 에서 신라 를 만나다.' },
+    { start: 10.2, duration: 2.6, text: '친구 와 학교 에 갑니다.' },
+  ],
+};
+
+/** English for the Korean track, aligned cue-for-cue. */
+const koEn = {
+  languageCode: 'en',
+  name: 'English',
+  kind: null,
+  isTranslatable: false,
+  segments: [
+    { start: 0, duration: 2.4, text: 'I am a student.' },
+    { start: 2.4, duration: 2.8, text: 'I study Korean.' },
+    { start: 5.2, duration: 2.6, text: 'The weather is nice today.' },
+    { start: 7.8, duration: 2.4, text: 'Meet Silla at Jongno.' },
+    { start: 10.2, duration: 2.6, text: 'I go to school with a friend.' },
+  ],
+};
+
 /** Everything the preview can render, in the order the switcher shows them. */
 export const SCENARIOS = [
+  {
+    id: 'korean',
+    label: 'Korean',
+    note: 'NIKL, with romanized readings over the words. Korean is the third language: Hangul had to be added to the segmenter before any of this could mark, and the readings are Romanization generated at build time, not the Hangul respelling the source carries. The Korean reading control switches between the pronunciation form (종로 -> jongno) and the spelling form (종로 -> jongro), which differ on about 16% of words.',
+    tracks: [ko, koEn],
+    settings: { studyLanguage: 'ko', glossLanguage: 'en', listId: 'nikl' },
+  },
   {
     id: 'bilingual',
     label: 'Two languages',

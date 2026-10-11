@@ -48,9 +48,8 @@ injected on demand, so there is nothing to reload.
   or NIKL or Yonsei for Korean, and the level you are working at. Words at or above
   it are underlined in a colour for their level; words you know are left plain.
 - **Defines any word on hover.** Reading and meaning. Chinese shows pinyin,
-  Japanese shows kana, Korean shows a pronunciation where the source has one. A
-  word shows every list that places it, HSK 2.0 and HSK 3.0 frequently disagree,
-  and both are shown.
+  Japanese shows kana, Korean shows Romanization. A word shows every list that
+  places it, HSK 2.0 and HSK 3.0 frequently disagree, and both are shown.
 - **Shows two subtitle tracks at once.** The language you are learning with a
   second line beneath it. Either line can be a machine translation where the video
   offers one; translated lines are tagged so they are not mistaken for a real
@@ -140,6 +139,12 @@ offered, but only the course source glosses what it holds, so **about half of
 Korean words have no definition yet**. Those words still mark, and the hover says
 so. See the known limitations below.
 
+Korean readings are **Romanization**, generated at build time rather than copied
+from the source, because the definition source's pronunciation field is written in
+Hangul and so is no help to someone who cannot yet read Hangul. The **Korean
+reading** setting switches between the pronunciation form (종로 as `jongno`) and the
+spelling form (종로 as `jongro`).
+
 ## Development
 
 ```bash
@@ -147,6 +152,10 @@ npm test               # hermetic suites, no browser, no network
 npm run test:browser   # real Chromium, fixture pages
 npm run ui             # Vite preview of the side panel, for layout work
 ```
+
+The dictionaries are generated and committed. `npm run wordlists:check` fetches the
+pinned sources, rebuilds, and fails on any difference, which is what catches a data
+file that was edited by hand, and it runs in CI.
 
 There are no runtime dependencies and no build step: the repository is the
 extension. The one generated file, `src/vendor/mediabunny.js`, is committed, so

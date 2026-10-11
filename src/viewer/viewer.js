@@ -294,7 +294,7 @@ function markSegments() {
       // output goes straight to `markLine` with nothing rewritten in between.
       cue.tokens = segment(cue.text, dictionary.headwords, dictionary.maxWordLength);
     }
-    cue.marked = markLine(cue.tokens, dictionary, list, thresholdFor(list), withReading);
+    cue.marked = markLine(cue.tokens, dictionary, list, thresholdFor(list), withReading, settings.koreanReading);
   }
 
   renderCaptions(activeIndex());

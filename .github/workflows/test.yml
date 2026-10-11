@@ -49,6 +49,28 @@ jobs:
 
       - run: npm test
 
+  # The committed dictionaries, rebuilt from the revisions they name and compared
+  # byte for byte.
+  #
+  # This is a separate job because it is the only one that reaches outside the
+  # repository, and because its failure means something different from a test
+  # failing: it means a data file cannot be reproduced, so its provenance claim is
+  # untrue. `japanese.json` shipped with two glosses no JMdict release contains,
+  # because a copy-edit swept across it, and every other check passed. This is what
+  # catches that.
+  wordlists:
+    name: wordlists
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+
+      - run: npm run wordlists:check
+
   browser:
     name: browser
     runs-on: ubuntu-latest

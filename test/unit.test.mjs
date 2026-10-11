@@ -257,6 +257,7 @@ section('the video settings');
       'defaultSpeed',
       'difficulty',
       'glossLanguage',
+      'koreanReading',
       'listId',
       'markStyle',
       'rememberPosition',

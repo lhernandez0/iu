@@ -704,6 +704,120 @@ section('the Korean join is what it is, measured and not hoped');
   check('more than half the words have a definition', ratio > 0.45 && ratio < 0.6, true);
   check('and joined words are a real subset', withDefinition.length > 0, true);
 }
+
+// --- Korean readings: Romanization, checked against the standard -------------
+
+section('the Korean readings are Romanization, and they match the published standard');
+
+{
+  // The 25 examples the National Institute of Korean Language publishes in the
+  // Revised Romanization standard ITSELF, as the worked cases for the rules. Using
+  // the standard's own list rather than examples of our own is the difference
+  // between testing that the romanizer is self-consistent and testing that it is
+  // RIGHT: it is what catches 백마 -> baekma (a character map) against baengma (the
+  // nasal assimilation rule).
+  //
+  // The expected strings are the standard's, lowercased because the data stores
+  // lowercase and an initial capital is a naming convention rather than part of the
+  // romanization.
+  const OFFICIAL = [
+    ['구미', 'gumi'], ['영동', 'yeongdong'], ['백암', 'baegam'], ['옥천', 'okcheon'],
+    ['합덕', 'hapdeok'], ['호법', 'hobeop'], ['월곶', 'wolgot'], ['벚꽃', 'beotkkot'],
+    ['한밭', 'hanbat'], ['구리', 'guri'], ['설악', 'seorak'], ['칠곡', 'chilgok'],
+    ['임실', 'imsil'], ['울릉', 'ulleung'], ['대관령', 'daegwallyeong'],
+    ['백마', 'baengma'], ['신문로', 'sinmunno'], ['종로', 'jongno'],
+    ['왕십리', 'wangsimni'], ['별내', 'byeollae'], ['신라', 'silla'],
+    ['학여울', 'hangnyeoul'], ['해돋이', 'haedoji'], ['같이', 'gachi'],
+    ['굳히다', 'guchida'],
+  ];
+
+  // **Tested against the ROMANIZER, not only against the data.** The standard
+  // draws its examples from place names, and only 5 of the 25 are vocabulary we
+  // ship (벚꽃, 종로, 신라, 같이, 굳히다). Asserting through the data alone would
+  // therefore check a fifth of the rules and quietly pass on the other twenty,
+  // including every one that exercises assimilation.
+  const { romanize } = await import('koroman');
+  const wrong = [];
+  for (const [word, expected] of OFFICIAL) {
+    const got = romanize(word);
+    if (got !== expected) wrong.push(`${word}: got "${got}", standard says "${expected}"`);
+  }
+  check('the romanizer reproduces all 25 examples in the standard', wrong, []);
+
+  // And some of those ARE shipped vocabulary, so the build is connected to the
+  // romanizer rather than the two merely existing side by side. Without this, a
+  // build that stopped calling it would still pass the check above.
+  const inData = OFFICIAL.filter(([word]) => word in korean.words);
+  check('some of the standard\'s examples are shipped vocabulary', inData.length >= 5, true);
+  const mismatched = inData.filter(([word, expected]) => korean.words[word].p !== expected);
+  check('and they carry the romanization in the data', mismatched.map(([w]) => w), []);
+}
+
+section('the Korean reading replaced a respelling that was not a reading');
+
+{
+  const words = Object.keys(korean.words);
+
+  // Coverage is the point of generating the reading rather than copying one. The
+  // source only fills its pronunciation field on a fraction of rows, and it is not
+  // filled at all for the graded word list, so before this the reading existed on
+  // about a fifth of words.
+  const withReading = words.filter((w) => korean.words[w].p);
+  check('every Korean word has a reading', withReading.length, words.length);
+
+  // Every reading is Latin. The source's field held Hangul, which is what made it
+  // useless as a reading: a learner who cannot yet read Hangul cannot use a Hangul
+  // respelling. Asserted over the whole corpus rather than a sample, because a
+  // single non-Latin reading would render as a second copy of the word.
+  const nonLatin = words.filter((w) => /[\uac00-\ud7a3]/u.test(korean.words[w].p));
+  check('no reading is left in Hangul', nonLatin.slice(0, 5), []);
+
+  // The source's respelling is KEPT, in its own field, because it is the source's
+  // data and it carries the vowel length and the actual sound changes. It is just
+  // not what the reading control draws.
+  const withRespell = words.filter((w) => korean.words[w].s);
+  check('the source respelling is kept rather than discarded', withRespell.length > 1000, true);
+  // And where it exists it is Hangul, which is the property that made it unusable
+  // as a reading and is the reason for the separate field.
+  const badRespell = withRespell.filter((w) => !/[\uac00-\ud7a3]/u.test(korean.words[w].s));
+  check('and it is Hangul, which is why it is not the reading', badRespell.slice(0, 5), []);
+}
+
+section('the two romanization forms are stored without storing the same string twice');
+
+{
+  const words = Object.keys(korean.words);
+  const alternate = words.filter((w) => korean.words[w].pr);
+
+  // The alternate form exists ONLY where it differs, which is the point: storing
+  // both on every word would double the reading for no gain, since most words
+  // romanize the same either way.
+  const identical = alternate.filter((w) => korean.words[w].pr === korean.words[w].p);
+  check('the alternate form is never a duplicate of the primary', identical.slice(0, 5), []);
+
+  // It is a real minority, which is what makes the "only where it differs" storage
+  // worth the branch. If this ever rose toward every word, the delta is no longer a
+  // saving and the shape should be revisited.
+  check('and it is a minority of words', alternate.length > 0 && alternate.length < words.length / 2, true);
+
+  // Both forms are Latin. The entry key can be a phrase (`하십니까?`), a pair
+  // (`을/를`) or a parenthesised gloss (`월(월요일)`), so punctuation is expected and
+  // is carried through; what must NOT appear is Hangul, which would mean the
+  // romanizer was bypassed for that word.
+  const badForm = alternate.filter((w) => /[\uac00-\ud7a3]/u.test(korean.words[w].pr));
+  check('no alternate form is left in Hangul', badForm.slice(0, 5), []);
+
+  // A worked case, named because it is the one every guide uses: 종로 is `jongno`
+  // said aloud and `jongro` as written, the ㄹ+ㄴ assimilation being exactly the
+  // difference the two modes disagree about.
+  check('종로 is jongno as a pronunciation', korean.words['종로']?.p, 'jongno');
+  check('and jongro as a spelling', korean.words['종로']?.pr, 'jongro');
+  // 신라 is the other one guides use, and it is a different rule (ㄴ+ㄹ
+  // lateralisation), so the two together cover more than either alone.
+  check('신라 is silla as a pronunciation', korean.words['신라']?.p, 'silla');
+  check('and sinra as a spelling', korean.words['신라']?.pr, 'sinra');
+}
+
 // --- Result ------------------------------------------------------------------
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

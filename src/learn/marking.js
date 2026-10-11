@@ -12,7 +12,7 @@
  * `chrome.*`, the DOM, or settings storage.
  */
 
-import { lookup, levelOf, readingOf, traditionalOf } from './wordlist.js';
+import { lookup, levelOf, readingOf, alternateReadingOf, traditionalOf } from './wordlist.js';
 
 /**
  * Whether a word list can grade a language at all.
@@ -107,10 +107,11 @@ export function listForLanguage(lists, languageCode) {
  * @param {object|undefined} list
  * @param {number} threshold
  * @param {boolean} [withReading] Attach `reading` and `traditional`.
+ * @param {string} [koreanReading] `sound` or `spelling`; only Korean is affected.
  * @returns {Array<{text: string, defined: boolean, level: number|null,
  *   reading?: string|null, traditional?: string|null}>}
  */
-export function markLine(tokens, dictionary, list, threshold, withReading = false) {
+export function markLine(tokens, dictionary, list, threshold, withReading = false, koreanReading = 'sound') {
   return tokens.map((token) => {
     // Only words we hold a definition for are worth making interactive. An unknown
     // token has nothing to show, so it stays plain text.
@@ -121,7 +122,7 @@ export function markLine(tokens, dictionary, list, threshold, withReading = fals
         text: token.text,
         defined,
         level: null,
-        ...annotations(defined, withReading, dictionary, token.text),
+        ...annotations(defined, withReading, dictionary, token.text, koreanReading),
       };
     }
 
@@ -131,7 +132,7 @@ export function markLine(tokens, dictionary, list, threshold, withReading = fals
       text: token.text,
       defined,
       level: marked ? level : null,
-      ...annotations(defined, withReading, dictionary, token.text),
+      ...annotations(defined, withReading, dictionary, token.text, koreanReading),
     };
   });
 }
@@ -147,11 +148,18 @@ export function markLine(tokens, dictionary, list, threshold, withReading = fals
  * @param {boolean} withReading
  * @param {object} dictionary
  * @param {string} text
+ * @param {string} [koreanReading] `sound` (default) or `spelling`. Only Korean has
+ *   two romanization forms; for the other two languages this changes nothing,
+ *   because `alternateReadingOf` returns null and the primary reading stands.
  */
-export function annotations(defined, withReading, dictionary, text) {
+export function annotations(defined, withReading, dictionary, text, koreanReading = 'sound') {
   if (!withReading || !defined) return {};
+
+  // The alternate form ONLY where one exists, so a reader who has not asked for it
+  // pays nothing and the other languages are untouched.
+  const alternate = koreanReading === 'spelling' ? alternateReadingOf(dictionary, text) : null;
   return {
-    reading: readingOf(dictionary, text),
+    reading: alternate ?? readingOf(dictionary, text),
     // The other script's form, used by the script-conversion display. Kept
     // alongside the reading because both come from the same entry and looking it up
     // twice would be a second lookup for no reason.

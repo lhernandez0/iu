@@ -81,22 +81,31 @@
  *     is no "the source" to hang a scalar on.
  */
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { romanize } from 'koroman';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = resolve(here, '../src/learn/data');
-const CHINESE_OUT = join(DATA_DIR, 'chinese.json');
-const JAPANESE_OUT = join(DATA_DIR, 'japanese.json');
-const KOREAN_OUT = join(DATA_DIR, 'korean.json');
-const INDEX_OUT = join(DATA_DIR, 'index.json');
 
 /** @param {string} flag @returns {string|null} */
 function arg(flag) {
   const i = process.argv.indexOf(flag);
   return i === -1 ? null : (process.argv[i + 1] ?? null);
 }
+
+/**
+ * Where the built files go.
+ *
+ * Overridable because the verification script rebuilds into a scratch directory
+ * and compares: a check that verified the committed data by OVERWRITING it would
+ * destroy the evidence exactly when it found the problem it exists to find.
+ */
+const OUT_DIR = arg('--out') ? resolve(arg('--out')) : resolve(here, '../src/learn/data');
+const CHINESE_OUT = join(OUT_DIR, 'chinese.json');
+const JAPANESE_OUT = join(OUT_DIR, 'japanese.json');
+const KOREAN_OUT = join(OUT_DIR, 'korean.json');
+const INDEX_OUT = join(OUT_DIR, 'index.json');
 
 const zhSource = arg('--zh');
 const jaSource = arg('--ja');
@@ -109,6 +118,8 @@ if (!zhSource && !jaSource && !koSource) {
   console.error('       node tools/build-wordlist.mjs --ja <jmdict.json> --jlpt <dir>');
   console.error('       node tools/build-wordlist.mjs --ko <results.tsv> --ko-yonsei <dir>');
   console.error('       node tools/build-wordlist.mjs --zh … --ja … --jlpt … --ko … --ko-yonsei …   (all)');
+  console.error('');
+  console.error('  --out <dir>   write there instead of src/learn/data, for verification runs');
   process.exit(1);
 }
 if (jaSource && !jlptDir) {
@@ -677,6 +688,63 @@ async function readYonsei(dir) {
 }
 
 /**
+ * A Korean entry, with the reading derived rather than copied.
+ *
+ * ## Why the reading is computed and not taken from the source
+ *
+ * The definition source carries a `pronunciation` field, and it is NOT a reading
+ * in the sense the other two languages use. For Chinese `p` is pinyin and for
+ * Japanese it is kana: both are written in a DIFFERENT script from the word, so a
+ * learner who cannot yet read the script can use them. The Korean field is a Hangul
+ * respelling (가깝다 -> 가깝따, 한국 -> 한ː국) which shows the sound changes but stays
+ * in Hangul, so it is only useful to someone who already reads Hangul, which is the
+ * person who needs it least. It is kept as-is in `s`, for reference.
+ *
+ * `p` is therefore generated with `koroman`, an MIT implementation of the
+ * National Institute of Korean Language's Revised Romanization, including the
+ * sound-change rules. It matches all 25 of the standard's own published examples,
+ * and a naive character-mapping romanizer matches only 11 of them, because Revised
+ * Romanization is a set of rules and not a character map.
+ *
+ * The WORD is the input, never the respelling. The library applies the sound rules
+ * itself, so feeding it an already-rewritten spelling applies them twice: 학생
+ * romanizes to `haksaeng`, while its respelling 학쌩 romanizes to `hakssaeng`.
+ *
+ * ## The two forms, and why both are stored
+ *
+ * Romanization has two modes and they are different questions:
+ *
+ *   transcription (sound)      종로 -> `Jongno`   how it is SAID
+ *   transliteration (spelling) 종로 -> `Jongro`   how it is WRITTEN, reversible
+ *
+ * `p` holds the sound form, which is what a dictionary prints and what every one of
+ * the standard's examples uses. `pr` holds the spelling form and is written ONLY
+ * where the two differ, which is 1,206 of 7,738 words, so a viewer that wants the
+ * other form reads `pr ?? p` with no second lookup and no second copy of the string.
+ *
+ * @param {string} word
+ * @param {string} meaning
+ * @param {string} pos
+ * @param {string} respelling  The source's Hangul pronunciation, kept in `s`.
+ * @returns {{p: string, s: string, m: string, t: string, pos: string, pr?: string}}
+ */
+function newKoreanEntry(word, meaning, pos, respelling) {
+  const sound = romanize(word);
+  const spelling = romanize(word, { usePronunciationRules: false });
+  return {
+    p: sound,
+    // The source's own Hangul respelling. Not drawn as a reading; kept because it
+    // is the source's data and dropping it would discard information for free.
+    s: respelling,
+    m: meaning,
+    // Unused, as for Japanese. Korean has no second script for a word.
+    t: '',
+    pos,
+    ...(spelling !== sound ? { pr: spelling } : {}),
+  };
+}
+
+/**
  * Korean: NIKL levels and Yonsei course levels, with definitions from Yonsei.
  *
  * TWO sources, two lists, and they are complementary rather than redundant.
@@ -761,13 +829,7 @@ async function buildKorean(sourcePath, yonseiDirPath) {
       // non-answer next to a real gloss, and it is not used. The meaning comes
       // from the definition source, where there is one.
       const d = yonsei.get(word);
-      words[word] = {
-        p: d?.p ?? '',
-        m: d?.m ?? '',
-        // Unused, as for Japanese. Korean has no second script for a word.
-        t: '',
-        pos: partOfSpeech || d?.pos || '',
-      };
+      words[word] = newKoreanEntry(word, d?.m ?? '', partOfSpeech || d?.pos || '', d?.p ?? '');
     }
   }
 
@@ -780,13 +842,13 @@ async function buildKorean(sourcePath, yonseiDirPath) {
       // it. Fill the gap rather than replacing the entry, so the part of speech
       // from the level list is kept when it exists.
       if (!words[word].m) words[word].m = d.m;
-      if (!words[word].p) words[word].p = d.p;
+      if (!words[word].s) words[word].s = d.p;
       if (!words[word].pos) words[word].pos = d.pos;
       continue;
     }
     // A course word the graded list does not place. It ships with a definition and
     // a course level, which is the whole point of adding this source.
-    words[word] = { p: d.p, m: d.m, t: '', pos: d.pos };
+    words[word] = newKoreanEntry(word, d.m, d.pos, d.p);
   }
 
   const total = Object.keys(words).length;
@@ -852,8 +914,13 @@ async function writeIndex(lists) {
 
   const index = {
     meta: {
+      // NO `generatedAt`. There was one, and it was the only reason this file
+      // could not reproduce: a timestamp changes on every run, so a byte
+      // comparison against the committed copy always failed and `check-wordlists`
+      // could not exist. Nothing read it, and a build date is not provenance.
+      // The source revisions are pinned in each dictionary's `meta.sources`,
+      // which is where a reader should look for when this data came from.
       note: 'Generated by tools/build-wordlist.mjs. Maps lists to the dictionary holding their words.',
-      generatedAt: new Date().toISOString(),
     },
     dictionaries,
     lists: lists.map((list) => ({ ...list, dictionary: list.language })),
@@ -867,6 +934,10 @@ async function writeIndex(lists) {
 // --- Run ---------------------------------------------------------------------
 
 const collected = [];
+
+// Created up front so `--out` can point at a directory that does not exist yet,
+// which is how the verification script gets a clean scratch space.
+await mkdir(OUT_DIR, { recursive: true });
 
 if (zhSource) collected.push(...(await buildChinese(zhSource)));
 if (jaSource) collected.push(...(await buildJapanese(jaSource, jlptDir)));

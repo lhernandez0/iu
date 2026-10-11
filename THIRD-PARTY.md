@@ -290,6 +290,7 @@ file, the vendored bundle documented in the next section, and nothing else.
 | `playwright` | Apache-2.0 | Browser test tier and icon rasterising |
 | `vite` | MIT | The side-panel design preview only |
 | `esbuild` | MIT | Bundles `src/vendor/mediabunny.js`; not shipped |
+| `koroman` | MIT | Korean Romanization, run by `tools/build-wordlist.mjs`; not shipped |
 | `lightningcss`, `lightningcss-linux-x64-gnu` | **MPL-2.0** | Pulled in transitively by Vite |
 
 The two MPL-2.0 packages are the only non-permissive licences in the dependency
@@ -297,6 +298,24 @@ tree. MPL-2.0 is file-level copyleft: it obliges publishing changes to *its* fil
 and imposes nothing on this project. It is not a concern here because they are
 development-only, never bundled, and unmodified. Recorded so that the next person
 does not have to rediscover it.
+
+**`koroman` is why the Korean readings are generated rather than copied.**
+`src/learn/data/korean.json` carries a Latin reading for every word, and none of
+that comes from a source: the definition source's `pronunciation` field holds a
+Hangul respelling (`가깝다` -> `가깝따`), which is written in the script the learner
+is trying to learn and so is useless as a reading. `koroman` (MIT, no dependencies)
+implements the National Institute of Korean Language's Revised Romanization,
+including the sound-change rules, and the build runs it over each word to produce
+the reading. It reproduces **all 25 of the examples published in the standard**,
+which `test/learn.test.mjs` asserts directly, because a naive character-mapping
+romanizer reproduces only 11 of them: Revised Romanization is a set of rules, not a
+character map.
+
+It is a **development dependency** and is not shipped. The extension reads the
+finished string, so no romanization code runs in the browser and nothing is added
+to the release ZIP. The second Romanization form (the spelling rather than the
+pronunciation, `종로` as `jongro` against `jongno`) is produced by the same library
+and stored only on the words where it differs.
 
 ## `src/vendor/mediabunny.js`, MPL-2.0, and this attribution is required
 

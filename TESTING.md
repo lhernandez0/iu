@@ -29,7 +29,7 @@ make `npm test` something to avoid, which is the worst outcome available.
 So: the fast tier stays fast and runs constantly, and the slow tier is pulled out
 deliberately.
 
-## Tier 1: hermetic (`npm test`, 1030 checks)
+## Tier 1: hermetic (`npm test`, 1171 checks)
 
 Boots real modules against stubbed browser globals and drives them through their
 message surfaces. No network, no browser, no dependencies, plain Node scripts,
@@ -40,17 +40,28 @@ so they run with nothing installed.
 | `manifest.test.mjs` | nothing | 39 |
 | `unit.test.mjs` | nothing | 104 |
 | `errors.test.mjs` | the error registry | 20 |
-| `learn.test.mjs` | segmenter + word list | 91 |
-| `licence.test.mjs` | the licence files on disk | 49 |
+| `learn.test.mjs` | segmenter + word list | 142 |
+| `licence.test.mjs` | the licence files on disk | 82 |
 | `providers.test.mjs` | the provider seam | 15 |
 | `mkv-container.test.mjs` | the container parser, on generated fixtures | 72 |
 | `viewer.test.mjs` | subtitle parsing, encoding, the viewer's messages | 71 |
 | `marking.test.mjs` | the word-marking renderer | 21 |
-| `service-worker.test.mjs` | worker + `chrome` stub | 256 |
+| `service-worker.test.mjs` | worker + `chrome` stub | 260 |
 | `sidepanel.test.mjs` | panel + DOM stub | 150 |
 | `page-bridge.test.mjs` | bridge + page stub | 50 |
 | `content.test.mjs` | content script | 106 |
 | `history.test.mjs` | the transcript cache | 9 |
+
+One suite is hermetic but is **not** in `npm test`, because it reaches the network:
+`tools/check-wordlists.mjs`, run as `npm run wordlists:check`. It fetches the pinned
+word-list sources, rebuilds every dictionary into a scratch directory, and compares
+bytes with what is committed. A mismatch fails.
+
+That check exists because none of the suites above can see the failure it catches.
+`japanese.json` shipped with two glosses no JMdict release contains, because a
+copy-edit renaming the UI's "reader" to "viewer" swept across the committed data
+file. Every test passed. The file was valid, correctly shaped, and wrong, and the
+only thing that could reveal it was rebuilding from source and comparing.
 
 Each file is spawned as its own process, because they all grab the same globals
 (`chrome`, `document`, the module cache) and a shared process lets one suite's

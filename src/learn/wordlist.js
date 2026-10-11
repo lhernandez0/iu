@@ -289,6 +289,26 @@ export function readingOf(dictionary, word) {
 }
 
 /**
+ * The alternate form of a reading, where the language has one.
+ *
+ * Korean romanization has two modes and they answer different questions:
+ * transcription (종로 -> `jongno`, how it is SAID) and transliteration
+ * (종로 -> `jongro`, how it is WRITTEN). The build stores the sound form in `p`
+ * always and the spelling form in `pr` ONLY where they differ, which is about 16%
+ * of words, so this is a lookup that usually misses and falls back.
+ *
+ * Returns null when there is no alternate, which is every word in Chinese and
+ * Japanese, so the caller does not need to ask what language it is holding.
+ *
+ * @param {Dictionary} dictionary
+ * @param {string} word
+ * @returns {string|null}
+ */
+export function alternateReadingOf(dictionary, word) {
+  return lookup(dictionary, word)?.pr || null;
+}
+
+/**
  * The other script's form of a Chinese word, or null.
  *
  * `t` is the traditional form, carried by every one of the 11,470 entries. There

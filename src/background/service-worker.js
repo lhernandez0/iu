@@ -1620,7 +1620,7 @@ async function applyMarks(entry) {
 
   entry.rows = entry.rows.map((row, index) => ({
     ...row,
-    tokens: markLine(tokensPerLine[index], dictionary, list, threshold, settings.romaji !== 'off'),
+    tokens: markLine(tokensPerLine[index], dictionary, list, threshold, settings.romaji !== 'off', settings.koreanReading),
   }));
   entry.markedWith = wanted;
 

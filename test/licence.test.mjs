@@ -229,6 +229,15 @@ section('attribution is where a person would find it');
 section('the index names every dictionary, and every dictionary declares its provenance');
 
 {
+  // The index must carry NO timestamp. It had a `meta.generatedAt`, and it was the
+  // only reason the file could not be reproduced: a build date changes on every
+  // run, so `tools/check-wordlists.mjs` could not compare bytes and the drift check
+  // it exists for was impossible. Nothing read the field. Asserted as an absence
+  // because it is the kind of thing that gets re-added as "useful metadata".
+  const indexMeta = JSON.parse(readFileSync(join(ROOT, 'src/learn/data/index.json'), 'utf8')).meta ?? {};
+  const stamps = Object.keys(indexMeta).filter((k) => /date|time|generated/i.test(k));
+  check('the index carries no build timestamp', stamps, []);
+
   // With one language the checks below could hardcode chinese.json. With two they
   // have to walk whatever the index declares, or a third language could ship with
   // no licence check at all and nothing would say so.
