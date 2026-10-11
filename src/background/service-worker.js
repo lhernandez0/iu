@@ -1501,6 +1501,11 @@ function rebuildRows(entry) {
   // stored one: crossing languages changes which list is in force without the
   // learner having chosen anything, and a stored id would leave the old tokens
   // looking reusable.
+  //
+  // The reusable-key is redundant here because `applyMarks` below re-checks the
+  // rows against its own key and re-marks when the reading form changed. Kept out
+  // deliberately rather than by omission, so the two keys do not both claim to be
+  // the guard.
   const wanted = `${effectiveListId(entry)}:${effectiveThreshold(entry)}`;
   const reusable = entry.markedWith === wanted;
 
@@ -1562,7 +1567,15 @@ async function applyMarks(entry) {
   // check is on the rows rather than on a remembered flag, because a flag can
   // claim marks that are no longer there, which is precisely how the transcript
   // came back unmarked after a language switch.
-  const wanted = `${effectiveListId(entry)}:${effectiveThreshold(entry)}`;
+  //
+  // `koreanReading` belongs in this key and was the bug that made the control do
+  // nothing. The reading is attached to each TOKEN at marking time, so tokens built
+  // under the other Romanization form are stale, but the key said "same list, same
+  // threshold, nothing to do", this returned early, and the rows kept the old form
+  // however many times the setting changed. Only the browser tier could see it: a
+  // hermetic test calling `markLine` with the new mode directly bypasses this
+  // function entirely.
+  const wanted = `${effectiveListId(entry)}:${effectiveThreshold(entry)}:${settings.koreanReading}`;
   const allMarked = entry.rows.every((row) => Array.isArray(row.tokens));
   if (entry.markedWith === wanted && allMarked) return;
 
@@ -1904,10 +1917,17 @@ api.storage.onChanged.addListener((changes, areaName) => {
   // Rebuild only when something that affects the ROWS moved. A pure presentation
   // change (text size, view mode) is applied by whichever surface made it, and
   // rebuilding here would throw away work for no visible difference.
+  //
+  // `koreanReading` belongs here and was missed when it was added: the readings are
+  // attached to the tokens at marking time, so switching to the other Romanization
+  // form changed nothing on screen until some OTHER setting happened to trigger a
+  // rebuild. Found by the browser test, which is the only tier that could see it,
+  // since a hermetic test calling `markLine` with the new mode directly would pass.
   const affectsRows = previous.listId !== settings.listId
     || previous.threshold !== settings.threshold
     || previous.romaji !== settings.romaji
-    || previous.toneStyle !== settings.toneStyle;
+    || previous.toneStyle !== settings.toneStyle
+    || previous.koreanReading !== settings.koreanReading;
 
   if (affectsRows) {
     if (previous.listId !== settings.listId) {
@@ -2007,10 +2027,17 @@ async function applySetting(id, value) {
 
     case 'romaji':
     case 'toneStyle':
-      // The reading is attached to each TOKEN by `markLine`, and the tone style is
-      // applied when it is drawn, so a change here has to rebuild the rows, not
-      // just repaint them. Without this the setting appeared to do nothing until
-      // the next video, because the tokens already in hand carried the old answer.
+    case 'koreanReading':
+      // The reading is attached to each TOKEN by `markLine`, and the tone style and
+      // the Romanization form are both applied when it is drawn, so a change here
+      // has to rebuild the rows, not just repaint them. Without this the setting
+      // appeared to do nothing until the next video, because the tokens already in
+      // hand carried the old answer.
+      //
+      // `koreanReading` was missed when it was added and fell through to `default`,
+      // so switching to the spelling form changed nothing on screen. Found by the
+      // browser test: a hermetic test calling `markLine` with the new mode directly
+      // passes, because it never goes through this switch at all.
       //
       // Not the same as `view` or `fontSize`, which are pure presentation and are
       // applied by the panel with nothing to send.
