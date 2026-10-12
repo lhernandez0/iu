@@ -296,6 +296,11 @@ The caption fetch is the only request the extension makes outside itself, and a
 test fails the build if another host or transport appears. See
 [`TESTING.md`](TESTING.md#the-privacy-claim-is-a-check-not-a-paragraph).
 
+The extension also ships a small number of third-party files, each named in
+[`THIRD-PARTY.md`](THIRD-PARTY.md) and fixed by hash so the exact bytes can be
+verified. They are local code, not requests: the media decoder is a bundled
+WebAssembly build that runs entirely inside the browser and sends nothing.
+
 ## Known limitations
 
 - **About half of Korean words have no definition yet.** Korean draws on two

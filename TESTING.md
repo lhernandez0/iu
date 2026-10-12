@@ -115,6 +115,13 @@ rather than trusting the prose to stay accurate:
 - **No transport but `fetch`**, `XMLHttpRequest`, `WebSocket`, `EventSource`,
   `sendBeacon`, `importScripts` and `navigator.send` all fail the suite. None is
   used, so an appearance is a new decision rather than a slip.
+  **`src/vendor/` is exempt, and pinned instead.** A compiled third-party library
+  names transports it never calls: libav.js's Emscripten glue contains
+  `XMLHttpRequest` and `importScripts` in dead branches, and they cannot be
+  removed without editing generated code. So for vendored files the rule is
+  stronger, not weaker: the bytes are fixed by sha256 in
+  `tools/libav/hashes.json`, and `manifest.test.mjs` fails if a vendored file
+  naming a transport is not pinned. Our own `src/` keeps the absolute rule.
 - **Every absolute URL host in `src/` is `youtube.com`**, and a host built at
   runtime fails too, because a URL assembled from parts cannot be vouched for.
 - **The `fetch` call sites are a named list.** Two in `wordlist.js`, reading

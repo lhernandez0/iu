@@ -225,14 +225,46 @@ section('shipped source can only reach youtube.com, and only over fetch');
   // 1. No transport other than `fetch`. Each of these can carry data off the
   //    machine, and none is used today, so any appearance is a new decision
   //    rather than an accident.
+  //
+  //    `src/vendor/` is EXEMPT, and the exchange is deliberate rather than a
+  //    loophole. A compiled third-party library carries transports it never
+  //    calls: libav.js's Emscripten glue names `XMLHttpRequest` in its lazy-
+  //    filesystem code and `importScripts` in a worker branch, both dead, and
+  //    neither can be removed without editing generated third-party code. So the
+  //    rule for vendored files changes from "may not CONTAIN a transport" to
+  //    "must be PINNED BY HASH", which is the stronger claim: an exact byte
+  //    budget for a file nobody here wrote, checked in `licence.test.mjs`. Our
+  //    own `src/` keeps the original, absolute rule.
   const FORBIDDEN = /\bXMLHttpRequest\b|\bWebSocket\b|\bEventSource\b|\bsendBeacon\b|\bimportScripts\b|navigator\.send/;
   const transports = [];
   for (const file of sources) {
+    if (relative(ROOT, file).startsWith(join('src', 'vendor'))) continue;
     for (const line of codeLines(readFileSync(file, 'utf8'))) {
       if (FORBIDDEN.test(line)) transports.push(`${relative(ROOT, file)}: ${line.trim()}`);
     }
   }
-  check('no transport but fetch appears in src/', transports, []);
+  check('no transport but fetch appears in OUR src/', transports, []);
+
+  // The other half of that exchange. A vendored file carrying a transport is only
+  // acceptable because its bytes are fixed, so this asserts the pin exists and
+  // covers every vendored file that names one. Removing a hash to silence a
+  // mismatch would fail here rather than quietly widening the exemption.
+  {
+    const vendorDir = join(ROOT, 'src', 'vendor');
+    const hashFile = join(ROOT, 'tools', 'libav', 'hashes.json');
+    const pinned = existsSync(hashFile)
+      ? new Set(Object.keys(JSON.parse(readFileSync(hashFile, 'utf8'))))
+      : new Set();
+    const unpinned = [];
+    if (existsSync(vendorDir)) {
+      for (const name of readdirSync(vendorDir)) {
+        if (name === 'README.md') continue;
+        const text = readFileSync(join(vendorDir, name), 'utf8');
+        if (FORBIDDEN.test(text) && !pinned.has(name)) unpinned.push(name);
+      }
+    }
+    check('every vendored file naming a transport is pinned by hash', unpinned, []);
+  }
 
   // 2. Every absolute URL named in OUR src/ resolves to youtube.com. A URL whose
   //    host is computed cannot be checked, so it fails rather than passing

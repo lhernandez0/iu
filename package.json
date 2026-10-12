@@ -21,6 +21,8 @@
     "pages:build": "node tools/pages/build.mjs",
     "pages:preview": "node tools/pages/build.mjs --force-offer --out build/pages-preview",
     "pages:media": "node tools/pages/fetch-media.mjs",
+    "vendor": "node tools/build-vendor.mjs",
+    "vendor:libav": "node tools/build-libav.mjs",
     "ui": "vite --config tools/ui/vite.config.mjs",
     "package": "make release",
     "test": "node test/run.mjs",

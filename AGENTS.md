@@ -34,7 +34,10 @@ deliberate edit to several files at once, not something to route around:
 - **No `storage.sync`.** Settings live in `storage.local`. The literal string fails
   `test/manifest.test.mjs`.
 - **One external host, `youtube.com`.** No other absolute URL host may appear in
-  `src/`, and no transport but `fetch`.
+  `src/`, and no transport but `fetch`. Both rules cover OUR `src/`; `src/vendor/`
+  is exempt from the hostname and transport scans and is pinned by sha256 instead
+  (`tools/libav/hashes.json`), because a compiled third-party library names
+  transports it never calls.
 - **The permission list is pinned.** A new permission is a deliberate change to
   `manifest.json` and the test together.
 - **Every file in `src/vendor/` must be named in `THIRD-PARTY.md`.**
