@@ -193,7 +193,8 @@ Bypass it with `git commit --no-verify` when it is wrong.
 ### The demo page
 
 ```bash
-npm run pages:build    # -> build/pages, served at 127.0.0.1 with any static server
+npm run ui             # dev server; the demo is at http://127.0.0.1:8099/pages-demo/
+npm run pages:build    # -> build/pages, for a static server or the deploy
 npm run pages:media    # rebuild the committed demo clip from archive.org
 ```
 
@@ -202,13 +203,20 @@ small shim standing in for the `chrome.*` APIs, and `.github/workflows/pages.yml
 publishes it to GitHub Pages on every push to `main`. It is the same viewer people
 install, not a copy, so the page cannot drift from the extension.
 
+**Use `npm run ui` to look at it.** The sample-video offer on the page is gated to a
+`*.github.io` host, because the media only exists on the deployed site, so with a
+plain static server you would never see it. The dev server builds with
+`--force-offer`, which blanks that check for the preview, and serves the result under
+`/pages-demo/`, so the page has the same relative-path layout the deploy has.
+
 The media is committed and public domain. [`THIRD-PARTY.md`](THIRD-PARTY.md) records
 its source, licence and the exact recipe that reproduces it.
 
 > If you change anything under `tools/pages/`, check it served from a **subpath**, not
 > the domain root. Pages serves a project site from `/<repo>/`, and root-absolute
 > paths (an `import '/src/...'`, or `runtime.getURL` returning `/${path}`) 404 there
-> while working perfectly at the root.
+> while working perfectly at the root. `npm run ui` serves the demo from a subpath
+> too, so the same mistake shows up there.
 
 ### Building the store package
 

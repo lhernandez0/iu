@@ -412,13 +412,15 @@ code.
 ### Source and licence
 
 *Princess Iron Fan* (鐵扇公主, 1941), the first Chinese animated feature, directed
-by the Wan brothers. From the Internet Archive:
+by Wan Laiming (萬籟鳴) and Wan Guchan (萬古蟾). From the Internet Archive:
 
 - Item: <https://archive.org/details/princess_iron_fan>
 - Licence as marked on the item: **Public domain**
   (`http://creativecommons.org/licenses/publicdomain/`)
-- The archive's own metadata records the title, the year (1941) and the language
-  (Mandarin Chinese). No creator is recorded.
+- The archive's own metadata records the `title`, the `year` (1941), the
+  `director`, the `publisher` (China United Film Company) and the `language`
+  (Mandarin Chinese). The demo page shows the title, year and directors; this file
+  is the full record.
 
 Public domain means no attribution is legally required. It is given anyway,
 because the source and the exact recipe are what let anyone check that these bytes

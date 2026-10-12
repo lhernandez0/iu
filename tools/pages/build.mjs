@@ -1,8 +1,9 @@
 /**
  * Build the GitHub Pages demo: the shipped viewer, on a normal web page.
  *
- *   node tools/pages/build.mjs                # into build/pages
+ *   node tools/pages/build.mjs                  # into build/pages
  *   node tools/pages/build.mjs --out <dir>
+ *   node tools/pages/build.mjs --force-offer    # show the offer off GitHub Pages
  *
  * ## What this produces, and what it does not change
  *
@@ -13,6 +14,15 @@
  *
  * Nothing under `src/` is rewritten. The three rewrites in the generated page are
  * all relative-path fixes for the extra directory level, not behaviour.
+ *
+ * ## `--force-offer`, and why it exists
+ *
+ * The sample-video offer is gated to a `*.github.io` host, because the media only
+ * exists on the deployed site. That gate makes the offer invisible in local
+ * development, so there was no way to LOOK at it before shipping, which is exactly
+ * the situation `--force-offer` fixes: it drops the host check for one build so the
+ * offer can be reviewed at `127.0.0.1`. The served artifact still carries the gate,
+ * because this flag changes the build, not the page.
  *
  * ## Why it is generated rather than committed
  *
@@ -32,6 +42,12 @@ const ROOT = resolve(here, '../..');
 
 const outArg = process.argv.indexOf('--out');
 const OUT = outArg === -1 ? resolve(ROOT, 'build/pages') : resolve(process.argv[outArg + 1]);
+
+/**
+ * Whether to skip the GitHub Pages host check so the offer can be previewed
+ * locally. See the note in the module docstring.
+ */
+const FORCE_OFFER = process.argv.includes('--force-offer');
 
 /**
  * The media the demo opens, if it is present.
@@ -116,44 +132,142 @@ function demoPage(viewerHtml, media) {
   }
   html = html.replace(script, '<script type="module" src="demo-entry.js"></script>');
 
-  // The loader. A module, and it runs after the demo entry so the viewer is ready
-  // to receive files. Kept in the page rather than in a file so the media names
-  // travel with the markup that references them.
+  // The demo offer, placed INSIDE the viewer's empty state.
+  //
+  // Not a floating button in the corner, which was tried and read as a stray
+  // control. The empty state is already the viewer asking what you want to open,
+  // so this continues that sentence: the hint, then one line offering the sample
+  // and naming it.
+  //
+  // The name is deliberately terse. An earlier version put the licence, the source
+  // and a note about the encoding behind a `?`, which read as a lecture under a
+  // file picker. Director and year is what identifies a film; the rest belongs in
+  // THIRD-PARTY.md, where a reader looking for provenance finds it.
+  //
+  // The rules it must not break:
+  //   - `.placeholder` is `pointer-events: none`, so this sets `auto` on itself.
+  //   - `.bar` auto-hides on pointer idle, so nothing demo-shaped may live there.
+  //   - HIDDEN unless the media exists AND the page is on GitHub Pages (see the
+  //     loader). Built locally there is no `tools/pages/media/`, so an offer would
+  //     fetch a 404 and sit there doing nothing.
+  const offer = `
+        <p class="placeholder-hint" id="demo-offer" hidden>
+          or
+          <button type="button" class="link-button" id="demo-load">open the sample video</button>
+          <span class="demo-credit">Princess Iron Fan (1941), dir. Wan Laiming and Wan Guchan</span>
+        </p>
+  `;
+  // Injected as the last child of the placeholder, so it sits under the existing
+  // hint text. The anchor is the closing tag rather than a line, so a change to the
+  // surrounding markup cannot silently move it somewhere else.
+  const placeholderEnd = '</div>\n\n        <!--\n          The captions, floating over the bottom of the picture.';
+  if (!html.includes(placeholderEnd)) {
+    throw new Error('the demo could not find the end of the viewer placeholder; update this anchor');
+  }
+  html = html.replace(placeholderEnd, `${offer}        </div>\n\n        <!--\n          The captions, floating over the bottom of the picture.`);
+
   const loader = `
     <script type="module">
-      // Open the bundled media automatically, so the page is a demonstration
-      // rather than an empty player with a file picker.
+      // The demo media, only on the published site.
       //
-      // The files are handed to the input through a DataTransfer, which is the same
-      // thing a drag-and-drop does, so this goes through the viewer's REAL path
-      // rather than a private hook. The viewer exports nothing to call, and adding
-      // an export only for the demo would put demo-shaped code in the product.
+      // The check is on the hostname rather than a build-time flag, so the SAME
+      // artifact works either way and there is no "which build is this" question.
+      // GitHub Pages serves project sites from \`<user>.github.io\`, so the suffix
+      // test is exact for that host and false for \`127.0.0.1\`, \`localhost\` and a
+      // \`file://\` page alike.
+      const onPages = ${FORCE_OFFER ? 'true /* --force-offer: review build only */' : "location.hostname.endsWith('.github.io')"};
+      const offer = document.getElementById('demo-offer');
+      const button = document.getElementById('demo-load');
       const video = ${JSON.stringify(media.video)};
       const subtitles = ${JSON.stringify(media.subtitles)};
 
-      if (video || subtitles.length) {
-        const input = document.getElementById('pick-files');
-        const transfer = new DataTransfer();
+      // No media bundled, or not on Pages: leave the offer hidden and the page
+      // empty. Checked against the ACTUAL files rather than assumed, because a
+      // local build has none and an offer that 404s is worse than no offer.
+      if (onPages && (video || subtitles.length)) {
+        offer.hidden = false;
 
-        for (const name of [video, ...subtitles]) {
-          if (!name) continue;
-          // Fetched as a blob rather than linked, because the viewer takes File
-          // objects: it reads the bytes to parse the container, and a URL would make
-          // it a streaming video with no file to inspect.
-          const response = await fetch(name);
-          if (!response.ok) continue;
-          const blob = await response.blob();
-          transfer.items.add(new File([blob], name, { type: blob.type }));
-        }
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          button.textContent = 'Loading…';
+          try {
+            // Handed to the input through a DataTransfer, which is the same thing a
+            // drag-and-drop does, so this goes through the viewer's REAL path rather
+            // than a private hook. The viewer exports nothing to call, and adding an
+            // export only for the demo would put demo-shaped code in the product.
+            const input = document.getElementById('pick-files');
+            const transfer = new DataTransfer();
 
-        if (transfer.items.length) {
-          input.files = transfer.files;
-          input.dispatchEvent(new Event('change', { bubbles: true }));
-        }
+            for (const name of [video, ...subtitles]) {
+              if (!name) continue;
+              // Fetched as a blob rather than linked, because the viewer takes File
+              // objects: it reads the bytes to parse the container, and a URL would
+              // make it a streaming video with no file to inspect.
+              const response = await fetch(name);
+              if (!response.ok) continue;
+              const blob = await response.blob();
+              transfer.items.add(new File([blob], name, { type: blob.type }));
+            }
+
+            if (!transfer.items.length) throw new Error('nothing loaded');
+
+            input.files = transfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            // Kept, not hidden: pressing it again re-opens the sample after you
+            // have replaced it with your own file, which is the obvious thing to
+            // want and what an auto-open timer could never do.
+            button.textContent = 'Open the sample video';
+            button.disabled = false;
+          } catch (error) {
+            button.textContent = 'Could not load the sample';
+            button.disabled = false;
+            console.error('the demo media could not be loaded', error);
+          }
+        });
       }
     </script>
   `;
   html = html.replace('</body>', `${loader}\n  </body>`);
+
+  // A small stylesheet for the offer. In the page because it styles the demo
+  // chrome, not the viewer, and putting it in `viewer.css` would put demo styling
+  // in the shipping artifact.
+  //
+  // The `auto` on `#demo-offer` is load bearing: `.placeholder` sets
+  // `pointer-events: none` so it never swallows clicks meant for the picture, and
+  // that is inherited, so the button is unclickable without this.
+  const style = `
+    <style>
+      #demo-offer {
+        pointer-events: auto;
+      }
+      /* The offer reads as a continuation of the hint above it, so it inherits that
+         line's muted colour and size. Not a call to action in a box: the empty
+         state should look like the viewer, plus one sentence. */
+      #demo-offer .link-button {
+        padding: 0;
+        border: 0;
+        background: none;
+        color: var(--accent);
+        font: inherit;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+        cursor: pointer;
+      }
+      #demo-offer .link-button:hover { color: #fff; }
+      #demo-offer .link-button:disabled { color: var(--muted); cursor: default; text-decoration: none; }
+
+      /* The film's name, quieter than the offer beside it and on its own line, so it
+         reads as a caption rather than as part of the sentence. */
+      .demo-credit {
+        display: block;
+        margin-top: 6px;
+        font-size: 12px;
+        opacity: 0.75;
+      }
+    </style>
+  `;
+  html = html.replace('</head>', `${style}\n  </head>`);
 
   return html;
 }
