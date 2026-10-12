@@ -515,6 +515,17 @@ select:disabled {
    the opposite of what a reading aid is for. So the last line stays lit, with
    only its TEXT dimmed to show it is not being spoken right now.
 
+   The dim is DELAYED by the `captionFade` setting (`setActive` in sidepanel.js
+   adds this class after the hold), so a line that finished a fraction of a
+   second ago, as most cues do before the next one starts, is still shown at full
+   strength rather than flickering dim on every short gap. `captionFade` of 0
+   dims immediately.
+
+   The transition is what makes that delay read as a fade rather than a snap. Its
+   duration is fixed, not the setting: the setting is the HOLD. Kept in sync with
+   `CAPTION_FADE_OUT_MS` in viewer.js by hand, since the same 300ms dissolve is
+   wanted in both surfaces.
+
    The background is deliberately left to `.row.active`. An earlier version set
    its own darker background here, which, at equal specificity, later in the
    file, simply overrode the active highlight and made the line look as though
@@ -523,6 +534,12 @@ select:disabled {
    The marks are not dimmed either: a coloured underline is the one thing saying
    "this word is the one you are learning", and fading it would hide exactly the
    information the panel exists to show. */
+.row .time,
+.row .primary,
+.row .secondary {
+  transition: color 300ms ease;
+}
+
 .row.paused .time,
 .row.paused .primary,
 .row.paused .secondary {

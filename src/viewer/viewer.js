@@ -35,13 +35,13 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { errorText } from '../common/errors.js';
-import { findActiveIndex, alignSecondary } from '../common/transcript.js';
+import { findActiveIndex, findPlayingIndex, captionHoldSeconds, alignSecondary } from '../common/transcript.js';
 import { parseSubtitles, languageFromFileName, SUBTITLE_EXTENSIONS } from './subtitles.js';
 import { readMatroskaTracks, readMatroska, imageCodecName } from './matroska.js';
 import { segment } from '../learn/segment.js';
 import { indexDictionary, loadIndex, dictionaryPathFor, lookup, levelOf, levelColour } from '../learn/wordlist.js';
 import { markLine, listCoversLanguage, listForLanguage } from '../learn/marking.js';
-import { SETTINGS_AREA, storageKey as SETTINGS_KEY } from '../common/settings.js';
+import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX } from '../common/settings.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
 
@@ -110,6 +110,9 @@ const DEFAULTS = {
   markStyle: 'underline',
   defaultSpeed: '1',
   captionSize: 20,
+  // How long a finished subtitle holds before fading, in seconds. Viewer-only: the
+  // panel's rows stay put on purpose, so a gap in a film's subtitles does NOT apply.
+  captionFade: CAPTION_FADE_DEFAULT,
   // Whether the difficulty band is drawn under the scrubber. Viewer-only, and in the
   // registry because it is a preference that persists, unlike volume, which the
   // element keeps on its own and which the OS volume should really own.
@@ -141,6 +144,12 @@ function applyStoredSettings(stored) {
   }
   const size = Number(stored.captionSize);
   if (Number.isFinite(size)) next.captionSize = Math.min(34, Math.max(12, Math.round(size)));
+  // Clamped the same way the registry does, so a hand-edited bucket cannot store a
+  // hold of a thousand seconds and leave a subtitle up for the rest of the film.
+  const fade = Number(stored.captionFade);
+  if (Number.isFinite(fade)) {
+    next.captionFade = Math.min(CAPTION_FADE_MAX, Math.max(CAPTION_FADE_MIN, Math.round(fade * 10) / 10));
+  }
   if (typeof stored.difficulty === 'boolean') next.difficulty = stored.difficulty;
   // The shared preferences, read the same way the panel reads them.
   next.listId = typeof stored.listId === 'string' && stored.listId ? stored.listId : null;
@@ -297,7 +306,7 @@ function markSegments() {
     cue.marked = markLine(cue.tokens, dictionary, list, thresholdFor(list), withReading);
   }
 
-  renderCaptions(activeIndex());
+  redrawCaptions();
   // The band is painted FROM these marks, so it has to be repainted when they change,
   // otherwise switching word list or threshold recolours every word and leaves the
   // timeline showing the levels of the previous list.
@@ -553,7 +562,7 @@ async function loadVideo(file) {
   // after the first frame has already been drawn.
   segments = [];
   glossLines = [];
-  renderCaptions(-1);
+  redrawCaptions();
   // A real open, so the offer is wanted. Set explicitly rather than left to the flag's
   // default, because a previous switch may have consumed it and a previous switch that
   // did NOT fire metadata would leave it set.
@@ -634,7 +643,7 @@ async function loadDefaultTrack() {
     // before anything is marked. Fire-and-forget: the captions are on screen already
     // and gain their marks when the dictionary lands.
     void prepareMarks(study.languageCode);
-    renderCaptions(activeIndex());
+    redrawCaptions();
     // The gloss, if there is a second track. Awaited only to align it; the captions
     // are already on screen without it.
     void loadGlossTrack(study);
@@ -669,7 +678,7 @@ async function loadGlossTrack(study) {
       : tracks.find((track) => track !== study && track.kind === 'text' && !track.error);
   if (!gloss || gloss === study) {
     glossLines = [];
-    renderCaptions(activeIndex());
+    redrawCaptions();
     return;
   }
   try {
@@ -677,10 +686,10 @@ async function loadGlossTrack(study) {
     // Aligned by start time with a drift tolerance, so an out-of-sync second track
     // leaves the line blank rather than pairing it with the wrong cue.
     glossLines = alignSecondary(segments, cues);
-    renderCaptions(activeIndex());
+    redrawCaptions();
   } catch {
     glossLines = [];
-    renderCaptions(activeIndex());
+    redrawCaptions();
   }
 }
 
@@ -709,6 +718,23 @@ async function loadSubtitles(files) {
   } else {
     setStatus(`${usable.length} subtitle tracks`);
   }
+
+  // The Line 1 / Line 2 pickers list `tracks`, so they are stale the moment this
+  // function changes that list. `loadEmbeddedTracks` re-renders because it ends in
+  // `renderTrackPickers`, but a SIDECAR-only selection never reaches it: an MP4 with
+  // `.srt` files beside it has no embedded tracks to discover, so the pickers stayed
+  // disabled and empty while the status line said "3 subtitle tracks". Rendering here
+  // is what makes two sidecar languages, one for each line, choosable at all.
+  renderTrackChoosers();
+
+  // And the captions must follow the same list, for the same reason.
+  //
+  // `loadVideo` ends by loading a default track, but it runs BEFORE this function
+  // and a sidecar selection has no tracks yet at that point, so its attempt found
+  // nothing and returned. The captions then stayed blank while the film played and
+  // the track pickers listed three usable files, leaving the transcript empty
+  // until the user touched a control. Re-run it now that `tracks` is populated.
+  void loadDefaultTrack();
 }
 
 /**
@@ -844,14 +870,43 @@ function activeIndex() {
  * silent stretch show the last thing said, wrong for a film in a way it is not wrong
  * for a side panel, where the row stays highlighted so it can be found again.
  *
- * The hold covers consecutive cues with a fraction of a second between them, so an
- * ordinary dialogue run does not blink. Measured against the fixtures: cues sit 1.5-2.5s
- * apart with sub-100ms gaps, so a second is far longer than any gap a real track leaves.
+ * The value is a SETTING (`captionFade`, in seconds) rather than the constant this
+ * once was, because how long to hold is a reading-speed preference and not something
+ * to guess for everyone. 0 disables the fade and keeps the old behaviour.
+ *
+ * The hold also has to cover consecutive cues with a fraction of a second between
+ * them, so an ordinary dialogue run does not blink. That is now the viewer's job to
+ * get right rather than the constant's: `captionClearDelayMs` returns 0 while the
+ * next cue is imminent, which cancels the clear instead of racing it.
  */
-const CAPTION_HOLD_MS = 1000;
+
+/**
+ * The delay, in ms, before a finished cue should be cleared.
+ *
+ * A thin adapter over `captionHoldSeconds`, which holds the decision and is tested
+ * hermetically. This only converts the seconds it answers in to the milliseconds a
+ * timer wants, so the unit is converted in exactly one place.
+ *
+ * @param {number} seconds The playhead, in seconds.
+ * @returns {number}
+ */
+function captionClearDelayMs(seconds) {
+  return captionHoldSeconds(segments, seconds, settings.captionFade) * 1000;
+}
 
 /** Pending clears, keyed by the primary element they would empty. */
 const captionTimers = new Map();
+
+/**
+ * How long the dissolve itself takes, in ms.
+ *
+ * Separate from the hold, which is the user's `captionFade` setting. This is the
+ * animation, and it is fixed: the two are added, so the line is fully gone
+ * `captionFade` seconds plus this after the cue ended. Kept in sync with the
+ * `.caption-fading` transition in `viewer.css` by hand, since a stylesheet cannot
+ * import a number from a script here.
+ */
+const CAPTION_FADE_OUT_MS = 300;
 
 /** @param {HTMLElement} primary */
 function cancelClear(primary) {
@@ -860,13 +915,31 @@ function cancelClear(primary) {
     clearTimeout(pending);
     captionTimers.delete(primary);
   }
+  // A new cue arriving while the previous one was mid-dissolve has to become opaque
+  // again, or the replacement text renders into a card that is still fading out and
+  // appears at whatever opacity the transition had reached.
+  fadeTarget(primary).classList.remove('caption-fading');
 }
 
 /**
- * Empty a placement's caption after `delayMs`.
+ * The caption containers that fade as one, given a line element.
  *
- * Keyed by the primary element so a later cue cancels the clear a previous one
- * scheduled, without that, a line would vanish a second after it appeared.
+ * The overlay's card holds both lines, so opacity goes on the CARD or the two lines
+ * dissolve at different rates and the box stays behind them. The below strip has no
+ * card, so the strip itself is the fading element.
+ *
+ * @param {HTMLElement} primary
+ * @returns {HTMLElement}
+ */
+function fadeTarget(primary) {
+  return primary.closest('.caption-card') ?? primary.closest('.captions') ?? primary;
+}
+
+/**
+ * Fade a placement's caption out after `delayMs`, then empty it.
+ *
+ * Keyed by the primary element so a later cue cancels the fade a previous one
+ * scheduled, without that, a line would vanish shortly after it appeared.
  *
  * @param {HTMLElement} primary
  * @param {HTMLElement} secondary
@@ -874,12 +947,23 @@ function cancelClear(primary) {
  */
 function scheduleClear(primary, secondary, delayMs) {
   cancelClear(primary);
+  const target = fadeTarget(primary);
   captionTimers.set(
     primary,
     setTimeout(() => {
-      captionTimers.delete(primary);
-      primary.replaceChildren();
-      secondary.replaceChildren();
+      // The hold elapsed. Start the dissolve, and empty the elements only once it has
+      // finished, so the text is still there to be seen as it goes rather than
+      // disappearing and leaving a box that fades by itself.
+      target.classList.add('caption-fading');
+      captionTimers.set(
+        primary,
+        setTimeout(() => {
+          captionTimers.delete(primary);
+          target.classList.remove('caption-fading');
+          primary.replaceChildren();
+          secondary.replaceChildren();
+        }, CAPTION_FADE_OUT_MS),
+      );
     }, delayMs),
   );
 }
@@ -909,8 +993,17 @@ function renderCaptions(index) {
   const stillPlaying = Boolean(cue) && els.video.currentTime < cue.start + cue.duration;
 
   if (!stillPlaying) {
-    scheduleClear(els.overlayPrimary, els.overlaySecondary, CAPTION_HOLD_MS);
-    scheduleClear(els.belowPrimary, els.belowSecondary, CAPTION_HOLD_MS);
+    // A cue that has ENDED. This is the case the previous version got wrong: it
+    // only scheduled the clear when it was called, and `onTimeUpdate` only called it
+    // when the cue INDEX changed. A cue ending into a long gap does not change the
+    // index, so the clear was never scheduled and the line sat through the whole
+    // silence until the next cue started. The delay now comes from the setting, and
+    // it is 0 (no clear) while the next cue is imminent.
+    const delay = captionClearDelayMs(els.video.currentTime);
+    if (delay > 0) {
+      scheduleClear(els.overlayPrimary, els.overlaySecondary, delay);
+      scheduleClear(els.belowPrimary, els.belowSecondary, delay);
+    }
     return;
   }
 
@@ -1145,7 +1238,7 @@ function applySettings() {
   // uses, so the reading is drawn identically on both surfaces.
   // Passed field by field rather than wholesale because the viewer's `settings` is
   // its own storage shape, not the worker's `learning` payload. `language` is the
-  // track's, which is what the reader is actually showing.
+  // track's, which is what the viewer is actually showing.
   setReadingSettings({
     romaji: settings.romaji,
     chineseScript: settings.chineseScript,
@@ -1734,9 +1827,42 @@ function reportPosition(force = false) {
 
 let lastRendered = -2;
 
+/**
+ * Redraw whatever belongs on screen right now, and record that it was drawn.
+ *
+ * Every redraw outside `onTimeUpdate` goes through here for two reasons. The cue to
+ * draw is the PLAYING one, not the one that started most recently, so a redraw while
+ * paused in a gap clears the finished line instead of resurrecting it, which is the
+ * same bug `findPlayingIndex` exists to fix. And `lastRendered` has to be told, or the
+ * next `timeupdate` sees an unchanged index, decides there is nothing to do, and
+ * skips the draw entirely.
+ */
+function redrawCaptions() {
+  lastRendered = captionIndex();
+  renderCaptions(lastRendered);
+}
+
+/**
+ * The cue that should be on screen, which is not the one that started last.
+ *
+ * `activeIndex` answers "which cue started most recently", the right question for a
+ * transcript and the wrong one for a subtitle. Between a cue's end and the next
+ * cue's start the answer is still the finished cue, and the render cache keyed on it
+ * would consider the screen up to date and never run the fade. This returns -1 once
+ * the cue has ended, so the ending is a state CHANGE and `renderCaptions` runs for
+ * it exactly as it runs for a new line.
+ *
+ * @returns {number}
+ */
+function captionIndex() {
+  return findPlayingIndex(segments, els.video.currentTime);
+}
+
 function onTimeUpdate() {
   reportPosition();
-  const index = activeIndex();
+  // Keyed on the cue that should be SHOWING, not the one that started last, so the
+  // end of a cue is a transition the renderer sees and can schedule a fade for.
+  const index = captionIndex();
   if (index !== lastRendered) {
     lastRendered = index;
     renderCaptions(index);
@@ -1751,7 +1877,10 @@ for (const event of ['timeupdate', 'play', 'pause', 'ended']) {
 // `seeked`, not `seeking`: reported once the new position is real.
 els.video.addEventListener('seeked', () => {
   reportPosition(true);
-  renderCaptions(activeIndex());
+  // `redrawCaptions` uses the PLAYING cue, so seeking into a gap fades the finished
+  // line rather than putting it back, and records what is on screen for the next
+  // `timeupdate`.
+  redrawCaptions();
 });
 
 // --- The resume position -----------------------------------------------------

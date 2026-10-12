@@ -8,7 +8,7 @@
  * wrong translation on every row, which is worse than showing nothing.
  */
 
-import { formatTimestamp, formatSrtTime, toPlainText, toSrt, findActiveIndex, alignSecondary } from '../src/common/transcript.js';
+import { formatTimestamp, formatSrtTime, toPlainText, toSrt, findActiveIndex, findPlayingIndex, captionHoldSeconds, alignSecondary } from '../src/common/transcript.js';
 import { defaults, SETTINGS, byAudience, audienceProblems, SURFACES, forSettingsView, forTranscriptBar } from '../src/common/settings.js';
 
 let failures = 0;
@@ -100,6 +100,54 @@ check('inside the last cue', findActiveIndex(timeline, 21), 2);
 check('past the end holds the last cue', findActiveIndex(timeline, 999), 2);
 check('empty transcript', findActiveIndex([], 5), -1);
 check('a single cue', findActiveIndex([seg(0, 'only', 1)], 0.5), 0);
+
+// --- findPlayingIndex: the subtitle question ---------------------------------
+//
+// The bug this exists for: a cue ending into a long gap left its line on screen
+// for the whole gap, because the renderer keyed its work on `findActiveIndex`,
+// which does not change when a cue ends. Asserted as the DIFFERENCE from
+// `findActiveIndex` at the same instant, because that is the property that makes
+// an ending visible to a renderer at all.
+
+section('findPlayingIndex');
+
+check('inside a cue, the same answer as findActiveIndex', findPlayingIndex(timeline, 1), 0);
+check('at the very start', findPlayingIndex(timeline, 0), 0);
+check('inside the second cue', findPlayingIndex(timeline, 10.5), 1);
+// The whole point: in the gap AFTER a cue, the finished line is NOT playing.
+check('in the gap after a cue, nothing plays', findPlayingIndex(timeline, 2.5), -1);
+check('and findActiveIndex still holds the finished line there', findActiveIndex(timeline, 2.5), 0);
+check('at the exact end of a cue, it has stopped', findPlayingIndex(timeline, 2), -1);
+check('a hair before the end, it plays', findPlayingIndex(timeline, 1.999), 0);
+check('in the last gap, nothing plays', findPlayingIndex(timeline, 30), -1);
+check('before the first cue', findPlayingIndex(timeline, -1), -1);
+check('empty transcript', findPlayingIndex([], 5), -1);
+
+// --- captionHoldSeconds: how long a finished line stays ----------------------
+//
+// The user-facing rule: after a cue ends, hold for the configured time, then fade.
+// With one exception that is the reason this is a function and not the setting
+// itself, an ordinary run of dialogue has sub-second gaps between cues, and
+// clearing on those would make every line blink. So the hold collapses to 0 while
+// the next cue is imminent, which the caller reads as "do not clear at all".
+
+section('captionHoldSeconds');
+
+const gapped = [seg(0, 'a', 2), seg(10, 'b', 2), seg(20, 'c', 2)];
+
+check('a long gap gets the configured hold', captionHoldSeconds(gapped, 2.5, 0.5), 0.5);
+check('the hold follows the setting', captionHoldSeconds(gapped, 2.5, 1.5), 1.5);
+// An imminent next cue: no clear, so the line is held by the incoming one instead.
+check('a cue 0.2s away is held, not cleared', captionHoldSeconds([seg(0, 'a', 2), seg(2.2, 'b', 1)], 2.1, 0.5), 0);
+check('a cue 0.5s away is held at the boundary', captionHoldSeconds([seg(0, 'a', 2), seg(2.5, 'b', 1)], 2.1, 0.5), 0);
+check('a cue 0.6s away is cleared', captionHoldSeconds([seg(0, 'a', 2), seg(2.7, 'b', 1)], 2.1, 0.5), 0.5);
+// 0 disables the fade: the line holds until the next cue replaces it, which is
+// what a stalled track did before this setting existed.
+check('a fade of 0 never clears', captionHoldSeconds(gapped, 2.5, 0), 0);
+check('a negative fade never clears', captionHoldSeconds(gapped, 2.5, -1), 0);
+check('a nonsense fade never clears', captionHoldSeconds(gapped, 2.5, 'abc'), 0);
+// The last cue has nothing after it, so a gap to the end of the film gets the hold.
+check('the last cue falls back to the hold', captionHoldSeconds(gapped, 20.5, 0.5), 0.5);
 
 // --- alignSecondary: the safety property -------------------------------------
 

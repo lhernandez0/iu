@@ -886,10 +886,12 @@ section('the choices a learner makes are all reported back in the learning block
   const learning = stub.received.at(-1)?.state?.learning;
 
   // The panel renders its controls from this block, so a missing key is a
-  // control that silently never updates.
-  for (const key of ['view', 'fontSize', 'listId', 'threshold', 'studyLanguage', 'glossLanguage']) {
+  // control that silently never updates. `captionFade` is the delay before a
+  // finished line dims, which the LIVE view reads from here.
+  for (const key of ['view', 'fontSize', 'listId', 'threshold', 'studyLanguage', 'glossLanguage', 'captionFade']) {
     check(`${key} is present`, key in (learning ?? {}), true);
   }
+  check('the subtitle fade defaults to half a second', learning?.captionFade, 0.5);
   check('the word lists are offered', Array.isArray(learning?.listOptions), true);
   check('and the levels of the chosen list', Array.isArray(learning?.thresholdOptions), true);
 }
