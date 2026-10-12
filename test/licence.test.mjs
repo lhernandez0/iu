@@ -212,6 +212,16 @@ section('attribution is where a person would find it');
     // need to find why the column is ignored.
     check('it records why TOPIK is excluded', /TOPIK/.test(text), true);
     check('and that the reason is its reserved licence', /corresponding\s+benefit|reserved|requires TOPIK/i.test(text), true);
+    // The Pages demo's committed media, the one piece of third-party MEDIA in the
+    // repository. It is public domain, so no attribution is legally required, but
+    // the source and the recipe are what let a reader verify the bytes. Asserted
+    // because a committed film clip with no stated origin is the kind of thing a
+    // reviewer has to take on trust, and this project does not ask for trust.
+    check('it names the demo film', /Princess Iron Fan/.test(text), true);
+    check('it states the public domain grant', /[Pp]ublic domain/.test(text), true);
+    check('it gives the archive.org source', /archive\.org\/details\/princess_iron_fan/.test(text), true);
+    check('it records that the video is not re-encoded', /stream copy|\-c copy/.test(text), true);
+    check('and names the rebuild command', /tools\/pages\/fetch-media\.mjs/.test(text), true);
   }
 
   // The notices file existing is not enough: the README is where a reader looks
