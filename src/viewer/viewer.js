@@ -562,6 +562,23 @@ async function loadVideo(file) {
   // after the first frame has already been drawn.
   segments = [];
   glossLines = [];
+  // And the TRACK LIST goes with them, which is not obvious and was a real bug: a
+  // track belongs to the FILE it came from, so keeping this list across an open
+  // leaves the previous file's sidecar subtitles in the Line 1 / Line 2 dropdowns
+  // even though their cues were just cleared. Picking one then does nothing, since
+  // its segments are gone, and the control offers languages the new file does not
+  // have.
+  //
+  // Seen on the demo page: it opens a clip with three `.srt` sidecars, and opening
+  // your own file afterwards still listed `demo.en.srt`, `demo.zh-Hans.srt` and
+  // `demo.zh-Hant.srt` beside your own track. Cleared for EVERY new video, so the
+  // list is always exactly what the current file carries, sidecar or embedded.
+  //
+  // `activeTrackLanguage` goes too, or `trackLanguage()` falls back through a
+  // language that is no longer in the list and the marking picks the wrong
+  // dictionary until a track is chosen.
+  tracks = [];
+  activeTrackLanguage = null;
   redrawCaptions();
   // A real open, so the offer is wanted. Set explicitly rather than left to the flag's
   // default, because a previous switch may have consumed it and a previous switch that
