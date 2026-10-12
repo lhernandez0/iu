@@ -19,6 +19,7 @@
     "readings:build": "node tools/build-readings.mjs",
     "icons": "node tools/make-icons.mjs",
     "pages:build": "node tools/pages/build.mjs",
+    "pages:preview": "node tools/pages/build.mjs --force-offer --out build/pages-preview",
     "pages:media": "node tools/pages/fetch-media.mjs",
     "ui": "vite --config tools/ui/vite.config.mjs",
     "package": "make release",

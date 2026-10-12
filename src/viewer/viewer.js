@@ -44,6 +44,7 @@ import { markLine, listCoversLanguage, listForLanguage } from '../learn/marking.
 import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX } from '../common/settings.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
+import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks } from './diagnostics.js';
 
 /**
  * The extension API namespace, `browser` where it exists (Chrome 148+ and always
@@ -562,6 +563,23 @@ async function loadVideo(file) {
   // after the first frame has already been drawn.
   segments = [];
   glossLines = [];
+  // And the TRACK LIST goes with them, which is not obvious and was a real bug: a
+  // track belongs to the FILE it came from, so keeping this list across an open
+  // leaves the previous file's sidecar subtitles in the Line 1 / Line 2 dropdowns
+  // even though their cues were just cleared. Picking one then does nothing, since
+  // its segments are gone, and the control offers languages the new file does not
+  // have.
+  //
+  // Seen on the demo page: it opens a clip with three `.srt` sidecars, and opening
+  // your own file afterwards still listed `demo.en.srt`, `demo.zh-Hans.srt` and
+  // `demo.zh-Hant.srt` beside your own track. Cleared for EVERY new video, so the
+  // list is always exactly what the current file carries, sidecar or embedded.
+  //
+  // `activeTrackLanguage` goes too, or `trackLanguage()` falls back through a
+  // language that is no longer in the list and the marking picks the wrong
+  // dictionary until a track is chosen.
+  tracks = [];
+  activeTrackLanguage = null;
   redrawCaptions();
   // A real open, so the offer is wanted. Set explicitly rather than left to the flag's
   // default, because a previous switch may have consumed it and a previous switch that
@@ -699,9 +717,11 @@ async function loadSubtitles(files) {
     // Read as bytes, not text, so `subtitles.js` can detect the encoding rather than
     // compounding a guess about it with a default.
     const bytes = new Uint8Array(await file.arrayBuffer());
-    const { segments: cues, format, encoding, error } = parseSubtitles(bytes, file.name);
+    const parsed = parseSubtitles(bytes, file.name);
+    const { segments: cues, format, encoding, error } = parsed;
 
     const languageCode = languageFromFileName(file.name);
+    logSubtitle(file, { ...parsed, size: file.size }, languageCode);
 
     // Replace a track for the same language rather than listing both, so picking a
     // corrected version of the same file does not leave the old one behind.
@@ -749,6 +769,7 @@ async function loadSubtitles(files) {
  */
 async function loadEmbeddedTracks(file) {
   const found = await readMatroskaTracks(viewerFor(file));
+  logEmbeddedTracks(found);
   // Anything we already have from a sidecar wins, because the user chose it
   // explicitly and a file's own track is not more authoritative than that.
   const fromFiles = tracks.filter((track) => track.source === 'file');
@@ -1578,6 +1599,10 @@ async function describeAudio(file) {
     // The file may have been replaced while this was reading.
     if (file !== audioSourceFile) return;
     audioTracks = declared;
+    // Logged WITHOUT a video codec: this path reads the container's audio only, and
+    // the video codec is not in hand here. `canPlayType` is still asked per track,
+    // since the audio half of the string is what decides the answer.
+    logAudioTracks(declared);
     renderAudio();
   } catch {
     // An unreadable container is not a failure: it means there is nothing to offer,
@@ -2524,6 +2549,10 @@ els.video.addEventListener('loadedmetadata', () => {
   measureBar();
   paintTime();
   paintDifficulty();
+  // Logged BEFORE the resume-prompt early return below, so a file that triggers the
+  // prompt is still reported. A media error has no metadata at all, so the failure
+  // case is logged from the error handler instead.
+  if (videoFile) logFile(videoFile, els.video);
   // Not for our own re-source. See `resourcingInternally`.
   if (resourcingInternally) {
     resourcingInternally = false;
@@ -2555,6 +2584,11 @@ applyVolume();
 syncFullscreenButton();
 render();
 setStatus('Ready.');
+
+// One line per page load, so a pasted log says which browser and build it came from
+// and what the browser claims about the codecs being warned about. See
+// `diagnostics.js`, which is temporary.
+logBanner();
 
 // The list manifest, so the caption pickers are populated as soon as the page opens
 // rather than only after a file is chosen. Fire-and-forget: the captions work without
