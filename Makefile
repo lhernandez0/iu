@@ -35,6 +35,12 @@ BUILD   := build
 STAGE   := $(BUILD)/stage
 ZIP     := $(BUILD)/$(SLUG)-$(VERSION).zip
 
+# The media decoder, built by `npm run vendor:libav` and NOT committed. It is a
+# compiled FFmpeg variant (ADR 0011), copied into the staged `src/vendor/` so the
+# extension can load it at runtime. Kept out of `SHIPPED` because it does not live
+# in the working tree.
+DECODER := $(BUILD)/libav
+
 # WHAT SHIPS. Everything else in the repository is development material.
 #
 # This list is the single source of truth. It used to live in three places, the
@@ -73,6 +79,10 @@ test: ## Run the hermetic suites (no browser, no network)
 test-browser: ## Run the browser tier (real Chromium, fixture pages)
 	npm run test:browser
 
+.PHONY: decoder
+decoder: ## Build the media decoder into build/libav (needs emcc)
+	npm run vendor:libav
+
 .PHONY: ui
 ui: ## Side-panel preview at http://127.0.0.1:8099
 	npm run ui
@@ -81,12 +91,25 @@ ui: ## Side-panel preview at http://127.0.0.1:8099
 
 .PHONY: stage
 stage: ## Copy the shipping set into build/stage
+	@# The media decoder is a build product, not committed (ADR 0011). A release
+	@# built without it would ship an extension that silently cannot play Dolby
+	@# audio or HEVC, so its absence is a hard failure here rather than a puzzle
+	@# for whoever installs the ZIP. It is copied into the staged `src/vendor/`,
+	@# which is where the extension loads it from at runtime.
+	@if [ ! -f $(DECODER)/libav.js ]; then \
+		echo "MISSING: $(DECODER)/libav.js" >&2; \
+		echo "  the media decoder is not built. run: npm run vendor:libav (needs emcc)" >&2; \
+		exit 1; \
+	fi
 	@rm -rf $(STAGE)
 	@mkdir -p $(STAGE)
 	@for entry in $(SHIPPED); do \
 		if [ ! -e "$$entry" ]; then echo "MISSING: $$entry" >&2; exit 1; fi; \
 		cp -r "$$entry" $(STAGE)/; \
 	done
+	@mkdir -p $(STAGE)/src/vendor
+	@cp $(DECODER)/* $(STAGE)/src/vendor/
+	@echo "staged the media decoder: $$(ls $(DECODER) | tr '\n' ' ')"
 	@# Directories that must never appear, asserted rather than assumed. This is
 	@# the failure this whole target exists to prevent, and a silent regression
 	@# would only be noticed by someone reading the artifact's file list.

@@ -228,13 +228,12 @@ section('shipped source can only reach youtube.com, and only over fetch');
   //
   //    `src/vendor/` is EXEMPT, and the exchange is deliberate rather than a
   //    loophole. A compiled third-party library carries transports it never
-  //    calls: libav.js's Emscripten glue names `XMLHttpRequest` in its lazy-
-  //    filesystem code and `importScripts` in a worker branch, both dead, and
-  //    neither can be removed without editing generated third-party code. So the
-  //    rule for vendored files changes from "may not CONTAIN a transport" to
-  //    "must be PINNED BY HASH", which is the stronger claim: an exact byte
-  //    budget for a file nobody here wrote, checked in `licence.test.mjs`. Our
-  //    own `src/` keeps the original, absolute rule.
+  //    calls, and they cannot be removed without editing generated code. The
+  //    media decoder, which is the one such library, is EXEMPT differently: it is
+  //    a build product and never enters the repository at all (ADR 0011), which a
+  //    check below asserts. So the rule is absolute for our own `src/`, and
+  //    applies to `src/vendor/` only if we ever commit generated code that names
+  //    a transport again.
   const FORBIDDEN = /\bXMLHttpRequest\b|\bWebSocket\b|\bEventSource\b|\bsendBeacon\b|\bimportScripts\b|navigator\.send/;
   const transports = [];
   for (const file of sources) {
@@ -245,25 +244,20 @@ section('shipped source can only reach youtube.com, and only over fetch');
   }
   check('no transport but fetch appears in OUR src/', transports, []);
 
-  // The other half of that exchange. A vendored file carrying a transport is only
-  // acceptable because its bytes are fixed, so this asserts the pin exists and
-  // covers every vendored file that names one. Removing a hash to silence a
-  // mismatch would fail here rather than quietly widening the exemption.
+  // A built decoder must never be committed back into the tree. It is 5 MB of
+  // opaque binary whose presence in git history is permanent, and it is the exact
+  // thing ADR 0011 moved out. Asserted rather than trusted, because "commit the
+  // artifact, it is easier" is a tempting mistake to make later.
+  //
+  // This is also what makes the `src/vendor/` exemption above safe to keep. The
+  // compiled library is the only third-party code here that names transports, and
+  // it never reaches this directory.
   {
     const vendorDir = join(ROOT, 'src', 'vendor');
-    const hashFile = join(ROOT, 'tools', 'libav', 'hashes.json');
-    const pinned = existsSync(hashFile)
-      ? new Set(Object.keys(JSON.parse(readFileSync(hashFile, 'utf8'))))
-      : new Set();
-    const unpinned = [];
-    if (existsSync(vendorDir)) {
-      for (const name of readdirSync(vendorDir)) {
-        if (name === 'README.md') continue;
-        const text = readFileSync(join(vendorDir, name), 'utf8');
-        if (FORBIDDEN.test(text) && !pinned.has(name)) unpinned.push(name);
-      }
-    }
-    check('every vendored file naming a transport is pinned by hash', unpinned, []);
+    const stray = existsSync(vendorDir)
+      ? readdirSync(vendorDir).filter((name) => name.startsWith('libav'))
+      : [];
+    check('the built media decoder is not committed to src/vendor', stray, []);
   }
 
   // 2. Every absolute URL named in OUR src/ resolves to youtube.com. A URL whose

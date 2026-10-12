@@ -1,59 +1,62 @@
 /**
- * Rebuild `src/vendor/libav*.{js,mjs,wasm}` from source.
+ * Build the media decoder into `build/libav/`, ready for the release ZIP.
  *
- *   node tools/build-libav.mjs [--checkout <dir>]
+ *   npm run vendor:libav
  *
- * ## Why this exists
+ * ## What this produces and why it is not in git
  *
- * `src/vendor/libav.js` is a custom build of [libav.js](https://github.com/
- * Yahweasel/libav.js) (LGPL-2.1) carrying an `iu` variant, committed for the same
- * reason `mediabunny.js` is: the release ZIP is assembled from `src/` alone and
- * cannot depend on `node_modules` or a build machine.
+ * Three files: a JS loader, an Emscripten glue file, and a ~5 MB WebAssembly
+ * binary containing FFmpeg. They are a BUILD PRODUCT. They are not committed,
+ * and they are not fetched at package time either; the release is assembled from
+ * a working tree that has been built. See ADR 0011 for the reasoning, which
+ * reverses the earlier choice to commit `mediabunny.js`.
  *
- * Nobody needs this script to run, test, or ship. It exists so the three
- * committed files can be reproduced rather than trusted.
+ * ## What it needs
  *
- * ## What it depends on
+ * `emcc` (and `emcmake`/`emconfigure`) on PATH, plus git, curl, tar and xz, and
+ * network access to `github.com`. Install Emscripten with `emsdk`:
  *
- * Docker (emscripten/emsdk), git, curl, tar, xz, and network access to
- * `github.com`. It is the only thing in this project that needs Docker.
+ *   git clone https://github.com/emscripten-core/emsdk
+ *   cd emsdk && ./emsdk install latest && ./emsdk activate latest
+ *   source ./emsdk_env.sh
  *
- * ## Why it does not just run libav.js's own build
+ * There is no Docker. An earlier version used the `emscripten/emsdk` image pinned
+ * by digest; 3.4 GB per run is not a price this project should pay for a build
+ * that runs a handful of times a year.
  *
- * Three differences, each load-bearing:
+ * ## Why it does not run libav.js's own build as-is
  *
- * 1. libav.js downloads FFmpeg from `ffmpeg.org`, which is not reachable here. We
- *    fetch the same source from `codeload.github.com` and repack it as the
- *    `ffmpeg-<version>.tar.xz` libav.js expects.
- * 2. libav.js builds via `docker/Dockerfile`, which wants a Dockerfile pipeline.
- *    We invoke `emscripten/emsdk` directly with the host uid, so files come out
- *    owned by the user rather than root.
- * 3. libav.js's `build` target builds EVERY variant. We build one, which is the
- *    difference between 4 minutes and an hour.
+ * 1. libav.js downloads FFmpeg from `ffmpeg.org`. We fetch the same source from
+ *    `codeload.github.com` and repack it as the tarball libav.js expects, because
+ *    the release host is not always reachable.
+ * 2. libav.js's `build` target builds EVERY variant. We build one, which is the
+ *    difference between four minutes and an hour.
+ * 3. We add the `iu` variant, which is the point: a new entry in
+ *    `configs/mkconfigs.js`, written by `tools/libav/add-variant.mjs`.
  *
- * ## Licence note
+ * ## Licence
  *
- * Our change is a CONFIGURATION change: a new entry in `configs/mkconfigs.js`.
- * libav.js's own `LICENSE.md` exempts configuration changes from the
- * share-your-modifications obligation ("changes that link to FFmpeg"), and the
- * build is LGPL-2.1 with no `--enable-gpl` or `--enable-nonfree`. The licence
- * headers libav.js embeds in the built files are kept verbatim. See
+ * The change to libav.js is CONFIGURATION: a new variant definition. libav.js's
+ * own `LICENSE.md` exempts configuration changes from the share-your-
+ * modifications obligation ("changes that link to FFmpeg"). The build is LGPL-2.1
+ * with no `--enable-gpl` and no `--enable-nonfree`, checked below. See
  * `THIRD-PARTY.md`.
  */
 
 import { execFileSync } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const VENDOR = join(ROOT, 'src', 'vendor');
+/** Build output. Gitignored, copied into the staged extension by `make stage`. */
+const OUT_DIR = join(ROOT, 'build', 'libav');
+/** The libav.js checkout, reused between builds. Gitignored. */
+const CHECKOUT = join(ROOT, 'build', 'libav-src');
 
 /**
- * Pinned upstream revisions.
- *
- * Both are commits, not branches: a moving target would make the committed
- * artifact unreproducible, which is the whole point of having this script.
+ * Pinned upstream revisions. Commits, not branches, so a build names what it is
+ * made from even though the artifact itself is not asserted byte-identical.
  */
 const LIBAV = {
   repo: 'https://github.com/Yahweasel/libav.js.git',
@@ -64,14 +67,17 @@ const FFMPEG = {
   // `git ls-remote --tags https://github.com/FFmpeg/FFmpeg.git n9.0`
   commit: '5b9252abfe2fda0ccb71ed45cd7a954cc45d2b6f',
   version: '9.0',
-  // Recorded so the tarball can be verified rather than assumed. This is the
-  // hash of the tree WE built from, produced from the GitHub tag, not of the
-  // ffmpeg.org release: the two are the same source but not the same bytes.
-  sha256: '840707528f804b0d92a2e132fd625be0e5a80424c33877d68e3e178fc673a8a4',
 };
-
-const EMSCRIPTEN_IMAGE = 'emscripten/emsdk';
 const VARIANT = 'iu';
+
+/**
+ * Whether to exclude the video decoders.
+ *
+ * `--audio-only` exists because the video decoders are measured at 2.39 MB raw /
+ * 0.83 MB gzipped, and a release that does not yet decode video should not carry
+ * them. `tools/libav/add-variant.mjs` owns which fragments that removes.
+ */
+const AUDIO_ONLY = process.argv.includes('--audio-only');
 
 /** @param {string} file @param {number} minBytes */
 function assertPresent(file, minBytes) {
@@ -87,181 +93,166 @@ function run(cmd, args, opts = {}) {
   return execFileSync(cmd, args, { stdio: 'inherit', ...opts });
 }
 
+/** @param {string} cmd */
+function have(cmd) {
+  try {
+    execFileSync('which', [cmd], { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Toolchain
+// ---------------------------------------------------------------------------
+
+// Checked before anything is downloaded, so a missing toolchain fails in a
+// second rather than after a five minute clone.
+if (!have('emcc')) {
+  console.error(
+    'emcc is not on PATH.\n\n' +
+      'The media decoder is built with Emscripten. Install it with emsdk:\n\n' +
+      '  git clone https://github.com/emscripten-core/emsdk\n' +
+      '  cd emsdk && ./emsdk install latest && ./emsdk activate latest\n' +
+      '  source ./emsdk_env.sh\n',
+  );
+  process.exit(1);
+}
+
 // ---------------------------------------------------------------------------
 // Checkout
 // ---------------------------------------------------------------------------
 
-const flagIndex = process.argv.indexOf('--checkout');
-const checkout =
-  flagIndex !== -1
-    ? process.argv[flagIndex + 1]
-    : join(ROOT, 'build', 'libav-src');
+console.log(`\nlibav.js checkout: ${CHECKOUT}`);
 
-console.log(`\nlibav.js checkout: ${checkout}`);
-
-if (!existsSync(join(checkout, 'Makefile'))) {
-  if (existsSync(checkout)) {
-    throw new Error(
-      `${checkout} exists but does not look like a libav.js checkout; ` +
-        `remove it or pass --checkout <dir>`,
-    );
+if (!existsSync(join(CHECKOUT, 'Makefile'))) {
+  if (existsSync(CHECKOUT)) {
+    throw new Error(`${CHECKOUT} is not a libav.js checkout; remove it and retry`);
   }
-  mkdirSync(dirname(checkout), { recursive: true });
-  run('git', ['clone', LIBAV.repo, checkout]);
+  mkdirSync(dirname(CHECKOUT), { recursive: true });
+  // A full clone, not `--depth 1`: the build stamps a banner from `git describe`,
+  // which needs tags, and a shallow clone has none.
+  run('git', ['clone', LIBAV.repo, CHECKOUT]);
 }
 
-// Fetch the pinned commit only if it is not already present. Cloning master
-// usually has it, and `git fetch --depth 1 origin <sha>` depends on the server
-// allowing reachable-SHA fetches, so this is the fallback rather than the first
-// move.
 try {
-  run('git', ['cat-file', '-e', `${LIBAV.commit}^{commit}`], { cwd: checkout, stdio: 'pipe' });
+  run('git', ['cat-file', '-e', `${LIBAV.commit}^{commit}`], { cwd: CHECKOUT, stdio: 'pipe' });
 } catch {
-  run('git', ['fetch', '--depth', '1', 'origin', LIBAV.commit], { cwd: checkout });
+  run('git', ['fetch', 'origin', LIBAV.commit], { cwd: CHECKOUT });
 }
-run('git', ['checkout', '--force', LIBAV.commit], { cwd: checkout });
+run('git', ['checkout', '--force', LIBAV.commit], { cwd: CHECKOUT });
 console.log(`  at ${LIBAV.commit}`);
 
-// Our variant, into the checkout. This is the one edit to libav.js's own tree.
-run('node', [join(ROOT, 'tools', 'libav', 'add-variant.mjs'), checkout]);
+// The variant definition, which is the change to libav.js's own tree.
+run('node', [
+  join(ROOT, 'tools', 'libav', 'add-variant.mjs'),
+  CHECKOUT,
+  ...(AUDIO_ONLY ? ['--audio-only'] : []),
+]);
 
-// libav.js regenerates `configs/configs/<variant>/` from `configs/mkconfigs.js`.
-run('node', ['mkconfigs.js'], { cwd: join(checkout, 'configs') });
+// libav.js generates `configs/configs/<variant>/` from `configs/mkconfigs.js`.
+run('node', ['mkconfigs.js'], { cwd: join(CHECKOUT, 'configs') });
+
+// ---------------------------------------------------------------------------
+// Licence guard
+// ---------------------------------------------------------------------------
+
+// Read from the GENERATED config, which is what the compiler is actually given,
+// rather than from the recipe. A `--enable-gpl` arriving through a fragment would
+// change libav.js from LGPL to GPL, and GPL cannot be linked into an MIT project.
+// This is the one check that must never be skipped.
+{
+  const configPath = join(CHECKOUT, 'configs', 'configs', VARIANT, 'ffmpeg-config.txt');
+  const config = readFileSync(configPath, 'utf8');
+  for (const flag of ['--enable-gpl', '--enable-nonfree', '--enable-version3']) {
+    if (config.includes(flag)) {
+      throw new Error(`${flag} appears in ${configPath}; this build would not be LGPL`);
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // FFmpeg source
 // ---------------------------------------------------------------------------
 
-const tarball = join(checkout, 'build', `ffmpeg-${FFMPEG.version}.tar.xz`);
+const tarball = join(CHECKOUT, 'build', `ffmpeg-${FFMPEG.version}.tar.xz`);
 
 if (!existsSync(tarball)) {
-  console.log(`\nFFmpeg ${FFMPEG.version} from codeload (ffmpeg.org is unreachable here)`);
-  const work = join(checkout, 'build', '.ffmpeg-fetch');
+  console.log(`\nFFmpeg ${FFMPEG.version} from codeload`);
+  const work = join(CHECKOUT, 'build', '.ffmpeg-fetch');
   rmSync(work, { recursive: true, force: true });
   mkdirSync(work, { recursive: true });
 
-  // GitHub's tarball endpoint serves the source for a commit ref, which for an
-  // annotated tag is the tag object, and a tag object is not a tree. Resolving
-  // the tag to its commit first means the URL always names a commit.
+  // A commit, not the tag: GitHub serves the tag OBJECT for an annotated tag, and
+  // a tag object is not a tree.
   const url = `https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/${FFMPEG.commit}`;
   run('curl', ['-fsSL', url, '-o', join(work, 'ffmpeg.tar.gz')]);
   run('tar', ['xzf', join(work, 'ffmpeg.tar.gz'), '-C', work]);
 
-  // codeload's top directory is named `<repo>-<commit>`; libav.js's Makefile
-  // hard-codes `ffmpeg-<version>` and untars straight into `build/`.
+  // codeload names the top directory `<repo>-<commit>`; libav.js's Makefile
+  // hard-codes `ffmpeg-<version>`.
   const extracted = join(work, `FFmpeg-${FFMPEG.commit}`);
   if (!existsSync(extracted)) {
-    throw new Error(`expected ${extracted} after extraction; codeload layout changed`);
+    throw new Error(`expected ${extracted}; the codeload layout changed`);
   }
   run('mv', [extracted, join(work, `ffmpeg-${FFMPEG.version}`)]);
   run('tar', ['cJf', tarball, '-C', work, `ffmpeg-${FFMPEG.version}`]);
   rmSync(work, { recursive: true, force: true });
-
-  const hash = execFileSync('sha256sum', [tarball], { encoding: 'utf8' }).split(/\s+/)[0];
-  if (hash !== FFMPEG.sha256) {
-    console.log(`  note: sha256 ${hash}`);
-    console.log(`        recorded ${FFMPEG.sha256}`);
-    console.log('        (same source, different packing; update the constant if intentional)');
-  }
 }
 
 // ---------------------------------------------------------------------------
 // Build
 // ---------------------------------------------------------------------------
 
-const target = `dist/libav-${LIBAV.version}-${VARIANT}.wasm.mjs`;
-// Two targets, not one: the wasm pair and the JS loader are built by different
-// rules. The loader (`dist/libav-<variant>.mjs`) is a minified copy of the
-// versioned one and needs no FFmpeg, so it is quick even after a full rebuild.
-const targets = `${target} dist/libav-${VARIANT}.mjs`;
-const havePkgConfig = (() => {
-  try {
-    execFileSync('docker', [
-      'run', '--rm', '-u', `${process.getuid()}:${process.getgid()}`,
-      EMSCRIPTEN_IMAGE, 'bash', '-lc', 'command -v pkg-config',
-    ], { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
-})();
+// Two targets: the wasm pair and the JS loader are built by different rules. The
+// loader (`dist/libav-<variant>.mjs`) is a minified copy of the versioned file and
+// needs no FFmpeg, so it is quick.
+const targets = `dist/libav-${LIBAV.version}-${VARIANT}.wasm.mjs dist/libav-${VARIANT}.mjs`;
 
-console.log(`\nbuilding ${targets} in ${EMSCRIPTEN_IMAGE}`);
-console.log('  this takes a few minutes; the wasm links at the end');
+console.log(`\nbuilding ${targets}`);
+console.log('  a few minutes; the wasm links at the end');
+if (AUDIO_ONLY) console.log('  --audio-only: video decoders excluded');
 
-// `make` installs the checkout's npm dependencies (terser) on first use, so the
-// container needs a writable HOME and node_modules. Running as the host uid
-// keeps every output file owned by the user instead of root.
-const script = [
-  'set -e',
-  'export HOME=/tmp',
-  'cd /src',
-  `make ${targets}`,
-].join(' && ');
+// FFmpeg's own build directory is removed first. Not for byte-identity (this
+// build makes no such claim), but because a stale tree can link objects from a
+// previous configuration and produce a decoder that does not match its recipe.
+const clean = [
+  `build/ffmpeg-${FFMPEG.version}/build-base-${VARIANT}`,
+  'dist/libav-*.wasm.wasm',
+  'dist/libav-*.wasm.mjs',
+  `dist/libav-${LIBAV.version}-${VARIANT}.mjs`,
+  `dist/libav-${VARIANT}.mjs`,
+].map((p) => `rm -rf ${p}`).join(' && ');
 
-const dockerArgs = [
-  'run', '--rm',
-  '-u', `${process.getuid()}:${process.getgid()}`,
-  '-v', `${checkout}:/src`,
-  '-e', 'EM_CACHE=/src/.em-cache',
-  EMSCRIPTEN_IMAGE, 'bash', '-lc', script,
-];
-if (!havePkgConfig) {
-  // We disable every external library and enable only what FFmpeg contains, so
-  // pkg-config has nothing to find. emconfigure prints a warning and continues.
-  console.log('  (pkg-config is absent in the image; harmless for this config)');
-}
-run('docker', dockerArgs);
+run('bash', ['-lc', ['set -e', `cd ${JSON.stringify(CHECKOUT)}`, clean, `make ${targets}`].join(' && ')]);
 
 // ---------------------------------------------------------------------------
-// Vendor
+// Collect
 // ---------------------------------------------------------------------------
 
-const dist = join(checkout, 'dist');
+const dist = join(CHECKOUT, 'dist');
 const outputs = {
-  // Renamed from `libav-<version>-iu.mjs` upstream: the loader finds the wasm
-  // files by a name IT constructs and fetches relative to its own URL, never by
-  // its own filename, so it works under any name. `libav.js` is clearer at the
-  // import site than a versioned one.
-  [`libav.js`]: join(dist, `libav-${VARIANT}.mjs`),
+  // Renamed from `libav-<version>-iu.mjs`: the loader builds the paths to its own
+  // wasm siblings from a name IT constructs, resolved relative to its own URL,
+  // never from its own filename, so it works under any name.
+  'libav.js': join(dist, `libav-${VARIANT}.mjs`),
   [`libav-${LIBAV.version}-${VARIANT}.wasm.mjs`]: join(dist, `libav-${LIBAV.version}-${VARIANT}.wasm.mjs`),
   [`libav-${LIBAV.version}-${VARIANT}.wasm.wasm`]: join(dist, `libav-${LIBAV.version}-${VARIANT}.wasm.wasm`),
 };
 
-console.log('\nvendoring');
+rmSync(OUT_DIR, { recursive: true, force: true });
+mkdirSync(OUT_DIR, { recursive: true });
+
+let total = 0;
 for (const [name, from] of Object.entries(outputs)) {
   const bytes = assertPresent(from, 10_000);
-  copyFileSync(from, join(VENDOR, name));
+  copyFileSync(from, join(OUT_DIR, name));
+  total += bytes;
   console.log(`  ${name.padEnd(36)} ${(bytes / 1024).toFixed(0).padStart(5)} KB`);
 }
 
-// The paths live in the build config, so a formula block is generated from them
-// rather than typed twice. `--check` will diff this against the committed file.
-const formula = {};
-for (const [name, from] of Object.entries(outputs)) {
-  formula[name] = execFileSync('sha256sum', [from], { encoding: 'utf8' }).split(/\s+/)[0];
-}
-writeFileSync(
-  join(ROOT, 'tools', 'libav', 'hashes.json'),
-  JSON.stringify(formula, null, 2) + '\n',
+console.log(
+  `\nwrote build/libav/  (${(total / 1024 / 1024).toFixed(2)} MB, ${AUDIO_ONLY ? 'audio only' : 'audio and video'})`,
 );
-
-// The README is generated the way `build-vendor.mjs` generates its own, so the
-// note cannot describe a state the files are no longer in.
-writeFileSync(
-  join(VENDOR, 'README.md'),
-  [
-    '# `src/vendor/`',
-    '',
-    'Generated. Do not edit by hand.',
-    '',
-    '- `mediabunny.js`, run `node tools/build-vendor.mjs`.',
-    '- `libav.js` and the two `libav-*` files, run `node tools/build-libav.mjs`.',
-    '',
-    'Both are committed because the release ZIP is built from `src/` alone and',
-    'cannot depend on `node_modules` or a build machine. See `THIRD-PARTY.md`.',
-    '',
-  ].join('\n'),
-);
-
-console.log('\ndone');
+console.log('run `make release` to package it, or `npm test` to decode a fixture with it');

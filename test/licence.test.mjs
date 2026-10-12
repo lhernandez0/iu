@@ -17,7 +17,6 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -178,29 +177,44 @@ section('the extension itself ships no dependencies');
       // By name, because "some third-party code exists" is not attribution.
       check(`${name} is named in THIRD-PARTY.md`, notices.includes(name), true);
     }
-    // Both licences, because both obligations have to be described for the
-    // document to be doing its job.
     check('and the MPL-2.0 obligation is stated', /MPL-2\.0/.test(notices), true);
+  }
+
+  // The media decoder is a BUILD PRODUCT, not a committed file (ADR 0011), so it
+  // is not in `src/vendor/` to be walked above. It still carries an obligation, so
+  // it is asserted a different way: its recipe must name the upstream project, the
+  // licence, and the pinned revision it builds from. A build product whose recipe
+  // does not say what it is made of is exactly the unattributed dependency this
+  // section exists to prevent.
+  //
+  // The decoded-output check lives in `libav.test.mjs`, which is a different
+  // claim: that file proves it WORKS, this one proves it is ACCOUNTED FOR.
+  {
+    const notices = readFileSync(join(ROOT, 'THIRD-PARTY.md'), 'utf8');
+    const builder = readFileSync(join(ROOT, 'tools', 'build-libav.mjs'), 'utf8');
+
+    // Named in the attribution document by the name the build actually produces.
+    check('the media decoder is named in THIRD-PARTY.md', /libav/i.test(notices), true);
+    check('and its FFmpeg obligation is stated', /FFmpeg/.test(notices), true);
     check('and the LGPL-2.1 obligation is stated', /LGPL-2\.1/.test(notices), true);
 
-    // The recorded hashes match what is committed. A vendored binary that has
-    // been edited by hand is not a reproducible build of anything, and this is
-    // the only place that could notice.
-    const hashFile = join(ROOT, 'tools', 'libav', 'hashes.json');
-    if (existsSync(hashFile)) {
-      const recorded = JSON.parse(readFileSync(hashFile, 'utf8'));
-      const wrong = [];
-      for (const [name, digest] of Object.entries(recorded)) {
-        const path = join(vendorDir, name);
-        if (!existsSync(path)) {
-          wrong.push(`${name} is recorded but absent`);
-          continue;
-        }
-        const actual = createHash('sha256').update(readFileSync(path)).digest('hex');
-        if (actual !== digest) wrong.push(name);
-      }
-      check('every vendored binary matches its recorded hash', wrong, []);
-    }
+    // Named in the recipe, with a revision to build from. Asserted from the
+    // RECIPE rather than from a document, because the recipe is what a future
+    // rebuild actually runs, so a wrong or missing pin there is the real failure.
+    check('the recipe names the upstream project', /Yahweasel\/libav\.js/.test(builder), true);
+    check(
+      'the recipe pins the libav.js revision it builds from',
+      /commit: '[0-9a-f]{40}'/.test(builder),
+      true,
+    );
+    check(
+      'the recipe pins the FFmpeg revision it builds from',
+      /FFMPEG[\s\S]{0,200}commit: '[0-9a-f]{40}'/.test(builder),
+      true,
+    );
+    // The licence guard is in the recipe, and it is the one that must not be
+    // dropped: a GPL flag would make the build unusable in an MIT project.
+    check('the recipe refuses a GPL build', /--enable-gpl/.test(builder), true);
   }
 }
 

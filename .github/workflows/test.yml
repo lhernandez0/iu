@@ -47,7 +47,20 @@ jobs:
           ffmpeg -version | head -1
       - run: npm run fixtures
 
-      - run: npm test
+      # The compiled decoder is a build product (ADR 0011), so it is built here
+      # rather than committed. Without it `libav.test.mjs` SKIPS and the job stays
+      # green, which is the same hazard the browser tier has: the guard below is
+      # what turns "the decoder did not build" into a red job.
+      - uses: ./.github/actions/build-decoder
+
+      - name: run the hermetic suite, and fail if the decoder test skipped
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/hermetic.log
+          if grep -q 'build/libav/ is not present' /tmp/hermetic.log; then
+            echo "::error::the decode test skipped, so the decoder was not tested"
+            exit 1
+          fi
 
   # The committed dictionaries, rebuilt from the revisions they name and compared
   # byte for byte.
@@ -162,6 +175,13 @@ jobs:
           node-version-file: '.nvmrc'
           cache: npm
       - run: npm ci
+
+      # The ZIP has to contain the compiled decoder, so it is built before
+      # packaging. `make stage` fails rather than shipping a ZIP without it, and
+      # `make verify` checks the archive, so a missing decoder cannot reach a
+      # reviewer as a green job.
+      - uses: ./.github/actions/build-decoder
+
       - run: make release
 
       # Uploaded so a reviewer can download exactly what would be submitted

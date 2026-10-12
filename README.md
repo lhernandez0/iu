@@ -169,10 +169,18 @@ The dictionaries are generated and committed. `npm run wordlists:check` fetches 
 pinned sources, rebuilds, and fails on any difference, which is what catches a data
 file that was edited by hand, and it runs in CI.
 
-There are no runtime dependencies and no build step: the repository is the
-extension. The one generated file, `src/vendor/mediabunny.js`, is committed, so
-nothing has to be installed to load or package it. Rebuild it with
-`node tools/build-vendor.mjs` if its version changes.
+There are no runtime dependencies, and for anyone using or testing the extension
+there is no build step: the repository is the extension. One generated file,
+`src/vendor/mediabunny.js`, is committed, so nothing has to be installed to load or
+package it; rebuild it with `node tools/build-vendor.mjs` if its version changes.
+
+**One exception, for packaging a release.** The media decoder, a compiled FFmpeg
+build for the audio and video formats a browser cannot play, is a build product
+rather than a committed file. `npm run vendor:libav` builds it into `build/libav/`
+and needs [Emscripten](https://github.com/emscripten-core/emsdk) on PATH, the same
+way `npm run fixtures` needs ffmpeg. `make release` copies it into the package and
+fails if it has not been built. See `THIRD-PARTY.md` for what it is and why it is
+built rather than committed.
 
 ### The commit hook
 
