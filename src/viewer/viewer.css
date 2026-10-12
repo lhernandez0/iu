@@ -205,6 +205,27 @@ body {
   pointer-events: auto;
 }
 
+/*
+ * The fade when a cue ends and the next one is not imminent.
+ *
+ * The `captionFade` setting is how long the line HOLDS before this starts, not how
+ * long the fade itself takes: a hold of 0.5s reads as "gone half a second after the
+ * line finished", which is what was asked for. The fade duration is fixed because a
+ * slow dissolve of a subtitle is a mood, not a preference, and one knob for both
+ * would make 0.5s mean something different at every setting.
+ *
+ * `CAPTION_FADE_OUT_MS` in `viewer.js` waits this long before emptying the element.
+ * The two must agree; they are 300ms in both places.
+ */
+.caption-card,
+.captions-below {
+  transition: opacity 300ms ease;
+}
+
+.caption-fading {
+  opacity: 0;
+}
+
 .captions-overlay .caption-line {
   margin: 0;
   /* A text shadow rather than a darker fill, so the text stays readable over a

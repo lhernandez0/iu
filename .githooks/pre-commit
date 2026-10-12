@@ -1,0 +1,16 @@
+#!/bin/sh
+#
+# Runs the staged-file checks before a commit.
+#
+# POSIX `sh`, not bash: hook interpreters vary, and this needs nothing bash adds.
+# No `set -e` on purpose, the exit code of the last command is what git reads and
+# this file has one meaningful command.
+#
+# The work lives in `tools/check-staged.mjs` so it can be run by hand and read as
+# code rather than shell. This file exists only to call it.
+#
+# Installed by `git config core.hooksPath .githooks` (see the README). That is a
+# per-clone setting, so a fresh clone has NO hook until it runs that command, which
+# is why CI still runs the full suite: the hook is a convenience, not the gate.
+
+node tools/check-staged.mjs

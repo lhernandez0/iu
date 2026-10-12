@@ -1843,6 +1843,15 @@ function learningState(entry = null) {
     translateInto: settings.translateInto,
     studyTranslated: settings.studyTranslated,
     glossTranslated: settings.glossTranslated,
+    // How long a finished line stays lit before it dims, in seconds. Sent like the
+    // other presentation settings rather than read from storage by the panel, one
+    // owner for settings, and the panel has the value in hand when it renders.
+    //
+    // It applies to the panel's LIVE view too, not only to the film's captions: a
+    // gap between lines leaves the last row lit, and this is how long that lasts
+    // before it dims. One preference for both surfaces, because "how long after a
+    // line ends should it stop looking current" is one question.
+    captionFade: settings.captionFade,
     // Only the lists that can mark what is on screen. Supplied here rather than in
     // the schema, because which lists exist is a property of the data and which are
     // useful is a property of the video.

@@ -1,0 +1,96 @@
+# Builds the demo page and publishes it to GitHub Pages.
+#
+# The demo is `tools/pages/build.mjs` output: the SHIPPED viewer on a plain web
+# page, with about forty lines standing in for the `chrome.*` APIs it normally
+# uses. It is not a fork of the viewer, so what the page proves is about what
+# people install rather than about a copy that can drift.
+#
+# ## Why this is a separate workflow rather than a job in test.yml
+#
+# It PUBLISHES. `test.yml` runs on pull requests and must never have a side effect
+# outside CI, and a deploy job living there would either need to be excluded from
+# pull requests by condition, or would deploy a branch before it was merged. A
+# separate file with its own trigger makes "this runs on main and writes to the
+# live site" visible in the filename.
+#
+# ## Why a PAGES subpath works
+#
+# A project site is served from https://<user>.github.io/<repo>/, NOT the domain
+# root, and three things in this demo were root-absolute and 404'd under that:
+# two import specifiers AND `chrome.runtime.getURL`. All three are relative now.
+# This is stated here because the failure mode is silent, the page loads and simply
+# never opens its video, and it does not reproduce when the build is served from
+# the root locally.
+name: pages
+
+on:
+  # Only main: a pull request must not publish.
+  push:
+    branches: [main]
+  # So the site can be rebuilt after a Pages settings change without an empty
+  # commit, which is the usual workaround.
+  workflow_dispatch:
+
+# The permissions Pages needs. `contents: read` for the checkout, the other two for
+# the deploy. Declared explicitly because the default token is read-only for
+# contents and the deploy fails without `pages: write` and `id-token: write`.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time. `cancel-in-progress: false` on purpose: cancelling a deploy
+# half way can leave the site serving the previous version while the workflow
+# reports failure, and a queued deploy is cheap. The group name is fixed rather
+# than per-ref, because the SITE is what must not be written concurrently.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+
+      # No fetch step. The media is COMMITTED (see THIRD-PARTY.md): it is public
+      # domain, it is 31 MB, and archive.org returns a 5XX for this item
+      # intermittently. Deploying by reaching out to a flaky third party would make
+      # the site fail for reasons that have nothing to do with this repository.
+      - run: npm run pages:build
+
+      # A guard, not a formality. The build writes `build/pages/` and the deploy
+      # uploads it; if the path or the output name changed, `upload-pages-artifact`
+      # would upload an empty directory and Pages would publish a blank site with
+      # every step green. Checking for the two files the page cannot work without
+      # is what makes a green run mean something.
+      - name: assert the build produced a usable page
+        run: |
+          test -f build/pages/index.html || { echo "no index.html"; exit 1; }
+          test -f build/pages/demo-entry.js || { echo "no demo-entry.js"; exit 1; }
+          # The viewer is served from the page, so its entry must be there too.
+          test -f build/pages/src/viewer/viewer.js || { echo "no viewer.js"; exit 1; }
+          echo "build/pages looks complete:"
+          du -sh build/pages
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/pages
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

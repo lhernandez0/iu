@@ -134,6 +134,9 @@ const stateWithSettings = (learning, top) => ({
     fontSize: 13,
     listId: 'hsk3_0',
     threshold: 3,
+    // The delay before a finished line dims. Small enough that a test can wait it
+    // out with real timers.
+    captionFade: 0.2,
     primaryLanguage: 'en',
     secondaryLanguage: null,
     translateInto: null,
@@ -734,15 +737,40 @@ section('the paused line holds its place in both views');
   const rows = byId.get('transcript').find((el) => el.classList.contains('row'));
 
   // In a gap: the line that finished is still the current line, but nothing is
-  // being said. It dims rather than vanishing.
+  // being said. It holds LIT for `captionFade` seconds, then dims, rather than
+  // vanishing or flickering on every short gap between cues.
   port.emit({ type: 'position', index: 1, seconds: 3, paused: true });
   check('the row keeps the highlight', rows[1].classList.contains('active'), true);
-  check('and is marked as not speaking', rows[1].classList.contains('paused'), true);
+  // Immediately after the gap starts the line is still at full strength: the dim
+  // is delayed, and most gaps are shorter than the hold.
+  check('and is not dimmed yet', rows[1].classList.contains('paused'), false);
+
+  // Wait out the 0.2s hold the fixture sets.
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  check('then it dims', rows[1].classList.contains('paused'), true);
 
   port.emit({ type: 'position', index: 2, seconds: 4.5, paused: false });
   check('speaking clears the dim', rows[2].classList.contains('paused'), false);
   check('including on the row that had it', rows[1].classList.contains('paused'), false);
   check('and the highlight moved on', rows[2].classList.contains('active'), true);
+}
+
+section('a pending dim is cancelled when the line starts again');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  const port = lastPort();
+  port.emit({ type: 'state', state: stateWithSettings() });
+  const rows = byId.get('transcript').find((el) => el.classList.contains('row'));
+
+  // A cue ends, then the next one starts BEFORE the hold elapses. The scheduled
+  // dim must be called off, or the row dims a moment after it became current
+  // again, which reads as the highlight breaking rather than as a fade.
+  port.emit({ type: 'position', index: 1, seconds: 3, paused: true });
+  port.emit({ type: 'position', index: 1, seconds: 3.05, paused: false });
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  check('the row never dims', rows[1].classList.contains('paused'), false);
+  check('and is still the current line', rows[1].classList.contains('active'), true);
 }
 
 section('a state push carries the paused flag, so a panel opened mid-gap agrees');
@@ -755,7 +783,10 @@ section('a state push carries the paused flag, so a panel opened mid-gap agrees'
 
   const rows = byId.get('transcript').find((el) => el.classList.contains('row'));
   check('the row is highlighted', rows[0].classList.contains('active'), true);
-  check('and dimmed, because it is a gap', rows[0].classList.contains('paused'), true);
+  // The dim is delayed here too, so it is not on yet.
+  check('and not yet dimmed', rows[0].classList.contains('paused'), false);
+  await new Promise((resolve) => setTimeout(resolve, 350));
+  check('then it dims, because it is a gap', rows[0].classList.contains('paused'), true);
 }
 
 // --- Result ------------------------------------------------------------------

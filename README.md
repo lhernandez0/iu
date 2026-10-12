@@ -174,6 +174,42 @@ extension. The one generated file, `src/vendor/mediabunny.js`, is committed, so
 nothing has to be installed to load or package it. Rebuild it with
 `node tools/build-vendor.mjs` if its version changes.
 
+### The commit hook
+
+```bash
+git config core.hooksPath .githooks   # once per clone
+```
+
+`.githooks/pre-commit` runs `tools/check-staged.mjs`, which reads the staged diff
+for the things a commit should not contain: an em dash, a merge conflict marker, a
+leftover `debugger`, a focused test (`.only`, which silently disables the rest of
+its suite), trailing whitespace, and any file over 8 MB. It runs in milliseconds
+because it reads only what is staged.
+
+The hook is a convenience, not a gate. `core.hooksPath` is a per-clone setting, so a
+fresh clone has no hook until it runs that command, and CI does not depend on it.
+Bypass it with `git commit --no-verify` when it is wrong.
+
+### The demo page
+
+```bash
+npm run pages:build    # -> build/pages, served at 127.0.0.1 with any static server
+npm run pages:media    # rebuild the committed demo clip from archive.org
+```
+
+`tools/pages/` builds a demo of the **shipped** viewer on a plain web page, with a
+small shim standing in for the `chrome.*` APIs, and `.github/workflows/pages.yml`
+publishes it to GitHub Pages on every push to `main`. It is the same viewer people
+install, not a copy, so the page cannot drift from the extension.
+
+The media is committed and public domain. [`THIRD-PARTY.md`](THIRD-PARTY.md) records
+its source, licence and the exact recipe that reproduces it.
+
+> If you change anything under `tools/pages/`, check it served from a **subpath**, not
+> the domain root. Pages serves a project site from `/<repo>/`, and root-absolute
+> paths (an `import '/src/...'`, or `runtime.getURL` returning `/${path}`) 404 there
+> while working perfectly at the root.
+
 ### Building the store package
 
 ```bash
@@ -258,6 +294,13 @@ test fails the build if another host or transport appears. See
   unrelated sources, a graded word list and a course companion, and only the second
   glosses what it holds. Words with no definition still mark, and the hover says it
   has no definition yet.
+- **Some Chinese characters have no pinyin.** Measured on a traditional track:
+  26 of 295 marked tokens (8.8%) show no reading, against 21 of 294 (7.1%) on the
+  same text in simplified, so traditional is only about 1.7 points worse. Of the
+  26, 21 are words the dictionary does not hold at all (師, 兄, 言, 僧, 芭蕉) and
+  fail identically in simplified; the remaining 5 are traditional forms (從, 裡,
+  穀, 雲, 淨) whose character mapping is not in the data. Traditional words whose
+  form IS in the dictionary resolve correctly (`厲害` shows `lìhai`).
 - **Korean is agglutinative, so it inherits Japanese's inflection gap and wider.**
   A conjugated verb does not match its dictionary form.
 - **Spaced scripts like English cannot be marked at all**, since a sentence is one

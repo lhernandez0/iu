@@ -368,7 +368,7 @@ for (const videoId of complete) {
   // When a real XML body IS present, read its structure from the captured bytes
   // rather than from an idea of what XML looks like. This is the whole point of
   // capturing: the shape in the report has to trace to a response, not to a guess.
-  // The reader reconstructs the raw filename from the normalised entry's own
+  // The viewer reconstructs the raw filename from the normalised entry's own
   // fields (language, client, format), so nothing extra has to be captured.
   //
   // Per track, not just the first. The two tracks differ in a way that matters,

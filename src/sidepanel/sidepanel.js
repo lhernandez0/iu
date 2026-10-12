@@ -99,6 +99,14 @@ const view = {
   focusMode: false,
   /** Whether the highlighted line is actually being spoken, or is a held gap. */
   speaking: true,
+  /**
+   * The pending dim of a just-finished line, or null.
+   *
+   * A gap leaves the last line lit; the dim is scheduled for `captionFade` seconds
+   * later rather than applied at once. Cancelled on any move of the highlight, so
+   * a dim queued for one line cannot land on another.
+   */
+  fadeTimer: null,
   /** Whether that held line was speaking or a gap, for the rebuild restore. */
   lastSpeaking: true,
   /** What each line was machine-translated into, if anything, for the MT tags. */
@@ -1220,6 +1228,19 @@ function buildRow(row, index) {
 }
 
 /**
+ * Cancel a scheduled dim of a finished line.
+ *
+ * Called whenever the highlight moves, so the timer cannot dim a row other than
+ * the one it was queued for, and so a line that starts being spoken again before
+ * the hold elapses never dims at all.
+ */
+function cancelFade() {
+  if (view.fadeTimer === null) return;
+  clearTimeout(view.fadeTimer);
+  view.fadeTimer = null;
+}
+
+/**
  * Highlight a row, including the case where nothing is being spoken.
  *
  * `index` is the last cue that has STARTED, which is not the same as a cue being
@@ -1239,6 +1260,11 @@ function setActive(index, speaking = true) {
   view.lastActive = index;
   view.lastSpeaking = speaking;
 
+  // A pending dim belongs to the line that just stopped. Any move of the
+  // highlight cancels it, or the dim would land on whatever row is current when
+  // the timer fires rather than on the one it was queued for.
+  cancelFade();
+
   view.elements[view.activeIndex]?.classList.remove('active');
   // The previous successor is no longer the successor.
   view.elements[view.activeIndex + 1]?.classList.remove('next');
@@ -1253,9 +1279,26 @@ function setActive(index, speaking = true) {
   const element = view.elements[index];
   if (!element) return;
   element.classList.add('active');
-  // Not being spoken, but still the last line: dimmed rather than gone, so a
-  // viewer looking up mid-gap keeps their place.
-  if (!speaking) element.classList.add('paused');
+  // Not being spoken, but still the last line. Held LIT for `captionFade` seconds
+  // before it dims, which is the same delay the film's captions use: a line that
+  // has only just finished is still the line you are on, and dimming it the
+  // instant it stops makes the panel flicker on every short gap between cues.
+  //
+  // The dim is applied LATER rather than skipped, because the property that makes
+  // this view usable is the one `sidepanel.css` documents: a viewer looking up
+  // mid-gap keeps their place. After the hold it dims to say the line is no
+  // longer current, and stays to be found again. `captionFade` of 0 dims
+  // immediately, which is the behaviour before the setting existed.
+  if (!speaking) {
+    const hold = Number(view.state?.learning?.captionFade);
+    if (!Number.isFinite(hold) || hold <= 0) element.classList.add('paused');
+    else {
+      view.fadeTimer = setTimeout(() => {
+        view.fadeTimer = null;
+        element.classList.add('paused');
+      }, hold * 1000);
+    }
+  }
 
   // The next line is marked so the Live view can reveal it as a preview. The
   // class is applied in both views because it costs nothing and switching views

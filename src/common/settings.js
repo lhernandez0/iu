@@ -154,6 +154,24 @@ export const CAPTION_SIZE_MIN = 12;
 export const CAPTION_SIZE_MAX = 34;
 
 /**
+ * How long a finished subtitle stays on screen before it fades, in ms.
+ *
+ * The default, and the reason this is a setting at all: a cue that has ENDED is
+ * not the line being spoken, and leaving it up made a long silent stretch show
+ * the last thing said. A viewer watching a film sees a stale line sitting there
+ * for however long the gap is, which is wrong in a way it is not wrong in the
+ * side panel, where the row stays highlighted so it can be found again.
+ *
+ * The default holds for long enough to cover an ordinary beat between two
+ * consecutive cues and no longer, so a run of dialogue does not blink. 0 turns
+ * the fade off entirely, which is the behaviour that was there before this
+ * existed and remains a legitimate choice for someone reading along slowly.
+ */
+export const CAPTION_FADE_DEFAULT = 0.5;
+export const CAPTION_FADE_MIN = 0;
+export const CAPTION_FADE_MAX = 10;
+
+/**
  * Whether Chinese subtitles are rewritten to the other script.
  *
  * A display option and nothing more: the dictionary already resolves traditional
@@ -600,6 +618,40 @@ export const SETTINGS = [
       const number = Number(value);
       if (!Number.isFinite(number)) return CAPTION_SIZE_DEFAULT;
       return Math.min(CAPTION_SIZE_MAX, Math.max(CAPTION_SIZE_MIN, Math.round(number)));
+    },
+  },
+  {
+    // How long a finished subtitle stays up before it fades, in SECONDS. 0 keeps
+    // it up until the next cue, which is what the viewer did before this existed.
+    //
+    // Seconds rather than milliseconds because this is a control a person reads.
+    // The consumers multiply by 1000 once, where the timer is set, so the unit is
+    // converted in exactly one place.
+    //
+    // A number input rather than a select: the useful values are a continuum
+    // (0.3 for fast reading, 2 while learning characters) and a fixed list would
+    // offer four of them and make the fifth somebody's problem.
+    //
+    // In the PANEL's settings sheet, not the viewer's caption bar. It is a
+    // preference set once and forgotten, and the caption bar is a row of controls
+    // in front of the film; a control nobody touches twice does not belong there.
+    // The viewer still HONOURS the value, it just no longer offers the control.
+    // `panel` is in the audience for that reason and `viewer` is not.
+    id: 'captionFade',
+    label: 'Fade subtitles after',
+    group: 'video',
+    type: 'number',
+    audience: ['panel'],
+    default: CAPTION_FADE_DEFAULT,
+    min: CAPTION_FADE_MIN,
+    max: CAPTION_FADE_MAX,
+    step: 0.1,
+    coerce: (value) => {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return CAPTION_FADE_DEFAULT;
+      // Rounded to a tenth, so typing 0.55 does not store a value the step cannot
+      // produce and the control then shows something a slider handle could not.
+      return Math.min(CAPTION_FADE_MAX, Math.max(CAPTION_FADE_MIN, Math.round(number * 10) / 10));
     },
   },
   {

@@ -84,6 +84,56 @@ export function findActiveIndex(segments, seconds) {
   return -1;
 }
 
+/**
+ * Index of the segment that should be DRAWN at `seconds`, or -1.
+ *
+ * Different from `findActiveIndex`, which answers "which cue started most
+ * recently". That is the right question for a transcript, where the row stays
+ * highlighted so it can be found again, and the wrong one for a subtitle: a cue
+ * that has ENDED is not the line being spoken, and a long silent stretch would
+ * otherwise show the last thing said for its whole duration.
+ *
+ * Returning -1 for the gap is what makes an ending a state change a renderer can
+ * see, rather than an unchanged index it skips over.
+ *
+ * @param {Segment[]} segments
+ * @param {number} seconds
+ * @returns {number}
+ */
+export function findPlayingIndex(segments, seconds) {
+  const index = findActiveIndex(segments, seconds);
+  if (index < 0) return -1;
+  const cue = segments[index];
+  return seconds < cue.start + cue.duration ? index : -1;
+}
+
+/**
+ * How long a finished cue should stay on screen, in seconds.
+ *
+ * 0 while another cue is imminent (within `fade`), so a run of ordinary dialogue
+ * holds a line across the sub-second gaps between its cues and does not blink,
+ * which is the flicker a naive "clear immediately" produces. A real gap gets the
+ * requested hold, after which the caller fades the line out.
+ *
+ * `fade` of 0 means never clear on a gap: the line stays until the next cue
+ * replaces it. That is the behaviour a stalled track had before any of this
+ * existed, and it stays available rather than being something a user cannot get
+ * back.
+ *
+ * @param {Segment[]} segments
+ * @param {number} seconds
+ * @param {number} fade Seconds to hold, or 0 to disable.
+ * @returns {number} Seconds to hold before fading, 0 meaning "do not clear".
+ */
+export function captionHoldSeconds(segments, seconds, fade) {
+  const hold = Number(fade);
+  if (!Number.isFinite(hold) || hold <= 0) return 0;
+  const index = findActiveIndex(segments, seconds);
+  const next = segments[index + 1];
+  if (next && next.start - seconds <= hold) return 0;
+  return hold;
+}
+
 /** @typedef {{start: number, duration: number, text: string}} Segment */
 
 /**

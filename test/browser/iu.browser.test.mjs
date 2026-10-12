@@ -93,10 +93,26 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
   section('a second language renders under the first, aligned');
 
   {
-    await routeYouTube(context, { videoId: 'dualvideo1', tracks: [ENGLISH, GERMAN] });
+    // A DISTINCT TITLE, and the wait below uses it. The section above uses the
+    // SAME English fixture, so it leaves three rows on screen that this video's
+    // rows are identical to. `waitForRows(page, 3)` therefore returns immediately
+    // and the assertions read the PREVIOUS video's dropdown, which listed one
+    // track. That is the flake `waitForRows` documents, and it is what failed in
+    // CI. It reproduces locally only sometimes, because whether the rebuild wins
+    // the race depends on timing; a log line is enough to win it.
+    //
+    // The title identifies WHICH VIDEO is loaded, which is what makes the wait
+    // mean "the panel is showing this one". It is read from the status line, so
+    // it is independent of the dropdown the assertions below inspect, unlike
+    // waiting for `de` and then asserting `de`.
+    await routeYouTube(context, { videoId: 'dualvideo1', title: 'Dual Track Video', tracks: [ENGLISH, GERMAN] });
     const watch = await openWatchPage(context, 'dualvideo1');
     const { page } = await openPanel(context, extensionId, watch);
-    await waitForRows(page, 3);
+    await page.waitForFunction(
+      () => (document.getElementById('status')?.textContent ?? '').includes('Dual Track Video'),
+      null,
+      { timeout: 20000 },
+    );
 
     let state = await panelState(page);
     check('before selecting, one language only', state.rows[0]?.secondary, '');
