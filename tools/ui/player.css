@@ -7,7 +7,7 @@
  * the point of this mock is to change that page's layout, so borrowing its rules
  * would mean borrowing the thing under discussion.
  *
- * The colours are the reader's, so it looks like the page it is mocking.
+ * The colours are the viewer's, so it looks like the page it is mocking.
  */
 
 :root {
@@ -881,7 +881,7 @@ body.player-preview {
   cursor: pointer;
 }
 
-/* Hidden from sight but not from assistive technology. The reader has its own copy
+/* Hidden from sight but not from assistive technology. The viewer has its own copy
    of this for the same reason: the panel's stylesheet is not loaded here. */
 .sr-only {
   position: absolute;

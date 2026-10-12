@@ -7,7 +7,7 @@
  * only LOOKS right can be caught by using it.
  *
  * Nothing here is imported by the extension. It is a preview, like
- * `tools/ui/reading.mjs`, and deliberately not a copy of `reader.js`: that file
+ * `tools/ui/reading.mjs`, and deliberately not a copy of `viewer.js`: that file
  * carries the content-message contract, the Matroska reading and the track
  * resolution, none of which is on trial. What IS on trial is the bar and the
  * captions, and both are small.
@@ -93,7 +93,7 @@ const SRT_URL = params.get('srt') ?? '/tools/ui/assets/preview.en.srt';
  *
  * Kept so it can be revoked: a blob URL pins its backing file until revoked, so
  * replacing the source without revoking holds every file opened this session in
- * memory. The reader already documents this; a mock that leaked while demonstrating
+ * memory. The viewer already documents this; a mock that leaked while demonstrating
  * a player would be a poor advertisement.
  *
  * @type {string|null}
@@ -154,7 +154,7 @@ const DEFAULTS = {
   // because a learner who is watching rather than studying may want a clean bar.
   difficulty: true,
   // Volume is remembered per preview, not per file. Persisting it is the point:
-  // re-picking a file after a page reload is a normal way to use the reader, and
+  // re-picking a file after a page reload is a normal way to use the viewer, and
   // having to reset the volume every time would be a bug in the eyes of a user.
   //
   // NOT a `volume` setting for the extension. It exists here because a preview needs
@@ -211,7 +211,7 @@ function saveSettings() {
 
 // --- The cue list ------------------------------------------------------------
 //
-// The reader gets its cues from the worker, which is not running in a preview, so
+// The viewer gets its cues from the worker, which is not running in a preview, so
 // the mock fetches the file's OWN subtitle track. Real text, real timing.
 
 /** @type {Array<{start: number, end: number, text: string}>} */
@@ -273,7 +273,7 @@ function activeCueIndex(seconds) {
 
 // --- The resume prompt -------------------------------------------------------
 //
-// Keyed on the path here, where the reader keys on
+// Keyed on the path here, where the viewer keys on
 // `local:<name>:<size>:<lastModified>`. The identity scheme is the extension's
 // business and is already implemented; what is being looked at is the PROMPT, the
 // position cannot reopen the file, so the offer is the feature.
@@ -575,7 +575,7 @@ let lastVolume = 100;
 // the control explains itself and stays unavailable rather than disappearing. A
 // missing button raises "where is it?"; a disabled one with a reason answers it.
 // That is also what makes the transition free: the day Chrome unflags this, the
-// feature appears in the reader with no code change beyond deleting a note.
+// feature appears in the viewer with no code change beyond deleting a note.
 //
 // ## What the extension will do, when the platform allows
 //
@@ -1027,7 +1027,7 @@ document.getElementById('pp-caption-size').addEventListener('input', (event) => 
  *
  * Changing what is playing while something is playing is a real thing to want, so
  * this picks a file, swaps the object URL and re-reads the cue list, the sequence
- * the reader runs. `URL.revokeObjectURL` on the way out, because a blob URL pins its
+ * the viewer runs. `URL.revokeObjectURL` on the way out, because a blob URL pins its
  * file and picking a 4GB film then another would hold both until the tab closes.
  */
 document.getElementById('pp-open').addEventListener('click', () => {

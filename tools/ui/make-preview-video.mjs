@@ -15,7 +15,7 @@
  * (`SRC_NOT_SUPPORTED`) with `net::ERR_ABORTED`, which reads like a codec problem
  * and is not one.
  *
- * This matters beyond the preview: **MKV is the format the reader exists for, and
+ * This matters beyond the preview: **MKV is the format the viewer exists for, and
  * it cannot be checked by hand in that browser.** Use real Chrome for the MKV
  * path. For the player layout, which is what the preview is for, MP4 is
  * equivalent, because the bar does not know what container it is over.
@@ -61,7 +61,7 @@ execFileSync(
     '-v', 'error',
     '-y',
     '-i', SOURCE,
-    // Video and audio only. The subtitle tracks are what the reader reads, but the
+    // Video and audio only. The subtitle tracks are what the viewer reads, but the
     // preview's cue list comes from the SIDECAR written below, and MP4 cannot carry
     // SubRip anyway, `mov_text` is a different format.
     '-map', '0:v:0',
