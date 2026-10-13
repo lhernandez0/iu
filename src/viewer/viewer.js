@@ -1541,6 +1541,15 @@ let audioBusy = false;
  */
 let trackDecoder = null;
 /**
+ * Whether a decode we attempted has failed.
+ *
+ * Distinct from `decoderCapability`, which records what the binary CLAIMS it can decode.
+ * A binary claiming a codec and a decode actually succeeding are different facts, and
+ * this is the second one being false. Cleared for each new file, so a failure on one
+ * film does not mark the next.
+ */
+let decoderFailed = false;
+/**
  * The shared audio device for decoded playback.
  *
  * Created lazily and reused, because an `AudioContext` is a scarce resource and
@@ -1698,12 +1707,17 @@ function renderAudio() {
   // told what is happening, so the field is shown and the note carries the message.
   const chosen = audioTracks[audioChoice];
   const unplayable = Boolean(chosen && !chosen.playable);
-  els.audioField.hidden = !choice && !unplayable;
+  // The note is for a viewer who is about to get NO SOUND, or who has just lost it.
+  // When we can decode the track for them there is nothing to say: the film plays
+  // with its audio, which is exactly what they expected, and announcing the machinery
+  // is the product talking about itself.
+  const note = unplayable ? audioNoteFor(chosen) : '';
+  els.audioField.hidden = !choice && !note;
 
   if (!choice) {
     els.audioSelect.replaceChildren();
     els.audioSelect.hidden = true;
-    els.audioNote.textContent = unplayable ? audioNoteFor(chosen) : '';
+    els.audioNote.textContent = note;
     return;
   }
 
@@ -1718,38 +1732,34 @@ function renderAudio() {
   });
 
   // The note says only what a viewer could NOT work out by looking, which is ONE case:
-  // a codec this browser cannot play. The other two were both noise, "switching rebuilds
-  // a copy of the file" described the implementation rather than the film, and
-  // "Preparing…" announced a wait that is already visible in the disabled select and is
-  // usually milliseconds long. Measured: 39 ms to a playable first frame, so the message
-  // was a flicker, not information.
-  els.audioNote.textContent = unplayable ? audioNoteFor(chosen) : '';
+  // a codec this browser cannot play AND we cannot decode. The others were all noise,
+  // "switching rebuilds a copy of the file" described the implementation rather than
+  // the film, "Preparing…" announced a wait already visible in the disabled select, and
+  // "we are decoding this for you" announced machinery that is working correctly.
+  els.audioNote.textContent = note;
   // The disabled state is the feedback. A control that greys itself for 39 ms reads as
   // responsive; one that also flashes a sentence reads as noisy.
   els.audioSelect.disabled = audioBusy;
 }
 
 /**
- * What to say when a track's audio is one this browser cannot play.
+ * What to say when a track's audio cannot be played.
  *
- * Two different sentences, because there are two different situations and the viewer
- * needs to know which one they are in: whether we can decode it for them, or whether
- * they will get silence. Saying "not supported" when we are about to play it anyway
- * would be worse than saying nothing.
+ * The ONLY case worth a sentence is one we cannot handle, because then the viewer is
+ * about to get silence and needs to know why. When the bundled decoder can play the
+ * track, the honest report is nothing at all: the audio works, and a note saying so
+ * is the product narrating itself. An earlier version printed "being decoded for you"
+ * on every such file, which is noise.
  *
  * @param {{codec: string, playable: boolean}} track
  * @returns {string}
  */
 function audioNoteFor(track) {
   const codec = track.codec.toUpperCase();
-  if (decoderCapability?.get(track.codec)) {
-    return `This file\u2019s audio (${codec}) is being decoded for you.`;
+  if (decoderFailed) {
+    return `This file\u2019s audio (${codec}) could not be decoded, so it plays silently.`;
   }
-  if (decoderCapability === null) {
-    // Capability has not been probed yet, so the honest thing is the plain warning
-    // without the promise. `describeAudio` re-renders once it knows.
-    return `This file\u2019s audio (${codec}) is not supported by this browser.`;
-  }
+  if (decoderCapability?.get(track.codec)) return '';
   return `This file\u2019s audio (${codec}) is not supported, so it will play silently.`;
 }
 
@@ -1765,6 +1775,8 @@ async function describeAudio(file) {
   audioSourceFile = file;
   audioTracks = [];
   audioChoice = 0;
+  // Cleared per file: a failure to decode one film says nothing about the next.
+  decoderFailed = false;
   // Cleared for a new file: showing the previous film's tracks while the new one is
   // still being read would offer a choice that means nothing.
   els.audioField.hidden = true;
@@ -1820,8 +1832,18 @@ async function startDecoding(file, index) {
     applyVolume();
     if (!els.video.paused) await decoder.play(els.video.currentTime);
   } catch (error) {
-    // A failed decode is not fatal: the picture still plays, and the note already said
-    // the audio is unsupported, so the honest outcome is silence with a reason.
+    // The decode failed, so the promise the note made (or would have made silently) is
+    // now false. This is the ONE case where the audio row must speak: the viewer would
+    // otherwise get silence with no explanation, which is the exact failure this
+    // feature exists to remove.
+    //
+    // `decoderCapability` is deliberately NOT consulted here. It records what the BINARY
+    // claims it can decode, and the binary claiming it and the decode succeeding are
+    // different facts; this path is the second one being false.
+    decoderFailed = true;
+    renderAudio();
+    // Also set the status line, because the audio row may be hidden for a one-track
+    // file. Both are cleared by the next file.
     setStatus(`Could not decode this file\u2019s audio (${String(error?.message ?? error)}).`, true);
   }
 }

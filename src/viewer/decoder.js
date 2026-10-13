@@ -57,6 +57,15 @@ const REFILL_INTERVAL_MS = 200;
  */
 const EAGAIN = -11;
 
+/**
+ * `ff_read_frame_multi` returns this at the end of the stream.
+ *
+ * Measured, and it is `AVERROR_EOF` as a 32-bit signed value. Compared EXACTLY,
+ * because it decides when to flush the decoder and "not EAGAIN" would also be true
+ * for an ordinary successful read.
+ */
+const AVERROR_EOF = -541478725;
+
 /** `av_seek_frame` flag: land on the keyframe at or before the timestamp. */
 const AVSEEK_FLAG_BACKWARD = 4;
 
@@ -177,9 +186,27 @@ export class TrackDecoder {
     this.context = context;
     this.libav = await LibAV.LibAV();
 
-    const bytes = new Uint8Array(await this.file.arrayBuffer());
-    await this.libav.writeFile('decoding.bin', bytes);
-    const [format, streams] = await this.libav.ff_init_demuxer_file('decoding.bin');
+    // **The file is NOT read into memory, and that is the whole point.**
+    //
+    // An earlier version did `await this.file.arrayBuffer()` and wrote that into the
+    // wasm filesystem. For a film that is gigabytes of RAM used twice (the ArrayBuffer
+    // AND the wasm copy), the read can take minutes, and on a large file it fails with
+    // `NotReadableError` because a single multi-gigabyte read is refused. Reported as
+    // "I played a movie and five minutes later there is still no audio".
+    //
+    // A BLOCK reader device instead reads only what the demuxer asks for, via
+    // `file.slice()`, on demand. Measured on a fixture: the demuxer asked for 4 slices
+    // and decoding began immediately, and the file size is irrelevant to startup.
+    await this.libav.mkblockreaderdev('input', this.file.size);
+    this.libav.onblockread = async (name, position, length) => {
+      // `length` is a hint; a slice of exactly what was asked for is always valid, and
+      // the demuxer will ask again if it needs more. An empty result means the end of
+      // the file, which the send call understands.
+      const chunk = await this.file.slice(position, position + length).arrayBuffer();
+      await this.libav.ff_block_reader_dev_send(name, position, new Uint8Array(chunk));
+    };
+
+    const [format, streams] = await this.libav.ff_init_demuxer_file('input');
     this.format = format;
     this.streams = streams;
 
@@ -307,20 +334,33 @@ export class TrackDecoder {
     let guard = 0;
 
     while (!this.disposed && this.nextStart < target && guard++ < 64) {
+      // A SMALL read limit, deliberately. This is the demuxer's read size, not the
+      // decode target: asking for a megabyte at a time returns tens of seconds of
+      // audio in one call, which overshoots the window and holds memory that a seek
+      // will only throw away. 64 KiB is a few frames, so the loop exits on the TARGET
+      // rather than on how much a read happened to return.
       const [result, byStream] = await this.libav.ff_read_frame_multi(
         this.format,
         this.packets,
-        { limit: 1 << 20 },
+        { limit: 64 * 1024 },
       );
       const batch = byStream[this.streamIndex];
       let produced = 0;
       if (batch?.length) {
+        // `config.fin` is passed ONLY at the end of the stream, and that is a real
+        // trap rather than a preference. `fin: true` makes the helper send a null
+        // packet to flush the decoder, and sending a null packet twice is an error
+        // ("Error submitting the packet to the decoder: End of file"), because the
+        // decoder is already drained. It was passed on every batch before, which
+        // happened to throw only because a large read limit reached the end of a
+        // short file in one call, so the second flush was never attempted.
+        const finished = result === AVERROR_EOF;
         const frames = await this.libav.ff_decode_multi(
           this.decoder,
           this.packets,
           this.frame,
           batch,
-          true,
+          finished,
         );
         for (const decoded of frames) this.schedule(decoded);
         produced = frames.length;
@@ -358,6 +398,15 @@ export class TrackDecoder {
     const node = this.context.createBufferSource();
     node.buffer = buffer;
     node.connect(this.gain);
+    // Pruned as each buffer finishes. Without this the array grows for the whole
+    // film, keeping every decoded AudioBuffer alive: a two hour film is thousands of
+    // nodes and hundreds of megabytes that can never be collected, because a finished
+    // source node is only released when nothing references it.
+    node.addEventListener('ended', () => {
+      node.disconnect();
+      const at = this.nodes.indexOf(node);
+      if (at !== -1) this.nodes.splice(at, 1);
+    });
     // Never schedule in the past: after a stall the queue can fall behind the clock,
     // and a start time in the past plays immediately, which is the recovery wanted.
     this.nextStart = Math.max(this.nextStart, this.context.currentTime);

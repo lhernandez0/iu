@@ -789,30 +789,29 @@ section('A file the browser cannot decode gets decoded for us');
   await page8.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   await page8.waitForTimeout(1000);
 
-  // (1) The UI path: open the file, and the note must appear once the decoder has been
-  // asked. It is the signal that the fallback decision has been made.
+  // (1) The UI path: open the file. Success must be SILENT, and the element muted so
+  // the decoded audio is the only sound. The mute is the signal that the decoder has
+  // actually started, and it is a state rather than a message, so waiting for it is
+  // the difference between testing the wiring and testing how fast the machine is.
   await page8.setInputFiles('#pick-files', join(FIXTURES, 'one-eac3.mkv'));
-  await page8.waitForFunction(
-    () => (document.getElementById('audio-note')?.textContent ?? '').length > 0,
-    null,
-    { timeout: 30000 },
-  );
-
-  const note = await page8.evaluate(() => document.getElementById('audio-note').textContent);
-  check('the viewer says the audio is being decoded', /decoded for you/i.test(note), true);
-
-  // The mute happens when the decoder actually starts, which is after the note is
-  // written: the note is a decision ("we can decode this"), the mute is the decoder
-  // having loaded 6 MB of WebAssembly and produced its first window. Waiting for the
-  // state, not the message, is the difference between testing the wiring and testing
-  // how fast the machine is.
   await page8.waitForFunction(() => document.getElementById('video').muted, null, {
     timeout: 30000,
   });
+
   check(
-    'and the element is muted so the decoded audio is the only source',
+    'the element is muted so the decoded audio is the only source',
     await page8.evaluate(() => document.getElementById('video').muted),
     true,
+  );
+
+  // Nothing is said when it works. An earlier version printed "being decoded for you"
+  // on every such file, which is the product narrating itself: the viewer asked for a
+  // film and got sound, which needs no announcement. Pinned because it is a deliberate
+  // reversal, and "add a friendly message" is the obvious thing to do next.
+  check(
+    'and nothing is said, because decoding successfully is not news',
+    await page8.evaluate(() => document.getElementById('audio-note').textContent),
+    '',
   );
 
   // (2) The real proof, under the extension's CSP: decode the fixture through the
