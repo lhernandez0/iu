@@ -11,7 +11,7 @@ npm test                  # hermetic, ~1s, no browser, no network. The default l
 npm run test:browser      # real Chromium, ~75s. Before a commit that changes wiring.
 npm run test:conformance  # Matroska conformance; needs `npm run conformance:fetch` once.
 npm run fixtures          # regenerate test/mkv/*.mkv (needs ffmpeg)
-npm run vendor:libav      # build the media decoder into build/libav (needs emcc, ~5 min)
+npm run vendor:libav      # build the media decoder into src/vendor (needs emcc, ~5 min)
 npm run ui                # Vite preview of the panel at 127.0.0.1:8099, for layout work
 make release              # stage, lint, zip, verify -> build/*.zip
 tools/ci/run-in-ci.sh npm test   # the same, in a container matching the CI runner
@@ -21,7 +21,8 @@ Only the first tier is in the default loop, on purpose. The others need a browse
 190 MB of downloaded files, or a compiler, and putting them in `npm test` would
 make the fast loop something to avoid.
 
-**The media decoder is the one build product.** `build/libav/` is not committed;
+**The media decoder is the one build product.** It is built into `src/vendor/`
+but gitignored, so it is never committed;
 `npm run vendor:libav` builds it, and `make stage` fails without it.
 `libav.test.mjs` skips when it is absent, so `npm test` stays fast and
 toolchain-free; CI builds it and fails if the test skipped. See `THIRD-PARTY.md`.
@@ -62,7 +63,7 @@ deliberate edit to several files at once, not something to route around:
 - **No build step, and no runtime dependencies.** Plain ES modules loaded directly.
   The one generated file that is committed is `src/vendor/mediabunny.js`, rebuilt
   with `node tools/build-vendor.mjs`. **One exception:** the media decoder is a
-  compiled FFmpeg build, built into `build/libav/` and NOT committed;
+  compiled FFmpeg build, built into `src/vendor/` (gitignored) and NOT committed;
   it needs `emcc` to rebuild and is copied into the package by `make stage`.
 - **`const api = globalThis.browser ?? globalThis.chrome;` at each use site**, never
   a shared module. The two browsers disagree, and a shared shim hides where.

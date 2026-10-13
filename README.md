@@ -176,7 +176,8 @@ package it; rebuild it with `node tools/build-vendor.mjs` if its version changes
 
 **One exception, for packaging a release.** The media decoder, a compiled FFmpeg
 build for the audio and video formats a browser cannot play, is a build product
-rather than a committed file. `npm run vendor:libav` builds it into `build/libav/`
+rather than a committed file. `npm run vendor:libav` builds it into
+`src/vendor/` (gitignored, so it is never committed)
 and needs [Emscripten](https://github.com/emscripten-core/emsdk) on PATH, the same
 way `npm run fixtures` needs ffmpeg. `make release` copies it into the package and
 fails if it has not been built. See `THIRD-PARTY.md` for what it is and why it is

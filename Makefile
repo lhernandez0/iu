@@ -36,10 +36,11 @@ STAGE   := $(BUILD)/stage
 ZIP     := $(BUILD)/$(SLUG)-$(VERSION).zip
 
 # The media decoder, built by `npm run vendor:libav` and NOT committed. It is a
-# compiled FFmpeg variant (ADR 0011), copied into the staged `src/vendor/` so the
-# extension can load it at runtime. Kept out of `SHIPPED` because it does not live
-# in the working tree.
-DECODER := $(BUILD)/libav
+# compiled FFmpeg variant that ships inside the extension, so it is built directly
+# into `src/vendor/` (gitignored by name) rather than into `build/`, which means
+# `SHIPPED` needs no special case: the normal `cp -r src` picks it up. This
+# variable exists so `stage` can assert it was built.
+DECODER := src/vendor/libav.js
 
 # WHAT SHIPS. Everything else in the repository is development material.
 #
@@ -91,13 +92,13 @@ ui: ## Side-panel preview at http://127.0.0.1:8099
 
 .PHONY: stage
 stage: ## Copy the shipping set into build/stage
-	@# The media decoder is a build product, not committed (ADR 0011). A release
-	@# built without it would ship an extension that silently cannot play Dolby
-	@# audio or HEVC, so its absence is a hard failure here rather than a puzzle
-	@# for whoever installs the ZIP. It is copied into the staged `src/vendor/`,
-	@# which is where the extension loads it from at runtime.
-	@if [ ! -f $(DECODER)/libav.js ]; then \
-		echo "MISSING: $(DECODER)/libav.js" >&2; \
+	@# The media decoder is a build product, not committed. A release built without
+	@# it would ship an extension that silently cannot play Dolby audio or HEVC, so
+	@# its absence is a hard failure here rather than a puzzle for whoever installs
+	@# the ZIP. It lives in `src/vendor/` (gitignored), so the loop below copies it
+	@# along with the rest of `src/`; this only has to refuse to proceed without it.
+	@if [ ! -f $(DECODER) ]; then \
+		echo "MISSING: $(DECODER)" >&2; \
 		echo "  the media decoder is not built. run: npm run vendor:libav (needs emcc)" >&2; \
 		exit 1; \
 	fi
@@ -107,9 +108,7 @@ stage: ## Copy the shipping set into build/stage
 		if [ ! -e "$$entry" ]; then echo "MISSING: $$entry" >&2; exit 1; fi; \
 		cp -r "$$entry" $(STAGE)/; \
 	done
-	@mkdir -p $(STAGE)/src/vendor
-	@cp $(DECODER)/* $(STAGE)/src/vendor/
-	@echo "staged the media decoder: $$(ls $(DECODER) | tr '\n' ' ')"
+	@echo "staged the media decoder: $$(ls src/vendor/libav* | xargs -n1 basename | tr '\n' ' ')"
 	@# Directories that must never appear, asserted rather than assumed. This is
 	@# the failure this whole target exists to prevent, and a silent regression
 	@# would only be noticed by someone reading the artifact's file list.

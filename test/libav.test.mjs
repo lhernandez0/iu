@@ -29,7 +29,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const DECODER = join(ROOT, 'build', 'libav', 'libav.js');
+const DECODER = join(ROOT, 'src', 'vendor', 'libav.js');
 const FIXTURE = join(ROOT, 'test', 'mkv', 'one-eac3.mkv');
 const EXPECTED = join(ROOT, 'tools', 'libav', 'expected.json');
 
@@ -54,7 +54,7 @@ console.log('\nthe built media decoder decodes Dolby audio');
 if (!existsSync(DECODER)) {
   // Not a failure. See the header: this is the same shape as any other
   // toolchain-gated tier in this project.
-  console.log('  skip  build/libav/ is not present');
+  console.log('  skip  src/vendor/libav.js is not built');
   console.log('        run `npm run vendor:libav` to build it (needs emcc)');
   process.exit(0);
 }

@@ -365,9 +365,9 @@ would silently drop.
 **Three files, built rather than committed, and the largest thing in the
 extension.** They are one library split across three files because WebAssembly
 works that way: a JS loader the extension imports, a JS glue file, and the `.wasm`
-binary itself. They live in `build/libav/` and are copied into the package by
-`make stage`; they are **not** in `src/` and **not** in the repository, for the
-reasons in "Why it is built rather than committed" below.
+binary itself. They are built into `src/vendor/` (gitignored by name) so the
+extension loads them exactly as it loads `mediabunny.js`, and they are **not** in
+the repository, for the reasons in "Why it is built rather than committed" below.
 
 | File | Bytes | What it is |
 | --- | --- | --- |
@@ -381,7 +381,7 @@ reasons in "Why it is built rather than committed" below.
 | [FFmpeg](https://ffmpeg.org) (compiled into the wasm) | LGPL-2.1 |
 | Built by | `npm run vendor:libav` (`tools/build-libav.mjs`), needs `emcc` |
 | Pinned to | libav.js `c05a676` (v6.10.9), FFmpeg `5b9252ab` (n9.0) |
-| Where it goes | `build/libav/` (gitignored), copied into the staged extension by `make stage` |
+| Where it goes | `src/vendor/` (gitignored by name), shipped by `make stage` |
 | Why it ships | The browser cannot decode HEVC video, Dolby audio (AC-3/E-AC-3), or open TS/AVI/ASF containers. This decodes and remuxes them, for files the viewer would otherwise refuse. |
 
 ### Why it is built rather than committed

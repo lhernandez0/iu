@@ -13,6 +13,7 @@
  */
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -244,20 +245,30 @@ section('shipped source can only reach youtube.com, and only over fetch');
   }
   check('no transport but fetch appears in OUR src/', transports, []);
 
-  // A built decoder must never be committed back into the tree. It is 5 MB of
-  // opaque binary whose presence in git history is permanent, and it is the exact
-  // thing ADR 0011 moved out. Asserted rather than trusted, because "commit the
-  // artifact, it is easier" is a tempting mistake to make later.
-  //
-  // This is also what makes the `src/vendor/` exemption above safe to keep. The
-  // compiled library is the only third-party code here that names transports, and
-  // it never reaches this directory.
+  // The built decoder must be present (when built) but NEVER tracked by git. It
+  // is 5.7 MB of opaque binary whose presence in git history is permanent and
+  // invisible to supply-chain scanners, which is the exact thing the build-product
+  // decision moved out. It lives in `src/vendor/` because that is where the
+  // extension loads from, so the guard is not "it is absent" but "git ignores it",
+  // asserted with `git check-ignore` rather than by trusting a `.gitignore` line.
   {
     const vendorDir = join(ROOT, 'src', 'vendor');
-    const stray = existsSync(vendorDir)
+    const decoder = existsSync(vendorDir)
       ? readdirSync(vendorDir).filter((name) => name.startsWith('libav'))
       : [];
-    check('the built media decoder is not committed to src/vendor', stray, []);
+    const tracked = [];
+    for (const name of decoder) {
+      // `git check-ignore` exits 0 when the path IS ignored, 1 when it is not.
+      let ignored = false;
+      try {
+        execFileSync('git', ['check-ignore', '-q', join('src', 'vendor', name)], { cwd: ROOT });
+        ignored = true;
+      } catch {
+        ignored = false;
+      }
+      if (!ignored) tracked.push(name);
+    }
+    check('every built decoder file in src/vendor is gitignored', tracked, []);
   }
 
   // 2. Every absolute URL named in OUR src/ resolves to youtube.com. A URL whose

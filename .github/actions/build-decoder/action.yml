@@ -1,9 +1,9 @@
 name: Build the media decoder
 description: >
-  Build the compiled FFmpeg variant into build/libav/ (ADR 0011). Shared by the
-  jobs that need the artifact: `hermetic`, because the decode test must run
-  against a real decoder rather than skip, and `package`, because the ZIP has to
-  contain it.
+  Build the compiled FFmpeg variant into src/vendor/ (gitignored, not committed).
+  Shared by the jobs that need the artifact: `hermetic`, because the decode test
+  must run against a real decoder rather than skip, and `package`, because the ZIP
+  has to contain it. See THIRD-PARTY.md for why it is built rather than committed.
 
 # A composite action rather than a repeated step, because the build has three
 # separate hazards that should be solved once: a toolchain to install, an artifact
@@ -31,7 +31,7 @@ runs:
     - uses: actions/cache@v4
       id: decoder-cache
       with:
-        path: build/libav
+        path: src/vendor/libav*
         key: libav-${{ hashFiles('tools/build-libav.mjs', 'tools/libav/add-variant.mjs') }}
 
     - name: build the decoder
@@ -46,9 +46,9 @@ runs:
       shell: bash
       run: |
         for f in libav.js libav-6.10.9.0-iu.wasm.mjs libav-6.10.9.0-iu.wasm.wasm; do
-          if [ ! -f "build/libav/$f" ]; then
-            echo "::error::build/libav/$f is missing after the build"
+          if [ ! -f "src/vendor/$f" ]; then
+            echo "::error::src/vendor/$f is missing after the build"
             exit 1
           fi
         done
-        ls -la build/libav
+        ls -la src/vendor/libav*

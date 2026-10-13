@@ -769,6 +769,94 @@ section('Resume continues rather than sitting paused');section('Resume continues
   await page2.close();
 }
 
+section('A file the browser cannot decode gets decoded for us');
+
+{
+  // The failure this feature exists for: a file whose audio is E-AC-3 plays its picture
+  // and emits SILENCE, with no `MediaError` to catch. `one-eac3.mkv` is that file.
+  //
+  // Two things are asserted, and the second is the one that matters:
+  //
+  //   1. The viewer says it is decoding, and mutes the element.
+  //   2. **Sound actually reaches the audio device**, measured by tapping the decoder's
+  //      own output with an analyser. A test that only checked "the module loaded" would
+  //      pass against a decoder producing silence, which is precisely the bug.
+  //
+  // The measurement runs UNDER THE EXTENSION ORIGIN, not on a plain page, because the
+  // manifest's CSP (`wasm-unsafe-eval`) is what allows WebAssembly to instantiate. A
+  // plain-page check would pass while the shipped extension failed.
+  const page8 = await context.newPage();
+  await page8.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page8.waitForTimeout(1000);
+
+  // (1) The UI path: open the file, and the note must appear once the decoder has been
+  // asked. It is the signal that the fallback decision has been made.
+  await page8.setInputFiles('#pick-files', join(FIXTURES, 'one-eac3.mkv'));
+  await page8.waitForFunction(
+    () => (document.getElementById('audio-note')?.textContent ?? '').length > 0,
+    null,
+    { timeout: 30000 },
+  );
+
+  const note = await page8.evaluate(() => document.getElementById('audio-note').textContent);
+  check('the viewer says the audio is being decoded', /decoded for you/i.test(note), true);
+
+  // The mute happens when the decoder actually starts, which is after the note is
+  // written: the note is a decision ("we can decode this"), the mute is the decoder
+  // having loaded 6 MB of WebAssembly and produced its first window. Waiting for the
+  // state, not the message, is the difference between testing the wiring and testing
+  // how fast the machine is.
+  await page8.waitForFunction(() => document.getElementById('video').muted, null, {
+    timeout: 30000,
+  });
+  check(
+    'and the element is muted so the decoded audio is the only source',
+    await page8.evaluate(() => document.getElementById('video').muted),
+    true,
+  );
+
+  // (2) The real proof, under the extension's CSP: decode the fixture through the
+  // module the viewer uses, and measure the samples reaching the destination.
+  const sound = await page8.evaluate(async () => {
+    const { TrackDecoder } = await import('/src/viewer/decoder.js');
+    const context = new AudioContext();
+    // Read the fixture through the extension's own URL. The extension packages
+    // `test/`, so this resolves under `chrome-extension://`, which is the origin that
+    // has to work.
+    const file = new File(
+      [await (await fetch('/test/mkv/one-eac3.mkv')).arrayBuffer()],
+      'one-eac3.mkv',
+    );
+    const decoder = new TrackDecoder(file, 0);
+    await decoder.start(0, context);
+
+    // Tap the decoder's own output rather than the destination: Web Audio has no way
+    // to observe the destination, and an analyser on the same node sees the same
+    // samples. `decoder.gain` is the decoder's output node.
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 2048;
+    decoder.gain.connect(analyser);
+
+    await decoder.play(0);
+    // Long enough for the first decoded window to reach the analyser.
+    await new Promise((resolve) => setTimeout(resolve, 900));
+
+    const samples = new Float32Array(analyser.fftSize);
+    analyser.getFloatTimeDomainData(samples);
+    let peak = 0;
+    for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
+    const position = decoder.position;
+    decoder.dispose();
+    return { peak, position };
+  });
+
+  check('the decoder produces real sound', sound.peak > 0.001, true);
+  check('and it has a real position on the media clock', sound.position > 0, true);
+  if (sound.peak <= 0.001) console.log(`  NOTE peak was ${sound.peak}`);
+
+  await page8.close();
+}
+
 section('Fullscreen, and the Picture-in-Picture round trip');
 
 {

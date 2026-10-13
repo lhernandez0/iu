@@ -158,7 +158,16 @@ section('the extension itself ships no dependencies');
   check('there are no runtime dependencies', pkg.dependencies ?? {}, {});
   // No `web_accessible_resources` means no bundled third-party asset is served.
   check('the manifest exposes no resources', manifest.web_accessible_resources ?? undefined, undefined);
-  check('the extension declares no content security policy it cannot honour', typeof manifest.content_security_policy, 'undefined');
+  // The CSP, which used to be asserted ABSENT and is now asserted to be exactly what
+  // the media decoder needs and nothing more. The decoder is WebAssembly, and MV3
+  // refuses to instantiate wasm without `wasm-unsafe-eval`, so the policy is a real
+  // requirement rather than a drift. It is checked strictly: no `unsafe-inline`, no
+  // remote source, because a loose policy here would silently allow far more than the
+  // decoder needs.
+  const policy = manifest.content_security_policy?.extension_pages ?? '';
+  check('the CSP allows WebAssembly', policy.includes("'wasm-unsafe-eval'"), true);
+  check('and allows no inline script', policy.includes("'unsafe-inline'"), false);
+  check('and allows no remote script source', /https?:/.test(policy), false);
 
   // Every vendored file must be attributed, or the licence obligation is unmet.
   //

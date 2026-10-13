@@ -49,8 +49,17 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-/** Build output. Gitignored, copied into the staged extension by `make stage`. */
-const OUT_DIR = join(ROOT, 'build', 'libav');
+/**
+ * Where the decoder is written.
+ *
+ * `src/vendor/`, because that is where the extension loads from: the cosmetic
+ * bundle (`mediabunny.js`) is there, and the release ZIP ships `src/` as-is. The
+ * three files are **gitignored by name**, so writing here is safe and there is no
+ * copy step between "built" and "loadable". `make stage` needs no special case.
+ *
+ * See the `.gitignore` entry and `THIRD-PARTY.md`.
+ */
+const OUT_DIR = join(ROOT, 'src', 'vendor');
 /** The libav.js checkout, reused between builds. Gitignored. */
 const CHECKOUT = join(ROOT, 'build', 'libav-src');
 
@@ -241,8 +250,14 @@ const outputs = {
   [`libav-${LIBAV.version}-${VARIANT}.wasm.wasm`]: join(dist, `libav-${LIBAV.version}-${VARIANT}.wasm.wasm`),
 };
 
-rmSync(OUT_DIR, { recursive: true, force: true });
+// Remove ONLY our own outputs. `OUT_DIR` is `src/vendor/`, which also holds the
+// committed `mediabunny.js` and its README, and `rm -rf` on the directory would
+// delete those. Removing the three files by name is the difference between a
+// clean rebuild and destroying committed work.
 mkdirSync(OUT_DIR, { recursive: true });
+for (const name of Object.keys(outputs)) {
+  rmSync(join(OUT_DIR, name), { force: true });
+}
 
 let total = 0;
 for (const [name, from] of Object.entries(outputs)) {
@@ -253,6 +268,6 @@ for (const [name, from] of Object.entries(outputs)) {
 }
 
 console.log(
-  `\nwrote build/libav/  (${(total / 1024 / 1024).toFixed(2)} MB, ${AUDIO_ONLY ? 'audio only' : 'audio and video'})`,
+  `\nwrote src/vendor/  (${(total / 1024 / 1024).toFixed(2)} MB, ${AUDIO_ONLY ? 'audio only' : 'audio and video'})`,
 );
-console.log('run `make release` to package it, or `npm test` to decode a fixture with it');
+console.log('gitignored; `make release` ships it. `npm test` decodes a fixture with it');

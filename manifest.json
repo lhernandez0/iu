@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "A Chinese, Japanese and Korean dictionary for video: unknown words marked in the subtitles, meanings on hover.",
   "minimum_chrome_version": "116",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "background": {
     "service_worker": "src/background/service-worker.js",
     "scripts": ["src/background/service-worker.js"],

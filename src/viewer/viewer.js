@@ -44,6 +44,7 @@ import { markLine, listCoversLanguage, listForLanguage } from '../learn/marking.
 import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX } from '../common/settings.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
+import { canDecode, TrackDecoder } from './decoder.js';
 import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks } from './diagnostics.js';
 
 /**
@@ -541,6 +542,9 @@ function notifyChanged() {
  * @param {File} file
  */
 async function loadVideo(file) {
+  // The decoder fallback belongs to the PREVIOUS file, so it is torn down before
+  // anything else: its scheduled audio would otherwise keep playing over the new film.
+  stopDecoder();
   // A stream from the previous file has to be torn down before its source goes away,
   // or its MediaSource stays attached and its object URL keeps the blob alive.
   // `releaseStream` revokes the rebuild's URL, so this must NOT revoke `videoObjectUrl`
@@ -1527,12 +1531,154 @@ let releaseStream = null;
 /** Whether a rebuild is in flight, so the control can say so rather than appear frozen. */
 let audioBusy = false;
 /**
+ * The decoder fallback, live only while a file's audio is being decoded by us.
+ *
+ * Null in the ordinary case, which is a file the browser plays itself. It is set when
+ * the browser cannot decode the chosen track, and torn down on a file change or when
+ * a track the browser CAN play is chosen.
+ *
+ * @type {TrackDecoder|null}
+ */
+let trackDecoder = null;
+/**
+ * The shared audio device for decoded playback.
+ *
+ * Created lazily and reused, because an `AudioContext` is a scarce resource and
+ * browsers cap how many a page may have. It also must be created from a user gesture
+ * on some browsers, which opening a file is.
+ *
+ * @type {AudioContext|null}
+ */
+let audioContext = null;
+/**
+ * The codec ids the bundled decoder knows, by the viewer's own codec names.
+ *
+ * Asked of the binary rather than hardcoded, so it cannot drift from what the build
+ * actually contains. `null` until probed, and `probeDecoder()` fills it.
+ *
+ * @type {Map<string, boolean>|null}
+ */
+let decoderCapability = null;
+/**
  * Whether the track select is showing.
  *
  * Shown whenever the file actually has more than one, in the transport row. The row is
  * full, so this only appears when it has something to offer, a select over a single
  * option is noise.
  */
+
+/**
+ * Map a track's codec name to the FFmpeg id `canDecode` wants.
+ *
+ * The names are the viewer's own, from `listAudioTracks`, which are mediabunny's
+ * spellings. The ids are FFmpeg's `AVCodecID` values. Only the handful that matter
+ * are listed; an unmapped name means "we cannot say", and the caller treats that as
+ * not decodable rather than guessing.
+ */
+const CODEC_IDS = new Map([
+  ['aac', 86018],
+  ['ac3', 86019],
+  ['eac3', 86056],
+  ['dts', 86020],
+  ['truehd', 86060],
+  ['mlp', 86045],
+  ['mp3', 86017],
+  ['opus', 86076],
+  ['flac', 86028],
+  ['vorbis', 86021],
+  ['wmav1', 86024],
+  ['wmav2', 86025],
+  ['wmapro', 86054],
+  ['pcm-s16', 65536],
+  ['pcm-s24', 65540],
+  ['pcm-f32', 65548],
+]);
+
+/**
+ * Whether the bundled decoder can decode a track the browser cannot.
+ *
+ * Answered by the binary, once per codec, and cached. `false` when the codec is not
+ * mapped or the decoder is not present, so a release built without it behaves exactly
+ * as before: the note says the audio is unsupported.
+ *
+ * @param {string} codec The viewer's own codec name for the track.
+ * @returns {Promise<boolean>}
+ */
+async function decoderCanPlay(codec) {
+  const id = CODEC_IDS.get(codec);
+  if (id === undefined) return false;
+  if (!decoderCapability) decoderCapability = new Map();
+  if (decoderCapability.has(codec)) return decoderCapability.get(codec);
+  let answer = false;
+  try {
+    answer = await canDecode(id);
+  } catch {
+    // The decoder is absent or failed to load; either way it cannot play anything.
+    answer = false;
+  }
+  decoderCapability.set(codec, answer);
+  return answer;
+}
+
+/** Lazily create the shared audio device. */
+function ensureAudioContext() {
+  if (!audioContext) {
+    // `AudioContext`, not `webkitAudioContext`: the project targets Chrome 116+ and
+    // Firefox 128+, both of which have had the unprefixed name for years.
+    audioContext = new AudioContext();
+  }
+  // Resumed because a context created before a gesture starts suspended, and a
+  // suspended context produces no sound with no error to explain it.
+  if (audioContext.state === 'suspended') void audioContext.resume();
+  return audioContext;
+}
+
+/**
+ * Stop the decoder fallback, if one is running.
+ *
+ * Called before anything that invalidates it: a new file, a track switch, or a choice
+ * the browser can play itself. The audio device is deliberately NOT closed, because it
+ * is reused and closing it would mean the next decode could not start without another
+ * gesture on some browsers.
+ */
+function stopDecoder() {
+  if (trackDecoder) {
+    trackDecoder.dispose();
+    trackDecoder = null;
+    // The element is unmuted again now that nothing else is producing sound, so a file
+    // the browser CAN play is audible after a previous one was decoded.
+    applyVolume();
+  }
+}
+
+/** Keep the element's silence and our decoded audio in step with the element's clock. */
+function syncDecoder() {
+  if (!trackDecoder) return;
+  // The USER's intent, from the slider, NOT `els.video.muted`. While the decoder
+  // plays, the element is forced muted so its own (silent or wrong) audio does not
+  // double with ours, so reading `video.muted` here would read our own silencing and
+  // silence the audio we are producing. That bug would look like "the decoder
+  // produces no sound", which is exactly the failure this feature exists to fix.
+  const muted = Number(els.volumeSlider.value) === 0;
+  trackDecoder.setVolume(volumeScale(Number(els.volumeSlider.value)), muted);
+}
+
+/**
+ * Correct drift between the element's clock and the audio it is decoding for us.
+ *
+ * The picture and the decoded sound are two clocks, and they can part company after a
+ * seek, a stall, or a long decode. This is the correction: if the audio is more than a
+ * quarter second from the picture, the audio is re-sought to the picture. Called from
+ * `timeupdate`, so the check is cheap and runs a few times a second.
+ */
+function correctDrift() {
+  if (!trackDecoder || els.video.paused) return;
+  const at = trackDecoder.position;
+  if (at === null) return;
+  if (Math.abs(at - els.video.currentTime) > 0.25) {
+    void trackDecoder.seek(els.video.currentTime);
+  }
+}
 
 /**
  * Build the selector from the file's own track list.
@@ -1546,14 +1692,22 @@ function renderAudio() {
   // a loaded file. It lived in the caption row once, and the caption row disappears when
   // the captions are off, so the control was unreachable for a viewer who wants the
   // original audio without subtitles, the case this feature exists for.
-  els.audioField.hidden = !choice;
+  //
+  // A single UNPLAYABLE track is the exception, and it is the whole reason the decoder
+  // exists: a one-track AC-3 file has no choice to offer, but the viewer still has to be
+  // told what is happening, so the field is shown and the note carries the message.
+  const chosen = audioTracks[audioChoice];
+  const unplayable = Boolean(chosen && !chosen.playable);
+  els.audioField.hidden = !choice && !unplayable;
 
   if (!choice) {
     els.audioSelect.replaceChildren();
-    els.audioNote.textContent = '';
+    els.audioSelect.hidden = true;
+    els.audioNote.textContent = unplayable ? audioNoteFor(chosen) : '';
     return;
   }
 
+  els.audioSelect.hidden = false;
   els.audioSelect.replaceChildren();
   audioTracks.forEach((track) => {
     const option = document.createElement('option');
@@ -1563,20 +1717,40 @@ function renderAudio() {
     els.audioSelect.append(option);
   });
 
-  // The note says only what a viewer could NOT work out by looking, which is now ONE
-  // case: a codec this browser cannot play. The other two were both noise,
-  // "switching rebuilds a copy of the file" described the implementation rather than
-  // the film, and "Preparing…" announced a wait that is already visible in the disabled
-  // select and is usually milliseconds long. Measured: 39 ms to a playable first frame,
-  // so the message was a flicker, not information.
-  const chosen = audioTracks[audioChoice];
-  const unplayable = chosen && !chosen.playable;
-  els.audioNote.textContent = unplayable
-    ? `This file\u2019s audio (${chosen.codec.toUpperCase()}) is not supported, so it will play silently.`
-    : '';
+  // The note says only what a viewer could NOT work out by looking, which is ONE case:
+  // a codec this browser cannot play. The other two were both noise, "switching rebuilds
+  // a copy of the file" described the implementation rather than the film, and
+  // "Preparing…" announced a wait that is already visible in the disabled select and is
+  // usually milliseconds long. Measured: 39 ms to a playable first frame, so the message
+  // was a flicker, not information.
+  els.audioNote.textContent = unplayable ? audioNoteFor(chosen) : '';
   // The disabled state is the feedback. A control that greys itself for 39 ms reads as
   // responsive; one that also flashes a sentence reads as noisy.
   els.audioSelect.disabled = audioBusy;
+}
+
+/**
+ * What to say when a track's audio is one this browser cannot play.
+ *
+ * Two different sentences, because there are two different situations and the viewer
+ * needs to know which one they are in: whether we can decode it for them, or whether
+ * they will get silence. Saying "not supported" when we are about to play it anyway
+ * would be worse than saying nothing.
+ *
+ * @param {{codec: string, playable: boolean}} track
+ * @returns {string}
+ */
+function audioNoteFor(track) {
+  const codec = track.codec.toUpperCase();
+  if (decoderCapability?.get(track.codec)) {
+    return `This file\u2019s audio (${codec}) is being decoded for you.`;
+  }
+  if (decoderCapability === null) {
+    // Capability has not been probed yet, so the honest thing is the plain warning
+    // without the promise. `describeAudio` re-renders once it knows.
+    return `This file\u2019s audio (${codec}) is not supported by this browser.`;
+  }
+  return `This file\u2019s audio (${codec}) is not supported, so it will play silently.`;
 }
 
 /**
@@ -1603,10 +1777,52 @@ async function describeAudio(file) {
     // the video codec is not in hand here. `canPlayType` is still asked per track,
     // since the audio half of the string is what decides the answer.
     logAudioTracks(declared);
+
+    // Whether the bundled decoder can handle a track the browser cannot, asked BEFORE
+    // rendering so the note can promise decoding rather than warn about silence. Only
+    // asked when it matters: a file the browser can play never touches the decoder,
+    // so the 6 MB is never loaded for the ordinary case.
+    const chosen = declared[audioChoice];
+    if (chosen && !chosen.playable) {
+      await decoderCanPlay(chosen.codec);
+      if (file !== audioSourceFile) return;
+    }
     renderAudio();
+    // Started AFTER the note is rendered, because it is not instant: this file has to
+    // be written into the decoder's filesystem and its first window decoded.
+    if (chosen && !chosen.playable && decoderCapability?.get(chosen.codec)) {
+      void startDecoding(file, audioChoice);
+    }
   } catch {
     // An unreadable container is not a failure: it means there is nothing to offer,
     // which is a normal state for a format we do not parse.
+  }
+}
+
+/**
+ * Decode a track the browser cannot, and mute the element so only our audio is heard.
+ *
+ * @param {File} file
+ * @param {number} index Which audio track.
+ */
+async function startDecoding(file, index) {
+  try {
+    const decoder = new TrackDecoder(file, index);
+    await decoder.start(els.video.currentTime, ensureAudioContext());
+    // The file may have been replaced while the decoder was loading.
+    if (file !== audioSourceFile) {
+      decoder.dispose();
+      return;
+    }
+    trackDecoder = decoder;
+    // Mutes the element and sets our own volume, in one place, so the "the element is
+    // muted because WE are making the sound" logic is not repeated here.
+    applyVolume();
+    if (!els.video.paused) await decoder.play(els.video.currentTime);
+  } catch (error) {
+    // A failed decode is not fatal: the picture still plays, and the note already said
+    // the audio is unsupported, so the honest outcome is silence with a reason.
+    setStatus(`Could not decode this file\u2019s audio (${String(error?.message ?? error)}).`, true);
   }
 }
 
@@ -1794,7 +2010,15 @@ let lastVolume = 100;
  */
 function applyVolume() {
   els.video.volume = volumeScale(Number(els.volumeSlider.value));
-  els.video.muted = Number(els.volumeSlider.value) === 0;
+  // The element is muted when the viewer says so, OR when the decoder is producing the
+  // audio: in that case the element's own sound (silence for a codec it cannot decode,
+  // or the wrong track after a switch) must not play alongside ours. The slider still
+  // reads as unmuted, because from the viewer's point of view there IS sound.
+  els.video.muted = Number(els.volumeSlider.value) === 0 || trackDecoder !== null;
+
+  // The decoded audio is a separate path to the speakers, so it is set here too or the
+  // slider would control only the element's own sound, which is the silent one.
+  syncDecoder();
 
   const muted = els.video.muted;
   // The icon is swapped by CSS from this same `aria-pressed`, not from JS: `<g hidden>`
@@ -1885,6 +2109,9 @@ function captionIndex() {
 
 function onTimeUpdate() {
   reportPosition();
+  // Correct drift between the picture and the audio we are decoding for it, which
+  // are two clocks. Cheap enough to run here, a few times a second.
+  correctDrift();
   // Keyed on the cue that should be SHOWING, not the one that started last, so the
   // end of a cue is a transition the renderer sees and can schedule a fade for.
   const index = captionIndex();
@@ -1902,10 +2129,24 @@ for (const event of ['timeupdate', 'play', 'pause', 'ended']) {
 // `seeked`, not `seeking`: reported once the new position is real.
 els.video.addEventListener('seeked', () => {
   reportPosition(true);
+  // The decoded audio belongs to the position just left, so it is re-sought with the
+  // picture rather than left to play a moment of the old place.
+  if (trackDecoder) void trackDecoder.seek(els.video.currentTime);
   // `redrawCaptions` uses the PLAYING cue, so seeking into a gap fades the finished
   // line rather than putting it back, and records what is on screen for the next
   // `timeupdate`.
   redrawCaptions();
+});
+
+// The decoded audio follows the element's own transport, because the element is the
+// clock: its `play` and `pause` are the only events that mean playback changed.
+els.video.addEventListener('play', () => {
+  // The element's current time is passed in, because it is the clock the decoder
+  // re-anchors to; a pause can be long enough for the two to have parted.
+  if (trackDecoder) void trackDecoder.play(els.video.currentTime);
+});
+els.video.addEventListener('pause', () => {
+  if (trackDecoder) trackDecoder.pause();
 });
 
 // --- The resume position -----------------------------------------------------
