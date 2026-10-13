@@ -47,6 +47,9 @@
 --enable-decoder=pcm_f64le
 --enable-decoder=pcm_u8
 --enable-decoder=pcm_s8
+--enable-encoder=aac
+--enable-decoder=aac
+--enable-encoder=aac
 --enable-decoder=hevc
 --enable-bsf=hevc_metadata
 --enable-bsf=extract_extradata

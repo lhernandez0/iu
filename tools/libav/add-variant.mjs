@@ -70,6 +70,24 @@ const GROUPS = {
     'decoder-pcm_f32le', 'codec-pcm_f32le', 'decoder-pcm_s16be',
     'decoder-pcm_s24be', 'decoder-pcm_f64le', 'decoder-pcm_u8',
     'decoder-pcm_s8',
+
+    // **The ENCODER, and it is the point of the whole output design.**
+    //
+    // Decoding produces raw PCM, and PCM has nowhere useful to go: it cannot be handed
+    // to a media element at a sane size, so without an encoder the only way to play it
+    // is Web Audio, which means owning the audio clock and keeping it in step with the
+    // video ourselves. That is where every bug in this feature lived.
+    //
+    // Encoding it back to AAC means the audio can be muxed with the video and given to
+    // the element as ONE stream, so the element owns seeking, pausing, sync and speed.
+    // The cost is a re-encode, which is lossy on audio that was already lossy, and for
+    // speech in a learning tool that is inaudible.
+    //
+    // FFmpeg's own `aac` encoder, so no external library and no licence change: this
+    // build stays LGPL-2.1. `encoder-aac` and `codec-aac` are both named because the
+    // fragment system splits `codec-<name>` into a decoder and an encoder and this
+    // variant needs the encoder half explicitly.
+    'encoder-aac', 'codec-aac',
   ],
 
   // HEVC is the one that matters most: the common codec in high definition

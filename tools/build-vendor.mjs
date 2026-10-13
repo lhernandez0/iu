@@ -66,6 +66,22 @@ writeFileSync(
     '  MP4,',
     '  CmafOutputFormat,',
     '  StreamTarget,',
+    // The transcode pipeline (ADR 0012). A custom decoder and encoder let us decode
+    // E-AC-3 and encode AAC with libav.js while the library owns the container,
+    // fragments, duration and seeking. Measured cost of naming these: 433 KB to
+    // 544 KB, +110 KB committed.
+    '  ALL_FORMATS,',
+    '  Mp4OutputFormat,',
+    '  BufferTarget,',
+    '  CustomAudioDecoder,',
+    '  CustomAudioEncoder,',
+    '  registerDecoder,',
+    '  registerEncoder,',
+    '  EncodedPacket,',
+    '  EncodedPacketSink,',
+    '  AudioSample,',
+    '  canDecodeAudio,',
+    '  canEncodeAudio,',
     "} from 'mediabunny';",
     '',
   ].join('\n'),

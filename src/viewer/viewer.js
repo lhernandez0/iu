@@ -44,7 +44,7 @@ import { markLine, listCoversLanguage, listForLanguage } from '../learn/marking.
 import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX } from '../common/settings.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
-import { canDecode, TrackDecoder } from './decoder.js';
+import { canDecode, transcodeForElement } from './decode-encode.js';
 import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks, logDecoder } from './diagnostics.js';
 
 /**
@@ -542,20 +542,21 @@ function notifyChanged() {
  * @param {File} file
  */
 async function loadVideo(file) {
-  // The decoder fallback belongs to the PREVIOUS file, so it is torn down before
-  // anything else: its scheduled audio would otherwise keep playing over the new film.
-  stopDecoder();
   // A stream from the previous file has to be torn down before its source goes away,
   // or its MediaSource stays attached and its object URL keeps the blob alive.
-  // `releaseStream` revokes the rebuild's URL, so this must NOT revoke `videoObjectUrl`
-  // as well, after a switch that variable holds the SAME MediaSource URL, and
-  // revoking it twice detaches a source the element may still be reading.
+  // `releaseStream` revokes whichever stream is live, the remux rebuild OR the
+  // transcode, so this must NOT revoke `videoObjectUrl` as well: after a switch that
+  // variable holds the SAME MediaSource URL, and revoking it twice detaches a source
+  // the element may still be reading.
   if (releaseStream) {
     releaseStream();
     releaseStream = null;
   } else if (videoObjectUrl) {
     URL.revokeObjectURL(videoObjectUrl);
   }
+  // The transcode handle belongs to the file just closed. `releaseStream` already ran
+  // its `revoke`; this only drops our reference so a stale `done` cannot be awaited.
+  transcodeStream = null;
 
   videoFile = file;
   videoObjectUrl = URL.createObjectURL(file);
@@ -676,37 +677,36 @@ async function loadDefaultTrack() {
 }
 
 /**
- * Load the second subtitle track and align it to the first.
+ * Load the second subtitle track, if the learner asked for one.
  *
- * **The viewer can show two lines because a local file can carry two tracks**,
- * Chinese traditional and English in the same MKV, for instance. That is the same
- * arrangement the panel already has, drawn over the video instead of beside it, so
- * the alignment comes from the shared `alignSecondary` rather than a second
- * implementation with its own drift tolerance.
+ * **The viewer can show two lines because a local file can carry two tracks**, Chinese
+ * traditional and English in the same MKV, for instance. That is the same arrangement the
+ * panel has, drawn over the video instead of beside it, so the alignment comes from the
+ * shared `alignSecondary` rather than a second implementation with its own drift
+ * tolerance.
  *
- * A track that cannot be read, or a file with only one, leaves the gloss empty, and
- * the CSS collapses the empty line rather than leaving a blank card.
+ * **A second line is OPT-IN, and it is drawn only from the chosen track.** This used to
+ * fall back to "the first readable track that is not the study one" whenever the gloss
+ * setting was empty, which meant a file with two tracks drew a second line the learner
+ * never asked for, while the panel's own picker (and the viewer's) correctly said "Off".
+ * Two controls disagreed about what was on screen. Off means off: a second line appears
+ * only when `glossLanguage` names a track.
  *
  * @param {object} study
  */
 async function loadGlossTrack(study) {
   const chosen = trackFor(settings.glossLanguage);
-  // A second track the learner chose, or the first readable one that is not the study
-  // track. Never the same track twice: a "gloss" identical to the line above it is
-  // noise, not a translation.
-  const gloss =
-    chosen && chosen !== study
-      ? chosen
-      : tracks.find((track) => track !== study && track.kind === 'text' && !track.error);
-  if (!gloss || gloss === study) {
+  // Never the same track twice: a "gloss" identical to the line above it is noise, not a
+  // translation. And no fallback: an unset gloss is "Off", not "pick one for me".
+  if (!chosen || chosen === study) {
     glossLines = [];
     redrawCaptions();
     return;
   }
   try {
-    const cues = await ensureSegments(gloss);
-    // Aligned by start time with a drift tolerance, so an out-of-sync second track
-    // leaves the line blank rather than pairing it with the wrong cue.
+    const cues = await ensureSegments(chosen);
+    // Aligned by start time with a drift tolerance, so an out-of-sync second track leaves
+    // the line blank rather than pairing it with the wrong cue.
     glossLines = alignSecondary(segments, cues);
     redrawCaptions();
   } catch {
@@ -1531,15 +1531,25 @@ let releaseStream = null;
 /** Whether a rebuild is in flight, so the control can say so rather than appear frozen. */
 let audioBusy = false;
 /**
- * The decoder fallback, live only while a file's audio is being decoded by us.
+ * The live transcode stream, present only while a track we must decode is playing.
  *
  * Null in the ordinary case, which is a file the browser plays itself. It is set when
- * the browser cannot decode the chosen track, and torn down on a file change or when
- * a track the browser CAN play is chosen.
+ * the browser cannot decode the chosen track, and torn down on a file change or when a
+ * track the browser CAN play is chosen. It is the SAME shape as `releaseStream` (a
+ * rebuilt stream), which is the point of this design: the element plays our fragmented
+ * MP4 exactly as it plays any other stream, so there is no second clock and none of the
+ * synchronisation machinery the earlier Web Audio design needed.
  *
- * @type {TrackDecoder|null}
+ * @type {{url: string, done: Promise<void>, revoke: () => void}|null}
  */
-let trackDecoder = null;
+let transcodeStream = null;
+/**
+ * The last whole percent of transcode progress that was logged.
+ *
+ * The conversion reports progress far more often than is useful to print, so the log
+ * line is emitted only when the whole percent changes. `-1` so the first `0%` is logged.
+ */
+let lastTranscodePercent = -1;
 /**
  * Whether a decode we attempted has failed.
  *
@@ -1550,35 +1560,14 @@ let trackDecoder = null;
  */
 let decoderFailed = false;
 /**
- * The shared audio device for decoded playback.
- *
- * Created lazily and reused, because an `AudioContext` is a scarce resource and
- * browsers cap how many a page may have. It also must be created from a user gesture
- * on some browsers, which opening a file is.
- *
- * @type {AudioContext|null}
- */
-let audioContext = null;
-/**
  * The codec ids the bundled decoder knows, by the viewer's own codec names.
  *
  * Asked of the binary rather than hardcoded, so it cannot drift from what the build
- * actually contains. `null` until probed, and `probeDecoder()` fills it.
+ * actually contains. `null` until probed, and `decoderCanPlay()` fills it.
  *
  * @type {Map<string, boolean>|null}
  */
 let decoderCapability = null;
-/**
- * When the drift corrector last re-sought the audio, in `Date.now()` milliseconds.
- *
- * Zero means never. The cooldown exists because a seek tears down the scheduled audio
- * and takes time to decode the new position, so a corrector allowed to fire on every
- * `timeupdate` can loop while the audio settles, which sounds exactly like no audio at
- * all. See `correctDrift`.
- */
-let lastDriftSeek = 0;
-/** How long the drift corrector must wait between corrections, in milliseconds. */
-const DRIFT_COOLDOWN_MS = 2000;
 /**
  * Whether the track select is showing.
  *
@@ -1640,93 +1629,14 @@ async function decoderCanPlay(codec) {
   return answer;
 }
 
-/** Lazily create the shared audio device. */
-function ensureAudioContext() {
-  if (!audioContext) {
-    // `AudioContext`, not `webkitAudioContext`: the project targets Chrome 116+ and
-    // Firefox 128+, both of which have had the unprefixed name for years.
-    audioContext = new AudioContext();
-    // Autoplay policy: an AudioContext created WITHOUT a user gesture starts
-    // `suspended`, and a suspended context produces NO sound with no error anywhere.
-    // Opening a file is a gesture, so it usually resumes, but "usually" is what makes
-    // this worth logging: the failure mode is total silence and no diagnostic.
-    audioContext.addEventListener('statechange', () => {
-      logDecoder('audio-context', { state: audioContext.state });
-    });
-  }
-  if (audioContext.state === 'suspended') {
-    audioContext.resume().then(
-      () => logDecoder('audio-context-resumed', { state: audioContext.state }),
-      (error) => logDecoder('audio-context-resume-FAILED', { error: String(error?.message ?? error) }),
-    );
-  }
-  logDecoder('audio-context', { state: audioContext.state, rate: audioContext.sampleRate });
-  return audioContext;
-}
-
-/**
- * Stop the decoder fallback, if one is running.
- *
- * Called before anything that invalidates it: a new file, a track switch, or a choice
- * the browser can play itself. The audio device is deliberately NOT closed, because it
- * is reused and closing it would mean the next decode could not start without another
- * gesture on some browsers.
- */
-function stopDecoder() {
-  if (trackDecoder) {
-    trackDecoder.dispose();
-    trackDecoder = null;
-    // The element is unmuted again now that nothing else is producing sound, so a file
-    // the browser CAN play is audible after a previous one was decoded.
-    applyVolume();
-  }
-}
-
-/** Keep the element's silence and our decoded audio in step with the element's clock. */
-function syncDecoder() {
-  if (!trackDecoder) return;
-  // The USER's intent, from the slider, NOT `els.video.muted`. While the decoder
-  // plays, the element is forced muted so its own (silent or wrong) audio does not
-  // double with ours, so reading `video.muted` here would read our own silencing and
-  // silence the audio we are producing. That bug would look like "the decoder
-  // produces no sound", which is exactly the failure this feature exists to fix.
-  const muted = Number(els.volumeSlider.value) === 0;
-  trackDecoder.setVolume(volumeScale(Number(els.volumeSlider.value)), muted);
-}
-
 /**
  * Correct drift between the element's clock and the audio it is decoding for us.
  *
- * The picture and the decoded sound are two clocks, and they can part company after a
- * seek, a stall, or a long decode. This is the correction: if the audio is more than a
- * quarter second from the picture, the audio is re-sought to the picture. Called from
- * `timeupdate`, so the check is cheap and runs a few times a second.
+ * **GONE, and its absence is the point of this design.** The decoded audio used to be a
+ * second clock that had to be re-sought onto the element's, with a cooldown to stop the
+ * corrector looping. Now the element plays our stream itself, so there is nothing to
+ * correct; see the module comment in `decode-encode.js`.
  */
-/**
- * Correct drift between the element's clock and the audio it is decoding for us.
- *
- * The picture and the decoded sound are two clocks, and they can part company after a
- * seek, a stall, or a long decode. This is the correction: if the audio is more than a
- * quarter second from the picture, the audio is re-sought to the picture.
- *
- * **It is rate limited, and that is not a nicety.** A seek is expensive and it
- * DESTROYS the scheduled audio while the new position is decoded, so a corrector that
- * can fire on every `timeupdate` will, while the audio is still settling, seek again
- * and again and the viewer never hears anything. Measured: it re-sought 130 ms after
- * starting. The cooldown gives each correction time to take effect before the next
- * comparison, so the loop cannot form. Called from `timeupdate`, a few times a second.
- */
-function correctDrift() {
-  if (!trackDecoder || els.video.paused) return;
-  const now = Date.now();
-  if (now - lastDriftSeek < DRIFT_COOLDOWN_MS) return;
-  const at = trackDecoder.position;
-  if (at === null) return;
-  if (Math.abs(at - els.video.currentTime) > 0.25) {
-    lastDriftSeek = now;
-    void trackDecoder.seek(els.video.currentTime);
-  }
-}
 
 /**
  * Build the selector from the file's own track list.
@@ -1874,24 +1784,56 @@ async function describeAudio(file) {
  */
 async function startDecoding(file, index) {
   try {
-    const decoder = new TrackDecoder(file, index);
-    await decoder.start(els.video.currentTime, ensureAudioContext());
-    logDecoder('started', {
-      index,
-      at: Number(els.video.currentTime.toFixed(2)),
-      scheduled: Number((decoder.position ?? 0).toFixed(2)),
+    const resumeAt = els.video.currentTime;
+    const wasPlaying = !els.video.paused;
+
+    // The previous stream is released BEFORE the new one is built, so two MediaSources
+    // are never open against the same element, which throws.
+    if (releaseStream) {
+      releaseStream();
+      releaseStream = null;
+    }
+
+    const stream = await transcodeForElement(file, els.video, {
+      // **Throttled to whole percent.** The conversion reports progress on every
+      // internal step, which on a long film is hundreds of events a second, and logging
+      // each one both floods the console past usefulness and costs real time in
+      // `console.log` on a path that is already the slowest part of the feature. Only a
+      // change of whole percent is worth a line.
+      onProgress: (fraction) => {
+        const percent = Math.round(fraction * 100);
+        if (percent === lastTranscodePercent) return;
+        lastTranscodePercent = percent;
+        logDecoder('transcode-progress', { percent });
+      },
     });
-    // The file may have been replaced while the decoder was loading.
+    // The file may have been replaced while the transcoder was starting.
     if (file !== audioSourceFile) {
-      decoder.dispose();
+      stream.revoke();
       logDecoder('abandoned', { reason: 'the file changed while decoding was starting' });
       return;
     }
-    trackDecoder = decoder;
-    // Mutes the element and sets our own volume, in one place, so the "the element is
-    // muted because WE are making the sound" logic is not repeated here.
-    applyVolume();
-    if (!els.video.paused) await decoder.play(els.video.currentTime);
+
+    // The element must attach BEFORE production has anywhere to put its output, and
+    // `transcodeForElement` deliberately does not wait for that. Swapping `src` is what
+    // makes `sourceopen` fire.
+    if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+    videoObjectUrl = stream.url;
+    releaseStream = stream.revoke;
+    transcodeStream = stream;
+    // Our own re-source, not a new file: the metadata handler must not offer to resume
+    // something the viewer is already watching.
+    resourcingInternally = true;
+    els.video.src = stream.url;
+    els.video.load();
+
+    // Back to where they were, once the stream can accept a seek.
+    restorePosition(resumeAt, () => {
+      if (wasPlaying) void els.video.play().catch(() => {});
+    });
+    logDecoder('started', { index, at: Number(resumeAt.toFixed(2)) });
+
+    await stream.done;
   } catch (error) {
     // The decode failed, so the promise the note made (or would have made silently) is
     // now false. This is the ONE case where the audio row must speak: the viewer would
@@ -2001,6 +1943,22 @@ async function selectAudioTrack(index) {
     return;
   }
 
+  // **Two rebuilds, and which one is right depends on the codec.** A track the browser
+  // can play is REMUXED by mediabunny, which copies it and keeps every codec intact. A
+  // track it cannot is TRANSCODED, because remuxing an E-AC-3 track would still hand the
+  // element E-AC-3, which is silence. The transcoder is the same one the initial open
+  // uses, so a switch here is the same operation as opening the file.
+  const chosen = audioTracks[index];
+  if (chosen && !chosen.playable && decoderCapability?.get(chosen.codec)) {
+    audioBusy = true;
+    renderAudio();
+    // `startDecoding` sets `resourcingInternally` and restores the position itself.
+    await startDecoding(audioSourceFile, index);
+    audioBusy = false;
+    renderAudio();
+    return;
+  }
+
   audioBusy = true;
   renderAudio();
   const resumeAt = els.video.currentTime;
@@ -2094,14 +2052,11 @@ let lastVolume = 100;
 function applyVolume() {
   const wantsMute = Number(els.volumeSlider.value) === 0;
   els.video.volume = volumeScale(Number(els.volumeSlider.value));
-  // The element is muted when the viewer says so, OR when the decoder is producing the
-  // audio: in that case the element's own sound (silence for a codec it cannot decode,
-  // or the wrong track after a switch) must not play alongside ours.
-  els.video.muted = wantsMute || trackDecoder !== null;
-
-  // The decoded audio is a separate path to the speakers, so it is set here too or the
-  // slider would control only the element's own sound, which is the silent one.
-  syncDecoder();
+  // **The element is NOT muted while we transcode.** In the earlier Web Audio design it
+  // had to be, because our audio came from a separate path and the element's own sound
+  // would have doubled with it. Now the element plays the transcoded stream itself, so
+  // its sound IS our sound, and muting it would silence the film.
+  els.video.muted = wantsMute;
 
   // **The ICON reflects the viewer's intent, not the element's `muted`.** While the
   // decoder plays, the element is muted on purpose, and showing that as "muted" told
@@ -2193,9 +2148,6 @@ function captionIndex() {
 
 function onTimeUpdate() {
   reportPosition();
-  // Correct drift between the picture and the audio we are decoding for it, which
-  // are two clocks. Cheap enough to run here, a few times a second.
-  correctDrift();
   // Keyed on the cue that should be SHOWING, not the one that started last, so the
   // end of a cue is a transition the renderer sees and can schedule a fade for.
   const index = captionIndex();
@@ -2213,25 +2165,16 @@ for (const event of ['timeupdate', 'play', 'pause', 'ended']) {
 // `seeked`, not `seeking`: reported once the new position is real.
 els.video.addEventListener('seeked', () => {
   reportPosition(true);
-  // The decoded audio belongs to the position just left, so it is re-sought with the
-  // picture rather than left to play a moment of the old place.
-  if (trackDecoder) void trackDecoder.seek(els.video.currentTime);
   // `redrawCaptions` uses the PLAYING cue, so seeking into a gap fades the finished
   // line rather than putting it back, and records what is on screen for the next
   // `timeupdate`.
   redrawCaptions();
 });
 
-// The decoded audio follows the element's own transport, because the element is the
-// clock: its `play` and `pause` are the only events that mean playback changed.
-els.video.addEventListener('play', () => {
-  // The element's current time is passed in, because it is the clock the decoder
-  // re-anchors to; a pause can be long enough for the two to have parted.
-  if (trackDecoder) void trackDecoder.play(els.video.currentTime);
-});
-els.video.addEventListener('pause', () => {
-  if (trackDecoder) trackDecoder.pause();
-});
+// **The transport needs no handler for the transcoded audio any more.** The element
+// plays our stream itself, so its own `play`, `pause` and `seek` ARE the audio's; the
+// earlier design drove a separate decoder from these events and had to re-seek it in
+// step. Nothing to keep in sync means nothing to get out of sync.
 
 // --- The resume position -----------------------------------------------------
 //

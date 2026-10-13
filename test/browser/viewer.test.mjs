@@ -167,6 +167,50 @@ section('a real MKV produces subtitles in the panel');
   check('and the English gloss line', values.some((v) => v === 'en'), true);
 }
 
+section('the second caption line is opt-in, and matches the picker');
+
+{
+  // **A file with two subtitle tracks used to draw a second line the viewer never asked
+  // for.** When the gloss setting was empty (its default, "Off"), the viewer fell back to
+  // "the first readable track that is not the study one" and drew it, while its own
+  // picker and the panel both said "Off". So the screen and the control disagreed, which
+  // is the kind of mismatch a viewer cannot resolve from the interface.
+  //
+  // The fixture carries English and Japanese, so the fallback had a track to pick and the
+  // bug was reachable. The assertion is that with the gloss Off there is NO second line,
+  // and that choosing one makes it appear: both directions, so a fix that simply never
+  // showed a second line would fail too.
+  const reader = await context.newPage();
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/src/sidepanel/sidepanel.html`);
+  await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await reader.waitForTimeout(800);
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await reader.evaluate(() => document.getElementById('video').play().catch(() => {}));
+  await reader.waitForTimeout(2500);
+
+  const readLines = () =>
+    reader.evaluate(() => ({
+      secondary: document.getElementById('caption-secondary')?.textContent.trim() ?? '',
+      glossValue: document.getElementById('gloss-track')?.value ?? null,
+    }));
+
+  const off = await readLines();
+  check('with the second line Off, no second line is drawn', off.secondary, '');
+  check('and the picker agrees it is Off', off.glossValue, '');
+
+  // Choose a second line, and it must appear. Done through the control, so this tests the
+  // path a viewer actually takes rather than calling the loader directly.
+  await reader.selectOption('#gloss-track', 'en');
+  await reader.waitForTimeout(1200);
+  const on = await readLines();
+  check('choosing a second line draws it', on.secondary.length > 0, true);
+  check('and the picker agrees which one', on.glossValue, 'en');
+
+  await reader.close();
+  await panel.close();
+}
+
 section('machine translation is refused for a local file, visibly');
 
 {
@@ -767,44 +811,50 @@ section('Resume continues rather than sitting paused');section('Resume continues
   await page2.close();
 }
 
-section('A file the browser cannot decode gets decoded for us');
+section('A file the browser cannot decode is transcoded so the element can play it');
 
 {
   // The failure this feature exists for: a file whose audio is E-AC-3 plays its picture
   // and emits SILENCE, with no `MediaError` to catch. `one-eac3.mkv` is that file.
   //
-  // Two things are asserted, and the second is the one that matters:
+  // **The design changed, and so did what proves it works.** The decoded audio used to
+  // play through Web Audio with the element forced MUTED, so "the element is muted" was
+  // the signal that decoding had started. Now the audio is re-encoded to AAC and remuxed
+  // into a stream the ELEMENT plays, so the element is deliberately NOT muted, and the
+  // proof is that it decodes audio: `webkitAudioDecodedByteCount` is Chrome's own count
+  // of the audio bytes it has decoded, which is non-zero only if there IS audio to
+  // decode. A test that only checked "the module loaded" would pass against a stream
+  // with no sound, which is exactly the bug this guards.
   //
-  //   1. The viewer says it is decoding, and mutes the element.
-  //   2. **Sound actually reaches the audio device**, measured by tapping the decoder's
-  //      own output with an analyser. A test that only checked "the module loaded" would
-  //      pass against a decoder producing silence, which is precisely the bug.
-  //
-  // The measurement runs UNDER THE EXTENSION ORIGIN, not on a plain page, because the
-  // manifest's CSP (`wasm-unsafe-eval`) is what allows WebAssembly to instantiate. A
-  // plain-page check would pass while the shipped extension failed.
+  // The measurement runs UNDER THE EXTENSION ORIGIN, because the manifest's CSP
+  // (`wasm-unsafe-eval`) is what allows WebAssembly to instantiate. A plain-page check
+  // would pass while the shipped extension failed.
   const page8 = await context.newPage();
   await page8.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   await page8.waitForTimeout(1000);
 
-  // (1) The UI path: open the file. Success must be SILENT, and the element muted so
-  // the decoded audio is the only sound. The mute is the signal that the decoder has
-  // actually started, and it is a state rather than a message, so waiting for it is
-  // the difference between testing the wiring and testing how fast the machine is.
   await page8.setInputFiles('#pick-files', join(FIXTURES, 'one-eac3.mkv'));
-  await page8.waitForFunction(() => document.getElementById('video').muted, null, {
-    timeout: 30000,
-  });
 
-  check(
-    'the element is muted so the decoded audio is the only source',
-    await page8.evaluate(() => document.getElementById('video').muted),
-    true,
+  // Transcoding takes a moment, so wait on the OUTCOME rather than on a fixed delay: the
+  // element is playing and has decoded audio.
+  await page8.waitForFunction(
+    () => {
+      const video = document.getElementById('video');
+      return video.currentTime > 0.1 && (video.webkitAudioDecodedByteCount ?? 0) > 0;
+    },
+    null,
+    { timeout: 60000 },
   );
 
-  // Nothing is said when it works. An earlier version printed "being decoded for you"
-  // on every such file, which is the product narrating itself: the viewer asked for a
-  // film and got sound, which needs no announcement. Pinned because it is a deliberate
+  check(
+    'the element is NOT muted: it plays the transcoded audio itself',
+    await page8.evaluate(() => document.getElementById('video').muted),
+    false,
+  );
+
+  // Nothing is said when it works. An earlier version printed "being decoded for you" on
+  // every such file, which is the product narrating itself: the viewer asked for a film
+  // and got sound, which needs no announcement. Pinned because it is a deliberate
   // reversal, and "add a friendly message" is the obvious thing to do next.
   check(
     'and nothing is said, because decoding successfully is not news',
@@ -812,44 +862,21 @@ section('A file the browser cannot decode gets decoded for us');
     '',
   );
 
-  // (2) The real proof, under the extension's CSP: decode the fixture through the
-  // module the viewer uses, and measure the samples reaching the destination.
-  const sound = await page8.evaluate(async () => {
-    const { TrackDecoder } = await import('/src/viewer/decoder.js');
-    const context = new AudioContext();
-    // Read the fixture through the extension's own URL. The extension packages
-    // `test/`, so this resolves under `chrome-extension://`, which is the origin that
-    // has to work.
-    const file = new File(
-      [await (await fetch('/test/mkv/one-eac3.mkv')).arrayBuffer()],
-      'one-eac3.mkv',
-    );
-    const decoder = new TrackDecoder(file, 0);
-    await decoder.start(0, context);
-
-    // Tap the decoder's own output rather than the destination: Web Audio has no way
-    // to observe the destination, and an analyser on the same node sees the same
-    // samples. `decoder.gain` is the decoder's output node.
-    const analyser = context.createAnalyser();
-    analyser.fftSize = 2048;
-    decoder.gain.connect(analyser);
-
-    await decoder.play(0);
-    // Long enough for the first decoded window to reach the analyser.
-    await new Promise((resolve) => setTimeout(resolve, 900));
-
-    const samples = new Float32Array(analyser.fftSize);
-    analyser.getFloatTimeDomainData(samples);
-    let peak = 0;
-    for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
-    const position = decoder.position;
-    decoder.dispose();
-    return { peak, position };
+  const played = await page8.evaluate(() => {
+    const video = document.getElementById('video');
+    return {
+      decoded: video.webkitAudioDecodedByteCount,
+      duration: video.duration,
+      currentTime: video.currentTime,
+    };
   });
 
-  check('the decoder produces real sound', sound.peak > 0.001, true);
-  check('and it has a real position on the media clock', sound.position > 0, true);
-  if (sound.peak <= 0.001) console.log(`  NOTE peak was ${sound.peak}`);
+  check('the element decoded audio from the transcoded stream', played.decoded > 0, true);
+  check(
+    'and the stream is a real one, with a finite duration',
+    Number.isFinite(played.duration) && played.duration > 1,
+    true,
+  );
 
   await page8.close();
 }
@@ -861,10 +888,10 @@ section('Dolby audio keeps playing past the first buffer window');
   // built around what the earlier tests got wrong rather than around the fix.
   //
   // `one-eac3.mkv` is 2.4 seconds, which FITS ENTIRELY IN THE FIRST DECODE WINDOW, so a
-  // decoder that schedules one window and then stops for good passes on it. That is
-  // what happened: every test used a short file, the audio played for about two seconds
-  // and stopped, and on a real film the viewer got a couple of seconds and then
-  // silence. The fixture is 5.1 and 30 seconds, so refilling is unavoidable.
+  // decoder that schedules one window and then stops for good passes on it. That is what
+  // happened: every test used a short file, the audio played for about two seconds and
+  // stopped, and on a real film the viewer got a couple of seconds and then silence. The
+  // fixture is 5.1 and 30 seconds, so there is nothing to stop early into.
   //
   // It also checks the MUTE button, which reported "muted" while sound was playing,
   // because the icon was drawn from the element's `muted` rather than from what the
@@ -874,54 +901,69 @@ section('Dolby audio keeps playing past the first buffer window');
   await page9.waitForTimeout(1000);
   await page9.setInputFiles('#pick-files', join(FIXTURES, 'six-eac3.mkv'));
 
-  await page9.waitForFunction(() => document.getElementById('video').muted, null, {
-    timeout: 30000,
-  });
+  await page9.waitForFunction(
+    () => {
+      const video = document.getElementById('video');
+      return video.currentTime > 0.1 && (video.webkitAudioDecodedByteCount ?? 0) > 0;
+    },
+    null,
+    { timeout: 90000 },
+  );
 
-  // The mute ICON must show the viewer's intent, not the element's forced mute. Reading
-  // `aria-pressed` is reading what the button SHOWS.
+  // The mute ICON must show the viewer's intent. Reading `aria-pressed` is reading what
+  // the button SHOWS.
   check(
     'the mute button does not claim the sound is off',
     await page9.evaluate(() => document.getElementById('mute').getAttribute('aria-pressed')),
     'false',
   );
-  check('even though the element itself is muted for our audio', await page9.evaluate(() => document.getElementById('video').muted), true);
+  check(
+    'and the element is playing audible sound, not muted',
+    await page9.evaluate(() => document.getElementById('video').muted),
+    false,
+  );
 
-  await page9.evaluate(async () => {
-    await document.getElementById('video').play().catch(() => {});
-  });
-
-  // Whether the decoder produced audio, and whether it KEPT producing it. The counter
-  // is read from the trace the module already emits, so this measures the real thing
-  // rather than a proxy.
+  // Whether the sound KEPT playing, and whether SEEKING works in both directions. A seek
+  // is the point: on the old design a seek was what stopped the refill for good, and a
+  // test that only played straight through would have missed it. It is also where the bug
+  // that reached a user lived: a jump forward threw `error 3`, because the video was
+  // announced to `addSourceBuffer` with a codec string that did not match the file. So
+  // the assertions below are "a seek lands where it was asked to, and no error appears",
+  // not merely "the playhead moved".
   const progress = await page9.evaluate(async () => {
     const video = document.getElementById('video');
-    // **The seek is the point of this test.** `correctDrift` seeks the decoder while
-    // the element plays, and a seek is what used to stop the refill timer for good. A
-    // test that only plays straight through never calls it, so it passes against the
-    // broken code, which is how this bug reached a user with every test green.
-    video.currentTime = 10;
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await video.play().catch(() => {});
+    const seekTo = async (seconds) => {
+      video.currentTime = seconds;
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      return { at: video.currentTime, error: video.error ? video.error.code : null };
+    };
+    const forward = await seekTo(10);
+    const backward = await seekTo(3);
     const times = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 5; i++) {
       await new Promise((resolve) => setTimeout(resolve, 700));
       times.push(video.currentTime);
     }
-    return { first: times[0], last: times[times.length - 1], count: times.length };
+    return {
+      forward,
+      backward,
+      first: times[0],
+      last: times[times.length - 1],
+      decoded: video.webkitAudioDecodedByteCount,
+      duration: video.duration,
+    };
   });
 
-  // Past the FIRST window: with a 30 second file, 7 seconds of playback means the
-  // decoder refilled at least twice. A decoder that stops after one window reaches
-  // about 2 seconds and no further.
-  check(
-    'the film plays well past the first decode window',
-    progress.last > 5,
-    true,
-  );
-  check('and the playhead kept moving', progress.last > progress.first, true);
+  check('the stream has a finite duration', Number.isFinite(progress.duration), true);
+  // `seekable` covers the target, so the element accepted the jump rather than clamping.
+  check('a forward seek lands where it was asked to', progress.forward.at > 9, true);
+  check('and it raises no media error', progress.forward.error, null);
+  check('a backward seek lands where it was asked to', progress.backward.at < 4, true);
+  check('and it raises no media error either', progress.backward.error, null);
+  check('and it keeps playing afterwards', progress.last > progress.first, true);
+  check('with audio still being decoded', progress.decoded > 0, true);
 
-  // No page error, because a decoder that throws when it runs out leaves the trace in
-  // the console and a silent film, which is the failure being pinned here.
   await page9.close();
 }
 
