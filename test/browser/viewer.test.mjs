@@ -360,28 +360,26 @@ section('the audio track selector');
   // state said one thing and the audio said another.
   await reader.bringToFront();
 
+  // **The row is ALWAYS there, including before a file is opened.** It used to hide
+  // unless a file had more than one track, which made "one track", "no track" and "a
+  // decoder problem" indistinguishable, leaving a viewer with no sound nowhere to
+  // look. Pinned here because hiding it again is the obvious thing to do.
   const beforeLoad = await reader.evaluate(() => ({
     fieldHidden: document.getElementById('audio-field').hidden,
     hasButton: document.getElementById('audio') !== null,
   }));
-  check('no selector before a file is opened', beforeLoad.fieldHidden, true);
+  check('the audio row is visible before a file is opened', beforeLoad.fieldHidden, false);
   check('and no button to reveal it either', beforeLoad.hasButton, false);
-
-  // `test/mkv/two-audio.mkv`, which `npm run fixtures` generates, NOT a copy under
-  // `tools/ui/assets/`. That directory is gitignored, so the file exists on a
-  // developer's machine and nowhere else, and CI failed with ENOENT on it while
-  // every other suite passed.
   await reader.setInputFiles('#pick-files', join(FIXTURES, 'two-audio.mkv'));
-  const appeared = await reader
-    .waitForFunction(() => !document.getElementById('audio-field').hidden, null, { timeout: 15000 })
-    .then(() => true)
-    .catch(() => false);
+  // Wait for the TRACKS, not for the row. The row is visible immediately now, so
+  // waiting on it would read the options before they were populated.
+  const listed = await reader
+    .waitForFunction(() => document.getElementById('audio-track').options.length === 2, null, { timeout: 15000 })
+    .then(() => reader.evaluate(() =>
+      [...document.getElementById('audio-track').options].map((option) => option.textContent),
+    ))
+    .catch(() => []);
 
-  check('the selector appears for a file with two audio tracks', appeared, true);
-
-  const listed = await reader.evaluate(() =>
-    [...document.getElementById('audio-track').options].map((option) => option.textContent),
-  );
   check('and lists both tracks', listed.length, 2);
 
   await reader.selectOption('#audio-track', '1');
@@ -854,6 +852,77 @@ section('A file the browser cannot decode gets decoded for us');
   if (sound.peak <= 0.001) console.log(`  NOTE peak was ${sound.peak}`);
 
   await page8.close();
+}
+
+section('Dolby audio keeps playing past the first buffer window');
+
+{
+  // **This is the test that would have caught the bug that reached a user**, and it is
+  // built around what the earlier tests got wrong rather than around the fix.
+  //
+  // `one-eac3.mkv` is 2.4 seconds, which FITS ENTIRELY IN THE FIRST DECODE WINDOW, so a
+  // decoder that schedules one window and then stops for good passes on it. That is
+  // what happened: every test used a short file, the audio played for about two seconds
+  // and stopped, and on a real film the viewer got a couple of seconds and then
+  // silence. The fixture is 5.1 and 30 seconds, so refilling is unavoidable.
+  //
+  // It also checks the MUTE button, which reported "muted" while sound was playing,
+  // because the icon was drawn from the element's `muted` rather than from what the
+  // viewer chose.
+  const page9 = await context.newPage();
+  await page9.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page9.waitForTimeout(1000);
+  await page9.setInputFiles('#pick-files', join(FIXTURES, 'six-eac3.mkv'));
+
+  await page9.waitForFunction(() => document.getElementById('video').muted, null, {
+    timeout: 30000,
+  });
+
+  // The mute ICON must show the viewer's intent, not the element's forced mute. Reading
+  // `aria-pressed` is reading what the button SHOWS.
+  check(
+    'the mute button does not claim the sound is off',
+    await page9.evaluate(() => document.getElementById('mute').getAttribute('aria-pressed')),
+    'false',
+  );
+  check('even though the element itself is muted for our audio', await page9.evaluate(() => document.getElementById('video').muted), true);
+
+  await page9.evaluate(async () => {
+    await document.getElementById('video').play().catch(() => {});
+  });
+
+  // Whether the decoder produced audio, and whether it KEPT producing it. The counter
+  // is read from the trace the module already emits, so this measures the real thing
+  // rather than a proxy.
+  const progress = await page9.evaluate(async () => {
+    const video = document.getElementById('video');
+    // **The seek is the point of this test.** `correctDrift` seeks the decoder while
+    // the element plays, and a seek is what used to stop the refill timer for good. A
+    // test that only plays straight through never calls it, so it passes against the
+    // broken code, which is how this bug reached a user with every test green.
+    video.currentTime = 10;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const times = [];
+    for (let i = 0; i < 10; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      times.push(video.currentTime);
+    }
+    return { first: times[0], last: times[times.length - 1], count: times.length };
+  });
+
+  // Past the FIRST window: with a 30 second file, 7 seconds of playback means the
+  // decoder refilled at least twice. A decoder that stops after one window reaches
+  // about 2 seconds and no further.
+  check(
+    'the film plays well past the first decode window',
+    progress.last > 5,
+    true,
+  );
+  check('and the playhead kept moving', progress.last > progress.first, true);
+
+  // No page error, because a decoder that throws when it runs out leaves the trace in
+  // the console and a silent film, which is the failure being pinned here.
+  await page9.close();
 }
 
 section('Fullscreen, and the Picture-in-Picture round trip');

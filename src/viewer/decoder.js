@@ -67,21 +67,6 @@ const DECODE_AHEAD_SECONDS = 2;
 /** How often to top up the buffer while playing, in milliseconds. */
 const REFILL_INTERVAL_MS = 200;
 
-/**
- * `ff_read_frame_multi` returns this when it hit the output limit rather than the
- * end of the stream. Measured, and it is `-EAGAIN` as libav.js reports it.
- */
-const EAGAIN = -11;
-
-/**
- * `ff_read_frame_multi` returns this at the end of the stream.
- *
- * Measured, and it is `AVERROR_EOF` as a 32-bit signed value. Compared EXACTLY,
- * because it decides when to flush the decoder and "not EAGAIN" would also be true
- * for an ordinary successful read.
- */
-const AVERROR_EOF = -541478725;
-
 /** `av_seek_frame` flag: land on the keyframe at or before the timestamp. */
 const AVSEEK_FLAG_BACKWARD = 4;
 
@@ -273,6 +258,13 @@ export class TrackDecoder {
 
     this.gain = this.context.createGain();
     this.gain.connect(this.context.destination);
+    trace('graph', {
+      ctxState: this.context.state,
+      ctxRate: this.context.sampleRate,
+      destChannels: this.context.destination.channelCount,
+      destMax: this.context.destination.maxChannelCount,
+      gain: this.gain.gain.value,
+    });
 
     // Positioned but NOT scheduled: `start` runs while the element may still be
     // paused, and scheduling here would play decoded audio over a paused picture,
@@ -324,6 +316,17 @@ export class TrackDecoder {
       AVSEEK_FLAG_BACKWARD,
     );
     if (result < 0) trace('seek-FAILED', { result });
+
+    // **The decoder is flushed, and skipping this is a real bug that only appears after
+    // a seek once the stream has ended.** `fill` passes `fin: true` when it reaches
+    // EOF, which makes the helper send a null packet and DRAIN the decoder. A seek
+    // moves the demuxer but does not reset the decoder, so the next packet is rejected
+    // with "Error submitting the packet to the decoder: End of file". Flushing here
+    // returns the decoder to a state that accepts packets, which is what a seek means.
+    if (this.decoder) await this.libav.avcodec_flush_buffers(this.decoder);
+    // After a seek there is stream left to read, so the decoder may be flushed again
+    // when this position reaches its end.
+    this.ended = false;
     // The media time the caller asked for. Frames BEFORE this are the tail of the
     // keyframe the backward seek landed on, and they belong to a moment the viewer
     // has already passed, so `schedule` drops them. Without this the audio plays from
@@ -334,13 +337,22 @@ export class TrackDecoder {
     // The old anchor describes a position the playhead has left, so it is dropped;
     // the next scheduled buffer establishes a new one.
     this.anchor = null;
-    if (this.playing) await this.fill();
+    if (this.playing) {
+      await this.fill();
+      // **The refill timer is re-armed here, and forgetting this was a real bug.**
+      // `stopNodes` used to clear it, and `correctDrift` seeks without going through
+      // `play`, so the first drift correction stopped refilling permanently: the two
+      // seconds already buffered played out and the film fell silent for good, with no
+      // error. Re-arming on every seek makes the timer's life independent of who
+      // called.
+      this.startTimer();
+    }
   }
 
-  /** Stop every scheduled buffer and clear the refill timer. @private */
+  /**
+   * Stop every scheduled buffer. Does NOT touch the refill timer. @private
+   */
   stopNodes() {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
     for (const node of this.nodes) {
       try {
         node.stop();
@@ -349,6 +361,30 @@ export class TrackDecoder {
       }
     }
     this.nodes = [];
+  }
+
+  /** Stop refilling. @private */
+  stopTimer() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
+  /** Ensure the refill timer is running. @private */
+  startTimer() {
+    if (!this.timer) {
+      // The callback catches, deliberately. An exception inside a `setInterval`
+      // callback is reported to the console but does NOT stop the interval, so a
+      // `fill` that throws every tick looks EXACTLY like a decoder that produces
+      // nothing: three buffers play, the film goes silent, and the only trace is an
+      // unhandled rejection somebody has to notice. Logging the failure and stopping
+      // the timer turns that into one legible line.
+      this.timer = setInterval(() => {
+        void this.fill().catch((error) => {
+          trace('fill-FAILED', { error: String(error?.message ?? error) });
+          this.stopTimer();
+        });
+      }, REFILL_INTERVAL_MS);
+    }
   }
 
   /**
@@ -370,7 +406,7 @@ export class TrackDecoder {
     // double audio.
     await this.seek(seconds);
     await this.fill();
-    if (!this.timer) this.timer = setInterval(() => void this.fill(), REFILL_INTERVAL_MS);
+    this.startTimer();
   }
 
   /**
@@ -383,6 +419,7 @@ export class TrackDecoder {
   pause() {
     this.playing = false;
     this.stopNodes();
+    this.stopTimer();
   }
 
   /**
@@ -396,15 +433,66 @@ export class TrackDecoder {
    */
   async fill() {
     if (this.disposed || !this.libav) return;
-    // `nextStart` is 0 before anything is scheduled, so the window is measured from
-    // the playhead until the first buffer exists.
-    const from = this.nextStart || this.context.currentTime;
-    const target = Math.max(this.context.currentTime, from) + DECODE_AHEAD_SECONDS;
+    // **One fill at a time, and this is what made the audio stop.**
+    //
+    // `fill` is async and runs on a timer, so a call that takes longer than the
+    // interval overlaps the next one. Both then drive the SAME demuxer and decoder
+    // handles through the worker, and the second corrupts the first's state: the
+    // decoder reports an error, the promise rejects, and because the rejection was
+    // unhandled the audio simply stopped with nothing in the console.
+    //
+    // Measured as the reported symptom: about 100 ms of sound (exactly the three
+    // buffers `seek` fills synchronously, 3 * 1536 / 48000) and then silence until
+    // the next seek produced another blip. It reproduced only on a large file, where
+    // a fill outlasts the 200 ms interval; a short fixture finishes first, which is
+    // why every small-file test passed.
+    if (this.filling) return;
+    this.filling = true;
+    try {
+      await this.fillOnce();
+    } finally {
+      this.filling = false;
+    }
+    // A periodic proof that refilling continues. Logging only the first three buffers
+    // made a WORKING decoder look like a stopped one, which cost real debugging time.
+    this.fills = (this.fills ?? 0) + 1;
+    if (this.fills % 25 === 0) {
+      trace('fill-alive', {
+        fills: this.fills,
+        scheduledTo: Number(this.nextStart.toFixed(1)),
+        audibleNow: Number(this.context.currentTime.toFixed(1)),
+      });
+    }
+  }
+
+  /**
+   * One pass of decoding, without the re-entrancy guard that `fill` applies.
+   * @private
+   */
+  async fillOnce() {
+    if (this.disposed || !this.libav) return;
+    // **The window is measured from what is SCHEDULED, not only from the audio clock.**
+    // `context.currentTime` is the right anchor for what is AUDIBLE, but it stands still
+    // while the graph is empty, so a loop that aims at
+    // `currentTime + DECODE_AHEAD_SECONDS` keeps decoding as fast as it can and
+    // overshoots: measured 438 live buffers, 14 seconds of audio, against a 2 second
+    // window. `nextStart` is what has been SCHEDULED, and it always advances, so the
+    // window is expressed against it and the loop stops when the buffer is genuinely
+    // full regardless of the clock.
     let guard = 0;
     if (this.fills === undefined) this.fills = 0;
     this.fills++;
 
-    while (!this.disposed && this.nextStart < target && guard++ < 64) {
+    while (!this.disposed && guard++ < 64) {
+      // Where the buffer ends. Never earlier than the playhead plus the window, so a
+      // context that has not started yet still fills, and never more than a fixed
+      // amount AHEAD of the playhead, which is the bound that actually holds.
+      const horizon =
+        Math.max(this.context.currentTime, this.nextStart) + DECODE_AHEAD_SECONDS;
+      const buffered = this.nextStart - this.context.currentTime;
+      if (this.nextStart > 0 && buffered >= DECODE_AHEAD_SECONDS) break;
+      if (this.nextStart >= horizon) break;
+
       // A SMALL read limit, deliberately. This is the demuxer's read size, not the
       // decode target: asking for a megabyte at a time returns tens of seconds of
       // audio in one call, which overshoots the window and holds memory that a seek
@@ -416,30 +504,52 @@ export class TrackDecoder {
         { limit: 64 * 1024 },
       );
       const batch = byStream[this.streamIndex];
-      let produced = 0;
       if (batch?.length) {
-        // `config.fin` is passed ONLY at the end of the stream, and that is a real
-        // trap rather than a preference. `fin: true` makes the helper send a null
-        // packet to flush the decoder, and sending a null packet twice is an error
-        // ("Error submitting the packet to the decoder: End of file"), because the
-        // decoder is already drained. It was passed on every batch before, which
-        // happened to throw only because a large read limit reached the end of a
-        // short file in one call, so the second flush was never attempted.
-        const finished = result === AVERROR_EOF;
+        // `config.fin` is passed AT MOST ONCE per seek, and that is a real trap rather
+        // than tidiness. `fin: true` makes the helper send a null packet that DRAINS the
+        // decoder, and draining it twice throws "Error submitting the packet to the
+        // decoder: End of file". The refill timer keeps running after the stream ends,
+        // so without the `ended` guard every tick past the end would flush again.
         const frames = await this.libav.ff_decode_multi(
           this.decoder,
           this.packets,
           this.frame,
           batch,
-          finished,
+          result === this.libav.AVERROR_EOF && !this.ended,
         );
-        for (const decoded of frames) this.schedule(decoded);
-        produced = frames.length;
+        for (const decoded of frames) {
+          this.schedule(decoded);
+          // Stop the moment the window is full. One read can decode many frames (a
+          // 64 KiB batch of 6-channel audio is several seconds), so without this the
+          // loop overshoots the window by whatever the last batch held.
+          if (this.nextStart > 0 && this.nextStart - this.context.currentTime >= DECODE_AHEAD_SECONDS) {
+            break;
+          }
+        }
       }
-      // `EAGAIN` means the read limit was hit, so another call will produce more.
-      // Anything else with no packets or no frames means there is nothing left.
-      if (result === EAGAIN) continue;
-      if (!produced && !batch?.length) break;
+
+      // Why the read stopped, and what to do about it. **The codes are read from the
+      // instance, and hardcoding them was a bug.** `libav.EAGAIN` is `6` and a limited
+      // read returns `-6`, so a hardcoded `-11` never matched and every batch looked
+      // like the end of the stream: the loop exited and the decoder produced no more
+      // audio, which is the silence reported after a couple of seconds.
+      if (result === -this.libav.EAGAIN) {
+        // The read limit was hit, so there is more to come. This is the COMMON case
+        // inside a full window, not an error.
+        continue;
+      }
+      // `libav.AVERROR_EOF`, read from the instance for the same reason.
+      if (result === this.libav.AVERROR_EOF) {
+        // Marked so the decoder is flushed ONCE. The timer keeps ticking after the end,
+        // and a second flush throws; a seek clears this, because after a seek there is
+        // more stream to read.
+        this.ended = true;
+        break;
+      }
+      // Any other negative is a real read error, and looping on it would spin.
+      if (result < 0) throw new Error(`Could not read the audio track (${this.libav.ff_error(result)}).`);
+      // A successful read that produced no packets for us means the demuxer is
+      // interleaving other streams; keep going rather than stopping.
     }
   }
 
@@ -532,6 +642,11 @@ export class TrackDecoder {
   /** Release everything. Not reusable after this. */
   dispose() {
     this.disposed = true;
+    // **The timer is stopped FIRST, and skipping it was a real crash.** `fill` checks
+    // `this.disposed` at its top, but the callback from an already-scheduled interval
+    // had `this.libav` read to null underneath it and threw
+    // "Cannot read properties of null (reading 'EAGAIN')" from inside the tick.
+    this.stopTimer();
     this.stopNodes();
     this.libav = null;
   }

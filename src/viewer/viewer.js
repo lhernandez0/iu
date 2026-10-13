@@ -616,9 +616,9 @@ async function loadVideo(file) {
   try {
     await loadEmbeddedTracks(file);
   } catch (error) {
-    // A container we cannot parse is not a reason to refuse the video. It means
-    // there are no embedded tracks we can offer, which is a normal state.
-    setStatus(`Could not read subtitle tracks from this video (${String(error?.message ?? error)}). Use a .srt file.`, true);
+    // CONSOLE ONLY. The viewer is told nothing: an unparseable container is a normal
+    // state (there are simply no embedded tracks to offer), not a fault to report.
+    logDecoder('embedded-failed', { error: String(error?.message ?? error) });
   }
 
   // Listed after playback starts, so the control never delays the video. The choice
@@ -1646,10 +1646,21 @@ function ensureAudioContext() {
     // `AudioContext`, not `webkitAudioContext`: the project targets Chrome 116+ and
     // Firefox 128+, both of which have had the unprefixed name for years.
     audioContext = new AudioContext();
+    // Autoplay policy: an AudioContext created WITHOUT a user gesture starts
+    // `suspended`, and a suspended context produces NO sound with no error anywhere.
+    // Opening a file is a gesture, so it usually resumes, but "usually" is what makes
+    // this worth logging: the failure mode is total silence and no diagnostic.
+    audioContext.addEventListener('statechange', () => {
+      logDecoder('audio-context', { state: audioContext.state });
+    });
   }
-  // Resumed because a context created before a gesture starts suspended, and a
-  // suspended context produces no sound with no error to explain it.
-  if (audioContext.state === 'suspended') void audioContext.resume();
+  if (audioContext.state === 'suspended') {
+    audioContext.resume().then(
+      () => logDecoder('audio-context-resumed', { state: audioContext.state }),
+      (error) => logDecoder('audio-context-resume-FAILED', { error: String(error?.message ?? error) }),
+    );
+  }
+  logDecoder('audio-context', { state: audioContext.state, rate: audioContext.sampleRate });
   return audioContext;
 }
 
@@ -1724,33 +1735,35 @@ function correctDrift() {
  * over a single option is noise, and a one-track file has nothing to select.
  */
 function renderAudio() {
-  const choice = audioTracks.length > 1;
-  // Shown whenever there is a choice, in the transport row, which is never hidden for
-  // a loaded file. It lived in the caption row once, and the caption row disappears when
-  // the captions are off, so the control was unreachable for a viewer who wants the
-  // original audio without subtitles, the case this feature exists for.
-  //
-  // A single UNPLAYABLE track is the exception, and it is the whole reason the decoder
-  // exists: a one-track AC-3 file has no choice to offer, but the viewer still has to be
-  // told what is happening, so the field is shown and the note carries the message.
   const chosen = audioTracks[audioChoice];
-  const unplayable = Boolean(chosen && !chosen.playable);
-  // The note is for a viewer who is about to get NO SOUND, or who has just lost it.
-  // When we can decode the track for them there is nothing to say: the film plays
-  // with its audio, which is exactly what they expected, and announcing the machinery
-  // is the product talking about itself.
-  const note = unplayable ? audioNoteFor(chosen) : '';
-  els.audioField.hidden = !choice && !note;
+  // The note is empty on purpose: everything diagnostic goes to the console. See
+  // `audioNoteFor`.
+  const note = audioNoteFor(chosen);
 
-  if (!choice) {
-    els.audioSelect.replaceChildren();
-    els.audioSelect.hidden = true;
+  // **ALWAYS VISIBLE.** It used to appear only when a file had more than one track,
+  // on the reasoning that a control over a single option is noise. That was wrong for
+  // a reason that matters more than tidiness: the field is the only place that says
+  // what audio the viewer is GETTING. Hidden, "one track" and "no track" and "the
+  // decoder failed" are all indistinguishable from each other, and a learner with no
+  // sound has nowhere to look. The select also states the track itself, so a film
+  // with one track now shows that track rather than nothing.
+  els.audioField.hidden = false;
+  els.audioSelect.hidden = false;
+
+  els.audioSelect.replaceChildren();
+  if (!audioTracks.length) {
+    // A file with no audio track, or one still being read. Stated plainly rather than
+    // left as an empty box, which reads as a rendering bug.
+    const option = document.createElement('option');
+    option.textContent = 'No audio track';
+    option.disabled = true;
+    option.selected = true;
+    els.audioSelect.append(option);
+    els.audioSelect.disabled = true;
     els.audioNote.textContent = note;
     return;
   }
 
-  els.audioSelect.hidden = false;
-  els.audioSelect.replaceChildren();
   audioTracks.forEach((track) => {
     const option = document.createElement('option');
     option.value = String(track.index);
@@ -1771,24 +1784,21 @@ function renderAudio() {
 }
 
 /**
- * What to say when a track's audio cannot be played.
+ * The note beside the audio row.
  *
- * The ONLY case worth a sentence is one we cannot handle, because then the viewer is
- * about to get silence and needs to know why. When the bundled decoder can play the
- * track, the honest report is nothing at all: the audio works, and a note saying so
- * is the product narrating itself. An earlier version printed "being decoded for you"
- * on every such file, which is noise.
+ * **EMPTY, and everything it used to say now goes to the console instead.** It
+ * reported decoder state to the viewer: which codec could not be played, whether we
+ * were decoding it, and when a decode failed. A viewer is not a developer and should
+ * not be told about codecs or decoders; the audio either plays or it does not.
  *
- * @param {{codec: string, playable: boolean}} track
+ * The row itself still always shows the track, so "no track" and "one track" are
+ * distinguishable, which was the real problem. Everything diagnostic is traced, so it
+ * is still available in a report.
+ *
  * @returns {string}
  */
-function audioNoteFor(track) {
-  const codec = track.codec.toUpperCase();
-  if (decoderFailed) {
-    return `This file\u2019s audio (${codec}) could not be decoded, so it plays silently.`;
-  }
-  if (decoderCapability?.get(track.codec)) return '';
-  return `This file\u2019s audio (${codec}) is not supported, so it will play silently.`;
+function audioNoteFor() {
+  return '';
 }
 
 /**
@@ -1805,9 +1815,10 @@ async function describeAudio(file) {
   audioChoice = 0;
   // Cleared per file: a failure to decode one film says nothing about the next.
   decoderFailed = false;
-  // Cleared for a new file: showing the previous film's tracks while the new one is
-  // still being read would offer a choice that means nothing.
-  els.audioField.hidden = true;
+  // The row stays visible through the read, so the viewer can always see that the
+  // audio row exists rather than watching it appear.
+  audioTracks = [];
+  renderAudio();
   try {
     const declared = await listAudioTracks(file);
     // The file may have been replaced while this was reading.
@@ -1825,7 +1836,7 @@ async function describeAudio(file) {
     const chosen = declared[audioChoice];
     logDecoder('describe', {
       tracks: declared.length,
-      chosen: chosen ? chosen.codec : '(none)',
+      chosen: chosen ? chosen.codec : 'NONE-THIS-FILE-HAS-NO-AUDIO-TRACK',
       playable: chosen ? chosen.playable : '(none)',
     });
     if (chosen && !chosen.playable) {
@@ -1849,6 +1860,9 @@ async function describeAudio(file) {
     // An unreadable container is not a failure: it means there is nothing to offer,
     // which is a normal state for a format we do not parse.
     logDecoder('describe-failed', { error: String(error?.message ?? error) });
+    // Rendered even on failure, so the row says "No audio track" rather than sitting
+    // empty. The row always tells the truth about what was found, including nothing.
+    renderAudio();
   }
 }
 
@@ -1889,9 +1903,8 @@ async function startDecoding(file, index) {
     // different facts; this path is the second one being false.
     decoderFailed = true;
     renderAudio();
-    // Also set the status line, because the audio row may be hidden for a one-track
-    // file. Both are cleared by the next file.
-    setStatus(`Could not decode this file\u2019s audio (${String(error?.message ?? error)}).`, true);
+    // CONSOLE ONLY, for now. Nothing is shown in the interface.
+    logDecoder('decode-failed', { error: String(error?.message ?? error) });
   }
 }
 
@@ -2031,7 +2044,8 @@ async function selectAudioTrack(index) {
     // first's URL out from under the element.
     await done;
   } catch (error) {
-    setStatus(`Could not switch audio track (${String(error?.message ?? error)}).`, true);
+    // CONSOLE ONLY, for now. Nothing is shown in the interface.
+    logDecoder('switch-failed', { error: String(error?.message ?? error) });
   } finally {
     audioBusy = false;
     renderAudio();
@@ -2078,22 +2092,23 @@ let lastVolume = 100;
  * the icon keeps saying which of the two it is.
  */
 function applyVolume() {
+  const wantsMute = Number(els.volumeSlider.value) === 0;
   els.video.volume = volumeScale(Number(els.volumeSlider.value));
   // The element is muted when the viewer says so, OR when the decoder is producing the
   // audio: in that case the element's own sound (silence for a codec it cannot decode,
-  // or the wrong track after a switch) must not play alongside ours. The slider still
-  // reads as unmuted, because from the viewer's point of view there IS sound.
-  els.video.muted = Number(els.volumeSlider.value) === 0 || trackDecoder !== null;
+  // or the wrong track after a switch) must not play alongside ours.
+  els.video.muted = wantsMute || trackDecoder !== null;
 
   // The decoded audio is a separate path to the speakers, so it is set here too or the
   // slider would control only the element's own sound, which is the silent one.
   syncDecoder();
 
-  const muted = els.video.muted;
-  // The icon is swapped by CSS from this same `aria-pressed`, not from JS: `<g hidden>`
-  // does not work, because SVG ignores the HTML attribute.
-  const label = muted ? 'Unmute' : 'Mute';
-  els.muteButton.setAttribute('aria-pressed', String(muted));
+  // **The ICON reflects the viewer's intent, not the element's `muted`.** While the
+  // decoder plays, the element is muted on purpose, and showing that as "muted" told
+  // the viewer their sound was off while it was playing, which is the opposite of the
+  // truth. `wantsMute` is the slider, which is the only thing the viewer controls.
+  const label = wantsMute ? 'Unmute' : 'Mute';
+  els.muteButton.setAttribute('aria-pressed', String(wantsMute));
   els.muteButton.setAttribute('aria-label', label);
   els.muteButton.title = label;
 }

@@ -197,10 +197,12 @@
               already one tab stop away and always in the same place. A toggle whose
               whole job is to show something adjacent is a click tax.
 
-              Hidden until a file actually has more than one track, which is the only
-              thing the removed button was doing usefully.
+              ALWAYS SHOWN, including for a file with one track or none. It used to
+              hide unless there was a choice, which made "one track", "no tracks" and
+              "the decoder is not playing this" look identical, with nowhere for a
+              viewer with no sound to look. The select now states the track itself.
             -->
-            <label class="field audio-field" id="audio-field" hidden>
+            <label class="field audio-field" id="audio-field">
               <span class="field-label">Audio</span>
               <select id="audio-track" aria-label="Audio track"></select>
             </label>

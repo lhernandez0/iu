@@ -199,11 +199,44 @@ ffmpeg([
 // the element the format provides for exactly this, and one of the same length
 // replaces the language without shifting a single byte, see the test.
 
+// **The Dolby fixtures, which the decoder is tested against.**
+//
+// AC-3 and E-AC-3 are the codecs the browser cannot decode at all, which is the whole
+// reason the bundled decoder exists, and the fixtures are the only way to prove it
+// works. `one-eac3.mkv` is a single mono track, enough to check the decode.
+//
+// `six-eac3.mkv` is 5.1 and LONGER THAN THE DECODER'S BUFFER WINDOW, and both of those
+// matter. A 6-channel track is what a real film carries, and a short file cannot show a
+// refill bug: the whole thing fits in the first window, so the reader never has to
+// continue. A decoder that stops after the first window passes on a three second file
+// and fails on a film, which is exactly the bug that reached a user.
+console.log('one-eac3.mkv, a single E-AC-3 track the browser cannot decode');
+ffmpeg([
+  ...SHORT_VIDEO,
+  '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
+  '-map', '0:v', '-map', '1:a',
+  '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+  '-c:a', 'eac3',
+  '-shortest',
+  'one-eac3.mkv',
+]);
+
+console.log('six-eac3.mkv, 5.1 E-AC-3 and longer than the decoder refill window');
+ffmpeg([
+  '-f', 'lavfi', '-i', 'testsrc=duration=30:size=160x90:rate=5',
+  '-f', 'lavfi', '-i', 'sine=frequency=440:duration=30',
+  '-map', '0:v', '-map', '1:a',
+  '-af', 'pan=5.1|FL=c0|FR=c0|FC=c0|LFE=c0|BL=c0|BR=c0',
+  '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+  '-c:a', 'eac3',
+  '-shortest',
+  'six-eac3.mkv',
+]);
+
 // The source subtitle files are inputs, not fixtures, every one of them is
 // embedded in a container above, so leaving them loose would put four stray files
 // in the directory for no reason.
 for (const temp of ['en.srt', 'zh.srt', 'ja.ass', 'untagged.srt']) {
   rmSync(join(OUT, temp), { force: true });
 }
-
 console.log('\nfixtures written to test/mkv/');
