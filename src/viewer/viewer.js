@@ -1569,6 +1569,17 @@ let audioContext = null;
  */
 let decoderCapability = null;
 /**
+ * When the drift corrector last re-sought the audio, in `Date.now()` milliseconds.
+ *
+ * Zero means never. The cooldown exists because a seek tears down the scheduled audio
+ * and takes time to decode the new position, so a corrector allowed to fire on every
+ * `timeupdate` can loop while the audio settles, which sounds exactly like no audio at
+ * all. See `correctDrift`.
+ */
+let lastDriftSeek = 0;
+/** How long the drift corrector must wait between corrections, in milliseconds. */
+const DRIFT_COOLDOWN_MS = 2000;
+/**
  * Whether the track select is showing.
  *
  * Shown whenever the file actually has more than one, in the transport row. The row is
@@ -1680,11 +1691,28 @@ function syncDecoder() {
  * quarter second from the picture, the audio is re-sought to the picture. Called from
  * `timeupdate`, so the check is cheap and runs a few times a second.
  */
+/**
+ * Correct drift between the element's clock and the audio it is decoding for us.
+ *
+ * The picture and the decoded sound are two clocks, and they can part company after a
+ * seek, a stall, or a long decode. This is the correction: if the audio is more than a
+ * quarter second from the picture, the audio is re-sought to the picture.
+ *
+ * **It is rate limited, and that is not a nicety.** A seek is expensive and it
+ * DESTROYS the scheduled audio while the new position is decoded, so a corrector that
+ * can fire on every `timeupdate` will, while the audio is still settling, seek again
+ * and again and the viewer never hears anything. Measured: it re-sought 130 ms after
+ * starting. The cooldown gives each correction time to take effect before the next
+ * comparison, so the loop cannot form. Called from `timeupdate`, a few times a second.
+ */
 function correctDrift() {
   if (!trackDecoder || els.video.paused) return;
+  const now = Date.now();
+  if (now - lastDriftSeek < DRIFT_COOLDOWN_MS) return;
   const at = trackDecoder.position;
   if (at === null) return;
   if (Math.abs(at - els.video.currentTime) > 0.25) {
+    lastDriftSeek = now;
     void trackDecoder.seek(els.video.currentTime);
   }
 }

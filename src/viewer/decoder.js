@@ -180,6 +180,18 @@ export class TrackDecoder {
      * @private
      */
     this.anchor = null;
+    /**
+     * The media time the last seek ASKED for.
+     *
+     * Frames before this are dropped by `schedule`, because a backward seek lands on
+     * an earlier keyframe and the decoder produces the audio in between. Kept as a
+     * field rather than a parameter because `schedule` is called from `fill`, which
+     * does not know what was requested.
+     *
+     * @type {number|null}
+     * @private
+     */
+    this.targetMedia = null;
   }
 
   /**
@@ -312,6 +324,12 @@ export class TrackDecoder {
       AVSEEK_FLAG_BACKWARD,
     );
     if (result < 0) trace('seek-FAILED', { result });
+    // The media time the caller asked for. Frames BEFORE this are the tail of the
+    // keyframe the backward seek landed on, and they belong to a moment the viewer
+    // has already passed, so `schedule` drops them. Without this the audio plays from
+    // wherever the keyframe was (which can be seconds early), the position reads
+    // short, and the drift corrector fights it in a loop.
+    this.targetMedia = seconds;
     this.nextStart = 0;
     // The old anchor describes a position the playhead has left, so it is dropped;
     // the next scheduled buffer establishes a new one.
@@ -442,6 +460,27 @@ export class TrackDecoder {
     const channels = decoded.data.length;
     const length = decoded.data[0]?.length ?? 0;
     if (!length) return;
+
+    // Where this frame sits in the FILM, from its own timestamp. This is the audio's
+    // real position, and it is what the clock is built from.
+    const stamp = decoded.best_effort_timestamp;
+    const media =
+      stamp != null && decoded.time_base_den
+        ? (stamp * decoded.time_base_num) / decoded.time_base_den
+        : null;
+
+    // DROP frames from before the position the viewer asked for.
+    //
+    // A backward seek lands on the keyframe at or before the target, and the decoder
+    // then produces every frame from there, so the first ones are the tail of audio
+    // the viewer has already passed. Scheduling them would play from the keyframe
+    // (up to seconds early), make `position` read behind the picture, and the drift
+    // corrector would seek again, which drops these and produces the same frames:
+    // the loop the diagnostics showed as a re-seek 130 ms after starting.
+    if (media !== null && this.targetMedia != null && media + 0.05 < this.targetMedia) {
+      return;
+    }
+
     if (this.scheduled === undefined) this.scheduled = 0;
     if (this.scheduled++ < 3) {
       trace('scheduled', { channels, length, rate: decoded.sample_rate, n: this.scheduled - 1 });
@@ -470,16 +509,11 @@ export class TrackDecoder {
     node.start(this.nextStart);
     this.nodes.push(node);
 
-    // The anchor, from the frame's own position in the file. `best_effort_timestamp`
-    // is in units of `time_base_num / time_base_den` seconds; a frame that reports no
-    // timestamp falls back to the running schedule, which is still a valid clock.
-    const stamp = decoded.best_effort_timestamp;
+    // The anchor: the FIRST scheduled frame's own media time, and the audio-clock time
+    // it starts at. Everything after is measured from here, so `position` reports where
+    // the audio really is rather than where the schedule happens to have reached.
     if (this.anchor === null) {
-      const media =
-        stamp != null && decoded.time_base_den
-          ? (stamp * decoded.time_base_num) / decoded.time_base_den
-          : this.nextStart;
-      this.anchor = { media, context: this.nextStart };
+      this.anchor = { media: media ?? this.targetMedia ?? 0, context: this.nextStart };
     }
 
     this.nextStart += buffer.duration;
