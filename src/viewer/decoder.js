@@ -40,6 +40,22 @@
 const DECODER_URL = '../vendor/libav.js';
 
 /**
+ * Log one step of the decode path, under the extension's diagnostic prefix.
+ *
+ * Duplicated from `diagnostics.js` rather than imported, deliberately: this module is
+ * the one that FAILS when the decoder is missing or broken, and importing a sibling
+ * through the same module graph it is diagnosing would be the wrong dependency. A
+ * `console.log` with the same prefix costs nothing and always works.
+ *
+ * @param {string} step
+ * @param {Record<string, unknown>} [fields]
+ */
+function trace(step, fields = {}) {
+  const parts = Object.entries(fields).map(([key, value]) => `${key}=${String(value)}`);
+  console.log(`[iu] decoder step=${step}${parts.length ? ' ' + parts.join(' ') : ''}`);
+}
+
+/**
  * Seconds of audio to keep decoded ahead of the playhead.
  *
  * A balance, not a tuned constant: too small and a slow decode starves playback
@@ -85,12 +101,19 @@ let libraryPromise = null;
  */
 function loadLibrary() {
   if (!libraryPromise) {
-    libraryPromise = import(DECODER_URL).catch((error) => {
-      // Cleared so a later attempt can retry: a transient failure should not poison
-      // every future attempt for the life of the page.
-      libraryPromise = null;
-      throw error;
-    });
+    trace('import-start', { url: DECODER_URL });
+    libraryPromise = import(DECODER_URL)
+      .then((module) => {
+        trace('import-ok', { hasLibAV: typeof module?.default?.LibAV });
+        return module;
+      })
+      .catch((error) => {
+        // Cleared so a later attempt can retry: a transient failure should not poison
+        // every future attempt for the life of the page.
+        libraryPromise = null;
+        trace('import-FAILED', { error: String(error?.message ?? error) });
+        throw error;
+      });
   }
   return libraryPromise;
 }
@@ -183,8 +206,10 @@ export class TrackDecoder {
    */
   async start(seconds, context) {
     const { default: LibAV } = await loadLibrary();
+    trace('library-loaded');
     this.context = context;
     this.libav = await LibAV.LibAV();
+    trace('libav-instance');
 
     // **The file is NOT read into memory, and that is the whole point.**
     //
@@ -209,9 +234,17 @@ export class TrackDecoder {
     const [format, streams] = await this.libav.ff_init_demuxer_file('input');
     this.format = format;
     this.streams = streams;
+    trace('demuxed', {
+      bytes: this.file.size,
+      streams: streams.length,
+      codecs: streams.map((entry) => `${entry.codec_type}:${entry.codec_id}`).join(','),
+    });
 
     const stream = streams.filter((entry) => entry.codec_type === 1)[this.trackIndex];
-    if (!stream) throw new Error('That audio track is not in this file.');
+    if (!stream) {
+      trace('no-audio-stream', { wanted: this.trackIndex, found: streams.filter((s) => s.codec_type === 1).length });
+      throw new Error('That audio track is not in this file.');
+    }
     this.stream = stream;
     // The key packets come back under. It is the stream's index in the FILE, which
     // is not its position among the audio streams when the file interleaves video.
@@ -224,6 +257,7 @@ export class TrackDecoder {
     this.decoder = decoder;
     this.packets = packets;
     this.frame = frame;
+    trace('decoder-ready', { codecId: stream.codec_id, streamIndex: stream.index });
 
     this.gain = this.context.createGain();
     this.gain.connect(this.context.destination);
@@ -252,16 +286,32 @@ export class TrackDecoder {
     if (this.disposed) return;
     this.stopNodes();
 
+    // **The seek is in the stream's OWN time base, not microseconds, and that was the
+    // bug that made every file play no sound.** The first version passed
+    // `seconds * 1e6`, on the assumption that `av_seek_frame` wants microseconds. It
+    // does not: it wants the target in the units of the stream's `time_base`.
+    // Matroska audio here is `1/1000`, so 0.24 seconds went in as 240000 MILLISECONDS,
+    // which is 240 seconds, and every read after it returned end-of-file on a short
+    // file. Silent, with no error, because the seek succeeded.
+    //
+    // `AV_TIME_BASE` (1000000) is used ONLY when the time base is unknown, which is
+    // the documented default for `av_seek_frame` when the stream index is -1.
+    const num = this.stream.time_base_num;
+    const den = this.stream.time_base_den;
+    const stamp = num && den ? Math.round((seconds * den) / num) : Math.round(seconds * MICROSECONDS);
+    trace('seek', { seconds: Number(seconds.toFixed(2)), stamp, timeBase: `${num ?? '?'}/${den ?? '?'}` });
+
     // `AVSEEK_FLAG_BACKWARD`: land on the keyframe at or before the target, which is
     // where the decoder has the state to produce correct samples from. A forward
     // seek would start after the target and drop audio.
-    await this.libav.av_seek_frame(
+    const result = await this.libav.av_seek_frame(
       this.format,
       -1,
-      Math.floor(seconds * MICROSECONDS),
+      stamp,
       0,
       AVSEEK_FLAG_BACKWARD,
     );
+    if (result < 0) trace('seek-FAILED', { result });
     this.nextStart = 0;
     // The old anchor describes a position the playhead has left, so it is dropped;
     // the next scheduled buffer establishes a new one.
@@ -295,6 +345,7 @@ export class TrackDecoder {
    */
   async play(seconds) {
     if (this.disposed) return;
+    trace('play', { seconds: Number(seconds.toFixed(2)), state: this.context.state });
     this.playing = true;
     // Re-sought rather than resumed, because a pause may have lasted minutes and the
     // element may have moved. Stops any buffer already scheduled, so there is no
@@ -332,6 +383,8 @@ export class TrackDecoder {
     const from = this.nextStart || this.context.currentTime;
     const target = Math.max(this.context.currentTime, from) + DECODE_AHEAD_SECONDS;
     let guard = 0;
+    if (this.fills === undefined) this.fills = 0;
+    this.fills++;
 
     while (!this.disposed && this.nextStart < target && guard++ < 64) {
       // A SMALL read limit, deliberately. This is the demuxer's read size, not the
@@ -389,6 +442,10 @@ export class TrackDecoder {
     const channels = decoded.data.length;
     const length = decoded.data[0]?.length ?? 0;
     if (!length) return;
+    if (this.scheduled === undefined) this.scheduled = 0;
+    if (this.scheduled++ < 3) {
+      trace('scheduled', { channels, length, rate: decoded.sample_rate, n: this.scheduled - 1 });
+    }
 
     const buffer = this.context.createBuffer(channels, length, decoded.sample_rate);
     for (let channel = 0; channel < channels; channel++) {

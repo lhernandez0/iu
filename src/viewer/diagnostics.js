@@ -205,14 +205,29 @@ export function logEmbeddedTracks(found) {
   }
 }
 
+/**
+ * What the decoder attempt is doing, logged at each step.
+ *
+ * This exists because "I hear nothing and there is no selector" has several possible
+ * causes and no way to tell them apart from outside: the capability probe said no, the
+ * import failed, the demux threw, the decode produced silence, or nothing ran at all.
+ * Each step logs, so the answer is in the paste rather than in a round trip.
+ *
+ * @param {string} step
+ * @param {Record<string, unknown>} [fields]
+ */
+export function logDecoder(step, fields = {}) {
+  line('decoder', { step, ...fields });
+}
+
 /** Announce once per page, so a pasted log says which build it came from. */
 export function logBanner() {
   line('viewer', {
     ua: navigator.userAgent,
     audioTracksApi: 'audioTracks' in HTMLMediaElement.prototype,
-    // The three codecs users have reported being warned about. Asked in the RFC
-    // spelling, because the short name answers `""` for everything and would report
-    // this browser as unable to play anything at all.
+    // The codecs users have reported being warned about. Asked in the RFC spelling,
+    // because the short name answers `""` for everything and would report this browser
+    // as unable to play anything at all.
     canPlayAc3: canPlayAudioCodec('ac-3'),
     canPlayEac3: canPlayAudioCodec('ec-3'),
     canPlayDts: canPlayAudioCodec('dts'),

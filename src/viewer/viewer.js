@@ -45,7 +45,7 @@ import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTIO
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
 import { canDecode, TrackDecoder } from './decoder.js';
-import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks } from './diagnostics.js';
+import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks, logDecoder } from './diagnostics.js';
 
 /**
  * The extension API namespace, `browser` where it exists (Chrome 148+ and always
@@ -1795,19 +1795,32 @@ async function describeAudio(file) {
     // asked when it matters: a file the browser can play never touches the decoder,
     // so the 6 MB is never loaded for the ordinary case.
     const chosen = declared[audioChoice];
+    logDecoder('describe', {
+      tracks: declared.length,
+      chosen: chosen ? chosen.codec : '(none)',
+      playable: chosen ? chosen.playable : '(none)',
+    });
     if (chosen && !chosen.playable) {
-      await decoderCanPlay(chosen.codec);
+      const can = await decoderCanPlay(chosen.codec);
+      logDecoder('capability', { codec: chosen.codec, canDecode: can });
       if (file !== audioSourceFile) return;
     }
     renderAudio();
     // Started AFTER the note is rendered, because it is not instant: this file has to
     // be written into the decoder's filesystem and its first window decoded.
     if (chosen && !chosen.playable && decoderCapability?.get(chosen.codec)) {
+      logDecoder('start', { codec: chosen.codec, index: audioChoice });
       void startDecoding(file, audioChoice);
+    } else if (chosen && !chosen.playable) {
+      logDecoder('skipped', {
+        codec: chosen.codec,
+        reason: 'the decoder says it cannot decode this codec',
+      });
     }
-  } catch {
+  } catch (error) {
     // An unreadable container is not a failure: it means there is nothing to offer,
     // which is a normal state for a format we do not parse.
+    logDecoder('describe-failed', { error: String(error?.message ?? error) });
   }
 }
 
@@ -1821,9 +1834,15 @@ async function startDecoding(file, index) {
   try {
     const decoder = new TrackDecoder(file, index);
     await decoder.start(els.video.currentTime, ensureAudioContext());
+    logDecoder('started', {
+      index,
+      at: Number(els.video.currentTime.toFixed(2)),
+      scheduled: Number((decoder.position ?? 0).toFixed(2)),
+    });
     // The file may have been replaced while the decoder was loading.
     if (file !== audioSourceFile) {
       decoder.dispose();
+      logDecoder('abandoned', { reason: 'the file changed while decoding was starting' });
       return;
     }
     trackDecoder = decoder;
