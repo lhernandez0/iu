@@ -153,3 +153,37 @@ clean-stage:
 clean: ## Remove everything under build/
 	@rm -rf $(BUILD)
 	@echo "cleaned $(BUILD)/"
+
+# The regenerable caches, and how to get each one back. Every entry is a build
+# product, a download, or a render: none of it is tracked in git, and none of it
+# is needed to read or edit the source. The point of listing them together is
+# that "the folder is 800 MB" is almost always these, and a cleanup done by hand
+# from memory is how a tracked file gets deleted by mistake.
+#
+# `node_modules/` is deliberately NOT here. It is the one cache where the
+# restore command is slow and needs the network, so removing it is a decision
+# rather than a cleanup; `rm -rf node_modules` and `npm install` do it by hand.
+.PHONY: clean-all
+clean-all: clean ## Also remove the downloaded and rendered caches
+	@# Only the DOWNLOADED files, by extension. The runner `test/conformance/run.mjs`
+	@# is tracked source and lives in the same directory, so removing the directory
+	@# would delete it. This is exactly the mistake the note above warns about.
+	@rm -f test/conformance/*.mkv
+	@rm -rf tools/ui/assets
+	@rm -rf .cache
+	@echo
+	@echo "Removed, and how to restore each:"
+	@echo "  build/            make release      (or npm run vendor:libav)"
+	@echo "  conformance mkv   npm run conformance:fetch"
+	@echo "  tools/ui/assets   re-render them, they are review screenshots"
+	@echo "  .cache            npm run wordlists:fetch"
+	@echo
+	@echo "node_modules/ was kept: rm -rf node_modules && npm install to drop it."
+
+.PHONY: size
+size: ## Report what is using the space, largest first
+	@du -sh . 2>/dev/null
+	@echo
+	@du -sh */ .[a-z]*/ 2>/dev/null | sort -rh | head -12
+	@echo
+	@echo "Regenerable caches: make clean-all"
