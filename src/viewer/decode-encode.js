@@ -267,21 +267,41 @@ export async function transcodeForElement(file, video, options = {}) {
     return false;
   };
 
-  /** The furthest source time the element has buffered, or 0 when nothing is. @returns {number} */
-  const bufferedEnd = () => {
+  /**
+   * The end of the CONTIGUOUS run of buffered media containing, or nearest ahead of, a time.
+   *
+   * **The furthest buffer end is the wrong measure, and it is what broke a spammed
+   * backward seek.** The element's `buffered` is a list of disjoint ranges. After seeking
+   * backward the list holds the range being rebuilt AND the range that was there before,
+   * further ahead, so the FURTHEST end reported a large runway while the playhead actually
+   * had almost none. The producer was then paused (`requestPause` saw a huge "ahead") and
+   * the buffer never grew past the first fragment, so playback crawled.
+   *
+   * The runway that matters is the media the playhead can reach WITHOUT a gap, so this
+   * walks the ranges from the one covering `seconds` and stops at the first gap. A time
+   * before all ranges returns the start of the first, which reads as "no runway yet".
+   *
+   * @param {number} seconds
+   * @returns {number}
+   */
+  const bufferedAheadEnd = (seconds) => {
     if (!sourceBuffer) return 0;
     const ranges = sourceBuffer.buffered;
-    return ranges.length ? ranges.end(ranges.length - 1) : 0;
+    if (!ranges.length) return 0;
+    let end = -Infinity;
+    for (let i = 0; i < ranges.length; i++) {
+      if (ranges.start(i) > seconds + 0.05) {
+        // The first range ahead of the playhead: only it can extend the runway, and only if
+        // it touches what we already had.
+        return end === -Infinity ? ranges.start(i) : end;
+      }
+      // Touching or covering the playhead: extend the runway to this range's end.
+      if (ranges.start(i) <= seconds + 0.05 && ranges.end(i) >= seconds - 0.05) end = ranges.end(i);
+      else if (end !== -Infinity && ranges.start(i) <= end + 0.05) end = ranges.end(i);
+    }
+    return end === -Infinity ? ranges.start(0) : end;
   };
 
-  /**
-   * Ask the producer for another window if the playhead is running out of runway.
-   *
-   * The condition is "less than `LEAD_SECONDS` of PLAYABLE media ahead", measured from the
-   * element's buffer, so it is correct however much the platform has evicted. It is
-   * re-checked after every append and on every playhead event, which means the producer is
-   * asked again exactly when the buffer has drained to the lead, no sooner.
-   */
   /**
    * Ask the producer to keep going, because the playhead is running out of runway.
    *
@@ -291,7 +311,7 @@ export async function transcodeForElement(file, video, options = {}) {
    */
   const requestMore = () => {
     if (disposed || producerDone) return;
-    if (bufferedEnd() - video.currentTime < LEAD_MAX) worker.postMessage({ type: 'produce', id: activePass });
+    if (bufferedAheadEnd(video.currentTime) - video.currentTime < LEAD_MAX) worker.postMessage({ type: 'produce', id: activePass });
   };
 
   /**
@@ -305,7 +325,7 @@ export async function transcodeForElement(file, video, options = {}) {
    */
   const requestPause = () => {
     if (disposed || producerDone) return;
-    if (bufferedEnd() - video.currentTime > LEAD_MAX) worker.postMessage({ type: 'pause', id: activePass });
+    if (bufferedAheadEnd(video.currentTime) - video.currentTime > LEAD_MAX) worker.postMessage({ type: 'pause', id: activePass });
   };
 
   /**
@@ -497,7 +517,7 @@ export async function transcodeForElement(file, video, options = {}) {
     // whether the producer should continue or hold. Doing it here rather than on a timer
     // means production is driven by playback progress and not by the clock.
     pump();
-    const ahead = bufferedEnd() - video.currentTime;
+    const ahead = bufferedAheadEnd(video.currentTime) - video.currentTime;
     if (ahead > LEAD_MAX) requestPause();
     else if (ahead < LEAD_MAX) requestMore();
   };
@@ -565,7 +585,7 @@ export async function transcodeForElement(file, video, options = {}) {
     // A runway BELOW the minimum means the producer could not keep up with playback, which
     // is what an underrun sounds like (a stutter). Logged so it is visible in a paste
     // rather than only felt, and the ask below is what recovers it.
-    const ahead = bufferedEnd() - video.currentTime;
+    const ahead = bufferedAheadEnd(video.currentTime) - video.currentTime;
     if (ahead < LEAD_MIN) console.log(`[iu] transcode step=underrun ahead=${ahead.toFixed(1)}`);
     if (ahead > LEAD_MAX) requestPause();
     else requestMore();
