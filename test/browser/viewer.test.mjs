@@ -222,13 +222,13 @@ section('the study picker shows the track the captions actually draw');
   // said "en". A viewer reads the dropdown to know what they are hearing, so a mismatch is
   // a lie about the state of the page.
   //
-  // `long-eac3-subs.mkv` carries English (track 3) and Japanese (track 4), and Japanese is
-  // the markable one, so the automatic pick is Japanese and the two tracks are
-  // distinguishable by their text.
+  // `three-tracks.mkv` carries English, Japanese and Chinese, all starting at 0.5s, so the
+  // automatic pick is a markable one (Japanese) and the tracks are distinguishable by text
+  // ("Hello there" versus "Japanese line"). It is a GENERATED fixture, so CI has it.
   const reader = await context.newPage();
   await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   await reader.waitForTimeout(800);
-  await reader.setInputFiles('#pick-files', join(FIXTURES, 'long-eac3-subs.mkv'));
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
   await reader.waitForTimeout(6000);
   await reader.evaluate(() => {
     const video = document.getElementById('video');
@@ -243,15 +243,17 @@ section('the study picker shows the track the captions actually draw');
     primary: document.getElementById('caption-primary').textContent,
   }));
 
-  // The automatic pick is Japanese, and the caption text says so. The pair is asserted
-  // together, so "the picker is right but nothing is drawn" fails as loudly as a mismatch.
+  // The automatic pick is Japanese, and the caption drawn is the Japanese track's text,
+  // not the English track's. The two are asserted TOGETHER, so "the picker is right but
+  // the caption is the other language" fails, which is the exact bug this guards.
+  // The Japanese track holds "Japanese line" then "Line with, a comma"; the English track
+  // holds "Hello there". Naming neither, the check is that the text is one of the
+  // Japanese cues and is NOT the English one, so it does not depend on where in a cue the
+  // playhead happened to land.
   check('the picker names the Japanese track', state.picker, 'ja');
-  check('and the caption drawn is the Japanese one', /Japanese/.test(state.primary), true);
+  check('and the caption is the Japanese track, not the English one', /Japanese line|Line with/.test(state.primary), true);
 
   // Choosing English must move BOTH: the caption to the English text, the picker to `en`.
-  // The playhead is put INSIDE an English cue first, because this file's cues are ten
-  // seconds apart and the switch itself does not move the playhead; asserting in the gap
-  // between cues would read an empty caption and call a working switch broken.
   await reader.selectOption('#study-track', 'en');
   await reader.evaluate(() => {
     const video = document.getElementById('video');
@@ -263,7 +265,7 @@ section('the study picker shows the track the captions actually draw');
     picker: document.getElementById('study-track').value,
     primary: document.getElementById('caption-primary').textContent,
   }));
-  check('switching the picker switches the caption', /English/.test(switched.primary), true);
+  check('switching the picker switches the caption', /Hello there|Second line/.test(switched.primary), true);
   check('and the picker reflects the choice', switched.picker, 'en');
 
   await reader.close();
@@ -1178,17 +1180,25 @@ section('the caption for a position is the same at every speed');
   const page10 = await context.newPage();
   await page10.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   await page10.waitForTimeout(800);
-  await page10.setInputFiles('#pick-files', join(FIXTURES, 'long-eac3-subs.mkv'));
-  await page10.waitForTimeout(6000);
+  // A GENERATED fixture, so CI has it. Its cues are at 0.5s for 2s and at 3s for 2s, which
+  // is enough: the positions below sit inside those cues and the position is HELD (paused),
+  // so nothing depends on the file being long.
+  await page10.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await page10.waitForTimeout(5000);
 
   /**
    * The caption drawn for a position, at a given rate, WITHOUT letting it drift.
    *
-   * The element is PAUSED before the position is read. At 8x a 900 ms wait would advance
-   * the playhead about seven seconds, so a test that played would read a different position
-   * than it asked for and compare captions from two different cues. Pausing holds the
-   * position, so the only thing the rate can change is how the renderer decides WHICH cue
-   * that position has, which is exactly the property under test.
+   * The element is PAUSED before the position is read. At 8x a long wait would advance the
+   * playhead past the cue, so a test that played would read a different position than it
+   * asked for and compare captions from two different cues. Pausing holds the position, so
+   * the only thing the rate can change is how the renderer decides WHICH cue that position
+   * has, which is exactly the property under test.
+   *
+   * It WAITS FOR A NON-EMPTY CAPTION rather than sleeping a fixed time, because a finished
+   * cue holds on screen for `captionFade` and then fades, and a fixed wait can land inside
+   * that fade and read an empty line for a position that is perfectly well captioned. That
+   * is a race in the TEST, not the player, and the fix is to poll for the settled state.
    */
   const captionAt = async (seconds, rate) => {
     await page10.evaluate(
@@ -1201,14 +1211,18 @@ section('the caption for a position is the same at every speed');
       },
       { s: seconds, r: rate },
     );
-    // One frame plus a boundary settle, so the pause, the seek and the render have all run.
-    await page10.waitForTimeout(700);
+    await page10
+      .waitForFunction(() => document.getElementById('caption-primary').textContent.trim().length > 0, null, { timeout: 4000 })
+      .catch(() => {});
+    // A short settle after the caption appears, so a fade scheduled by the position change
+    // cannot fire between the poll and the read.
+    await page10.waitForTimeout(150);
     return page10.evaluate(() => document.getElementById('caption-primary').textContent.replace(/\s+/g, ' ').trim());
   };
 
-  // Positions chosen to land INSIDE cues (this file's cues start near x.51 and run 3s), so
-  // the expectation is a non-empty caption rather than a gap.
-  const positions = [50.8, 60.8, 70.8];
+  // Positions inside the fixture's cues (0.5s+2s and 3s+2s), so the expectation is a
+  // non-empty caption rather than a gap.
+  const positions = [1.0, 4.0];
   const rates = [0.125, 1, 2, 4, 8];
 
   for (const seconds of positions) {

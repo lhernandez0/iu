@@ -19,7 +19,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import {
   readMatroska,
   readMatroskaTracks,
@@ -424,6 +424,40 @@ section("the file's own TimecodeScale is used, not an assumed millisecond");
   // Stated as the relationship, so the assertion says what it means: the scale was
   // applied rather than ignored.
   check('the two differ by exactly the scale ratio', Math.round(baseStart / fastStart), 10);
+}
+
+// --- Every fixture a test asks for must be one the generator produces ---------
+//
+// **This guards a mistake that reached main.** A debugging fixture was created by hand
+// in `test/mkv/` (gitignored, like every fixture) and a browser test was pointed at it.
+// It worked locally because the file was on the developer's disk, and it failed in CI
+// with `ENOENT` because CI only has the files `npm run fixtures` creates. The lesson is
+// not "be careful": it is that a test must depend only on files the repository can
+// REGENERATE, so this asserts exactly that relationship rather than trusting review.
+//
+// The check reads the test files for `join(FIXTURES, '...')` and `readerOf('...')`, and
+// requires every name to appear in the generator. It cannot see a file a test builds the
+// name for dynamically, which is a limit worth knowing, not a reason to skip it.
+
+section('every fixture a test names is one the generator produces');
+
+{
+  const generator = readFileSync(join(ROOT, 'tools', 'mkv-fixtures.mjs'), 'utf8');
+  const produced = new Set([...generator.matchAll(/'([a-z0-9-]+\.mkv)'/g)].map((m) => m[1]));
+
+  const sources = [
+    join(ROOT, 'test', 'browser', 'viewer.test.mjs'),
+    join(ROOT, 'test', 'mkv-container.test.mjs'),
+  ].filter(existsSync);
+
+  const missing = [];
+  for (const file of sources) {
+    const text = readFileSync(file, 'utf8');
+    for (const match of text.matchAll(/(?:FIXTURES,\s*|readerOf\(|readerFor\()'([^']+\.mkv)'/g)) {
+      if (!produced.has(match[1])) missing.push(`${basename(file)}: ${match[1]}`);
+    }
+  }
+  check('no test names a fixture the generator does not create', missing, []);
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
