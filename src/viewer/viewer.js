@@ -45,7 +45,7 @@ import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTIO
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
 import { transcodeForElement } from './decode-encode.js';
-import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks, logDecoder } from './diagnostics.js';
+import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks, logDecoder, logSubs } from './diagnostics.js';
 
 /**
  * The extension API namespace, `browser` where it exists (Chrome 148+ and always
@@ -459,6 +459,11 @@ function viewerFor(file) {
     read: async (offset, length) => {
       const end = Math.min(offset + length, file.size);
       const buffer = await file.slice(offset, end).arrayBuffer();
+      // Counted, not logged. A film's cues are walked cluster by cluster, so this fires
+      // thousands of times; the totals are reported once by `extract-done` instead, which
+      // keeps the log readable while still saying how much was read.
+      window.__cuesRead = (window.__cuesRead ?? 0) + buffer.byteLength;
+      window.__cuesReads = (window.__cuesReads ?? 0) + 1;
       return new Uint8Array(buffer);
     },
   };
@@ -585,6 +590,9 @@ async function loadVideo(file) {
   // dictionary until a track is chosen.
   tracks = [];
   activeTrackLanguage = null;
+  // The single-pass cue read belongs to the file just replaced, so it is dropped. A new
+  // open runs it again, once, for the new file's tracks. See `readAllCues`.
+  allCuesPromise = null;
   redrawCaptions();
   // A real open, so the offer is wanted. Set explicitly rather than left to the flag's
   // default, because a previous switch may have consumed it and a previous switch that
@@ -656,25 +664,39 @@ async function loadDefaultTrack() {
   // preference the panel reads, so a track chosen in the panel's dropdown is the one
   // the captions draw.
   const study = trackFor(settings.studyLanguage) ?? pickDefaultTrack();
-  if (!study) return;
+  logSubs('pick', {
+    studyLanguage: settings.studyLanguage ?? 'null',
+    chosen: study ? `${study.languageCode} n=${study.trackNumber} kind=${study.kind}${study.error ? ' ERR:' + study.error : ''}` : 'NONE',
+    available: tracks.map((t) => `${t.languageCode}/${t.source}/${t.kind}`).join(','),
+  });
+  if (!study) {
+    logSubs('pick-none', { reason: 'no track to load, captions will stay empty' });
+    return;
+  }
   try {
+    logSubs('read-start', { track: study.languageCode, kind: study.kind, cached: Boolean(study.segments) });
     segments = await ensureSegments(study);
     activeTrackLanguage = study.languageCode;
     lastIndex = -2;
     lastRendered = -2;
+    logSubs('read-done', { track: study.languageCode, count: segments.length, error: study.error ?? 'none' });
     // The list follows the track, so the dictionary is loaded for THIS language
     // before anything is marked. Fire-and-forget: the captions are on screen already
     // and gain their marks when the dictionary lands.
     void prepareMarks(study.languageCode);
     redrawCaptions();
+    logSubs('drawn', { count: segments.length, t: Number(els.video.currentTime.toFixed(2)) });
     // The gloss, if there is a second track. Awaited only to align it; the captions
     // are already on screen without it.
     void loadGlossTrack(study);
-  } catch {
+  } catch (error) {
     // A track that cannot be read is normal for an image-based subtitle, and the
-    // panel reports it. Nothing to say here.
+    // panel reports it. Nothing to say here beyond the trace.
+    logSubs('read-failed', { track: study.languageCode, error: String(error?.message ?? error) });
   }
 }
+
+
 
 /**
  * Load the second subtitle track, if the learner asked for one.
@@ -696,6 +718,11 @@ async function loadDefaultTrack() {
  */
 async function loadGlossTrack(study) {
   const chosen = trackFor(settings.glossLanguage);
+  logSubs('gloss-pick', {
+    glossLanguage: settings.glossLanguage ?? 'null',
+    chosen: chosen ? `${chosen.languageCode} n=${chosen.trackNumber}${chosen.error ? ' ERR:' + chosen.error : ''}` : 'NONE',
+    study: study?.languageCode ?? 'none',
+  });
   // Never the same track twice: a "gloss" identical to the line above it is noise, not a
   // translation. And no fallback: an unset gloss is "Off", not "pick one for me".
   if (!chosen || chosen === study) {
@@ -708,8 +735,16 @@ async function loadGlossTrack(study) {
     // Aligned by start time with a drift tolerance, so an out-of-sync second track leaves
     // the line blank rather than pairing it with the wrong cue.
     glossLines = alignSecondary(segments, cues);
+    logSubs('gloss-aligned', {
+      track: chosen.languageCode,
+      studyCues: segments.length,
+      glossCues: cues.length,
+      filled: glossLines.filter(Boolean).length,
+      firstStart: cues[0]?.start != null ? Number(cues[0].start.toFixed(2)) : 'nil',
+    });
     redrawCaptions();
-  } catch {
+  } catch (error) {
+    logSubs('gloss-failed', { error: String(error?.message ?? error) });
     glossLines = [];
     redrawCaptions();
   }
@@ -774,6 +809,7 @@ async function loadSubtitles(files) {
 async function loadEmbeddedTracks(file) {
   const found = await readMatroskaTracks(viewerFor(file));
   logEmbeddedTracks(found);
+  logSubs('embedded-found', { count: found.length, kinds: found.map((t) => `${t.number}:${t.kind}`).join(',') });
   // Anything we already have from a sidecar wins, because the user chose it
   // explicitly and a file's own track is not more authoritative than that.
   const fromFiles = tracks.filter((track) => track.source === 'file');
@@ -825,24 +861,80 @@ async function loadEmbeddedTracks(file) {
 }
 
 /**
- * Read the cues for one embedded track, on first use.
+ * Read every embedded caption track's cues in ONE pass over the file.
  *
- * Deferred rather than done at load time because it walks the media, the only
- * expensive thing here, and a film with three subtitle tracks should not pay for
- * all three when one is chosen.
+ * ## Why it is ONE pass, and why that is the whole point
+ *
+ * **A caption track is a few kilobytes of text, but in Matroska its blocks are
+ * interleaved inside the video's clusters and there is no index that points at them.**
+ * Measured on a 7.1 GB film: reading a single track's cues took 916 sequential reads of
+ * 8 MiB, 7.68 GB in total, because the only way to find a track's blocks is to walk every
+ * cluster. So the cost of "find the subtitles" is "read the film".
+ *
+ * That makes calling the reader once PER TRACK catastrophic, and the previous design did
+ * exactly that: two tracks meant two full passes, and because the marking and the gloss
+ * could both ask at once, the same track was sometimes walked concurrently, so a single
+ * open reached about 23 GB of reads and starved playback while it did. `readMatroska`
+ * already takes several `trackNumbers` and fills every one of them in the same walk, so
+ * the film is read once and every caption track comes out of that one pass.
+ *
+ * ## One read per file, at the start
+ *
+ * It runs at open, before playback needs the disk, and it resolves a single promise that
+ * every caller shares. So a track is read once per file, never twice, whether it is the
+ * study line, the gloss, or both at the same moment.
+ */
+let allCuesPromise = null;
+
+/**
+ * The cue lists for every caption track in the file, read once.
+ *
+ * @returns {Promise<{byNumber: Map<number, Array<object>>, truncated: boolean, ms: number}>}
+ */
+function readAllCues() {
+  if (allCuesPromise) return allCuesPromise;
+  const numbers = tracks.filter((track) => track.kind === 'text').map((track) => track.trackNumber);
+  const startedAt = Date.now();
+  logSubs('all-cues-start', { tracks: numbers.join(','), bytes: videoFile?.size ?? 'null' });
+  allCuesPromise = readMatroska({ ...viewerFor(videoFile), trackNumbers: numbers })
+    .then(({ cues, truncated }) => {
+      const ms = Date.now() - startedAt;
+      logSubs('all-cues-done', {
+        ms,
+        truncated,
+        counts: numbers.map((n) => `${n}:${(cues.get(n) ?? []).length}`).join(','),
+      });
+      return { byNumber: cues, truncated, ms };
+    })
+    .catch((error) => {
+      // Reset so a later attempt can retry rather than every track failing forever.
+      allCuesPromise = null;
+      logSubs('all-cues-failed', { error: String(error?.message ?? error) });
+      throw error;
+    });
+  return allCuesPromise;
+}
+
+/**
+ * The cues for one track, from the single pass.
  *
  * @param {object} track
+ * @returns {Promise<Array<object>>}
  */
 async function ensureSegments(track) {
-  if (track.segments) return track.segments;
-  if (track.kind !== 'text') return [];
+  if (track.segments) {
+    logSubs('read-cached', { track: track.languageCode, count: track.segments.length });
+    return track.segments;
+  }
+  if (track.kind !== 'text') {
+    logSubs('read-skipped', { track: track.languageCode, kind: track.kind, reason: 'not a text track' });
+    return [];
+  }
 
-  const { cues, truncated } = await readMatroska({
-    ...viewerFor(videoFile),
-    trackNumbers: [track.trackNumber],
-  });
+  logSubs('read-await', { track: track.languageCode, n: track.trackNumber });
+  const { byNumber, truncated } = await readAllCues();
 
-  track.segments = cues.get(track.trackNumber) ?? [];
+  track.segments = byNumber.get(track.trackNumber) ?? [];
   if (truncated) {
     // A cluster too large to hold, or a region that could not be read. Reported
     // rather than passed off as a complete transcript, a partial transcript that
@@ -852,6 +944,7 @@ async function ensureSegments(track) {
   if (!track.segments.length && !track.error) {
     track.error = 'that track has no cues in it';
   }
+  logSubs('read-done', { track: track.languageCode, count: track.segments.length, error: track.error ?? 'none' });
   return track.segments;
 }
 
@@ -1016,6 +1109,14 @@ function renderCaptions(index) {
   // that is still PLAYING, and without this check the last line of a scene stayed on
   // screen through every silent stretch that followed it, indefinitely.
   const stillPlaying = Boolean(cue) && els.video.currentTime < cue.start + cue.duration;
+
+  logSubs('render', {
+    index,
+    cues: segments.length,
+    t: Number(els.video.currentTime.toFixed(2)),
+    cueStart: cue ? Number(cue.start.toFixed(2)) : 'nil',
+    stillPlaying,
+  });
 
   if (!stillPlaying) {
     // A cue that has ENDED. This is the case the previous version got wrong: it

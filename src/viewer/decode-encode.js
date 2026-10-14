@@ -33,26 +33,40 @@
 const WORKER_URL = './transcode-worker.js';
 
 /**
- * How close to the produced edge the playhead may get before a seek is re-run, in seconds.
- *
- * Not zero: the element reads a little ahead of the playhead and `timeupdate` is coarse,
- * so a request per event would cancel passes in a loop. A few seconds is what playback
- * needs to survive a scheduling hiccup.
- */
-const SEEK_MARGIN_SECONDS = 4;
-
-/**
  * How much produced media to keep behind the playhead before evicting it, in seconds.
  *
- * **Deliberately generous.** Eviction frees memory, but a viewer who seeks back into an
- * evicted range forces the range to be re-produced, which is a whole pass. Keeping minutes
- * behind means an ordinary back-and-forth never trips it, while a two-hour film still
- * cannot grow the buffer to the whole film.
+ * This exists to bound a two-hour film, NOT to manage a runaway producer: the producer
+ * now advances only on request and in small windows (see the worker's `WINDOW_SECONDS`),
+ * so the buffer stays near what has been watched. So the margin can be modest rather
+ * than the minutes it used to be, which only mattered while the producer filled the
+ * buffer as fast as it could and eviction was the only thing standing between it and the
+ * platform quota.
  *
- * This is a **flat buffer**, not an evolving one. `SourceBuffer.remove` on modern Chrome
- * uses an internal GC and is not the O(n) memory thrash it once was.
+ * It stays comfortably above the window size so ordinary back-and-forth within a minute
+ * never forces a re-produce.
  */
-const EVICT_BEHIND_SECONDS = 180;
+const EVICT_BEHIND_SECONDS = 60;
+
+/**
+ * The runway ahead of the playhead to keep produced, in seconds: a minimum and a maximum.
+ *
+ * **Adaptive, so a fast machine is not starved and a slow one is not over-buffered.** The
+ * producer is asked for another window whenever the playable media ahead of the playhead
+ * falls below `LEAD_MIN`. `LEAD_MAX` is the ceiling that keeps a two-hour film bounded:
+ * past it, no more windows are requested, so the buffer stays near what has been watched
+ * and the platform never has to evict to stay inside its quota (that eviction is what the
+ * runaway producer used to trigger, and what dropped the media under the playhead).
+ *
+ * The gap between them is the slack: a window produces five seconds (see the worker's
+ * `WINDOW_SECONDS`), so the producer must be able to finish one before the runway runs
+ * out. It used to be a fixed 15 with no ceiling, which is how the buffer grew unchecked.
+ *
+ * Both are expressed in produced seconds AHEAD of the playhead rather than a fixed lead,
+ * so they hold at 0.5x (the buffer drains twice as fast, so `LEAD_MIN` is more urgent) and
+ * at 1.25x without a rate term anywhere.
+ */
+const LEAD_MIN = 12;
+const LEAD_MAX = 40;
 
 /**
  * How long a seek must be quiet before it is acted on, in milliseconds.
@@ -62,6 +76,48 @@ const EVICT_BEHIND_SECONDS = 180;
  * drag settle and acts on where it stopped.
  */
 const SEEK_SETTLE_MS = 200;
+
+/**
+ * How far the playhead must move from the last requested position before a re-seek.
+ *
+ * A pass is produced from a keyframe before its requested position and covers forward from
+ * there, so the playhead sitting near that position is covered by the pass even while the
+ * first fragment is still arriving. Only a move beyond this means the playhead is somewhere
+ * the in-flight pass does not serve. Small enough that an ordinary seek is immediate, large
+ * enough that jitter around the position does not cancel the pass.
+ */
+const RESEEK_MARGIN_SECONDS = 1;
+
+/**
+ * How often the watchdog re-checks the runway while the element is playing, in ms.
+ *
+ * **A safety net, and it exists because a lost wakeup stopped playback dead.** Production
+ * is otherwise driven by events (`updateend`, the playhead events), which is efficient but
+ * means a single missed signal leaves the element with nothing to play and no further event
+ * to notice it by. This ticks while playing and re-asks for a window whenever the runway is
+ * short, so a missed signal costs at most one tick rather than the rest of the film.
+ */
+const WATCHDOG_MS = 750;
+
+/**
+ * How long the producer must make no progress before the playhead is treated as stuck.
+ *
+ * Generous on purpose. A cold pass delivers its first fragment in about 400 ms on a large
+ * file, and a machine under load can take several seconds. Re-seeking before that CANCELS
+ * the pass that was about to succeed, which is a loop rather than a recovery, so the
+ * threshold must be comfortably longer than a slow-but-healthy start.
+ */
+const STALL_MS = 8000;
+
+/**
+ * How long to wait for the FIRST fragment before trying the seek again.
+ *
+ * Longer than `STALL_MS`, because a pass has to be set up (a keyframe lookup, the coder,
+ * the first window) before it can produce anything, and a false re-seek at startup is what
+ * wedged a short file that was never actually stuck. Only a pass that has produced NOTHING
+ * for this long is re-issued.
+ */
+const SEED_STALL_MS = 15000;
 
 /** @type {Worker|null} */
 let sharedWorker = null;
@@ -138,18 +194,119 @@ export async function transcodeForElement(file, video, options = {}) {
   let activePass = 0;
   /** The offset the active pass belongs at, in source seconds. */
   let passOffset = 0;
-  /** Whether the active pass has produced anything yet. */
-  let passProduced = false;
-  /** The source time the produced media reaches, in seconds. */
-  let producedThrough = 0;
-  /** The number of media fragments in the active pass, used with `minimumFragmentDuration`. */
-  let passCursor = 0;
   /** When the current seek was requested, for the latency trace. */
   let seekAskedAt = 0;
+  /**
+   * When the producer last made progress: media appended, or a pass just requested.
+   *
+   * **A re-seek is only allowed once progress has genuinely stopped.** A pass takes a
+   * moment to deliver its first fragment (about 400 ms on a large cold seek, longer on a
+   * busy machine), and the element is legitimately unbuffered during that window. Seeking
+   * again then CANCELS the pass before it can produce, which is an infinite loop: the
+   * startup case did exactly this, re-seeking at 0 forever so nothing ever appended. So
+   * every "the buffer is empty" decision is measured against this, and only a pass that
+   * has produced nothing for `STALL_MS` is treated as stuck.
+   */
+  let lastProgressAt = 0;
   /** The last source time a seek was requested for, so a drag does not repeat it. */
   let lastSeekAt = -1;
+  /**
+   * Whether the emergency seek-to-start has already run.
+   *
+   * **Once per file, so it cannot become a loop.** The start is always produceable, so if
+   * even that fails to fill the buffer, seeking to it again would loop; a single attempt to
+   * reach a knowable place is the promise, not infinite retrying of the same place.
+   */
+  let startFallbackTried = false;
+  /**
+   * The `producedMedia` count when the active pass was requested.
+   *
+   * **This is what stops an infinite seek loop.** A seek must not be re-issued until the
+   * pass it just started has had a chance to deliver media; without this, the watchdog saw
+   * the element still unbuffered (the previous passes filled elsewhere) and re-seeked
+   * every few hundred milliseconds, so the seek was cancelled and restarted forever and
+   * never appended anything. The count is `producedMedia` at request time, so "no progress
+   * since the request" is a real stall rather than a slow start.
+   */
+  let pendingSinceCount = -1;
+  /** Whether the whole file has been produced, so no more windows are requested. */
+  let producerDone = false;
+  /**
+   * How many media chunks the active pass has actually APPENDED.
+   *
+   * Used with `pendingSinceCount` to tell "this pass has not started yet" from "this pass
+   * is stuck": a chunk was appended since the seek was requested only if this grew.
+   */
+  let producedMedia = 0;
   /** @type {ReturnType<typeof setTimeout>|null} */
   let settleTimer = null;
+  /** @type {ReturnType<typeof setInterval>|null} */
+  let watchdogTimer = null;
+
+  /**
+   * Whether the element has media buffered at a source time.
+   *
+   * **This replaces the estimate that caused the hang.** The bridge used to decide
+   * whether it needed to produce more from a running count of fragments, which said "I
+   * already produced past here" even after the platform had EVICTED that region to stay
+   * under its quota. So a backward seek into an evicted region was judged unnecessary and
+   * never refilled, and the element starved. The element's `buffered` ranges are the
+   * ground truth: a time inside one is playable, a time outside one is not, whatever we
+   * think we produced.
+   *
+   * @param {number} seconds
+   * @returns {boolean}
+   */
+  const isBuffered = (seconds) => {
+    if (!sourceBuffer) return false;
+    const ranges = sourceBuffer.buffered;
+    for (let i = 0; i < ranges.length; i++) {
+      // A hair inside the edges, so a time exactly on a boundary counts as buffered.
+      if (seconds >= ranges.start(i) - 0.05 && seconds <= ranges.end(i) + 0.05) return true;
+    }
+    return false;
+  };
+
+  /** The furthest source time the element has buffered, or 0 when nothing is. @returns {number} */
+  const bufferedEnd = () => {
+    if (!sourceBuffer) return 0;
+    const ranges = sourceBuffer.buffered;
+    return ranges.length ? ranges.end(ranges.length - 1) : 0;
+  };
+
+  /**
+   * Ask the producer for another window if the playhead is running out of runway.
+   *
+   * The condition is "less than `LEAD_SECONDS` of PLAYABLE media ahead", measured from the
+   * element's buffer, so it is correct however much the platform has evicted. It is
+   * re-checked after every append and on every playhead event, which means the producer is
+   * asked again exactly when the buffer has drained to the lead, no sooner.
+   */
+  /**
+   * Ask the producer to keep going, because the playhead is running out of runway.
+   *
+   * The condition is "less than `LEAD_MAX` of playable media ahead", measured from the
+   * element's buffer, so it is correct however much the platform has evicted. The producer
+   * is otherwise paused (`requestPause`), so this is what keeps it just ahead.
+   */
+  const requestMore = () => {
+    if (disposed || producerDone) return;
+    if (bufferedEnd() - video.currentTime < LEAD_MAX) worker.postMessage({ type: 'produce', id: activePass });
+  };
+
+  /**
+   * Tell the producer to hold, because there is already a comfortable runway.
+   *
+   * **The upper half of the adaptive target, and the reason the buffer stays bounded.**
+   * Without it the producer runs as fast as it can and the buffer grows until the platform
+   * evicts the oldest range to stay inside its quota, which drops media under the playhead.
+   * Pausing above `LEAD_MAX` keeps the lead between `LEAD_MIN` and `LEAD_MAX`, so a two-hour
+   * film costs about a minute of buffer rather than the whole file.
+   */
+  const requestPause = () => {
+    if (disposed || producerDone) return;
+    if (bufferedEnd() - video.currentTime > LEAD_MAX) worker.postMessage({ type: 'pause', id: activePass });
+  };
 
   /**
    * Append queued fragments until the buffer is busy or the queue drains.
@@ -206,18 +363,23 @@ export async function transcodeForElement(file, video, options = {}) {
   /**
    * Ask the worker for a pass starting at the keyframe before the target.
    *
+   * **Sent whenever the target is NOT already playable**, whatever direction it is.
+   * Nothing here decides "we have already produced past this", because that is the
+   * decision that broke the backward seek: the region it judged produced had been evicted.
+   * A target that is buffered is not sought at all (see `onPlayheadMoved`), so arriving
+   * here means a pass is genuinely needed.
+   *
    * @param {number} seconds
    */
   const requestSeek = (seconds) => {
-    // One request per position: `timeupdate` fires throughout the wait and each one would
-    // otherwise cancel the pass the previous one started.
-    if (Math.abs(seconds - lastSeekAt) < SEEK_MARGIN_SECONDS) return;
     lastSeekAt = seconds;
+    lastProgressAt = Date.now();
     activePass += 1;
     passOffset = seconds;
-    passProduced = false;
-    passCursor = 0;
+    producerDone = false;
     seekAskedAt = Date.now();
+    /** The index to clear once this pass has appended its first media, or -1 before it has. @type {number} */
+    pendingSinceCount = -1;
     worker.postMessage({ type: 'seek', id: activePass, seconds });
   };
 
@@ -227,6 +389,8 @@ export async function transcodeForElement(file, video, options = {}) {
    * @param {number} seconds
    */
   const settleSeek = (seconds) => {
+    // Reset the buffer position expectations for the new pass: `updateend` will request
+    // more, so appending resumes without any explicit kick.
     if (settleTimer) clearTimeout(settleTimer);
     settleTimer = setTimeout(() => {
       settleTimer = null;
@@ -239,18 +403,29 @@ export async function transcodeForElement(file, video, options = {}) {
    *
    * **`seeking` is the important one.** A stall is exactly the state where `timeupdate`
    * stops firing, so a handler that only listens for `timeupdate` never gets a chance to
-   * notice that the playhead jumped past what was produced: the element sits waiting, no
-   * event arrives, and the seek is never asked for. `seeking` fires the moment
-   * `currentTime` is written, before the wait begins.
+   * notice that the playhead jumped outside the buffer: the element sits waiting, no event
+   * arrives, and the seek is never asked for. `seeking` fires the moment `currentTime` is
+   * written, before the wait begins.
+   *
+   * The test is the element's OWN buffer, not a producer estimate, so it holds in both
+   * directions and after an eviction.
    */
   const onPlayheadMoved = () => {
     if (disposed || sourceBuffer?.updating) return;
-    if (producedThrough <= 0) return;
-    // Eviction is cheap and runs on every event; a seek only when about to run dry.
+    // Eviction is cheap and runs on every event.
     evict();
-    if (video.currentTime > producedThrough - SEEK_MARGIN_SECONDS) {
-      settleSeek(video.currentTime);
+    if (isBuffered(video.currentTime)) {
+      // The playhead is fine; just keep enough runway ahead of it.
+      requestMore();
+      return;
     }
+    // **The playhead is outside the buffer, but that alone does not mean a seek.** At
+    // startup the buffer is empty and `timeupdate` fires at 0 while the first pass is
+    // still being produced; seeking again there would cancel the very pass that is about
+    // to fill it. That was an infinite loop at 0. A seek is only right when the playhead
+    // has moved somewhere the in-flight pass does not start at, so the last requested
+    // position is the reference.
+    if (Math.abs(video.currentTime - lastSeekAt) > RESEEK_MARGIN_SECONDS) settleSeek(video.currentTime);
   };
 
   /**
@@ -270,18 +445,23 @@ export async function transcodeForElement(file, video, options = {}) {
       return;
     }
     if (message.type === 'media') {
-      if (seekAskedAt && !passProduced) {
+      if (seekAskedAt) {
         console.log(`[iu] transcode step=seek-first-fragment ms=${Date.now() - seekAskedAt}`);
         seekAskedAt = 0;
       }
-      passProduced = true;
-      passCursor += 1;
-      // Fragments carry no timestamp here; the pass's offset plus a running estimate of
-      // its produced span is enough to know when the element will run dry.
-      // `minimumFragmentDuration` is 1 second, so each fragment advances it by about one.
-      producedThrough = Math.max(producedThrough, (message.offset ?? passOffset) + passCursor);
+      producedMedia += 1;
+      lastProgressAt = Date.now();
+      // This pass has delivered media, so a later stall is not "waiting for the first
+      // fragment" and may be re-issued. See `pendingSinceCount`.
+      pendingSinceCount = -1;
       queue.push({ bytes: message.bytes, init: false, offset: message.offset ?? passOffset });
       pump();
+      return;
+    }
+    if (message.type === 'paused') {
+      // The producer suspended itself (the bridge asked, or its wait watchdog fired). If
+      // the runway has since shrunk, ask it to resume; otherwise leave it held.
+      requestMore();
       return;
     }
     if (message.type === 'mime') {
@@ -291,6 +471,8 @@ export async function transcodeForElement(file, video, options = {}) {
       applyDuration();
     } else if (message.type === 'progress') {
       options.onProgress?.(Math.min(1, message.fraction ?? message.progress ?? 0));
+    } else if (message.type === 'done') {
+      producerDone = true;
     } else if (message.type === 'error') {
       // A conversion failure means silence with no other symptom, so it is logged rather
       // than swallowed.
@@ -310,7 +492,15 @@ export async function transcodeForElement(file, video, options = {}) {
     }
   };
 
-  const onUpdateEnd = () => pump();
+  const onUpdateEnd = () => {
+    // A completed append is the moment the buffer changed, so it is the moment to decide
+    // whether the producer should continue or hold. Doing it here rather than on a timer
+    // means production is driven by playback progress and not by the clock.
+    pump();
+    const ahead = bufferedEnd() - video.currentTime;
+    if (ahead > LEAD_MAX) requestPause();
+    else if (ahead < LEAD_MAX) requestMore();
+  };
 
   mediaSource.addEventListener(
     'sourceopen',
@@ -323,6 +513,9 @@ export async function transcodeForElement(file, video, options = {}) {
           sourceBuffer.addEventListener('updateend', onUpdateEnd);
           applyDuration();
           pump();
+          // The element is ready, so let the producer start running. It begins paused in
+          // effect, waiting for this first `produce`.
+          requestMore();
         } catch (error) {
           failure = error;
           console.log(`[iu] transcode step=sourcebuffer-failed error=${String(error?.message ?? error)}`);
@@ -338,7 +531,53 @@ export async function transcodeForElement(file, video, options = {}) {
   video.addEventListener('seeking', onPlayheadMoved);
   video.addEventListener('seeked', onPlayheadMoved);
 
+  // The watchdog: while playing, re-check the runway so a missed signal cannot strand the
+  // element with nothing to play. It only asks when the runway is genuinely short, so it
+  // adds no production of its own. See `WATCHDOG_MS`.
+  watchdogTimer = setInterval(() => {
+    if (disposed || video.paused) return;
+    if (!isBuffered(video.currentTime)) {
+      // **Stalled outside the buffer.** Recovery is gated on the producer having made NO
+      // progress at all for a while, never on "the buffer is empty right now", because an
+      // empty buffer at startup or during a cold seek is normal and re-seeking then would
+      // cancel the very pass that is about to fill it. `waitingForFirst` distinguishes a
+      // pass that has not delivered yet (long patience) from one that delivered and then
+      // went quiet (shorter patience).
+      const waited = Date.now() - lastProgressAt;
+      const waitingForFirst = pendingSinceCount >= 0 && producedMedia === pendingSinceCount;
+      const limit = waitingForFirst ? SEED_STALL_MS : STALL_MS;
+      if (waited > limit) {
+        if (!startFallbackTried && video.currentTime > 5) {
+          startFallbackTried = true;
+          console.log(`[iu] transcode step=stuck-fallback from=${video.currentTime.toFixed(1)}`);
+          requestSeek(0);
+          return;
+        }
+        console.log(`[iu] transcode step=stuck-retry t=${video.currentTime.toFixed(1)}`);
+        requestSeek(video.currentTime);
+        return;
+      }
+      // Not stuck yet, but if this is a fresh position outside the buffer, make sure a
+      // pass is on its way; `settleSeek` debounces so a drag does not cancel per event.
+      if (!settleTimer && !waitingForFirst && waited < 500) settleSeek(video.currentTime);
+      return;
+    }
+    // A runway BELOW the minimum means the producer could not keep up with playback, which
+    // is what an underrun sounds like (a stutter). Logged so it is visible in a paste
+    // rather than only felt, and the ask below is what recovers it.
+    const ahead = bufferedEnd() - video.currentTime;
+    if (ahead < LEAD_MIN) console.log(`[iu] transcode step=underrun ahead=${ahead.toFixed(1)}`);
+    if (ahead > LEAD_MAX) requestPause();
+    else requestMore();
+  }, WATCHDOG_MS);
+
   worker.addEventListener('message', onMessage);
+  // A pending pass from the start, so the watchdog treats the initial production as "not
+  // delivered yet" rather than "stuck", which is what stops it re-seeking at 0 before the
+  // first window has had a chance to arrive.
+  pendingSinceCount = producedMedia;
+  lastSeekAt = 0;
+  lastProgressAt = Date.now();
   worker.postMessage({ type: 'convert', id: activePass, file, trackIndex: options.trackIndex ?? 0 });
 
   return {
@@ -347,6 +586,7 @@ export async function transcodeForElement(file, video, options = {}) {
     revoke: () => {
       disposed = true;
       if (settleTimer) clearTimeout(settleTimer);
+      if (watchdogTimer) clearInterval(watchdogTimer);
       video.removeEventListener('timeupdate', onPlayheadMoved);
       video.removeEventListener('seeking', onPlayheadMoved);
       video.removeEventListener('seeked', onPlayheadMoved);

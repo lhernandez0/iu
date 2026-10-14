@@ -220,6 +220,26 @@ export function logDecoder(step, fields = {}) {
   line('decoder', { step, ...fields });
 }
 
+/**
+ * Trace one step of the subtitle path, so a caption that never appears can be located.
+ *
+ * **Added because "no subtitles at all" is a chain of silent branches.** The viewer picks
+ * a track, reads its cues from the container, marks them, and draws the cue that should be
+ * on screen right now. Any one of those can yield nothing without an error: no track was
+ * picked, the read never started, the read never finished, it returned zero cues, the mark
+ * pass skipped, or the cue exists but the playhead is between cues. From outside they all
+ * look identical, an empty caption line. Each step logs here so the paste says WHICH.
+ *
+ * `phase` is deliberately terse and greppable: pick, resolve, read-start, read-done,
+ * read-failed, mark, redraw.
+ *
+ * @param {string} phase
+ * @param {Record<string, unknown>} [fields]
+ */
+export function logSubs(phase, fields = {}) {
+  line('subs', { phase, ...fields });
+}
+
 /** Announce once per page, so a pasted log says which build it came from. */
 export function logBanner() {
   line('viewer', {

@@ -50,6 +50,78 @@ import { registerCoders } from './coders.js';
 const AUDIO_BITRATE = 192_000;
 
 /**
+ * How much media to produce per window, in source seconds.
+ *
+ * **This is the backpressure, and without it the producer ran away.** The first version
+ * called `execute()` once and let it convert the WHOLE file. Measured on a two-hour
+ * film, that meant one open transcoded everything: the progress log ran 0 to 100 before
+ * the viewer had watched a second, and the elements of the Media Source buffer grew
+ * until the platform evicted the oldest range to stay inside its quota. That eviction
+ * is what dropped the media under the playhead and made a backward seek starve.
+ *
+ * A window is produced, then the pass WAITS until the bridge asks for more. So the cost
+ * is bounded by how far the viewer has actually got, not by the length of the film, and
+ * the buffer never approaches the quota.
+ *
+ * Five seconds is a few seconds of playback at the slowest speed (0.5x means two and a
+ * half seconds of viewing), which is enough to bridge a seek without producing so much
+ * that a still frame costs real work. It is not tuned against a measurement yet; it is
+ * a floor that is obviously safe, and the number to raise if seeks feel starved.
+ */
+const WINDOW_SECONDS = 5;
+
+/**
+ * The longest a pass will WAIT for the bridge before checking for itself.
+ *
+ * The bridge normally asks for the next window promptly, so this never fires in ordinary
+ * operation. It exists so that a lost or never-sent `produce` cannot deadlock the pass:
+ * after this long the pass wakes anyway and re-evaluates. Generous, because waking early
+ * just means one extra small window, and it must not fire during a legitimately slow
+ * window on a busy machine.
+ */
+const WAIT_CEILING_MS = 5000;
+
+/**
+ * Resolvers waiting for the bridge to ask for the next window.
+ *
+ * Keyed by pass id, so a seek that replaces the pass drops the previous pass's waiter
+ * rather than leaving a promise that never settles.
+ *
+ * @type {Map<number, () => void>}
+ */
+const produceWaiters = new Map();
+
+/**
+ * Passes the bridge asked to produce, that no waiter was registered to receive.
+ *
+ * **This is what stops a lost wakeup wedging playback forever.** The bridge asks for the
+ * next window when the buffer has drained to the lead, and it does so from `updateend`
+ * and from the playhead events. The producer posts `produced` and then registers its
+ * waiter, so a `produce` that arrives in that gap finds no waiter and used to be dropped.
+ * The pass then waited for a permission that had already been given, and the film played
+ * a few seconds and stopped, which is exactly the reported symptom. A grant with no
+ * waiter is remembered here and consumed by the next wait, so the gap cannot lose it.
+ *
+ * @type {Set<number>}
+ */
+const produceGrants = new Set();
+
+/** The worker's own timer for the current wait, so it can be cleared once resolved. */
+let waitTimer = null;
+
+/** Release a pass that is waiting for permission to produce its next window. */
+function allowProduce(id) {
+  const resolve = produceWaiters.get(id);
+  if (!resolve) {
+    // No waiter yet. Remember the grant rather than dropping it. See `produceGrants`.
+    produceGrants.add(id);
+    return;
+  }
+  produceWaiters.delete(id);
+  resolve();
+}
+
+/**
  * Log one step under the extension's diagnostic prefix.
  *
  * A worker's own console is easy to lose, so the bridge forwards worker errors to the
@@ -65,6 +137,10 @@ function trace(step, fields = {}) {
 
 /** The conversion currently running, so a seek can cancel it. @type {any} */
 let current = null;
+/** The id of the pass `current` belongs to, so a `produce` for a stale pass is ignored. */
+let currentPassId = 0;
+/** The pause controller for the running `execute`, so the bridge can suspend it. @type {AbortController|null} */
+let currentPause = null;
 /** The `Input` for the open file, reused across seeks rather than re-opened. */
 let currentInput = null;
 /** The chosen audio track index, so a seek re-runs the same track. */
@@ -234,18 +310,82 @@ async function runPass(id, start, offset) {
   };
 
   current = conversion;
+  currentPassId = id;
   try {
-    await conversion.execute();
+    for (;;) {
+      currentPause = new AbortController();
+      // A continuous run from where the last one was suspended. Fragments stream throughout.
+      // eslint-disable-next-line no-await-in-loop
+      await conversion.execute({ pauseSignal: currentPause.signal });
+      currentPause = null;
+      // Reported so the bridge knows the pass got this far; `produce` resumes it.
+      self.postMessage({ id, type: 'paused' });
+      // Wait for the bridge to resume. `current !== conversion` means a seek replaced this
+      // pass, so it stops rather than resuming into a buffer nobody wants.
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => {
+        if (current !== conversion) {
+          resolve();
+          return;
+        }
+        if (produceGrants.delete(id)) {
+          resolve();
+          return;
+        }
+        produceWaiters.set(id, resolve);
+        // **A watchdog on the wait itself, so a wait can never be forever.** The grant
+        // bookkeeping above closes the known race, but this survives a signal lost in a way
+        // not thought of: the pass wakes on its own and decides from live state. If the
+        // bridge really wanted this pass stopped, `current` is no longer this conversion
+        // and the loop breaks; otherwise it runs one more stretch. So the worst case is one
+        // extra stretch rather than a deadlock.
+        waitTimer = setTimeout(() => allowProduce(id), WAIT_CEILING_MS);
+      });
+      if (waitTimer) {
+        clearTimeout(waitTimer);
+        waitTimer = null;
+      }
+      if (current !== conversion) break;
+    }
+    if (current === conversion) self.postMessage({ id, type: 'done' });
   } finally {
+    produceWaiters.delete(id);
     if (current === conversion) current = null;
   }
-  self.postMessage({ id, type: 'done' });
+}
+
+/**
+ * Pause the running conversion, so the producer cannot run far ahead of the playhead.
+ *
+ * **This is the backpressure, and it replaced a windowed `execute({ until })` loop.** That
+ * loop looked right and did not work: measured in the browser, advancing the conversion in
+ * `until` steps emitted the `ftyp` header and then NO media fragments at all, because
+ * mediabunny streams fragments during a continuous `execute` and does not flush them at an
+ * `until` boundary. The element then never received media and sat at `readyState 0`.
+ * Aborting the pause signal instead suspends the SAME run part-way, so fragments keep
+ * streaming and the bounded lead is achieved by pausing once far enough ahead and resuming
+ * when the bridge asks. See `WINDOW_SECONDS` for the target.
+ *
+ * Idempotent: pausing an already-paused or finished pass is a no-op.
+ */
+function pauseCurrent() {
+  if (!currentPause) return;
+  try {
+    currentPause.abort();
+  } catch {
+    // Already aborted, or the run finished between the check and here. Not fatal.
+  }
 }
 
 /** Cancel the running pass, if any, and wait for it to actually stop. */
 async function cancelCurrent() {
   const running = current;
   current = null;
+  // A pass waiting for permission to produce would otherwise hang forever, holding the
+  // worker and the bridge's `done` together. So do its waiters and its unspent grants.
+  for (const resolve of produceWaiters.values()) resolve();
+  produceWaiters.clear();
+  produceGrants.clear();
   if (!running) return;
   try {
     await running.cancel();
@@ -302,6 +442,14 @@ self.addEventListener('message', (event) => {
     seekTo(message.id, message.seconds).catch((error) => {
       self.postMessage({ id: message.id, type: 'error', message: String(error?.message ?? error) });
     });
+  } else if (message.type === 'produce') {
+    // The bridge wants the producer to continue. Ignored for a pass that is no longer
+    // current, so a late `produce` cannot drive a superseded conversion.
+    if (message.id === currentPassId) allowProduce(message.id);
+  } else if (message.type === 'pause') {
+    // The bridge has enough runway; suspend so the producer cannot run far ahead. See
+    // `pauseCurrent`.
+    if (message.id === currentPassId) pauseCurrent();
   }
 });
 
