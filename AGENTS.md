@@ -23,9 +23,10 @@ loop something to avoid.
 
 **There is no build product.** `src/vendor/mediabunny.js` is committed generated
 code, rebuilt with `npm run vendor`; the codecs it carries are MPL-2.0 packages
-(`@mediabunny/ac3`, `@mediabunny/aac-encoder`) bundled with it. An earlier revision
-shipped a compiled FFmpeg wasm build; it was retired in favour of those packages, and
-with it went the C toolchain the release path used to need. See `THIRD-PARTY.md`.
+(`@mediabunny/ac3`, `@mediabunny/dts`, `@mediabunny/aac-encoder`) bundled with it. An
+earlier revision shipped a compiled FFmpeg wasm build; it was retired in favour of those
+packages, and with it went the C toolchain the release path used to need. See
+`THIRD-PARTY.md`.
 
 **When CI fails and the local machine passes, reproduce it in the container
 first.** `tools/ci/run-in-ci.sh <command>` runs the command in Ubuntu 24.04 with

@@ -233,6 +233,23 @@ ffmpeg([
   'six-eac3.mkv',
 ]);
 
+// **DTS, the third codec WebCodecs lacks.** ADR 0013 put it in scope and reversed the
+// earlier belief that no permissively-licensed DTS decoder existed; `@mediabunny/dts` is
+// MPL-2.0 like the others, and this fixture is what proves the registration actually
+// works rather than assuming it. `dca` is ffmpeg's DTS encoder, and `-strict -2` is
+// required because it is still flagged experimental, which the flag says nothing about
+// the file being playable, only about ffmpeg's confidence in the encoder.
+console.log('one-dts.mkv, a single DTS track the browser cannot decode');
+ffmpeg([
+  ...SHORT_VIDEO,
+  '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
+  '-map', '0:v', '-map', '1:a',
+  '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+  '-c:a', 'dca', '-strict', '-2',
+  '-shortest',
+  'one-dts.mkv',
+]);
+
 // The source subtitle files are inputs, not fixtures, every one of them is
 // embedded in a container above, so leaving them loose would put four stray files
 // in the directory for no reason.

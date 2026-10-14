@@ -18,12 +18,13 @@
  * So there are two paths and this module owns both:
  *
  *   1. **The API, when the browser has it.** Preferred: the browser demuxes, decodes
- *      and switches, which means it handles every codec it can PLAY, including AC-3
- *      and DTS, which we cannot decode ourselves at any price we would pay.
+ *      and switches, which means it handles every codec it can PLAY. A codec it cannot
+ *      play (AC-3, E-AC-3, DTS) is not a dead end any more: `decode-encode.js` transcodes
+ *      just that track to AAC through the coder packages, and the browser then plays it.
  *   2. **Remuxing, when it does not.** Ask for a copy of the file containing only the
- *      chosen track, and hand the element that. Costs real work per switch and only
- *      covers codecs the element can already play, but it needs no flag and no
- *      permission.
+ *      chosen track, and hand the element that. Costs real work per switch, and is the
+ *      path for a track the element can already play; a track it CANNOT play goes through
+ *      the transcode path instead.
  *
  * ## What this does NOT do
  *

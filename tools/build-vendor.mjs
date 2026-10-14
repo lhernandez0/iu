@@ -85,6 +85,10 @@ writeFileSync(
     '// what rewrites the specifier to a relative import.',
     'export { registerAc3Decoder, registerAc3Encoder } from \'@mediabunny/ac3\';',
     'export { registerAacEncoder } from \'@mediabunny/aac-encoder\';',
+    // DTS, the third codec WebCodecs lacks. ADR 0013 put it in scope and reversed ADR
+    // 0011\'s "no non-GPL decoder exists", which was true then and is not now: this
+    // package is MPL-2.0, like the other two.
+    'export { registerDtsDecoder, registerDtsEncoder } from \'@mediabunny/dts\';',
     '',
   ].join('\n'),
 );
@@ -115,8 +119,8 @@ const rows = Object.entries(result.metafile.outputs[OUT]?.inputs ?? {})
 statSync(OUT);
 const gzipped = gzipSync(readFileSync(OUT)).length;
 console.log(`src/vendor/mediabunny.js  ${(bundled / 1024).toFixed(0)} KB raw, ${(gzipped / 1024).toFixed(0)} KB gzipped`);
-console.log('  (mediabunny + @mediabunny/ac3 + @mediabunny/aac-encoder, compared against');
-console.log('   mediabunny alone, which is only for scale; the other two are the coders)');
+console.log('  (mediabunny + @mediabunny/ac3 + @mediabunny/dts + @mediabunny/aac-encoder,');
+console.log('   compared against mediabunny alone, which is only for scale; the rest are the coders)');
 console.log('\nlargest contributors:');
 for (const [name, bytes] of rows) console.log(`  ${(bytes / 1024).toFixed(0).padStart(5)} KB  ${name}`);
 
@@ -125,12 +129,13 @@ writeFileSync(join(OUT_DIR, 'README.md'), [
   '',
   'Generated. Do not edit by hand, run `node tools/build-vendor.mjs`.',
   '',
-  '`mediabunny.js` is a tree-shaken bundle of three MPL-2.0 packages, committed',
+  '`mediabunny.js` is a tree-shaken bundle of four MPL-2.0 packages, committed',
   'because the release ZIP is built from `src/` alone and cannot depend on',
   '`node_modules`:',
   '',
   '- [mediabunny](https://mediabunny.dev), the container and conversion toolkit',
   '- `@mediabunny/ac3`, the AC-3 and E-AC-3 coder (WebCodecs has neither)',
+  '- `@mediabunny/dts`, the DTS coder (WebCodecs has none)',
   '- `@mediabunny/aac-encoder`, the AAC encoder (absent in some browsers)',
   '',
   'They are bundled together because the coder packages import the bare specifier',

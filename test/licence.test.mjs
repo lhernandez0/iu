@@ -192,10 +192,11 @@ section('the extension itself ships no dependencies');
   // The media decoder used to be a COMPILED build product, an FFmpeg variant
   // (ADR 0011), and this section asserted its recipe named the upstream, the
   // licence and the pinned revisions. ADR 0013 retired that: the codecs come from
-  // published MPL-2.0 packages (`@mediabunny/ac3`, `@mediabunny/aac-encoder`) that
-  // are bundled INTO `mediabunny.js`, so there is no separate artifact and no
-  // separate attribution entry. What must still hold is that the bundle names
-  // every package inside it, or a part of the shipped code is unattributed.
+  // published MPL-2.0 packages (`@mediabunny/ac3`, `@mediabunny/dts`,
+  // `@mediabunny/aac-encoder`) that are bundled INTO `mediabunny.js`, so there is no
+  // separate artifact and no separate attribution entry. What must still hold is that
+  // the bundle names every package inside it, or a part of the shipped code is
+  // unattributed.
   //
   // Asserted from THIRD-PARTY.md rather than from the bundle itself, because the
   // document is what a person reads to learn the obligation, and a bundle that
@@ -204,6 +205,7 @@ section('the extension itself ships no dependencies');
   {
     const notices = readFileSync(join(ROOT, 'THIRD-PARTY.md'), 'utf8');
     check('the AC-3 coder package is named in THIRD-PARTY.md', notices.includes('@mediabunny/ac3'), true);
+    check('the DTS coder package is named in THIRD-PARTY.md', notices.includes('@mediabunny/dts'), true);
     check('the AAC encoder package is named in THIRD-PARTY.md', notices.includes('@mediabunny/aac-encoder'), true);
   }
 }

@@ -1090,6 +1090,61 @@ section('Dolby audio keeps playing past the first buffer window');
   await page9.close();
 }
 
+section('a DTS file is transcoded too, the third codec WebCodecs lacks');
+
+{
+  // **DTS is the codec the project once believed it could not support.** ADR 0011 said no
+  // non-GPL DTS decoder existed, so it stayed out of scope and a DTS film played silence.
+  // ADR 0013 reversed that: `@mediabunny/dts` is MPL-2.0, and the licence obstacle was
+  // never there. This section is the proof that the reversal reached the code, because a
+  // decision in a document and a working decoder are different things.
+  //
+  // The assertions are the same shape as the E-AC-3 case and for the same reason: a DTS
+  // film must not merely LOAD, it must produce audibly decoded samples. `one-dts.mkv` is a
+  // GENERATED fixture, so CI has it.
+  const page11 = await context.newPage();
+  await page11.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page11.waitForTimeout(1000);
+  await page11.setInputFiles('#pick-files', join(FIXTURES, 'one-dts.mkv'));
+
+  await page11.waitForFunction(
+    () => {
+      const video = document.getElementById('video');
+      return video.currentTime > 0.1 && (video.webkitAudioDecodedByteCount ?? 0) > 0;
+    },
+    null,
+    { timeout: 60000 },
+  );
+
+  const played = await page11.evaluate(() => {
+    const video = document.getElementById('video');
+    const ranges = video.buffered;
+    return {
+      decoded: video.webkitAudioDecodedByteCount,
+      muted: video.muted,
+      duration: video.duration,
+      ranges: ranges.length,
+    };
+  });
+
+  check('the DTS file decoded audio rather than playing silence', played.decoded > 0, true);
+  // NOT muted, because the element plays our transcoded stream itself (ADR 0012). An
+  // earlier design muted the element and played audio separately, so this also pins that
+  // the DTS path goes through the same element-owned playback as everything else.
+  check('and the element is not muted, it plays the transcoded audio', played.muted, false);
+  check('and the stream is finite', Number.isFinite(played.duration), true);
+
+  // The capability probe must report DTS as decodable once the coder is registered. This
+  // is what routes a DTS track to the transcode path instead of the "cannot play" note.
+  const canDecode = await page11.evaluate(async () => {
+    const coders = await import('./coders.js');
+    return { dts: await coders.canDecodeTrack('dts') };
+  });
+  check('and the capability probe says DTS is decodable', canDecode.dts, true);
+
+  await page11.close();
+}
+
 section('Fullscreen, and the Picture-in-Picture round trip');
 
 {

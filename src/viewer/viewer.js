@@ -1629,8 +1629,10 @@ els.scrubber.addEventListener('keyup', () => {
 //
 // **A third state is real and must be shown**: a file whose audio is AC-3, E-AC-3 or
 // DTS. The browser can neither decode those nor play them, so no amount of remuxing
-// helps, and the failure mode is SILENCE, no error, nothing to catch. The selector
-// says so instead.
+// helps, and the failure mode is SILENCE, no error, nothing to catch. So that case is
+// not left to remuxing: the track is transcoded to AAC through the coder packages (ADR
+// 0012, ADR 0013), and the selector says what it is doing instead of leaving the viewer
+// to work out why the picture had no sound.
 
 /** The file's audio tracks, as last listed. @type {Array<object>} */
 let audioTracks = [];

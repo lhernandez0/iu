@@ -4,11 +4,12 @@
  * ## Why this file exists
  *
  * A browser plays the codecs its own `WebCodecs` implementation carries. It has AAC,
- * Opus, H.264, VP9 and others. It has **no AC-3 or E-AC-3**, which is most of what a
- * film rip carries, which is why a file whose audio is one of those plays its picture
+ * Opus, H.264, VP9 and others. It has **no AC-3, E-AC-3 or DTS**, which is most of what
+ * a film rip carries, which is why a file whose audio is one of those plays its picture
  * and emits **silence**, with no error to catch. Mediabunny ships official MPL-2.0
  * packages that supply exactly those codecs through its custom-coder API, and this
- * module registers them. See ADR 0013.
+ * module registers them. See ADR 0013, which also reversed the earlier belief that DTS
+ * had no permissively-licensed decoder. `@mediabunny/dts` is MPL-2.0 like the others.
  *
  * ## Registration is LAZY, and that is not a nicety
  *
@@ -24,11 +25,11 @@
  *
  *     if (!(await canEncodeAudio('aac'))) registerAacEncoder();
  *
- * The **decoder** is registered unconditionally, because there is no case where a
- * browser has AC-3 and we should defer to it: WebCodecs does not define it at all, so
- * the package is the only implementation that exists. If a browser ever gains one, the
- * same precedence rule means checking for it then, and the comment here is the place
- * that says so.
+ * The AC-3 and DTS **decoders** are registered unconditionally, because there is no case
+ * where a browser has either and we should defer to it: WebCodecs does not define them at
+ * all, so the package is the only implementation that exists. If a browser ever gains
+ * one, the same precedence rule means checking for it then, and the comment here is the
+ * place that says so.
  *
  * ## What this module does NOT do
  *
@@ -37,7 +38,7 @@
  * file whose audio the browser can already play never touches any of this.
  */
 
-import { canDecodeAudio, canEncodeAudio, registerAc3Decoder, registerAc3Encoder, registerAacEncoder } from '../vendor/mediabunny.js';
+import { canDecodeAudio, canEncodeAudio, registerAc3Decoder, registerAc3Encoder, registerDtsDecoder, registerDtsEncoder, registerAacEncoder } from '../vendor/mediabunny.js';
 
 /**
  * Whether the coder registration has run, so it happens once per worker or page.
@@ -64,6 +65,14 @@ export function registerCoders() {
       // only answer and it is registered unconditionally.
       registerAc3Decoder();
       registerAc3Encoder();
+
+      // DTS is the same case as AC-3: WebCodecs has no DTS decoder, so the package is the
+      // only answer and there is no native path to defer to. ADR 0013 put it in scope and
+      // reversed ADR 0011's "no non-GPL decoder exists", which `@mediabunny/dts` (MPL-2.0)
+      // makes false. The encoder is registered too, for symmetry and because a future
+      // conversion target may want it, but DECODING is what makes a DTS film audible.
+      registerDtsDecoder();
+      registerDtsEncoder();
 
       // The AAC encoder exists in WebCodecs, but not in every browser, and a registered
       // custom encoder would take precedence over it. So it is registered only when the
