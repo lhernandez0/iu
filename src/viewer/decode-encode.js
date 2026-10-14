@@ -398,8 +398,12 @@ export async function transcodeForElement(file, video, options = {}) {
     passOffset = seconds;
     producerDone = false;
     seekAskedAt = Date.now();
-    /** The index to clear once this pass has appended its first media, or -1 before it has. @type {number} */
-    pendingSinceCount = -1;
+    // **The new pass is "pending" until it delivers its first media.** Set to the CURRENT
+    // count, not -1: the watchdog treats a pending pass as still starting and does not
+    // re-seek it. Resetting to -1 here defeated that guard for every seek, so a pass that
+    // was delivering fragments but had not yet made the playhead playable was re-seeked
+    // and cancelled in a loop. That was the repeated `seek requested=55.6`.
+    pendingSinceCount = producedMedia;
     worker.postMessage({ type: 'seek', id: activePass, seconds });
   };
 
@@ -577,9 +581,13 @@ export async function transcodeForElement(file, video, options = {}) {
         requestSeek(video.currentTime);
         return;
       }
-      // Not stuck yet, but if this is a fresh position outside the buffer, make sure a
-      // pass is on its way; `settleSeek` debounces so a drag does not cancel per event.
-      if (!settleTimer && !waitingForFirst && waited < 500) settleSeek(video.currentTime);
+      // **Nothing else, deliberately.** The watchdog only recovers a pass that has genuinely
+      // stopped making progress. It must NOT seek "to be safe" while the playhead is merely
+      // unbuffered, because that is the normal state during the first fragment of a cold
+      // seek and re-seeking then cancels the pass that is about to fill it. A seek to a NEW
+      // position is `onPlayheadMoved`'s job, which compares against the last requested
+      // position. Proactively seeking here was an infinite loop: every pass delivered a
+      // first fragment, which counted as "recent progress", which triggered another seek.
       return;
     }
     // A runway BELOW the minimum means the producer could not keep up with playback, which
