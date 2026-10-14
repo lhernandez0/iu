@@ -11,21 +11,21 @@ npm test                  # hermetic, ~1s, no browser, no network. The default l
 npm run test:browser      # real Chromium, ~75s. Before a commit that changes wiring.
 npm run test:conformance  # Matroska conformance; needs `npm run conformance:fetch` once.
 npm run fixtures          # regenerate test/mkv/*.mkv (needs ffmpeg)
-npm run vendor:libav      # build the media decoder into src/vendor (needs emcc, ~5 min)
+npm run vendor            # rebuild src/vendor/mediabunny.js (needs node_modules)
 npm run ui                # Vite preview of the panel at 127.0.0.1:8099, for layout work
 make release              # stage, lint, zip, verify -> build/*.zip
 tools/ci/run-in-ci.sh npm test   # the same, in a container matching the CI runner
 ```
 
-Only the first tier is in the default loop, on purpose. The others need a browser,
-190 MB of downloaded files, or a compiler, and putting them in `npm test` would
-make the fast loop something to avoid.
+Only the first tier is in the default loop, on purpose. The others need a browser
+or 190 MB of downloaded files, and putting them in `npm test` would make the fast
+loop something to avoid.
 
-**The media decoder is the one build product.** It is built into `src/vendor/`
-but gitignored, so it is never committed;
-`npm run vendor:libav` builds it, and `make stage` fails without it.
-`libav.test.mjs` skips when it is absent, so `npm test` stays fast and
-toolchain-free; CI builds it and fails if the test skipped. See `THIRD-PARTY.md`.
+**There is no build product.** `src/vendor/mediabunny.js` is committed generated
+code, rebuilt with `npm run vendor`; the codecs it carries are MPL-2.0 packages
+(`@mediabunny/ac3`, `@mediabunny/aac-encoder`) bundled with it. An earlier revision
+shipped a compiled FFmpeg wasm build; it was retired in favour of those packages, and
+with it went the C toolchain the release path used to need. See `THIRD-PARTY.md`.
 
 **When CI fails and the local machine passes, reproduce it in the container
 first.** `tools/ci/run-in-ci.sh <command>` runs the command in Ubuntu 24.04 with
@@ -42,19 +42,13 @@ deliberate edit to several files at once, not something to route around:
   `test/manifest.test.mjs`.
 - **One external host, `youtube.com`.** No other absolute URL host may appear in
   `src/`, and no transport but `fetch`. Both rules cover OUR `src/`; `src/vendor/`
-  is exempt from the hostname and transport scans, because a compiled third-party
-  library names transports it never calls. The compiled media decoder never enters
-  the repository at all, so it is covered by its recipe instead.
+  is exempt from the hostname and transport scans, because generated third-party
+  code names transports it never calls.
 - **The permission list is pinned.** A new permission is a deliberate change to
   `manifest.json` and the test together.
-- **Every file in `src/vendor/` must be named in `THIRD-PARTY.md`,** and the media
-  decoder must be named there with its LGPL obligation, even though it is built
-  rather than committed.
-- **The built media decoder must never be committed to `src/vendor/`.** A test
-  asserts this, because "just commit the artifact, it is easier" is a tempting
-  mistake to make later. It would bloat every clone of this repository by 5 MB,
-  permanently.
-- **Every file in `src/vendor/` must be named in `THIRD-PARTY.md`.**
+- **Every file in `src/vendor/` must be named in `THIRD-PARTY.md`,** and the coder
+  packages bundled into `mediabunny.js` must be named there with their MPL-2.0
+  obligation.
 - **The manifest `description` equals `package.json`'s and is at most 132
   characters**, because the store reads the manifest and rejects over 132.
 
@@ -62,9 +56,7 @@ deliberate edit to several files at once, not something to route around:
 
 - **No build step, and no runtime dependencies.** Plain ES modules loaded directly.
   The one generated file that is committed is `src/vendor/mediabunny.js`, rebuilt
-  with `node tools/build-vendor.mjs`. **One exception:** the media decoder is a
-  compiled FFmpeg build, built into `src/vendor/` (gitignored) and NOT committed;
-  it needs `emcc` to rebuild and is copied into the package by `make stage`.
+  with `node tools/build-vendor.mjs`.
 - **`const api = globalThis.browser ?? globalThis.chrome;` at each use site**, never
   a shared module. The two browsers disagree, and a shared shim hides where.
 - **Comments explain why, especially where the obvious alternative was tried and

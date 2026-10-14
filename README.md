@@ -172,16 +172,11 @@ file that was edited by hand, and it runs in CI.
 There are no runtime dependencies, and for anyone using or testing the extension
 there is no build step: the repository is the extension. One generated file,
 `src/vendor/mediabunny.js`, is committed, so nothing has to be installed to load or
-package it; rebuild it with `node tools/build-vendor.mjs` if its version changes.
-
-**One exception, for packaging a release.** The media decoder, a compiled FFmpeg
-build for the audio and video formats a browser cannot play, is a build product
-rather than a committed file. `npm run vendor:libav` builds it into
-`src/vendor/` (gitignored, so it is never committed)
-and needs [Emscripten](https://github.com/emscripten-core/emsdk) on PATH, the same
-way `npm run fixtures` needs ffmpeg. `make release` copies it into the package and
-fails if it has not been built. See `THIRD-PARTY.md` for what it is and why it is
-built rather than committed.
+package it; rebuild it with `node tools/build-vendor.mjs` if its version changes. It
+bundles the container library and the two coder packages that supply Dolby audio
+decoding and AAC encoding, which a browser's own WebCodecs may not have. There is no
+other build product, and the release path needs no compiler. See `THIRD-PARTY.md`
+for what is bundled and why.
 
 ### The commit hook
 
@@ -306,9 +301,8 @@ test fails the build if another host or transport appears. See
 [`TESTING.md`](TESTING.md#the-privacy-claim-is-a-check-not-a-paragraph).
 
 The extension also ships a small number of third-party files, each named in
-[`THIRD-PARTY.md`](THIRD-PARTY.md) and fixed by hash so the exact bytes can be
-verified. They are local code, not requests: the media decoder is a bundled
-WebAssembly build that runs entirely inside the browser and sends nothing.
+[`THIRD-PARTY.md`](THIRD-PARTY.md). They are local code, not requests: the coder
+packages are WebAssembly that runs entirely inside the browser and sends nothing.
 
 ## Known limitations
 
@@ -367,7 +361,8 @@ pipeline test and not a transcriber.
 
 Our code, everything in `src/` except `src/vendor/`, plus the icons and the tests,
 is **MIT**; see [`LICENSE`](LICENSE). One third-party file ships:
-`src/vendor/mediabunny.js` (MPL-2.0), a generated bundle that reads a local video's
+`src/vendor/mediabunny.js` (MPL-2.0), a generated bundle of the container library
+and the AC-3 and AAC coder packages, which reads and re-encodes a local video's
 audio tracks. MPL-2.0 is file-level copyleft: it obliges publishing changes to its
 own files, and imposes nothing on this project. No third-party fonts or images are
 bundled.

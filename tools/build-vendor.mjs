@@ -34,7 +34,8 @@
  */
 
 import { build } from 'esbuild';
-import { mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -66,23 +67,24 @@ writeFileSync(
     '  MP4,',
     '  CmafOutputFormat,',
     '  StreamTarget,',
-    // The transcode pipeline (ADR 0012). A custom decoder and encoder let us decode
-    // E-AC-3 and encode AAC with libav.js while the library owns the container,
-    // fragments, duration and seeking. Measured cost of naming these: 433 KB to
-    // 544 KB, +110 KB committed.
+    // The transcode pipeline (ADR 0012). The library owns the container; the coders
+    // below are the two codecs WebCodecs lacks.
     '  ALL_FORMATS,',
     '  Mp4OutputFormat,',
     '  BufferTarget,',
-    '  CustomAudioDecoder,',
-    '  CustomAudioEncoder,',
-    '  registerDecoder,',
-    '  registerEncoder,',
     '  EncodedPacket,',
     '  EncodedPacketSink,',
     '  AudioSample,',
     '  canDecodeAudio,',
     '  canEncodeAudio,',
     "} from 'mediabunny';",
+    '',
+    '// The coder packages (ADR 0013). They register through mediabunny\'s custom-coder',
+    '// API, so they must be bundled WITH mediabunny: their published files import the',
+    '// bare specifier "mediabunny", which an extension cannot resolve. Bundling here is',
+    '// what rewrites the specifier to a relative import.',
+    'export { registerAc3Decoder, registerAc3Encoder } from \'@mediabunny/ac3\';',
+    'export { registerAacEncoder } from \'@mediabunny/aac-encoder\';',
     '',
   ].join('\n'),
 );
@@ -102,7 +104,6 @@ const result = await build({
 
 statSync(OUT);
 const bundled = statSync(OUT).size;
-const source = statSync(join(ROOT, 'node_modules', 'mediabunny', 'dist', 'bundles', 'mediabunny.min.mjs')).size;
 
 // The winners, largest first, so the number can be interrogated rather than trusted.
 const rows = Object.entries(result.metafile.outputs[OUT]?.inputs ?? {})
@@ -111,9 +112,11 @@ const rows = Object.entries(result.metafile.outputs[OUT]?.inputs ?? {})
   .sort((a, b) => b[1] - a[1])
   .slice(0, 8);
 
-console.log(`mediabunny.min.mjs (unbundled)  ${(source / 1024).toFixed(0)} KB`);
-console.log(`src/vendor/mediabunny.js         ${(bundled / 1024).toFixed(0)} KB`);
-console.log(`                                 ${((bundled / source) * 100).toFixed(0)}% of the full bundle`);
+statSync(OUT);
+const gzipped = gzipSync(readFileSync(OUT)).length;
+console.log(`src/vendor/mediabunny.js  ${(bundled / 1024).toFixed(0)} KB raw, ${(gzipped / 1024).toFixed(0)} KB gzipped`);
+console.log('  (mediabunny + @mediabunny/ac3 + @mediabunny/aac-encoder, compared against');
+console.log('   mediabunny alone, which is only for scale; the other two are the coders)');
 console.log('\nlargest contributors:');
 for (const [name, bytes] of rows) console.log(`  ${(bytes / 1024).toFixed(0).padStart(5)} KB  ${name}`);
 
@@ -122,9 +125,17 @@ writeFileSync(join(OUT_DIR, 'README.md'), [
   '',
   'Generated. Do not edit by hand, run `node tools/build-vendor.mjs`.',
   '',
-  '`mediabunny.js` is a tree-shaken bundle of [mediabunny](https://mediabunny.dev)',
-  '(MPL-2.0), committed because the release ZIP is built from `src/` alone and',
-  'cannot depend on `node_modules`. See `THIRD-PARTY.md`.',
+  '`mediabunny.js` is a tree-shaken bundle of three MPL-2.0 packages, committed',
+  'because the release ZIP is built from `src/` alone and cannot depend on',
+  '`node_modules`:',
+  '',
+  '- [mediabunny](https://mediabunny.dev), the container and conversion toolkit',
+  '- `@mediabunny/ac3`, the AC-3 and E-AC-3 coder (WebCodecs has neither)',
+  '- `@mediabunny/aac-encoder`, the AAC encoder (absent in some browsers)',
+  '',
+  'They are bundled together because the coder packages import the bare specifier',
+  '`"mediabunny"`, which a `chrome-extension://` page cannot resolve. See',
+  '`THIRD-PARTY.md`.',
   '',
 ].join('\n'));
 

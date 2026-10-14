@@ -47,20 +47,7 @@ jobs:
           ffmpeg -version | head -1
       - run: npm run fixtures
 
-      # The compiled decoder is a build product, not committed, so it is built here
-      # rather than committed. Without it `libav.test.mjs` SKIPS and the job stays
-      # green, which is the same hazard the browser tier has: the guard below is
-      # what turns "the decoder did not build" into a red job.
-      - uses: ./.github/actions/build-decoder
-
-      - name: run the hermetic suite, and fail if the decoder test skipped
-        run: |
-          set -o pipefail
-          npm test 2>&1 | tee /tmp/hermetic.log
-          if grep -q 'src/vendor/libav.js is not built' /tmp/hermetic.log; then
-            echo "::error::the decode test skipped, so the decoder was not tested"
-            exit 1
-          fi
+      - run: npm test
 
   # The committed dictionaries, rebuilt from the revisions they name and compared
   # byte for byte.
@@ -101,12 +88,6 @@ jobs:
             sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
           fi
       - run: npm run fixtures
-
-      # The viewer's E-AC-3 test imports the built decoder, so this job needs it in
-      # `src/vendor/` before Chromium loads the extension. Without it the extension
-      # loads, the decoder import 404s, and the test that proves audio works fails
-      # for a reason that has nothing to do with audio.
-      - uses: ./.github/actions/build-decoder
 
       # A FULL Chromium, not the default. The bundled headless shell cannot load
       # extensions at all, so `npx playwright install chromium` would download
@@ -181,12 +162,6 @@ jobs:
           node-version-file: '.nvmrc'
           cache: npm
       - run: npm ci
-
-      # The ZIP has to contain the compiled decoder, so it is built before
-      # packaging. `make stage` fails rather than shipping a ZIP without it, and
-      # `make verify` checks the archive, so a missing decoder cannot reach a
-      # reviewer as a green job.
-      - uses: ./.github/actions/build-decoder
 
       - run: make release
 

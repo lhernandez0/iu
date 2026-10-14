@@ -35,13 +35,6 @@ BUILD   := build
 STAGE   := $(BUILD)/stage
 ZIP     := $(BUILD)/$(SLUG)-$(VERSION).zip
 
-# The media decoder, built by `npm run vendor:libav` and NOT committed. It is a
-# compiled FFmpeg variant that ships inside the extension, so it is built directly
-# into `src/vendor/` (gitignored by name) rather than into `build/`, which means
-# `SHIPPED` needs no special case: the normal `cp -r src` picks it up. This
-# variable exists so `stage` can assert it was built.
-DECODER := src/vendor/libav.js
-
 # WHAT SHIPS. Everything else in the repository is development material.
 #
 # This list is the single source of truth. It used to live in three places, the
@@ -80,10 +73,6 @@ test: ## Run the hermetic suites (no browser, no network)
 test-browser: ## Run the browser tier (real Chromium, fixture pages)
 	npm run test:browser
 
-.PHONY: decoder
-decoder: ## Build the media decoder into build/libav (needs emcc)
-	npm run vendor:libav
-
 .PHONY: ui
 ui: ## Side-panel preview at http://127.0.0.1:8099
 	npm run ui
@@ -92,23 +81,12 @@ ui: ## Side-panel preview at http://127.0.0.1:8099
 
 .PHONY: stage
 stage: ## Copy the shipping set into build/stage
-	@# The media decoder is a build product, not committed. A release built without
-	@# it would ship an extension that silently cannot play Dolby audio or HEVC, so
-	@# its absence is a hard failure here rather than a puzzle for whoever installs
-	@# the ZIP. It lives in `src/vendor/` (gitignored), so the loop below copies it
-	@# along with the rest of `src/`; this only has to refuse to proceed without it.
-	@if [ ! -f $(DECODER) ]; then \
-		echo "MISSING: $(DECODER)" >&2; \
-		echo "  the media decoder is not built. run: npm run vendor:libav (needs emcc)" >&2; \
-		exit 1; \
-	fi
 	@rm -rf $(STAGE)
 	@mkdir -p $(STAGE)
 	@for entry in $(SHIPPED); do \
 		if [ ! -e "$$entry" ]; then echo "MISSING: $$entry" >&2; exit 1; fi; \
 		cp -r "$$entry" $(STAGE)/; \
 	done
-	@echo "staged the media decoder: $$(ls src/vendor/libav* | xargs -n1 basename | tr '\n' ' ')"
 	@# Directories that must never appear, asserted rather than assumed. This is
 	@# the failure this whole target exists to prevent, and a silent regression
 	@# would only be noticed by someone reading the artifact's file list.
@@ -173,7 +151,7 @@ clean-all: clean ## Also remove the downloaded and rendered caches
 	@rm -rf .cache
 	@echo
 	@echo "Removed, and how to restore each:"
-	@echo "  build/            make release      (or npm run vendor:libav)"
+	@echo "  build/            make release"
 	@echo "  conformance mkv   npm run conformance:fetch"
 	@echo "  tools/ui/assets   re-render them, they are review screenshots"
 	@echo "  .cache            npm run wordlists:fetch"

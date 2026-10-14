@@ -13,7 +13,6 @@
  */
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -229,12 +228,9 @@ section('shipped source can only reach youtube.com, and only over fetch');
   //
   //    `src/vendor/` is EXEMPT, and the exchange is deliberate rather than a
   //    loophole. A compiled third-party library carries transports it never
-  //    calls, and they cannot be removed without editing generated code. The
-  //    media decoder, which is the one such library, is EXEMPT differently: it is
-  //    a build product and never enters the repository at all (ADR 0011), which a
-  //    check below asserts. So the rule is absolute for our own `src/`, and
-  //    applies to `src/vendor/` only if we ever commit generated code that names
-  //    a transport again.
+  //    calls, and they cannot be removed without editing generated code. So the
+  //    rule is absolute for our own `src/`, and applies to `src/vendor/` only if
+  //    we ever commit generated code that names a transport again.
   const FORBIDDEN = /\bXMLHttpRequest\b|\bWebSocket\b|\bEventSource\b|\bsendBeacon\b|\bimportScripts\b|navigator\.send/;
   const transports = [];
   for (const file of sources) {
@@ -244,32 +240,6 @@ section('shipped source can only reach youtube.com, and only over fetch');
     }
   }
   check('no transport but fetch appears in OUR src/', transports, []);
-
-  // The built decoder must be present (when built) but NEVER tracked by git. It
-  // is 5.7 MB of opaque binary whose presence in git history is permanent and
-  // invisible to supply-chain scanners, which is the exact thing the build-product
-  // decision moved out. It lives in `src/vendor/` because that is where the
-  // extension loads from, so the guard is not "it is absent" but "git ignores it",
-  // asserted with `git check-ignore` rather than by trusting a `.gitignore` line.
-  {
-    const vendorDir = join(ROOT, 'src', 'vendor');
-    const decoder = existsSync(vendorDir)
-      ? readdirSync(vendorDir).filter((name) => name.startsWith('libav'))
-      : [];
-    const tracked = [];
-    for (const name of decoder) {
-      // `git check-ignore` exits 0 when the path IS ignored, 1 when it is not.
-      let ignored = false;
-      try {
-        execFileSync('git', ['check-ignore', '-q', join('src', 'vendor', name)], { cwd: ROOT });
-        ignored = true;
-      } catch {
-        ignored = false;
-      }
-      if (!ignored) tracked.push(name);
-    }
-    check('every built decoder file in src/vendor is gitignored', tracked, []);
-  }
 
   // 2. Every absolute URL named in OUR src/ resolves to youtube.com. A URL whose
   //    host is computed cannot be checked, so it fails rather than passing

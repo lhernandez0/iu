@@ -68,6 +68,19 @@ const DASH_EXEMPT = new Set([
 const CONFLICT = /^(<{7}|={7}|>{7})( |$)/;
 
 /**
+ * Files exempt from the trailing-whitespace check, with the reason.
+ *
+ * Generated code is not ours to tidy. `src/vendor/mediabunny.js` is produced by
+ * `node tools/build-vendor.mjs` from the MPL-2.0 packages, and its minified output
+ * carries trailing whitespace we neither wrote nor may edit; flagging it would mean
+ * either stripping lines from a generated file (which the next rebuild undoes) or
+ * bypassing the hook on every rebuild commit. Exempted by exact name, like the other
+ * allowlists here, so nothing else is covered by accident. A hand-written file with
+ * trailing whitespace is still caught.
+ */
+const WHITESPACE_EXEMPT = new Set(['src/vendor/mediabunny.js']);
+
+/**
  * Above this, a staged file is probably not meant for the repository.
  *
  * 8 MB, chosen against the largest legitimate file: `src/learn/data/japanese.json`
@@ -210,7 +223,7 @@ function main() {
 
     for (const { line, text } of lines) {
       // Only on a line with content, so a genuinely blank line is not flagged.
-      if (text.trim() && text !== text.replace(/\s+$/, '')) {
+      if (!WHITESPACE_EXEMPT.has(path) && text.trim() && text !== text.replace(/\s+$/, '')) {
         problems.push(`${path}:${line}  trailing whitespace`);
       }
     }

@@ -1,8 +1,0 @@
-{
-  "_comment": "Values the decode test asserts against test/mkv/one-eac3.mkv. Measured, not assumed: see ADR 0011. Update together with the fixture and the variant if either changes.",
-  "codecId": 86056,
-  "codecName": "eac3",
-  "frames": 87,
-  "samples": 133632,
-  "sampleRate": 44100
-}

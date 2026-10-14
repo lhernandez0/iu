@@ -44,7 +44,7 @@ import { markLine, listCoversLanguage, listForLanguage } from '../learn/marking.
 import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX } from '../common/settings.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
-import { canDecode, transcodeForElement } from './decode-encode.js';
+import { transcodeForElement } from './decode-encode.js';
 import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks, logDecoder } from './diagnostics.js';
 
 /**
@@ -1553,17 +1553,18 @@ let lastTranscodePercent = -1;
 /**
  * Whether a decode we attempted has failed.
  *
- * Distinct from `decoderCapability`, which records what the binary CLAIMS it can decode.
- * A binary claiming a codec and a decode actually succeeding are different facts, and
- * this is the second one being false. Cleared for each new file, so a failure on one
- * film does not mark the next.
+ * Distinct from `decoderCapability`, which records what the coders CLAIM they can
+ * decode. A coder claiming a codec and a decode actually succeeding are different
+ * facts, and this is the second one being false. Cleared for each new file, so a
+ * failure on one film does not mark the next.
  */
 let decoderFailed = false;
 /**
- * The codec ids the bundled decoder knows, by the viewer's own codec names.
+ * Whether each codec can be decoded, by the viewer's own codec names.
  *
- * Asked of the binary rather than hardcoded, so it cannot drift from what the build
- * actually contains. `null` until probed, and `decoderCanPlay()` fills it.
+ * Answered by `canDecodeAudio`, which accounts for the registered coder packages, so
+ * it cannot drift from what we actually ship. `null` until probed, and
+ * `decoderCanPlay()` fills it.
  *
  * @type {Map<string, boolean>|null}
  */
@@ -1577,52 +1578,33 @@ let decoderCapability = null;
  */
 
 /**
- * Map a track's codec name to the FFmpeg id `canDecode` wants.
+ * Whether we can decode a track the browser cannot.
  *
- * The names are the viewer's own, from `listAudioTracks`, which are mediabunny's
- * spellings. The ids are FFmpeg's `AVCodecID` values. Only the handful that matter
- * are listed; an unmapped name means "we cannot say", and the caller treats that as
- * not decodable rather than guessing.
- */
-const CODEC_IDS = new Map([
-  ['aac', 86018],
-  ['ac3', 86019],
-  ['eac3', 86056],
-  ['dts', 86020],
-  ['truehd', 86060],
-  ['mlp', 86045],
-  ['mp3', 86017],
-  ['opus', 86076],
-  ['flac', 86028],
-  ['vorbis', 86021],
-  ['wmav1', 86024],
-  ['wmav2', 86025],
-  ['wmapro', 86054],
-  ['pcm-s16', 65536],
-  ['pcm-s24', 65540],
-  ['pcm-f32', 65548],
-]);
-
-/**
- * Whether the bundled decoder can decode a track the browser cannot.
+ * Answered by which coder packages are registered, asked through mediabunny's own
+ * `canDecodeAudio`, which accounts for registered custom decoders. The names are the
+ * viewer's own, from `listAudioTracks`, which are mediabunny's spellings.
  *
- * Answered by the binary, once per codec, and cached. `false` when the codec is not
- * mapped or the decoder is not present, so a release built without it behaves exactly
- * as before: the note says the audio is unsupported.
+ * **This is a name lookup now, not a codec-id lookup, because the coders are the
+ * published packages** (`@mediabunny/ac3` handles AC-3 and E-AC-3) rather than a
+ * hand-built FFmpeg variant whose contents had to be asked of the binary. The set is
+ * therefore "what the packages cover", and the range for anything else is the browser's
+ * own `canPlayType`.
  *
  * @param {string} codec The viewer's own codec name for the track.
  * @returns {Promise<boolean>}
  */
 async function decoderCanPlay(codec) {
-  const id = CODEC_IDS.get(codec);
-  if (id === undefined) return false;
   if (!decoderCapability) decoderCapability = new Map();
   if (decoderCapability.has(codec)) return decoderCapability.get(codec);
   let answer = false;
   try {
-    answer = await canDecode(id);
+    // **Imported lazily, so a file the browser can play never loads the coder bundle.**
+    // The bundle carries two WebAssembly codecs and is 690 KB gzipped, and the whole
+    // point of the lazy rule is that a file needing none of it pays for none of it.
+    const { canDecodeTrack } = await import('./coders.js');
+    answer = await canDecodeTrack(codec);
   } catch {
-    // The decoder is absent or failed to load; either way it cannot play anything.
+    // The coder is absent or failed to register; either way it cannot decode anything.
     answer = false;
   }
   decoderCapability.set(codec, answer);
@@ -1739,10 +1721,10 @@ async function describeAudio(file) {
     // since the audio half of the string is what decides the answer.
     logAudioTracks(declared);
 
-    // Whether the bundled decoder can handle a track the browser cannot, asked BEFORE
-    // rendering so the note can promise decoding rather than warn about silence. Only
-    // asked when it matters: a file the browser can play never touches the decoder,
-    // so the 6 MB is never loaded for the ordinary case.
+    // Whether the coder packages can handle a track the browser cannot, asked
+    // BEFORE rendering so the note can promise decoding rather than warn about
+    // silence. Only asked when it matters: a file the browser can play never loads
+    // the coder bundle, so it is never paid for in the ordinary case.
     const chosen = declared[audioChoice];
     logDecoder('describe', {
       tracks: declared.length,
@@ -1795,6 +1777,7 @@ async function startDecoding(file, index) {
     }
 
     const stream = await transcodeForElement(file, els.video, {
+      trackIndex: index,
       // **Throttled to whole percent.** The conversion reports progress on every
       // internal step, which on a long film is hundreds of events a second, and logging
       // each one both floods the console past usefulness and costs real time in
@@ -1840,9 +1823,9 @@ async function startDecoding(file, index) {
     // otherwise get silence with no explanation, which is the exact failure this
     // feature exists to remove.
     //
-    // `decoderCapability` is deliberately NOT consulted here. It records what the BINARY
-    // claims it can decode, and the binary claiming it and the decode succeeding are
-    // different facts; this path is the second one being false.
+    // `decoderCapability` is deliberately NOT consulted here. It records what the
+    // coders CLAIM they can decode, and a coder claiming it and the decode succeeding
+    // are different facts; this path is the second one being false.
     decoderFailed = true;
     renderAudio();
     // CONSOLE ONLY, for now. Nothing is shown in the interface.
