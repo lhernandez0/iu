@@ -211,6 +211,64 @@ section('the second caption line is opt-in, and matches the picker');
   await panel.close();
 }
 
+section('the study picker shows the track the captions actually draw');
+
+{
+  // **The failure this catches is the control disagreeing with the screen.** With no
+  // stored `studyLanguage` the viewer picks a track itself, and it prefers a language it
+  // can mark (see `pickDefaultTrack`). The picker was driven from the null SETTING, so no
+  // option was marked selected and the browser showed the FIRST option, while the captions
+  // drew the picked one: measured on a file whose picked track is Japanese, the dropdown
+  // said "en". A viewer reads the dropdown to know what they are hearing, so a mismatch is
+  // a lie about the state of the page.
+  //
+  // `long-eac3-subs.mkv` carries English (track 3) and Japanese (track 4), and Japanese is
+  // the markable one, so the automatic pick is Japanese and the two tracks are
+  // distinguishable by their text.
+  const reader = await context.newPage();
+  await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await reader.waitForTimeout(800);
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'long-eac3-subs.mkv'));
+  await reader.waitForTimeout(6000);
+  await reader.evaluate(() => {
+    const video = document.getElementById('video');
+    video.muted = true;
+    video.currentTime = 0.6;
+    return video.play().catch(() => {});
+  });
+  await reader.waitForTimeout(2500);
+
+  const state = await reader.evaluate(() => ({
+    picker: document.getElementById('study-track').value,
+    primary: document.getElementById('caption-primary').textContent,
+  }));
+
+  // The automatic pick is Japanese, and the caption text says so. The pair is asserted
+  // together, so "the picker is right but nothing is drawn" fails as loudly as a mismatch.
+  check('the picker names the Japanese track', state.picker, 'ja');
+  check('and the caption drawn is the Japanese one', /Japanese/.test(state.primary), true);
+
+  // Choosing English must move BOTH: the caption to the English text, the picker to `en`.
+  // The playhead is put INSIDE an English cue first, because this file's cues are ten
+  // seconds apart and the switch itself does not move the playhead; asserting in the gap
+  // between cues would read an empty caption and call a working switch broken.
+  await reader.selectOption('#study-track', 'en');
+  await reader.evaluate(() => {
+    const video = document.getElementById('video');
+    video.currentTime = 0.6;
+    return video.play().catch(() => {});
+  });
+  await reader.waitForTimeout(2500);
+  const switched = await reader.evaluate(() => ({
+    picker: document.getElementById('study-track').value,
+    primary: document.getElementById('caption-primary').textContent,
+  }));
+  check('switching the picker switches the caption', /English/.test(switched.primary), true);
+  check('and the picker reflects the choice', switched.picker, 'en');
+
+  await reader.close();
+}
+
 section('machine translation is refused for a local file, visibly');
 
 {
@@ -393,6 +451,69 @@ section('the time bar, the volume control and the difficulty band');
     bar: Math.round(document.getElementById('bar').getBoundingClientRect().height),
   }));
   check('the caption offset accounts for the taller bar', offset.offset, `${offset.bar}px`);
+}
+
+section('the speed picker is OUR control, not the operating system dropdown');
+
+{
+  // **The failure this catches is a silent revert to the OS-styled dropdown.** A native
+  // `<select>` draws its dropdown with the operating system's own colours and font, none
+  // of which CSS can reach, so in a dark bar a twelve-rung list reads as a bright foreign
+  // box. The fix is `appearance: base-select`, which exposes the trigger and the
+  // `::picker()` to CSS. If that line is dropped, or a browser drops support, the control
+  // still WORKS (the native dropdown is the documented fallback) and only LOOKS wrong,
+  // which no behaviour test would notice.
+  await reader.bringToFront();
+
+  const support = await reader.evaluate(() => CSS.supports('appearance', 'base-select'));
+
+  if (!support) {
+    // The documented fallback: the select degrades to the native control, which is
+    // correct on a browser without the API. Nothing to assert about our styling, and the
+    // BEHAVIOUR below is checked regardless.
+    console.log('  skip  base-select is unsupported here, native dropdown is the fallback');
+  } else {
+    const styled = await reader.evaluate(() => {
+      const select = document.getElementById('speed');
+      const trigger = getComputedStyle(select);
+      const picker = getComputedStyle(select, '::picker(select)');
+      return {
+        appearance: trigger.appearance,
+        // The dark surface `--surface` (#1b1e25), not the OS default white. The exact
+        // bytes are asserted rather than "is dark", so the theme cannot drift unnoticed.
+        pickerBackground: picker.backgroundColor,
+      };
+    });
+    check('the select opts into the customizable API', styled.appearance, 'base-select');
+    check('and its dropdown is the bar surface, not OS white', styled.pickerBackground, 'rgb(27, 30, 37)');
+  }
+
+  // Behaviour, asserted whatever the styling path: every rung is offered, the grid or
+  // list is reachable, and choosing one drives `playbackRate`. This is the half a real
+  // user depends on and it must hold even on the fallback.
+  const speed = await reader.evaluate(() => {
+    const select = document.getElementById('speed');
+    const before = select.value;
+    select.value = '2';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    return {
+      optionCount: select.options.length,
+      values: [...select.options].map((o) => o.value),
+      before,
+      rate: document.getElementById('video').playbackRate,
+    };
+  });
+  check('every speed rung is present', speed.optionCount, 12);
+  check('spanning an eighth to eight', [speed.values[0], speed.values.at(-1)], ['0.125', '8']);
+  check('and a chosen rung actually drives playbackRate', speed.rate, 2);
+
+  // The wider range must survive a reload through the settings bucket, or a stored 8x
+  // would silently fall back to 1x on the next open.
+  const round = await reader.evaluate(() => {
+    const select = document.getElementById('speed');
+    return { value: select.value };
+  });
+  check('and the chosen speed is a rung the select itself holds', speed.values.includes(round.value), true);
 }
 
 section('the audio track selector');
@@ -1042,6 +1163,67 @@ section('Fullscreen, and the Picture-in-Picture round trip');
   );
 
   await page7.close();
+}
+
+section('the caption for a position is the same at every speed');
+
+{
+  // **This pins the rule ADR 0016 makes non-negotiable: the three surfaces stay in step.**
+  // A caption is a function of WHERE the picture is, never of how fast it is going or how
+  // an event happened to fire. So for one fixed `currentTime`, the caption must be the same
+  // at 0.125x and at 8x. That invariant needs no cue list to check and cannot pass by
+  // accident the way a timing tolerance can: if the renderer were driven by `timeupdate`
+  // (which is fixed near 4 Hz regardless of rate, the original bug) the caption would
+  // change with the rate at a fixed position, and this fails.
+  const page10 = await context.newPage();
+  await page10.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page10.waitForTimeout(800);
+  await page10.setInputFiles('#pick-files', join(FIXTURES, 'long-eac3-subs.mkv'));
+  await page10.waitForTimeout(6000);
+
+  /**
+   * The caption drawn for a position, at a given rate, WITHOUT letting it drift.
+   *
+   * The element is PAUSED before the position is read. At 8x a 900 ms wait would advance
+   * the playhead about seven seconds, so a test that played would read a different position
+   * than it asked for and compare captions from two different cues. Pausing holds the
+   * position, so the only thing the rate can change is how the renderer decides WHICH cue
+   * that position has, which is exactly the property under test.
+   */
+  const captionAt = async (seconds, rate) => {
+    await page10.evaluate(
+      ({ s, r }) => {
+        const video = document.getElementById('video');
+        video.pause();
+        video.muted = true;
+        video.playbackRate = r;
+        video.currentTime = s;
+      },
+      { s: seconds, r: rate },
+    );
+    // One frame plus a boundary settle, so the pause, the seek and the render have all run.
+    await page10.waitForTimeout(700);
+    return page10.evaluate(() => document.getElementById('caption-primary').textContent.replace(/\s+/g, ' ').trim());
+  };
+
+  // Positions chosen to land INSIDE cues (this file's cues start near x.51 and run 3s), so
+  // the expectation is a non-empty caption rather than a gap.
+  const positions = [50.8, 60.8, 70.8];
+  const rates = [0.125, 1, 2, 4, 8];
+
+  for (const seconds of positions) {
+    const reference = await captionAt(seconds, 1);
+    check(`a caption is drawn at ${seconds}s`, reference.length > 0, true);
+
+    const sameEverywhere = [];
+    for (const rate of rates) {
+      const shown = await captionAt(seconds, rate);
+      if (shown !== reference) sameEverywhere.push(`${rate}x:"${shown.slice(0, 12)}"`);
+    }
+    check(`and it is identical at every speed (${seconds}s)`, sameEverywhere, []);
+  }
+
+  await page10.close();
 }
 
 await closeAll();

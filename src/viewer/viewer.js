@@ -141,7 +141,7 @@ function applyStoredSettings(stored) {
   if (['off', 'above', 'below', 'marked'].includes(stored.romaji)) next.romaji = stored.romaji;
   if (['marks', 'numbers'].includes(stored.toneStyle)) next.toneStyle = stored.toneStyle;
   if (['underline', 'highlight'].includes(stored.markStyle)) next.markStyle = stored.markStyle;
-  if (['0.5', '0.75', '1', '1.25'].includes(String(stored.defaultSpeed))) {
+  if (['0.125', '0.25', '0.5', '0.75', '1', '1.25', '1.5', '2', '3', '4', '6', '8'].includes(String(stored.defaultSpeed))) {
     next.defaultSpeed = String(stored.defaultSpeed);
   }
   const size = Number(stored.captionSize);
@@ -685,6 +685,11 @@ async function loadDefaultTrack() {
     // and gain their marks when the dictionary lands.
     void prepareMarks(study.languageCode);
     redrawCaptions();
+    // **Repaint the pickers so the study dropdown shows the track just chosen.** When
+    // `settings.studyLanguage` is null the viewer picks the track itself, and the picker
+    // was last drawn before that choice existed, so without this it shows the first track
+    // while the captions draw the picked one. See `renderTrackChoosers`.
+    renderTrackPickers();
     logSubs('drawn', { count: segments.length, t: Number(els.video.currentTime.toFixed(2)) });
     // The gloss, if there is a second track. Awaited only to align it; the captions
     // are already on screen without it.
@@ -1002,14 +1007,20 @@ function activeIndex() {
  * The delay, in ms, before a finished cue should be cleared.
  *
  * A thin adapter over `captionHoldSeconds`, which holds the decision and is tested
- * hermetically. This only converts the seconds it answers in to the milliseconds a
- * timer wants, so the unit is converted in exactly one place.
+ * hermetically.
+ *
+ * **Scaled by `playbackRate`, because the timer is wall-clock and the hold is content.**
+ * `captionFade` is a reading-time preference measured in the film's own seconds, so at 2x
+ * a 0.5s hold must last 0.25 real seconds or the line lingers over content it no longer
+ * belongs to. A rate-scaled timer is the one place a second-of-content becomes a
+ * second-of-wall-clock, and doing it here keeps every other caption rule rate-free.
  *
  * @param {number} seconds The playhead, in seconds.
  * @returns {number}
  */
 function captionClearDelayMs(seconds) {
-  return captionHoldSeconds(segments, seconds, settings.captionFade) * 1000;
+  const rate = Math.min(8, Math.max(0.125, els.video.playbackRate || 1));
+  return (captionHoldSeconds(segments, seconds, settings.captionFade) * 1000) / rate;
 }
 
 /** Pending clears, keyed by the primary element they would empty. */
@@ -1214,15 +1225,24 @@ function renderTrackChoosers() {
   const glossSelect = document.getElementById('gloss-track');
   if (!studySelect || !glossSelect) return;
 
+  // **The study picker shows the track actually being drawn, not the raw setting.**
+  // `settings.studyLanguage` is null until the learner chooses, and the viewer has still
+  // picked a track itself (`pickDefaultTrack`, which prefers a markable language). Driving
+  // the select from the null setting marked NO option selected, so the browser showed the
+  // FIRST option while the captions drew the picked one: on a file whose picked track is
+  // Japanese, the picker said English. So the displayed value is the active track when the
+  // setting is unset, which is what a "Match the track"-style automatic choice means
+  // everywhere else in this file.
+  const shownStudy = settings.studyLanguage ?? activeTrackLanguage ?? '';
   const signature =
     tracks.map((track) => `${track.languageCode}:${track.name ?? ''}`).join(',') +
-    `|${settings.studyLanguage ?? ''}|${settings.glossLanguage ?? ''}`;
+    `|${shownStudy}|${settings.glossLanguage ?? ''}`;
   if (studySelect.dataset.signature === signature) return;
   studySelect.dataset.signature = signature;
   glossSelect.dataset.signature = signature;
 
   for (const [select, chosen, includeOff] of [
-    [studySelect, settings.studyLanguage, false],
+    [studySelect, shownStudy, false],
     [glossSelect, settings.glossLanguage, true],
   ]) {
     select.replaceChildren();
@@ -2234,18 +2254,78 @@ function onTimeUpdate() {
   reportPosition();
   // Keyed on the cue that should be SHOWING, not the one that started last, so the
   // end of a cue is a transition the renderer sees and can schedule a fade for.
-  const index = captionIndex();
-  if (index !== lastRendered) {
-    lastRendered = index;
-    renderCaptions(index);
-  }
+  syncCaptions();
   paintTime();
   remember();
+}
+
+/**
+ * Draw the caption for the current playhead, if it changed since the last draw.
+ *
+ * **Driven per animation frame while playing, which is what keeps captions in step at
+ * any speed.** `timeupdate` fires about four times a second regardless of `playbackRate`,
+ * so at 8x the playhead advances two seconds between updates and a cue boundary is
+ * crossed up to two seconds late: measured, wrong-caption samples rose from 8 in 60 at 1x
+ * to 33 in 71 at 8x. Rendering on the element's own frames instead makes the caption
+ * follow the picture at playback speed rather than at the event's fixed rate, and reuses
+ * the same `captionIndex` cache, so it draws only when the cue actually changes.
+ */
+function syncCaptions() {
+  const index = captionIndex();
+  if (index === lastRendered) return;
+  lastRendered = index;
+  renderCaptions(index);
+}
+
+/** @type {number|null} The running animation-frame handle while playing. */
+let captionFrame = null;
+
+/**
+ * The per-frame caption loop, active only while playing.
+ *
+ * Stopped when paused or ended, because a paused frame needs no redraw and a loop that
+ * ran forever would burn a frame's work per tick for nothing. It is restarted by the
+ * `play` event.
+ */
+function captionTick() {
+  captionFrame = null;
+  if (els.video.paused || els.video.ended) return;
+  syncCaptions();
+  captionFrame = requestAnimationFrame(captionTick);
+}
+
+function startCaptionLoop() {
+  if (captionFrame == null && !els.video.paused && !els.video.ended) {
+    captionFrame = requestAnimationFrame(captionTick);
+  }
+}
+
+function stopCaptionLoop() {
+  if (captionFrame != null) {
+    cancelAnimationFrame(captionFrame);
+    captionFrame = null;
+  }
 }
 
 for (const event of ['timeupdate', 'play', 'pause', 'ended']) {
   els.video.addEventListener(event, onTimeUpdate);
 }
+els.video.addEventListener('play', startCaptionLoop);
+els.video.addEventListener('pause', stopCaptionLoop);
+els.video.addEventListener('ended', stopCaptionLoop);
+// The loop reads `playbackRate` through the element's clock, so a rate change needs no
+// handler: the next frame simply sees the playhead further along. This is why the fix is
+// per frame rather than a rate-scaled timer, which would have to be re-armed on every
+// change and would drift from the element's own clock.
+//
+// **`seeking`, not only `seeked`.** `currentTime` is written at the START of a seek and
+// `seeked` fires when the element has ARRIVED, which can be a frame or more later, and
+// under a slow seek much later. For that window the caption is still the old cue while
+// `currentTime` already reads the new one, which the sync rule forbids. So the caption is
+// repainted the instant the position changes, and again on arrival.
+els.video.addEventListener('seeking', () => {
+  syncCaptions();
+});
 // `seeked`, not `seeking`: reported once the new position is real.
 els.video.addEventListener('seeked', () => {
   reportPosition(true);

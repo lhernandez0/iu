@@ -9,7 +9,12 @@
  */
 
 import { formatTimestamp, formatSrtTime, toPlainText, toSrt, findActiveIndex, findPlayingIndex, captionHoldSeconds, alignSecondary } from '../src/common/transcript.js';
-import { defaults, SETTINGS, byAudience, audienceProblems, SURFACES, forSettingsView, forTranscriptBar } from '../src/common/settings.js';
+import { defaults, SETTINGS, byAudience, audienceProblems, SURFACES, forSettingsView, forTranscriptBar, SPEED_VALUES, SPEED_MIN, SPEED_MAX, SPEED_BANDS } from '../src/common/settings.js';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 let failures = 0;
 let checks = 0;
@@ -148,6 +153,49 @@ check('a negative fade never clears', captionHoldSeconds(gapped, 2.5, -1), 0);
 check('a nonsense fade never clears', captionHoldSeconds(gapped, 2.5, 'abc'), 0);
 // The last cue has nothing after it, so a gap to the end of the film gets the hold.
 check('the last cue falls back to the hold', captionHoldSeconds(gapped, 20.5, 0.5), 0.5);
+
+// --- The speed range, and that every surface agrees on it --------------------
+//
+// The player supports 1/8x to 8x, and the SAME list has to appear in three places:
+// the settings registry (which validates a stored value and drives the panel), the
+// viewer's own `<select>` (which the viewer marks up by hand), and the design
+// preview's `<select>`. They are three hand-maintained lists of the same fact, so a
+// test is the only thing that keeps them from drifting, which is exactly the class of
+// bug that gives one surface a speed the player cannot actually run at.
+
+section('the speed range is 1/8x to 8x, and every surface offers the same rungs');
+
+check('the minimum is an eighth', SPEED_MIN, 0.125);
+check('the maximum is eight', SPEED_MAX, 8);
+check('the registered values are ascending', SPEED_VALUES, [...SPEED_VALUES].sort((a, b) => Number(a) - Number(b)));
+check('and span the whole range', [SPEED_VALUES[0], SPEED_VALUES.at(-1)], ['0.125', '8']);
+check('every value parses as a number in range', SPEED_VALUES.every((v) => Number(v) >= SPEED_MIN && Number(v) <= SPEED_MAX), true);
+
+/** The `value` of every `<option>` inside the element with `id`, from the source HTML. */
+function optionValues(htmlPath, id) {
+  const html = readFileSync(join(ROOT, htmlPath), 'utf8');
+  // The select is small and hand-written, so a scoped match is safe and avoids pulling
+  // in an HTML parser for one list.
+  const select = html.match(new RegExp(`<select[^>]*id="${id}"[\\s\\S]*?</select>`))?.[0] ?? '';
+  return [...select.matchAll(/<option[^>]*value="([^"]+)"/g)].map((m) => m[1]);
+}
+
+check('the viewer offers exactly the registered speeds', optionValues('src/viewer/viewer.html', 'speed'), SPEED_VALUES);
+check('the preview player offers exactly the registered speeds', optionValues('tools/ui/player.html', 'pp-speed'), SPEED_VALUES);
+
+// The BANDS are the reason the flat list of twelve read as a wall, so they are the thing
+// the UI change was for and the thing a future edit must not quietly drop. Three bands of
+// four is what makes the picker lay out as three clean rows; if a band gains or loses a
+// rung, the grid stops being three rows and the grouping stops being the shape.
+check('there are three bands', SPEED_BANDS.length, 3);
+check('each band is a full row of four', SPEED_BANDS.map((b) => b.values.length), [4, 4, 4]);
+check(
+  'the bands together are exactly the offered speeds, in order',
+  SPEED_BANDS.flatMap((b) => b.values),
+  SPEED_VALUES,
+);
+check('the first band is everything below normal speed', SPEED_BANDS[0].values.every((v) => Number(v) < 1), true);
+check('the last band is everything above normal speed', SPEED_BANDS.at(-1).values.every((v) => Number(v) > 1), true);
 
 // --- alignSecondary: the safety property -------------------------------------
 
@@ -335,7 +383,11 @@ section('the video settings');
   // A number, not a string, is the realistic wrong input, a control that stored
   // `1.25` rather than `"1.25"` should not lose the choice.
   check('a numeric speed is accepted and normalised', speed.coerce(1.25), '1.25');
-  check('an off-list speed falls back to 1x', speed.coerce('3'), '1');
+  // The list now spans 1/8x to 8x, so the off-list value used here has to be one that is
+  // genuinely not a rung. 3x IS a rung (added with the wider range), which is what this
+  // check caught when the range changed.
+  check('an off-list speed falls back to 1x', speed.coerce('0.6'), '1');
+  check('and a speed at the new maximum is kept', speed.coerce(8), '8');
 
   // Toggles coerce truthily, so a stored 0 or "" does not become a live `true`.
   const captions = SETTINGS.find((s) => s.id === 'captionsOn');

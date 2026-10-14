@@ -303,6 +303,24 @@ export async function transcodeForElement(file, video, options = {}) {
   };
 
   /**
+   * The runway to keep produced, in SOURCE seconds, scaled for the playback rate.
+   *
+   * **The runway is a promise about TIME, not about content, so it must scale with
+   * `playbackRate`.** At 1x, twelve source seconds of lead is twelve real seconds of
+   * safety. At 8x the playhead consumes that lead eight times faster, so twelve source
+   * seconds is only 1.5 real seconds and an underrun is likely; at 0.5x the same lead is
+   * twenty-four real seconds, which is wasted memory. Scaling by the rate keeps the buffer
+   * worth roughly the same WALL time at every speed, which is what "enough runway" means.
+   *
+   * @param {number} contentSeconds
+   * @returns {number}
+   */
+  const runway = (contentSeconds) => {
+    const rate = Number(video.playbackRate) || 1;
+    return contentSeconds * Math.min(8, Math.max(0.5, rate));
+  };
+
+  /**
    * Ask the producer to keep going, because the playhead is running out of runway.
    *
    * The condition is "less than `LEAD_MAX` of playable media ahead", measured from the
@@ -311,7 +329,7 @@ export async function transcodeForElement(file, video, options = {}) {
    */
   const requestMore = () => {
     if (disposed || producerDone) return;
-    if (bufferedAheadEnd(video.currentTime) - video.currentTime < LEAD_MAX) worker.postMessage({ type: 'produce', id: activePass });
+    if (bufferedAheadEnd(video.currentTime) - video.currentTime < runway(LEAD_MAX)) worker.postMessage({ type: 'produce', id: activePass });
   };
 
   /**
@@ -325,7 +343,7 @@ export async function transcodeForElement(file, video, options = {}) {
    */
   const requestPause = () => {
     if (disposed || producerDone) return;
-    if (bufferedAheadEnd(video.currentTime) - video.currentTime > LEAD_MAX) worker.postMessage({ type: 'pause', id: activePass });
+    if (bufferedAheadEnd(video.currentTime) - video.currentTime > runway(LEAD_MAX)) worker.postMessage({ type: 'pause', id: activePass });
   };
 
   /**
@@ -594,8 +612,8 @@ export async function transcodeForElement(file, video, options = {}) {
     // is what an underrun sounds like (a stutter). Logged so it is visible in a paste
     // rather than only felt, and the ask below is what recovers it.
     const ahead = bufferedAheadEnd(video.currentTime) - video.currentTime;
-    if (ahead < LEAD_MIN) console.log(`[iu] transcode step=underrun ahead=${ahead.toFixed(1)}`);
-    if (ahead > LEAD_MAX) requestPause();
+    if (ahead < runway(LEAD_MIN)) console.log(`[iu] transcode step=underrun ahead=${ahead.toFixed(1)} rate=${(Number(video.playbackRate) || 1).toFixed(2)}`);
+    if (ahead > runway(LEAD_MAX)) requestPause();
     else requestMore();
   }, WATCHDOG_MS);
 

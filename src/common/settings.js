@@ -141,12 +141,61 @@ const CAPTION_PLACEMENT_OPTIONS = [
   { value: 'below', label: 'Below the picture' },
 ];
 
-/** The speeds worth offering. Three, not a slider, this is a preference, not a fine control. */
+/**
+ * The speeds worth offering, as three BANDS from an eighth to eight times.
+ *
+ * **A speed control is about comprehension, and comprehension changes by ratio, not by a
+ * fixed step**, so the rungs are geometric: 1/8, 1/4, 1/2, 1x, 2x, 4x, 8x, plus the
+ * quarter steps near 1x (0.75x to slow a passage, 1.25x and 1.5x to skim one) where
+ * learners actually live. A linear scale from 1/8 to 8 would spend most of its travel
+ * above 4x, where almost nobody watches.
+ *
+ * **The list is grouped into three bands, and the viewer's picker renders them as three
+ * rows**: SLOW (below 1x), AROUND 1x (the fine steps either side), and FAST (above 1x).
+ * The grouping is the reason a flat list of twelve read as a wall: the set is not
+ * arbitrary, and the shape of the choice is three bands, so the control says so. Keeping
+ * 1.25x and 0.75x is deliberate for the same reason, they are the steps that get used at
+ * the speed a learner reads, and a tidier ladder without them loses the useful rungs.
+ *
+ * The exact set is asserted against the viewer's own `<select>` and the preview player's
+ * by a test, so none of the three can drift.
+ */
 const SPEED_OPTIONS = [
+  // SLOW: below normal, for close reading.
+  { value: '0.125', label: '0.125×' },
+  { value: '0.25', label: '0.25×' },
+  { value: '0.5', label: '0.5×' },
   { value: '0.75', label: '0.75×' },
+  // AROUND 1x: the fine steps either side, where the rungs are closest together.
   { value: '1', label: '1×' },
   { value: '1.25', label: '1.25×' },
+  { value: '1.5', label: '1.5×' },
+  { value: '2', label: '2×' },
+  // FAST: above normal, for skimming and review.
+  { value: '3', label: '3×' },
+  { value: '4', label: '4×' },
+  { value: '6', label: '6×' },
+  { value: '8', label: '8×' },
 ];
+
+/** The three bands the speeds group into, in order, each four rungs. */
+export const SPEED_BANDS = [
+  { name: 'Slower', values: ['0.125', '0.25', '0.5', '0.75'] },
+  { name: 'Normal', values: ['1', '1.25', '1.5', '2'] },
+  { name: 'Faster', values: ['3', '4', '6', '8'] },
+];
+
+/** The speed range the player supports, as the CSS and the timers clamp to. */
+export const SPEED_MIN = 0.125;
+export const SPEED_MAX = 8;
+
+/**
+ * The speed values as strings, in ascending order, for tests and callers that need to
+ * agree with the `<select>` without re-parsing labels.
+ *
+ * @type {string[]}
+ */
+export const SPEED_VALUES = SPEED_OPTIONS.map((option) => option.value);
 
 /** How large caption text is drawn, in px. Separate from the panel's text size. */
 export const CAPTION_SIZE_DEFAULT = 20;

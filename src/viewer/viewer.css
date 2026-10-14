@@ -767,6 +767,118 @@ body {
   font: 12px/1.4 system-ui, sans-serif;
 }
 
+/*
+ * The speed picker, drawn as OUR control rather than the operating system's.
+ *
+ * **Why this exists.** A native `<select>` renders its dropdown with the OS's own
+ * styling: a white panel, the OS font, and an OS checkmark, none of which can be
+ * reached from CSS. Measured against a dark bar it reads as a bright foreign box, and
+ * with twelve rungs the list is long enough that the mismatch is the first thing seen.
+ * The control was correct and looked like it belonged to another application.
+ *
+ * `appearance: base-select` opts the select into the customizable-select API, which
+ * exposes the trigger, the `::picker()` panel, the `::picker-icon` arrow and each
+ * `option` to normal CSS, while the browser keeps the keyboard navigation, focus
+ * management and top-layer rendering (so no `z-index` fights). Support is Limited
+ * availability (Chrome and Edge 135+, Safari 27), and the fallback is the point rather
+ * than a flaw: where it is unsupported the select degrades to exactly the native
+ * dropdown it already was, so nothing regresses.
+ *
+ * Scoped to the speed control on purpose. The caption-row selects sit in a row with its
+ * own carefully measured widths, and `base-select` removes the browser's
+ * size-to-longest-option behaviour, so applying it there is a layout change to check on
+ * its own rather than to make quietly here.
+ */
+#speed,
+#speed::picker(select) {
+  appearance: base-select;
+}
+
+/* The trigger: same shape and colour as the icon buttons beside it, so the row reads as
+   one control set. A fixed width, because `base-select` drops the browser's
+   size-to-content behaviour and a value like `1×` must not be narrower than `0.125×`. */
+#speed {
+  width: 4.75rem;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+#speed::picker-icon {
+  color: var(--muted);
+}
+
+/* The dropdown panel, in the bar's own surface colour and type. Rendered in the
+   top-layer by the browser, so it is never clipped by the bar. */
+#speed::picker(select) {
+  margin-block-start: 4px;
+  border: 1px solid #333844;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--fg);
+  font: 12px/1.4 system-ui, sans-serif;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/*
+ * The rungs as a four-wide grid in three BANDS, not a flat list of twelve.
+ *
+ * **Why bands.** Twelve speeds in a single heap read as a wall, and the eye has no way to
+ * find "normal" in it. But the set is not arbitrary: it is a geometric ladder, and the
+ * meaningful shape is three groups, the rungs that SLOW playback down, the fine steps
+ * AROUND 1x where learners actually live (0.75x, 1.25x, 1.5x are the ones that get used),
+ * and the rungs that SPEED it up. Four per row lays the twelve out as exactly three rows,
+ * so the grouping is a property of the layout rather than a hand-placed label, and a wider
+ * `row-gap` than `column-gap` makes the three bands read as three.
+ *
+ * `:open` is required. Styling the picker without it would make the panel visible even
+ * when the select is closed, which is the trap the guidance calls out.
+ *
+ * Keyboard is unaffected: the select still moves through every option on Up/Down even
+ * though the layout is two-dimensional. Only SPATIAL arrow navigation (Left/Right
+ * stepping sideways) would need scripted handling, and it is not worth a keydown
+ * interceptor for twelve options that Up/Down already reaches.
+ */
+#speed:open::picker(select) {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  column-gap: 3px;
+  /* Wider than the column gap, so the three bands separate visually without a border. */
+  row-gap: 9px;
+  padding: 6px;
+}
+
+#speed option {
+  min-inline-size: 3.4rem;
+  padding: 6px 8px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+#speed option:hover {
+  background: #24304a;
+}
+
+/* The selected rung is marked by a tinted background AND a border AND the checkmark, not
+   by colour alone, so selection survives a colour-blind reading and the high-contrast
+   forced-colors mode. */
+#speed option:checked {
+  background: #24304a;
+  box-shadow: inset 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+
+/* In a grid the default leading checkmark would shift every cell by its width when the
+   selection moves. It is parked after the label instead, where it annotates without
+   reflowing the row. */
+#speed option::checkmark {
+  margin-inline-start: 6px;
+  color: var(--accent);
+}
+
 .field input {
   width: 54px;
   font-variant-numeric: tabular-nums;
