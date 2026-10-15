@@ -352,6 +352,221 @@ function uint(bytes) {
   return value;
 }
 
+/**
+ * The byte offset of the `Cues` index, found through the `SeekHead`, or null.
+ *
+ * ## Why this exists, and what it is worth
+ *
+ * In Matroska a subtitle track's blocks live inside the video's clusters, and there is no
+ * list of where they are. So the only way to find a track's cues was to WALK THE FILE:
+ * measured on a 25 GB film, one track cost 3278 reads of 8 MiB, 27.5 GB, because the
+ * clusters have to be read to reach the blocks inside them.
+ *
+ * The format provides an index instead. `SeekHead` is a small element near the start that
+ * names the byte offset of other top-level elements, `Cues` among them, and `Cues` maps
+ * timestamps to cluster byte positions. So the offset of the index is found in TWO tiny
+ * reads (a 12-byte header and the ~100-byte `SeekHead` body), no matter how large the file
+ * is, and the index then turns "walk 27.5 GB" into "seek and read a few clusters".
+ *
+ * Measured on that same film: `SeekHead` at byte 52, pointing to `Cues` at byte
+ * 25247121664. Reading the `SeekHead` is a fixed cost; finding the same information by
+ * walking was the 27.5 GB.
+ *
+ * Returns null when there is no `SeekHead` or it does not name `Cues`, which is a real
+ * case: a file written by a streaming muxer may have neither, and such a file keeps the
+ * scan. Null is "no index", never an error.
+ *
+ * @param {{at: Function, size: number}} window
+ * @returns {Promise<{offset: number, size: number}|null>}
+ */
+async function findCues(window, segmentStart) {
+  // `SeekHead` precedes the clusters in every file a muxer writes, so a bounded walk from
+  // the segment start reaches it after a handful of elements. The bound keeps a malformed
+  // file from walking the whole thing looking for an element that is not there.
+  let seen = 0;
+  for await (const element of children(window, segmentStart, window.size)) {
+    if (++seen > 16) break;
+    if (element.id === ID.SeekHead) {
+      const body = await readElement(window, element);
+      if (!body) continue;
+      const entries = parseSeekHead(body);
+      const cues = entries.find((entry) => entry.id === ID.Cues);
+      if (!cues) continue;
+      // **`SeekPosition` is relative to the segment DATA start, not the file**, so the
+      // segment start has to be added. Measured on a 25 GB film: the entry said
+      // 25247121664 and the `Cues` element was really at 25247121716, exactly `segmentStart`
+      // further in. Reading at the raw position landed 52 bytes early, into the tail of the
+      // previous element, so the id there was not `Cues` at all and the index was declared
+      // missing while sitting right beside the address we had.
+      const cuesOffset = segmentStart + cues.position;
+      // The seek entry gives the offset of the `Cues` element HEADER, so read its header
+      // to learn its length. The body can be tens of megabytes on a long film, so only the
+      // header is read here; the entries are read on demand by `cueClusterRange`.
+      const head = await window.at(cuesOffset, 12);
+      if (!head) continue;
+      const cid = readVint(head, 0, true);
+      if (!cid || cid.value !== ID.Cues) continue;
+      const csize = readVint(head, cid.length, false);
+      if (!csize || csize.unknown) continue;
+      return { offset: cuesOffset, size: cid.length + csize.length + csize.value };
+    }
+    // `Cues` after `Tracks` means the walk has gone past where a `SeekHead` would be, and
+    // a `Cluster` means the media has started, so there is none.
+    if (element.id === ID.Cluster || element.id === ID.Cues) return null;
+  }
+  return null;
+}
+
+/**
+ * Parse a `SeekHead` body into `{id, position}` entries.
+ *
+ * The structure is `Seek` elements, each holding a `SeekID` (the target's element id, in
+ * its raw vint form) and a `SeekPosition` (the target's offset relative to the segment
+ * data start, which is what `Cues` uses here).
+ *
+ * @param {Uint8Array} body
+ * @returns {Array<{id: number, position: number}>}
+ */
+function parseSeekHead(body) {
+  const ID_SEEK = 0x4dbb;
+  const ID_SEEK_ID = 0x53ab;
+  const ID_SEEK_POSITION = 0x53ac;
+  const entries = [];
+  let cursor = 0;
+
+  while (cursor < body.length) {
+    const id = readVint(body, cursor, true);
+    if (!id) break;
+    cursor += id.length;
+    const size = readVint(body, cursor, false);
+    if (!size) break;
+    cursor += size.length;
+    const end = cursor + size.value;
+    if (end > body.length) break;
+
+    if (id.value === ID_SEEK) {
+      let inner = cursor;
+      let target = null;
+      let position = null;
+      while (inner < end) {
+        const innerId = readVint(body, inner, true);
+        if (!innerId) break;
+        inner += innerId.length;
+        const innerSize = readVint(body, inner, false);
+        if (!innerSize) break;
+        inner += innerSize.length;
+        if (inner + innerSize.value > end) break;
+        if (innerId.value === ID_SEEK_ID) target = uint(body.subarray(inner, inner + innerSize.value));
+        else if (innerId.value === ID_SEEK_POSITION) position = uint(body.subarray(inner, inner + innerSize.value));
+        inner += innerSize.value;
+      }
+      if (target !== null && position !== null) entries.push({ id: target, position });
+    }
+    cursor = end;
+  }
+  return entries;
+}
+
+/**
+ * The byte range the `Cues` index says holds the clusters for a window of time.
+ *
+ * ## What this is for
+ *
+ * With the index in hand, a viewer does not need the whole film's cues to show the line
+ * being spoken. It needs the cues near the playhead, which live in the clusters for that
+ * stretch of time, and the index says exactly which clusters those are. So the FIRST
+ * read is bounded by the window rather than by the film, and the rest is filled in later.
+ *
+ * `Cues` is a list of `CuePoint`s, each with a `CueTime` (in timestamp ticks) and a
+ * `CueTrackPositions` naming a `CueClusterPosition` (a byte offset from the segment data
+ * start). Reading the cluster from that position to the next cue point's position covers
+ * the window.
+ *
+ * @param {{at: Function, size: number}} window
+ * @param {{offset: number, size: number}} cuesIndex
+ * @param {number} segmentStart
+ * @param {number} fromSeconds
+ * @param {number} toSeconds
+ * @param {number} timecodeScale
+ * @returns {Promise<{start: number, end: number}|null>} A byte range, or null.
+ */
+async function cueClusterRange(window, cuesIndex, segmentStart, fromSeconds, toSeconds, timecodeScale) {
+  // The index can be tens of megabytes on a long film, so it is read in bounded pieces
+  // rather than whole. The cue points are ordered by time, so a linear scan can stop as
+  // soon as it passes `toSeconds`.
+  const toTicks = (seconds) => Math.round((seconds * 1e9) / timecodeScale);
+  const wantedFrom = toTicks(Math.max(0, fromSeconds));
+  const wantedTo = toTicks(Math.max(0, toSeconds));
+
+  const body = await window.at(cuesIndex.offset, cuesIndex.size);
+  if (!body) return null;
+  // Skip the `Cues` element's own header to reach its children.
+  const cid = readVint(body, 0, true);
+  const csize = readVint(body, cid.length, false);
+  let cursor = cid.length + csize.length;
+
+  let firstPosition = null;
+  let lastPosition = null;
+  while (cursor < body.length) {
+    const id = readVint(body, cursor, true);
+    if (!id) break;
+    cursor += id.length;
+    const size = readVint(body, cursor, false);
+    if (!size) break;
+    cursor += size.length;
+    const end = cursor + size.value;
+    if (end > body.length) break;
+
+    if (id.value === 0xbb) {
+      // CuePoint
+      let inner = cursor;
+      let time = null;
+      let position = null;
+      while (inner < end) {
+        const iid = readVint(body, inner, true);
+        if (!iid) break;
+        inner += iid.length;
+        const isz = readVint(body, inner, false);
+        if (!isz) break;
+        inner += isz.length;
+        if (inner + isz.value > end) break;
+        if (iid.value === 0xb3) {
+          time = uint(body.subarray(inner, inner + isz.value));
+        } else if (iid.value === 0xb7) {
+          // CueTrackPositions: find CueClusterPosition inside.
+          let j = inner;
+          const jEnd = inner + isz.value;
+          while (j < jEnd) {
+            const jid = readVint(body, j, true);
+            if (!jid) break;
+            j += jid.length;
+            const jsz = readVint(body, j, false);
+            if (!jsz) break;
+            j += jsz.length;
+            if (j + jsz.value > jEnd) break;
+            if (jid.value === 0xf1) position = uint(body.subarray(j, j + jsz.value));
+            j += jsz.value;
+          }
+        }
+        inner += isz.value;
+      }
+      if (time !== null && position !== null) {
+        if (time >= wantedFrom && firstPosition === null) firstPosition = position;
+        if (time <= wantedTo) lastPosition = position;
+        if (time > wantedTo && firstPosition !== null) break;
+      }
+    }
+    cursor = end;
+  }
+
+  if (firstPosition === null || lastPosition === null) return null;
+  // The end of the range is the START of the next cluster the index names, or the start of
+  // the index itself when this is the last window, since clusters precede `Cues`.
+  let endOffset = cuesIndex.offset;
+  if (lastPosition > firstPosition) endOffset = segmentStart + lastPosition;
+  return { start: segmentStart + firstPosition, end: endOffset };
+}
+
 /** @param {Uint8Array} bytes */
 function int16(bytes) {
   if (bytes.length < 2) return 0;
@@ -613,6 +828,80 @@ async function readTimecodeScale(window, segmentStart, segmentEnd) {
 }
 
 /**
+ * Read and decode one cluster, pushing any cues it holds into `cues`.
+ *
+ * Extracted from the main walk so a WINDOWED read can call it for a cluster the index
+ * named, by byte offset, without walking to it. That distinction is the whole point: a
+ * walk from the segment start touches every cluster header on the way, which measured
+ * 8.21 GB of reads just to step 7000 elements, while jumping straight to an offset is one
+ * small read.
+ *
+ * @param {{at: Function}} window
+ * @param {number} offset
+ * @param {number} span
+ * @param {Map<number, string>} codecByTrack
+ * @param {Set<number>|null} wanted
+ * @param {Map<number, Array<{start: number, duration: number, text: string}>>} cues
+ * @param {(ticks: number) => number} ticksToSeconds
+ * @returns {Promise<'ok'|'truncated'>}
+ */
+async function decodeCluster(window, offset, span, codecByTrack, wanted, cues, ticksToSeconds) {
+  const cluster = await window.at(offset, span);
+  if (!cluster) return 'truncated';
+
+  const clusterWindow = {
+    at: async (at, length) => {
+      const from = at - offset;
+      if (from < 0 || from + length > cluster.length) return null;
+      return cluster.subarray(from, from + length);
+    },
+  };
+
+  let base = 0;
+  for await (const child of children(clusterWindow, offset, offset + cluster.length)) {
+    if (child.id === ID.Timestamp) {
+      const bytes = await clusterWindow.at(child.offset, child.size);
+      if (bytes) base = uint(bytes);
+      continue;
+    }
+
+    const isSimple = child.id === ID.SimpleBlock;
+    const isGroup = child.id === ID.BlockGroup;
+    if (!isSimple && !isGroup) continue;
+
+    for await (const inner of children(clusterWindow, child.offset, child.offset + child.size)) {
+      if (inner.id !== ID.Block) continue;
+
+      const payload = await clusterWindow.at(inner.offset, inner.size);
+      if (!payload) continue;
+      const block = parseBlockHeader(payload);
+      if (!block) continue;
+
+      const codec = codecByTrack.get(block.track);
+      if (!codec) continue;
+      if (wanted && !wanted.has(block.track)) continue;
+
+      let duration = 0;
+      if (isGroup) {
+        for await (const field of children(clusterWindow, child.offset, child.offset + child.size)) {
+          if (field.id !== ID.BlockDuration) continue;
+          const bytes = await clusterWindow.at(field.offset, field.size);
+          if (bytes) duration = ticksToSeconds(uint(bytes));
+        }
+      }
+
+      const text = decodeBlockText(codec, block.text);
+      if (!text) continue;
+
+      const list = cues.get(block.track) ?? [];
+      list.push({ start: ticksToSeconds(base + block.relative), duration, text });
+      cues.set(block.track, list);
+    }
+  }
+  return 'ok';
+}
+
+/**
  * Read every text subtitle track and its cues from a Matroska file.
  *
  * @param {object} options
@@ -630,7 +919,7 @@ async function readTimecodeScale(window, segmentStart, segmentEnd) {
  *   timecodeScale: number,
  * }>}
  */
-export async function readMatroska({ read, size, trackNumbers }) {
+export async function readMatroska({ read, size, trackNumbers, window: timeWindow }) {
   const window = createWindow(read, size);
   /** @type {Array<{number: number, codec: string, language: string|null, name: string|null, kind: string}>} */
   let tracks = [];
@@ -664,6 +953,32 @@ export async function readMatroska({ read, size, trackNumbers }) {
   // which is how live-stream recordings are written.
   let lastGoodEnd = segmentStart;
 
+  // **A time window narrows the walk, using the file's own index.** Without this the walk
+  // below visits every cluster of the file, which on a 25 GB film is 27.5 GB of reads for
+  // one subtitle track. With it, `Cues` names the cluster byte range holding the window, so
+  // only those clusters are visited and the rest of the film is never read. A file with no
+  // index (a streaming muxer may write none) returns null here and keeps the full walk,
+  // which is slow but correct.
+  let walkStart = segmentStart;
+  let walkEnd = segmentEnd;
+  if (timeWindow) {
+    const index = await findCues(window, segmentStart);
+    if (index) {
+      const range = await cueClusterRange(
+        window,
+        index,
+        segmentStart,
+        timeWindow.from,
+        timeWindow.to,
+        timecodeScale,
+      );
+      if (range) {
+        walkStart = Math.max(segmentStart, range.start);
+        walkEnd = Math.min(segmentEnd, range.end);
+      }
+    }
+  }
+
   // Pass one: find `Tracks`. It precedes the clusters in every file a muxer
   // writes, so one forward walk finds it and then continues into the clusters.
   /** @type {Map<number, string>} Track number -> codec, so block payloads can be
@@ -685,10 +1000,21 @@ export async function readMatroska({ read, size, trackNumbers }) {
       // cheap: without it the walk would read every cluster of a multi-gigabyte
       // file to decide it wanted none of them.
       if (wanted && wanted.size === 0) break;
+      // **A windowed read stops here too.** `Tracks` is all this walk is for in that case:
+      // the clusters it wants were already named by the index and are decoded by the jump
+      // below. Continuing would step every cluster header of the file, which is the walk
+      // the index exists to avoid.
+      if (timeWindow && walkStart > segmentStart) break;
       continue;
     }
 
     if (element.id !== ID.Cluster) continue;
+
+    // **Outside the requested window, so it is stepped over rather than read.** The walk
+    // still starts at the segment so `Tracks` (which precedes the clusters) is found, but a
+    // windowed read must not touch a cluster it was not asked for. This is what turns a
+    // 27.5 GB scan into a read of the clusters the index named.
+    if (element.offset + element.size <= walkStart || element.offset >= walkEnd) continue;
 
     // Nothing to extract from, so there is no reason to walk the media.
     if (!codecByTrack.size) continue;
@@ -716,70 +1042,51 @@ export async function readMatroska({ read, size, trackNumbers }) {
       continue;
     }
 
-    const cluster = await window.at(element.offset, span);
-    if (!cluster) {
+    const cluster = await decodeCluster(
+      window,
+      element.offset,
+      span,
+      codecByTrack,
+      wanted,
+      cues,
+      ticksToSeconds,
+    );
+    if (cluster === 'truncated') {
       truncated = true;
       continue;
     }
 
-    // The cluster's own element bytes, so the child walk can use the same window
-    // helpers. Reading it whole is the trade this module makes: a cluster is a few
-    // seconds of media, not a film.
-    const clusterWindow = {
-      at: async (offset, length) => {
-        const from = offset - element.offset;
-        if (from < 0 || from + length > cluster.length) return null;
-        return cluster.subarray(from, from + length);
-      },
-    };
-
-    let base = 0;
-    for await (const child of children(clusterWindow, element.offset, element.offset + cluster.length)) {
-      if (child.id === ID.Timestamp) {
-        const bytes = await clusterWindow.at(child.offset, child.size);
-        if (bytes) base = uint(bytes);
-        continue;
-      }
-
-      const isSimple = child.id === ID.SimpleBlock;
-      const isGroup = child.id === ID.BlockGroup;
-      if (!isSimple && !isGroup) continue;
-
-      // A `BlockGroup` holds a `Block` plus (usually) a `BlockDuration`; a
-      // `SimpleBlock` holds neither.
-      for await (const inner of children(clusterWindow, child.offset, child.offset + child.size)) {
-        if (inner.id !== ID.Block) continue;
-
-        const payload = await clusterWindow.at(inner.offset, inner.size);
-        if (!payload) continue;
-        const block = parseBlockHeader(payload);
-        if (!block) continue;
-
-        const codec = codecByTrack.get(block.track);
-        if (!codec) continue;
-        if (wanted && !wanted.has(block.track)) continue;
-
-        let duration = 0;
-        if (isGroup) {
-          for await (const field of children(clusterWindow, child.offset, child.offset + child.size)) {
-            if (field.id !== ID.BlockDuration) continue;
-            const bytes = await clusterWindow.at(field.offset, field.size);
-            if (bytes) duration = ticksToSeconds(uint(bytes));
-          }
-        }
-
-        const text = decodeBlockText(codec, block.text);
-        if (!text) continue;
-
-        const list = cues.get(block.track) ?? [];
-        list.push({ start: ticksToSeconds(base + block.relative), duration, text });
-        cues.set(block.track, list);
-      }
-    }
-
     // A read that got this far consumed a readable region, so the fallback for an
     // unknown-size cluster can resume after it rather than restarting.
-    lastGoodEnd = element.offset + cluster.length;
+    lastGoodEnd = element.offset + span;
+  }
+
+  // **The windowed read: JUMP to the clusters the index named, do not walk to them.**
+  // The loop above starts at the segment so it finds `Tracks`, and stepping from there is
+  // what a full read must do. But a windowed read only wants a few clusters, and walking
+  // to them costs every header in between (measured: 8.21 GB to step 7000 elements), which
+  // would defeat the index. So when a window was requested and the index gave a byte range,
+  // the clusters in that range are decoded directly by offset and nothing else is read.
+  if (timeWindow && walkStart > segmentStart) {
+    let offset = walkStart;
+    while (offset < walkEnd) {
+      const head = await window.at(offset, 12);
+      if (!head || head.length < 2) break;
+      const cid = readVint(head, 0, true);
+      if (!cid || cid.value !== ID.Cluster) break;
+      const csize = readVint(head, cid.length, false);
+      if (!csize || csize.unknown) break;
+      const bodyOffset = offset + cid.length + csize.length;
+      if (csize.value > MAX_ELEMENT_BYTES) {
+        truncated = true;
+      } else if (
+        (await decodeCluster(window, bodyOffset, csize.value, codecByTrack, wanted, cues, ticksToSeconds)) ===
+        'ok'
+      ) {
+        // Decoded, so advance to the next cluster.
+      }
+      offset = bodyOffset + csize.value;
+    }
   }
 
   // Reported so a caller can tell a wrong-scale file from a right one; the viewer

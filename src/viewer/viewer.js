@@ -663,7 +663,25 @@ async function loadDefaultTrack() {
   // The learner's own choices win; otherwise the viewer picks. This is the same
   // preference the panel reads, so a track chosen in the panel's dropdown is the one
   // the captions draw.
-  const study = trackFor(settings.studyLanguage) ?? pickDefaultTrack();
+  //
+  // **A stored language that now resolves to an UNREADABLE track is not honoured.**
+  // `studyLanguage` is a language code, not a track identity, and codes are not unique
+  // across files: a learner who studied `ja` on one film, then opens a film whose only
+  // `ja` track is a Blu-ray PGS image track, had the image track selected, `ensureSegments`
+  // returned nothing for a non-text track, and the captions were permanently blank with
+  // no way to get them back except changing the language. Measured exactly that on a disc
+  // remux: pick chose `ja n=25 kind=image`, read-skipped it, and drew zero cues forever.
+  // So an unreadable named track falls through to the readable default instead, which the
+  // viewer then shows in its picker.
+  const named = trackFor(settings.studyLanguage);
+  const study = named && named.kind === 'text' ? named : pickDefaultTrack();
+  if (named && named.kind !== 'text') {
+    logSubs('pick-unreadable', {
+      stored: settings.studyLanguage,
+      kind: named.kind,
+      fallback: study ? `${study.languageCode} n=${study.trackNumber}` : 'NONE',
+    });
+  }
   logSubs('pick', {
     studyLanguage: settings.studyLanguage ?? 'null',
     chosen: study ? `${study.languageCode} n=${study.trackNumber} kind=${study.kind}${study.error ? ' ERR:' + study.error : ''}` : 'NONE',
