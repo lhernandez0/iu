@@ -959,3 +959,107 @@ body {
   white-space: nowrap;
   border: 0;
 }
+
+/* --- The keyboard shortcut panel ------------------------------------------ */
+
+/*
+ * A reference card, over the picture, that does NOT stop playback.
+ *
+ * Deliberately not `<dialog>` with `showModal`: that traps focus and dims the page, and
+ * the point of this panel is to be read WHILE a learner tries the keys, so the video
+ * keeps playing behind it and clicks outside it still reach the player.
+ *
+ * It is anchored to the top-right rather than centred, because centred means over the
+ * captions, and the captions are the thing a learner is looking at while they try a key.
+ */
+.shortcuts {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  width: min(30rem, calc(100% - 24px));
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  padding: 14px 18px 18px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  /* Opaque, not translucent: this is dense text, and reading it over a moving picture
+     is the one thing a translucent card cannot offer. */
+  background: #14161c;
+  color: var(--text);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+}
+
+.shortcuts[hidden] {
+  display: none;
+}
+
+.shortcut-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  padding: 2px 8px;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.shortcuts h3 {
+  margin: 14px 0 6px;
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted, #98a2b3);
+}
+
+.shortcuts h3:first-of-type {
+  margin-top: 0;
+}
+
+/*
+ * A two-column definition list, keys left, meaning right.
+ *
+ * A grid rather than floats so the columns line up whatever the key widths are, which
+ * a row of `<kbd>` elements plus text does not do on its own.
+ */
+.shortcuts dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 0.9em;
+}
+
+.shortcuts dt {
+  white-space: nowrap;
+}
+
+.shortcuts dd {
+  margin: 0;
+}
+
+.shortcuts kbd {
+  display: inline-block;
+  min-width: 1.4em;
+  margin-right: 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--edge);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  text-align: center;
+}
+
+/* Where a key differs from YouTube's, or has no counterpart there. Dimmer, because it
+   is context for the key rather than part of its name. */
+.shortcut-note {
+  color: var(--muted, #98a2b3);
+  font-size: 0.9em;
+}

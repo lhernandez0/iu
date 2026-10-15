@@ -1497,6 +1497,127 @@ section('the caption for a position is the same at every speed');
   await page10.close();
 }
 
+section('the keyboard shortcuts drive the player, and the help panel lists them');
+
+{
+  // **The wiring, not the mapping.** Which key means which action, and when a key
+  // belongs to the player at all, are tested hermetically in `shortcuts.test.mjs`. What
+  // only a browser can show is that a key reaches the media element: that `k` starts
+  // playback, that `l` moves the playhead, and that a key pressed inside a text field
+  // does NOT move it. A mapping that is right and a listener that is never attached
+  // passes every hermetic check and does nothing here.
+  const page12 = await context.newPage();
+  await page12.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page12.waitForTimeout(800);
+  await page12.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  // A track with cues, so the line-stepping keys have a list to step through. Chinese,
+  // so it is the same fixture the band section uses and the read is instant.
+  await page12.selectOption('#study-track', 'zh');
+  await page12.waitForFunction(() => (document.getElementById('caption-primary')?.textContent ?? '').length > 0, null, {
+    timeout: 30000,
+  });
+  await page12.evaluate(() => {
+    const video = document.getElementById('video');
+    video.muted = true;
+    video.pause();
+    video.currentTime = 0;
+  });
+
+  // `k` plays. The element's own `paused` is the assertion, not our button's icon: the
+  // icon is derived, and a listener that flipped the icon without calling `play` would
+  // pass on the icon.
+  await page12.keyboard.press('k');
+  await page12.waitForTimeout(300);
+  const playing = await page12.evaluate(() => !document.getElementById('video').paused);
+  check('k starts playback', playing, true);
+
+  // `l` moves forward 5 seconds. Paused first, so the position cannot drift from
+  // playback and make the assertion pass for the wrong reason.
+  await page12.evaluate(() => {
+    const video = document.getElementById('video');
+    video.pause();
+    video.currentTime = 0;
+  });
+  await page12.keyboard.press('l');
+  await page12.waitForTimeout(200);
+  const forward = await page12.evaluate(() => document.getElementById('video').currentTime);
+  check('l seeks forward 5 seconds', forward > 4 && forward < 6, true);
+
+  // `j` moves backward, and from the same place so the two are a pair.
+  await page12.keyboard.press('j');
+  await page12.waitForTimeout(200);
+  const backAgain = await page12.evaluate(() => document.getElementById('video').currentTime);
+  check('j seeks back 5 seconds', backAgain < 1, true);
+
+  // **The rule that matters most, in the browser.** `k` typed into a text field must
+  // insert a character and leave playback alone. Asserted on `paused` rather than on
+  // the field's value, because the field does not exist, the point is that the guard
+  // reads the TARGET tag, and a real input is the only way to produce that target.
+  await page12.evaluate(() => {
+    const input = document.createElement('input');
+    input.id = 'probe-input';
+    document.body.append(input);
+    input.focus();
+    document.getElementById('video').pause();
+  });
+  await page12.keyboard.press('k');
+  await page12.waitForTimeout(200);
+  const stillPaused = await page12.evaluate(() => document.getElementById('video').paused);
+  const typed = await page12.evaluate(() => document.getElementById('probe-input')?.value ?? '');
+  check('k typed into a field does not start playback', stillPaused, true);
+  check('and the character reaches the field', typed, 'k');
+  await page12.evaluate(() => document.getElementById('probe-input')?.remove());
+
+  // `c` toggles the captions, through the same setting the button writes.
+  const captionsBefore = await page12.evaluate(
+    () => document.getElementById('captions')?.getAttribute('aria-pressed'),
+  );
+  await page12.keyboard.press('c');
+  await page12.waitForTimeout(200);
+  const captionsAfter = await page12.evaluate(
+    () => document.getElementById('captions')?.getAttribute('aria-pressed'),
+  );
+  check('c toggles the captions', captionsBefore !== captionsAfter, true);
+
+  // `f` toggles fullscreen. Headless Chromium allows element fullscreen, so the state
+  // is checked directly rather than through the button's label.
+  await page12.keyboard.press('f');
+  await page12.waitForTimeout(300);
+  const fullscreen = await page12.evaluate(() => Boolean(document.fullscreenElement));
+  check('f enters fullscreen', fullscreen, true);
+  await page12.keyboard.press('f');
+  await page12.waitForTimeout(300);
+  const left = await page12.evaluate(() => Boolean(document.fullscreenElement));
+  check('and f leaves it again', left, false);
+
+  // `?` opens the help panel, and the panel must list the keys from the same table.
+  // The count is read from the MODULE rather than hardcoded, so adding a shortcut does
+  // not require editing a number here, and a panel that rendered a partial list is still
+  // caught because the two are compared rather than both being a literal.
+  await page12.keyboard.press('?');
+  await page12.waitForTimeout(200);
+  const help = await page12.evaluate(async () => {
+    const { SHORTCUTS } = await import('./shortcuts.js');
+    return {
+      open: !document.getElementById('shortcuts')?.hidden,
+      rows: document.querySelectorAll('#shortcuts dt').length,
+      expected: SHORTCUTS.length,
+      hasToggleKey: [...document.querySelectorAll('#shortcuts kbd')].some((k) => k.textContent === 'C'),
+    };
+  });
+  check('? opens the shortcut panel', help.open, true);
+  check('and it lists every shortcut in the table', help.rows, help.expected);
+  check('and the panel names the captions key', help.hasToggleKey, true);
+
+  // Escape closes it, so the panel is dismissable from the keyboard that opened it.
+  await page12.keyboard.press('Escape');
+  await page12.waitForTimeout(200);
+  const closed = await page12.evaluate(() => document.getElementById('shortcuts')?.hidden);
+  check('and Escape closes it', closed, true);
+
+  await page12.close();
+}
+
 await closeAll();
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

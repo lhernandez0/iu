@@ -41,7 +41,8 @@ import { readMatroskaTracks, readMatroska, imageCodecName } from './matroska.js'
 import { segment } from '../learn/segment.js';
 import { indexDictionary, loadIndex, dictionaryPathFor, lookup, levelOf, levelColour } from '../learn/wordlist.js';
 import { markLine, listCoversLanguage, listForLanguage } from '../learn/marking.js';
-import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX } from '../common/settings.js';
+import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX, SPEED_VALUES } from '../common/settings.js';
+import { resolveShortcut, jumpFraction, SHORTCUTS } from './shortcuts.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
 import { transcodeForElement } from './decode-encode.js';
@@ -2570,7 +2571,8 @@ function applyVolume() {
   els.muteButton.title = label;
 }
 
-els.muteButton.addEventListener('click', () => {
+/** Push the current volume onto the element and into the controls. */
+function toggleMute() {
   if (els.muteButton.getAttribute('aria-pressed') === 'true') {
     els.volumeSlider.value = String(lastVolume > 0 ? lastVolume : 100);
   } else {
@@ -2580,6 +2582,10 @@ els.muteButton.addEventListener('click', () => {
     els.volumeSlider.value = '0';
   }
   applyVolume();
+}
+
+els.muteButton.addEventListener('click', () => {
+  toggleMute();
 });
 
 els.volumeSlider.addEventListener('input', () => {
@@ -3082,10 +3088,19 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 const click = (id, handler) => document.getElementById(id)?.addEventListener('click', handler);
 
-click('play', () => {
+click('play', () => togglePlay());
+
+/**
+ * Play or pause, the action both the button and `k`/`Space` perform.
+ *
+ * A NAMED function rather than a closure in the click handler, because a keyboard
+ * shortcut and a button that perform the same action must do the same thing. Two
+ * implementations of "play or pause" is how the button and the key come to disagree.
+ */
+function togglePlay() {
   if (els.video.paused) void els.video.play();
   else els.video.pause();
-});
+}
 
 /**
  * The play button's icon and name, swapped in one place.
@@ -3111,13 +3126,22 @@ function syncPlayIcon() {
 els.video.addEventListener('play', syncPlayIcon);
 els.video.addEventListener('pause', syncPlayIcon);
 
-click('back', () => {
-  els.video.currentTime = Math.max(0, els.video.currentTime - 5);
-});
+/** How far `back`, `forward` and `j`/`l` move the playhead, in seconds. */
+const SEEK_STEP = 5;
 
-click('forward', () => {
-  els.video.currentTime = Math.min(els.video.duration || Infinity, els.video.currentTime + 5);
-});
+/** Move the playhead back one step, clamped to the start. */
+function seekBack() {
+  els.video.currentTime = Math.max(0, els.video.currentTime - SEEK_STEP);
+}
+
+/** Move the playhead forward one step, clamped to the end. */
+function seekForward() {
+  els.video.currentTime = Math.min(els.video.duration || Infinity, els.video.currentTime + SEEK_STEP);
+}
+
+click('back', () => seekBack());
+
+click('forward', () => seekForward());
 
 /**
  * Cue stepping, the control a generic player cannot have.
@@ -3126,24 +3150,30 @@ click('forward', () => {
  * hair before it, where float rounding puts you in the previous one. This is the
  * kind of thing that looks like an off-by-one and is really a seek artefact.
  */
-click('prev-cue', () => {
+function prevCue() {
   if (!segments.length) return;
   const index = activeIndex();
   const target = index <= 0 ? segments[0].start : segments[index - 1].start;
   els.video.currentTime = target + 0.05;
-});
+}
 
-click('next-cue', () => {
+function nextCue() {
   const index = activeIndex();
   if (index < 0 || !segments.length) return;
   const next = segments[index + 1];
   if (next) els.video.currentTime = next.start + 0.05;
-});
+}
 
-click('replay-cue', () => {
+function replayCue() {
   const index = activeIndex();
   if (index >= 0) els.video.currentTime = segments[index].start + 0.05;
-});
+}
+
+click('prev-cue', () => prevCue());
+
+click('next-cue', () => nextCue());
+
+click('replay-cue', () => replayCue());
 
 document.getElementById('speed').addEventListener('change', (event) => {
   setSetting('defaultSpeed', event.target.value);
@@ -3202,7 +3232,13 @@ document.getElementById('threshold').addEventListener('change', (event) => {
  */
 let fullscreenBeforePip = false;
 
-click('pip', () => {
+/**
+ * Toggle Picture-in-Picture, the action both the button and `i` perform.
+ *
+ * Named for the same reason as `togglePlay`: the button and the key must take the same
+ * path, or they come to differ.
+ */
+function togglePip() {
   if (document.pictureInPictureElement) {
     // Leaving PiP RESTORES fullscreen, if the viewer was in it when PiP started.
     //
@@ -3228,7 +3264,9 @@ click('pip', () => {
   void els.video.requestPictureInPicture().catch(() => {
     fullscreenBeforePip = false;
   });
-});
+}
+
+click('pip', () => togglePip());
 
 // Fullscreen the PICTURE, not the video. This is what lets the bar be a sibling of
 // the fullscreened element; `video.requestFullscreen()` takes the media element alone
@@ -3268,7 +3306,10 @@ function syncFullscreenButton() {
   els.fullscreenButton.title = label;
 }
 
-click('fullscreen', () => {
+click('fullscreen', () => toggleFullscreen());
+
+/** Toggle element fullscreen, the action both the button and `f` perform. */
+function toggleFullscreen() {
   if (document.fullscreenElement) {
     void document.exitFullscreen().catch(() => {});
     return;
@@ -3279,7 +3320,7 @@ click('fullscreen', () => {
   void els.picture.requestFullscreen().catch(() => {
     setStatus('This browser refused fullscreen for this page.', true);
   });
-});
+}
 
 // Entering Picture-in-Picture DROPS element fullscreen. Measured:
 //
@@ -3302,6 +3343,200 @@ window.addEventListener('resize', () => {
   // Still measured, because `--bar-offset` decides where the captions sit and the bar's
   // height changes with the row. Only the fullscreen guess is gone.
   measureBar();
+});
+
+// --- Keyboard shortcuts ------------------------------------------------------
+//
+// **The viewer is a player, so the keys a player has are the keys it should have.** The
+// mapping and the rules about WHEN a key is ours live in `shortcuts.js`, deliberately: the
+// table is data and the resolver is a pure function, so both are testable without a
+// browser, and the mistakes in a keyboard layer are nearly always in the table or the
+// guard rather than in the action. This file holds only the wiring, one `switch` mapping
+// an action id to the function that performs it.
+
+/**
+ * The speed ladder, so `<` and `>` step through the SAME values the picker offers.
+ *
+ * Taken from the shared `SPEED_VALUES` rather than written out here, because a second
+ * list would drift from the `<select>` and a key would eventually move to a speed the
+ * picker cannot show.
+ */
+const SPEED_LADDER = SPEED_VALUES;
+
+/** Step the playback speed one rung, clamped at the ends of the ladder. */
+function stepSpeed(direction) {
+  const current = String(settings.defaultSpeed ?? '1');
+  const at = SPEED_LADDER.indexOf(current);
+  // An unknown current speed (a hand-edited bucket) is treated as 1x, the value the
+  // picker would show, so the first press moves somewhere real rather than to an end.
+  const index = at >= 0 ? at : SPEED_LADDER.indexOf('1');
+  const next = Math.min(SPEED_LADDER.length - 1, Math.max(0, index + direction));
+  if (SPEED_LADDER[next] === current) return;
+  setSetting('defaultSpeed', SPEED_LADDER[next]);
+}
+
+/** Jump to a fraction of the film, clamped inside the media. */
+function jumpTo(fraction) {
+  const duration = els.video.duration;
+  if (!Number.isFinite(duration) || duration <= 0) return;
+  // Just inside the end, because seeking exactly TO the duration can throw or leave the
+  // element at the very edge with nothing playable after it. Same reason the end key does.
+  els.video.currentTime = Math.min(duration - 0.5, Math.max(0, duration * fraction));
+}
+
+/**
+ * Perform a shortcut action.
+ *
+ * A `switch` on the id, deliberately boring: the interesting logic is in the resolver and
+ * the named functions, and this is only the join. Every id in `SHORTCUTS` is handled,
+ * which a test asserts, so a key cannot be documented and then do nothing.
+ *
+ * @param {string} action
+ */
+function runShortcut(action) {
+  const jump = jumpFraction(action);
+  if (jump !== null) {
+    jumpTo(jump);
+    return;
+  }
+  switch (action) {
+    case 'play':
+      togglePlay();
+      break;
+    case 'mute':
+      toggleMute();
+      break;
+    case 'speed-down':
+      stepSpeed(-1);
+      break;
+    case 'speed-up':
+      stepSpeed(1);
+      break;
+    case 'back':
+      seekBack();
+      break;
+    case 'forward':
+      seekForward();
+      break;
+    case 'start':
+      els.video.currentTime = 0;
+      break;
+    case 'end':
+      // Just inside the end: seeking exactly TO the duration can throw or leave nothing
+      // playable after it, which the element already works around for its own seeks.
+      els.video.currentTime = Math.max(0, (els.video.duration || 0) - 0.5);
+      break;
+    case 'prev-cue':
+      prevCue();
+      break;
+    case 'next-cue':
+      nextCue();
+      break;
+    case 'replay-cue':
+      replayCue();
+      break;
+    case 'captions':
+      setSetting('captionsOn', !settings.captionsOn);
+      break;
+    case 'fullscreen':
+      toggleFullscreen();
+      break;
+    case 'pip':
+      togglePip();
+      break;
+    case 'help':
+      toggleHelp();
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * The one key listener, on the document.
+ *
+ * Document rather than the video element, because the video only has focus when it has
+ * been clicked, and a viewer who moves the pointer over the controls and presses `k`
+ * expects it to work. The resolver decides what belongs to a focused control and what
+ * does not.
+ */
+document.addEventListener('keydown', (event) => {
+  const action = resolveShortcut(event);
+  if (!action) return;
+  // Ours, so the browser's own handling is suppressed: without this, `Space` would also
+  // scroll the page and the arrows would scroll it under the bar.
+  event.preventDefault();
+  runShortcut(action);
+});
+
+// --- The shortcut help panel -------------------------------------------------
+
+/** Whether the help panel is open. */
+let helpOpen = false;
+
+/** Build the help table once, from the same table the keys come from. */
+function renderHelp() {
+  const panel = document.getElementById('shortcuts');
+  if (!panel || panel.dataset.built === 'true') return;
+  const groups = new Map();
+  for (const entry of SHORTCUTS) {
+    if (!groups.has(entry.group)) groups.set(entry.group, []);
+    groups.get(entry.group).push(entry);
+  }
+  const body = document.createDocumentFragment();
+  for (const [group, entries] of groups) {
+    const heading = document.createElement('h3');
+    heading.textContent = group;
+    body.append(heading);
+    const list = document.createElement('dl');
+    for (const entry of entries) {
+      const keys = document.createElement('dt');
+      for (const key of entry.keys) {
+        const kbd = document.createElement('kbd');
+        kbd.textContent = key;
+        keys.append(kbd);
+      }
+      const label = document.createElement('dd');
+      label.textContent = entry.label;
+      // Where a key differs from YouTube's, or has no counterpart, say so. The point of a
+      // help panel is to answer "but YouTube does X", and a bare list cannot.
+      if (entry.yt) {
+        const note = document.createElement('span');
+        note.className = 'shortcut-note';
+        note.textContent = ` (${entry.yt})`;
+        label.append(note);
+      }
+      list.append(keys, label);
+    }
+    body.append(list);
+  }
+  panel.replaceChildren(body);
+  panel.dataset.built = 'true';
+}
+
+function toggleHelp() {
+  helpOpen = !helpOpen;
+  const panel = document.getElementById('shortcuts');
+  const button = document.getElementById('help');
+  if (!panel) return;
+  if (helpOpen) renderHelp();
+  panel.hidden = !helpOpen;
+  button?.setAttribute('aria-pressed', String(helpOpen));
+  // Focus moves into the panel so a keyboard user is not left with focus on a hidden
+  // control, and `Escape` closes it through the click handler below.
+  if (helpOpen) panel.querySelector('button')?.focus();
+}
+
+click('help', () => toggleHelp());
+click('help-close', () => toggleHelp());
+
+document.addEventListener('keydown', (event) => {
+  // Escape closes the panel, and only when it is open, so the key stays available to the
+  // browser otherwise. Not routed through `resolveShortcut`: this is not a player action.
+  if (helpOpen && event.key === 'Escape') {
+    event.preventDefault();
+    toggleHelp();
+  }
 });
 
 /**
