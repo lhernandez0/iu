@@ -458,6 +458,26 @@ body {
 }
 
 /*
+ * A run the band is revealed with.
+ *
+ * The band is held back until the whole film is read, then drawn at once. This fades the
+ * runs in so the completed band arrives rather than snapping into place, which is the
+ * difference between a feature appearing and the bar flickering.
+ */
+.cues span.band-new {
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+/* Respect the reader's motion preference: the run is simply there, no fade. */
+@media (prefers-reduced-motion: reduce) {
+  .cues span.band-new {
+    opacity: 1;
+    transition: none;
+  }
+}
+
+/*
  * The scrubber.
  *
  * `appearance: none` plus explicit pseudo-element rules, because the default range is

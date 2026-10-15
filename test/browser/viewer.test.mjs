@@ -1164,6 +1164,114 @@ section('a long file reads its captions from the container index, not the whole 
   await reader.close();
 }
 
+section('the second line survives the background fill on a long file');
+
+{
+  // **The failure this catches is a second line that goes blank partway through a film.**
+  // The gloss is ALIGNED to the study cues (`alignSecondary`), one gloss string per study
+  // cue, and that alignment used to happen once, right after the FIRST pass, when the study
+  // list is only a window of a few minutes. The background fill then grew that list to the
+  // whole film, and the alignment was never redone, so the gloss array stayed the length of
+  // the window and every cue past it read `undefined` and drew an empty second line.
+  //
+  // The regression is only reachable when a file is BOTH windowed AND carries a chosen
+  // gloss, and before `long-dual.mkv` no fixture was both: `long-subs.mkv` windows but has
+  // one track, `three-tracks.mkv` has a gloss but is six seconds, which one window covers so
+  // the fill never runs. So this fixture exists to be that combination, and the assertion is
+  // a second line near the END of the film, where a stale alignment is blank.
+  const reader = await context.newPage();
+  await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await reader.waitForTimeout(800);
+
+  // **The gloss is seeded BEFORE the file is opened, and that is what makes this a test.**
+  // Choosing it afterwards runs the alignment against the study list as it already stands,
+  // which is the WHOLE film if the fill finished and the WINDOW if it did not, so the test
+  // would pass or fail on the fill's timing rather than on the bug. Selecting it first pins
+  // the timing the bug actually needs: the alignment happens at load, against the first-pass
+  // window of a few minutes, and then the fill grows the study list under it. Seeded through
+  // storage, so it is the same path a returning learner's saved choice takes.
+  await reader.evaluate(() => chrome.storage.local.set({ settings: { glossLanguage: 'en' } }));
+  await reader.waitForTimeout(200);
+
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'long-dual.mkv'));
+  // Let the fill finish: ten minutes of two tracks is small enough to complete quickly, and
+  // the wait only has to outlast the read, not be exact.
+  await reader.waitForTimeout(4000);
+
+  // Seek DEEP into the film, well past the first window, and PAUSE inside the last cue so
+  // the assertion cannot drift off it. The study line is "Study 20" and the gloss is
+  // "Gloss 20" at 570s for four seconds.
+  await reader.evaluate(() => {
+    const video = document.getElementById('video');
+    video.muted = true;
+    video.pause();
+    video.currentTime = 571;
+  });
+  const late = await reader
+    .waitForFunction(
+      () => {
+        const primary = document.getElementById('caption-primary')?.textContent ?? '';
+        const secondary = document.getElementById('caption-secondary')?.textContent ?? '';
+        return primary.includes('Study 20') && secondary.includes('Gloss 20');
+      },
+      null,
+      { timeout: 60000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  const seen = await reader.evaluate(() => ({
+    primary: document.getElementById('caption-primary')?.textContent ?? '',
+    secondary: document.getElementById('caption-secondary')?.textContent ?? '',
+  }));
+  check('the study line near the end of a long file is drawn', seen.primary.includes('Study 20'), true);
+  check('and its second line is drawn beside it, not left blank', late, true);
+
+  await reader.close();
+}
+
+section('the difficulty band appears whole, only once the film is read');
+
+{
+  // **The band is drawn from the marks on the WHOLE film, and it is held back until the
+  // read is complete.** Painting it while the background fill is still going would draw a
+  // fragment that grows in pieces, which reads as a glitch. So the property to pin is
+  // TIMING: on a file that needs a background fill, the band is EMPTY while the fill runs
+  // and appears complete after. `long-band.mkv` is the fixture for this because it is long
+  // enough to be windowed AND its study track is Chinese, which has a word list, so marks
+  // exist and an empty band can only mean "held back". A file whose study track cannot be
+  // marked is empty either way, and `three-tracks.mkv` is six seconds, one window, so the
+  // fill never runs and the two states are indistinguishable.
+  const reader = await context.newPage();
+  await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await reader.waitForTimeout(800);
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'long-band.mkv'));
+  // Chosen explicitly, so the study list follows the Chinese track whatever the ambient
+  // stored preference is, the same reasoning the band section above uses.
+  await reader.selectOption('#study-track', 'zh');
+
+  // Wait for the first caption, so the first pass has landed and the fill has certainly
+  // STARTED. At this instant the band must still be empty: reading is in progress.
+  await reader.waitForFunction(
+    () => (document.getElementById('caption-primary')?.textContent ?? '').length > 0,
+    null,
+    { timeout: 30000 },
+  );
+  const during = await reader.evaluate(() => document.querySelectorAll('#cues span').length);
+
+  // Now wait for the fill to finish. `cues-fill-done` is not observable from the page, so
+  // the signal is the band itself appearing, with a generous timeout for the ten minute read.
+  const appeared = await reader
+    .waitForFunction(() => document.querySelectorAll('#cues span').length > 0, null, { timeout: 60000 })
+    .then(() => true)
+    .catch(() => false);
+  const after = await reader.evaluate(() => document.querySelectorAll('#cues span').length);
+
+  check('the band is empty while the film is still being read', during, 0);
+  check('and it appears once the read is done', appeared && after > 0, true);
+
+  await reader.close();
+}
+
 section('a DTS file is transcoded too, the third codec WebCodecs lacks');
 
 {

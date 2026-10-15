@@ -159,6 +159,16 @@ function applyStoredSettings(stored) {
   next.threshold = Number.isFinite(level) && level >= 1 ? Math.floor(level) : null;
   next.studyLanguage = typeof stored.studyLanguage === 'string' && stored.studyLanguage ? stored.studyLanguage : null;
   next.glossLanguage = typeof stored.glossLanguage === 'string' && stored.glossLanguage ? stored.glossLanguage : null;
+  // **A stored track choice can arrive AFTER a file is open.** The settings read is
+  // asynchronous, so a file opened in the moments after the page loads is loaded with the
+  // DEFAULTS (both languages null) and the real choices land a moment later. The pickers
+  // re-render from the setting and show the choice, but the captions are already drawn from
+  // the auto-picked tracks, so the control and the screen disagreed: measured, the second
+  // line picker said English while no English line was drawn, because `loadGlossTrack` had
+  // run with a null setting and nothing re-ran it. So the tracks are reloaded when the
+  // choice changed, not only when a file first opens.
+  const trackChoiceChanged =
+    next.studyLanguage !== settings.studyLanguage || next.glossLanguage !== settings.glossLanguage;
   const changed = JSON.stringify(next) !== JSON.stringify(settings);
   settings = next;
   if (changed) {
@@ -166,6 +176,9 @@ function applyStoredSettings(stored) {
     // The marks are attached at marking time, so a change to how they look or what
     // they show needs the rows re-marked, not just repainted.
     markSegments();
+    // Guarded on tracks being loaded, so the ordinary page-load read, which arrives before
+    // any file is open, does nothing here and the first `loadDefaultTrack` does the work.
+    if (trackChoiceChanged && tracks.length) void loadDefaultTrack();
   }
 }
 
@@ -385,6 +398,20 @@ let tracks = [];
 let segments = [];
 
 /**
+ * The difficulty-band runs currently in the DOM, keyed so a repaint can tell a NEW run
+ * from one already drawn.
+ *
+ * The band is painted repeatedly as the background fill reads the film, and a full rebuild
+ * each time would make the whole band flicker (every span removed and re-added) while the
+ * only thing that changed is new material at the frontier. Holding the painted runs lets a
+ * repaint keep what is there and only ADD the new, which is what lets the new stretch fade
+ * in instead of the band blinking.
+ *
+ * @type {Map<string, HTMLElement>}
+ */
+let paintedRuns = new Map();
+
+/**
  * The GLOSS line's text, aligned cue-for-cue to `segments`.
  *
  * A local file can carry more than one subtitle track, a Chinese traditional and an
@@ -397,6 +424,24 @@ let segments = [];
  * @type {string[]}
  */
 let glossLines = [];
+
+/**
+ * The track the second line is drawn from, kept so the alignment can be REDONE when the
+ * study cues change.
+ *
+ * **This is the fix for a second line that went blank partway through a long film.** The
+ * gloss was aligned ONCE, against the study cues as they stood right after the first pass,
+ * which is a window of a few minutes, not the film. The background fill then grew the study
+ * list to the whole film, and `glossLines`, one entry per study cue, was never rebuilt, so
+ * every cue past the window read `glossLines[index] === undefined` and drew an empty second
+ * line. Toggling the gloss Off and back re-ran the alignment against the grown list, which is
+ * why that workaround appeared to fix it. Holding the source track means the alignment can be
+ * redone from the same input whenever the study list changes, which the chunked fill does as
+ * it reads.
+ *
+ * @type {object|null}
+ */
+let glossTrack = null;
 
 /** What the worker last told us it is showing, so position is measured against it. */
 let activeTrackLanguage = null;
@@ -573,6 +618,8 @@ async function loadVideo(file) {
   // after the first frame has already been drawn.
   segments = [];
   glossLines = [];
+  glossTrack = null;
+  paintedRuns = new Map();
   // And the TRACK LIST goes with them, which is not obvious and was a real bug: a
   // track belongs to the FILE it came from, so keeping this list across an open
   // leaves the previous file's sidecar subtitles in the Line 1 / Line 2 dropdowns
@@ -594,6 +641,8 @@ async function loadVideo(file) {
   // the bounded first pass again, for the new file's tracks. See `readCuesFirstPass`.
   cuesByNumber = new Map();
   cuesWindowed = false;
+  cuesCovered = [];
+  cuesComplete = false;
   firstPassPromise = null;
   fillPassPromise = null;
   redrawCaptions();
@@ -752,28 +801,44 @@ async function loadGlossTrack(study) {
   // Never the same track twice: a "gloss" identical to the line above it is noise, not a
   // translation. And no fallback: an unset gloss is "Off", not "pick one for me".
   if (!chosen || chosen === study) {
+    glossTrack = null;
     glossLines = [];
     redrawCaptions();
     return;
   }
   try {
-    const cues = await ensureSegments(chosen);
-    // Aligned by start time with a drift tolerance, so an out-of-sync second track leaves
-    // the line blank rather than pairing it with the wrong cue.
-    glossLines = alignSecondary(segments, cues);
+    await ensureSegments(chosen);
+    // Held so `applyMergedCues` can re-align without re-reading anything: the fill grows
+    // this track's cues in place, and the alignment follows.
+    glossTrack = chosen;
+    realignGloss();
     logSubs('gloss-aligned', {
       track: chosen.languageCode,
       studyCues: segments.length,
-      glossCues: cues.length,
+      glossCues: (chosen.segments ?? []).length,
       filled: glossLines.filter(Boolean).length,
-      firstStart: cues[0]?.start != null ? Number(cues[0].start.toFixed(2)) : 'nil',
+      firstStart: chosen.segments?.[0]?.start != null ? Number(chosen.segments[0].start.toFixed(2)) : 'nil',
     });
     redrawCaptions();
   } catch (error) {
     logSubs('gloss-failed', { error: String(error?.message ?? error) });
+    glossTrack = null;
     glossLines = [];
     redrawCaptions();
   }
+}
+
+/**
+ * Re-align the second line to the study cues as they now stand.
+ *
+ * Split out because it has TWO callers, and that is the point: `loadGlossTrack` calls it
+ * when the gloss is chosen, and `applyMergedCues` calls it every time the background fill
+ * grows the study list. Aligning only at load time was the bug, the study list is a window
+ * then, and the alignment was never revisited when the film arrived.
+ */
+function realignGloss() {
+  if (!glossTrack) return;
+  glossLines = alignSecondary(segments, glossTrack.segments ?? []);
 }
 
 /** @param {File[]} files */
@@ -933,14 +998,50 @@ const CAPTION_WINDOW_BACK = 5;
  */
 const CAPTION_WINDOW_AHEAD = 300;
 
+/**
+ * How much film the background fill reads per window, in seconds.
+ *
+ * The fill walks the film in windows rather than reading it whole, so each window's cues are
+ * merged as they arrive and a seek into an already-read stretch is served at once instead of
+ * waiting for the entire film. Smaller would fill sooner at the cost of re-reading the file's
+ * `Cues` element once per window, since each windowed read does its own index lookup; this
+ * matches the first window so the two reads are the same shape.
+ */
+const CAPTION_FILL_CHUNK = 300;
+
 /** The cue list per track, keyed by track number, merged from both passes. */
 let cuesByNumber = new Map();
 /** Whether the first (bounded) pass applied an index window, so a second pass is owed. */
 let cuesWindowed = false;
+/**
+ * The source-time windows that have actually been read, so a seek is only re-read when the
+ * film is not already covered there.
+ *
+ * Coverage is tracked from the READS, not inferred from the cues held. Inferring it from cue
+ * proximity looked natural and was wrong: a cue at 280s is within one window's reach of 570s,
+ * so a seek to 570s was judged covered and never read, and the caption never appeared. What
+ * matters is which stretches were READ, whether or not they carried a cue.
+ *
+ * @type {Array<{from: number, to: number}>}
+ */
+let cuesCovered = [];
+/** The windows a seek has already asked for, so a repeat seek does not re-read one. */
+const primedWindows = [];
 /** The promise for the first pass, shared so a track is never read twice at once. */
 let firstPassPromise = null;
 /** The promise for the background remainder, or null when there is none to run. */
 let fillPassPromise = null;
+
+/**
+ * Whether every caption has been read, so the difficulty band can be drawn.
+ *
+ * The band is painted from the marks on the WHOLE film, and while the background fill is
+ * still reading it any band would be a fragment that grows in pieces, which reads as a
+ * glitch rather than a feature. So the band is held back until the read is done and then
+ * appears once, complete. A file with no index is read wholly by the first pass, so this is
+ * set from `windowed`: a windowed first pass owes a fill, an unwindowed one owes none.
+ */
+let cuesComplete = false;
 
 /**
  * The window the first caption pass should read, in source seconds.
@@ -970,6 +1071,13 @@ function readCuesFirstPass() {
     .then(({ cues, truncated, windowed }) => {
       cuesByNumber = cues;
       cuesWindowed = windowed;
+      // A windowed read is a fragment and owes the fill; an unwindowed one read the whole
+      // file, so the band can be drawn from it at once.
+      cuesComplete = !windowed;
+      // Record the window as read, so a seek inside it is not re-read and a seek outside
+      // it is. Only when the read was actually windowed; an unwindowed read covered the
+      // whole film and there is nothing more to prime.
+      if (windowed) cuesCovered.push({ ...win });
       logSubs('cues-first-done', {
         ms: Date.now() - startedAt,
         windowed,
@@ -999,32 +1107,119 @@ function readCuesFillPass() {
   const numbers = tracks.filter((track) => track.kind === 'text').map((track) => track.trackNumber);
   const startedAt = Date.now();
   logSubs('cues-fill-start', { tracks: numbers.join(',') });
-  fillPassPromise = readMatroska({ ...viewerFor(videoFile), trackNumbers: numbers })
-    .then(({ cues, truncated }) => {
-      // The full read is authoritative and REPLACES the window rather than merging cue by
-      // cue: a windowed read and a full read of the same track can differ at the edges, and
-      // the full one is the truth.
-      cuesByNumber = cues;
-      logSubs('cues-fill-done', {
-        ms: Date.now() - startedAt,
-        truncated,
-        counts: numbers.map((n) => `${n}:${(cues.get(n) ?? []).length}`).join(','),
-      });
-      // Re-point every track at the fuller list, then redraw for the current position. A
-      // seek made while the fill was running is covered by this: the redraw uses wherever
-      // the playhead is NOW, not where it was when the first pass ran.
-      for (const track of tracks) {
-        if (track.kind !== 'text') continue;
-        track.segments = cuesByNumber.get(track.trackNumber) ?? track.segments;
-        if (track.segments?.length) track.error = null;
+
+  // **Fill in chunks, merging each as it lands, rather than reading the whole film once and
+  // swapping it in at the end.** The single full read had two faults. It REPLACED the marked
+  // first window with an unmarked full list and never re-marked it, so the marks the band is
+  // painted from were lost. And a seek past the first window found nothing until the whole
+  // read finished, measured at 143 seconds of blank captions on a large file. Successive
+  // index-served windows fix both: coverage only grows, and a seek into a stretch already
+  // read is served from it. The band itself is held back until the last window lands, see
+  // `cuesComplete`, so it appears whole rather than filling in pieces.
+  fillPassPromise = (async () => {
+    const duration = els.video.duration;
+    const first = captionWindow();
+    const chunks = [];
+    if (Number.isFinite(duration) && duration > 0) {
+      // Forward from the end of the first window, then backward from its start, so the
+      // region the learner is heading into fills first and the earlier film follows.
+      for (let from = first.to; from < duration; from += CAPTION_FILL_CHUNK) {
+        chunks.push({ from, to: Math.min(duration, from + CAPTION_FILL_CHUNK) });
       }
-      if (activeTrackLanguage) segments = trackFor(activeTrackLanguage)?.segments ?? segments;
-      redrawCaptions();
-    })
-    .catch((error) => {
-      logSubs('cues-fill-failed', { error: String(error?.message ?? error) });
+      for (let to = first.from; to > 0; to -= CAPTION_FILL_CHUNK) {
+        chunks.push({ from: Math.max(0, to - CAPTION_FILL_CHUNK), to });
+      }
+    } else {
+      // No duration to chunk by yet, which only happens before metadata arrives. One full
+      // read is the old behaviour, correct but not progressive.
+      chunks.push(null);
+    }
+
+    let truncated = false;
+    for (const chunk of chunks) {
+      const options = viewerFor(videoFile);
+      const { cues, truncated: t } = chunk
+        ? await readMatroska({ ...options, trackNumbers: numbers, window: chunk })
+        : await readMatroska({ ...options, trackNumbers: numbers });
+      truncated = truncated || t;
+      // Merged, not replaced: a chunk is one slice of the film and the cues already held
+      // for other slices are still good. `mergeCues` drops the duplicates an overlap makes.
+      mergeCues(cuesByNumber, cues);
+      if (chunk) cuesCovered.push({ ...chunk });
+      applyMergedCues();
+    }
+
+    // The whole film is read now, so the band may be drawn. `applyMergedCues` re-marks and
+    // repaints; `paintDifficulty` is called once more because `markSegments` returns early
+    // when there is no dictionary yet, and the band must still be cleared to empty rather
+    // than left as the fragment it was not drawing.
+    cuesComplete = true;
+    applyMergedCues();
+    paintDifficulty();
+
+    logSubs('cues-fill-done', {
+      ms: Date.now() - startedAt,
+      truncated,
+      counts: numbers.map((n) => `${n}:${(cuesByNumber.get(n) ?? []).length}`).join(','),
     });
+  })().catch((error) => {
+    logSubs('cues-fill-failed', { error: String(error?.message ?? error) });
+  });
   return fillPassPromise;
+}
+
+/**
+ * Merge freshly read cues into the accumulated map, dropping duplicates.
+ *
+ * A chunk can overlap the first window or a neighbour, and the same cue seen twice must
+ * land once: a repeated cue would draw the subtitle line twice and weight the difficulty
+ * band twice for that stretch. The key is the cue's whole identity (start, duration, text),
+ * not its start alone, because a track can legitimately carry two lines at one timestamp.
+ *
+ * @param {Map<number, Array<object>>} target
+ * @param {Map<number, Array<object>>} incoming
+ */
+function mergeCues(target, incoming) {
+  for (const [number, list] of incoming) {
+    if (!list.length) continue;
+    const existing = target.get(number);
+    if (!existing) {
+      target.set(number, list);
+      continue;
+    }
+    const seen = new Set(existing.map((cue) => `${cue.start}:${cue.duration}:${cue.text}`));
+    for (const cue of list) {
+      const key = `${cue.start}:${cue.duration}:${cue.text}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      existing.push(cue);
+    }
+    existing.sort((a, b) => a.start - b.start);
+  }
+}
+
+/**
+ * Re-point every text track at the accumulated cues, re-mark, and redraw.
+ *
+ * The re-mark is the part the old fill pass skipped and the reason the band disappeared.
+ * Newly merged cues carry no marks and the band is painted FROM marks, so without this the
+ * captions would grow to cover the film while the band stayed as short as the first window.
+ */
+function applyMergedCues() {
+  for (const track of tracks) {
+    if (track.kind !== 'text') continue;
+    track.segments = cuesByNumber.get(track.trackNumber) ?? track.segments;
+    if (track.segments?.length) track.error = null;
+  }
+  if (activeTrackLanguage) segments = trackFor(activeTrackLanguage)?.segments ?? segments;
+  // The study list just grew, so the second line has to be re-aligned to it. Without this
+  // the gloss stays the length of the first window and draws blank past it, which is the
+  // blank-second-line bug this exists to prevent.
+  realignGloss();
+  // `markSegments` marks and repaints the band itself, but returns early when there is no
+  // dictionary yet, so the redraw below is what puts the new captions on screen in that case.
+  markSegments();
+  redrawCaptions();
 }
 
 /**
@@ -1061,6 +1256,48 @@ async function ensureSegments(track) {
   void readCuesFillPass();
   logSubs('read-done', { track: track.languageCode, count: track.segments.length, error: track.error ?? 'none' });
   return track.segments;
+}
+
+/**
+ * Read the cue window around a position, if the film has not already been read there.
+ *
+ * This is the seek path, and it is what makes a far seek land at once instead of waiting
+ * for the background fill to walk there. The background fill covers the film chunk by
+ * chunk from where playback started, so without this a seek an hour ahead showed blank
+ * captions for as long as the walk took, measured in the minutes on a large file. The read
+ * here is the same index-served, bounded one the first pass uses, so it returns in a frame
+ * or two, and the result is merged and marked like any other window.
+ *
+ * It is a no-op when the position has already been READ, when there is no index to serve
+ * it, or when a read of that window is already in flight, so ordinary playback, which is
+ * always inside a window the fill or the first pass has covered, never triggers a read.
+ *
+ * @param {number} seconds
+ * @returns {Promise<void>}
+ */
+async function primeWindowAt(seconds) {
+  if (!cuesWindowed) return;
+  if (!Number.isFinite(seconds)) return;
+  // Already read: the position falls inside a window that was covered, so whatever is there
+  // is what the file has and a re-read would change nothing.
+  if (cuesCovered.some((covered) => seconds >= covered.from && seconds <= covered.to)) return;
+
+  const win = { from: Math.max(0, seconds - CAPTION_WINDOW_BACK), to: seconds + CAPTION_WINDOW_AHEAD };
+  if (primedWindows.some((p) => win.from >= p.from && win.to <= p.to)) return;
+  primedWindows.push(win);
+
+  const numbers = tracks.filter((track) => track.kind === 'text').map((track) => track.trackNumber);
+  const startedAt = Date.now();
+  logSubs('cues-prime-start', { from: win.from.toFixed(0), to: win.to.toFixed(0) });
+  try {
+    const { cues, windowed } = await readMatroska({ ...viewerFor(videoFile), trackNumbers: numbers, window: win });
+    mergeCues(cuesByNumber, cues);
+    if (windowed) cuesCovered.push({ from: win.from, to: Math.min(win.to, els.video.duration || win.to) });
+    applyMergedCues();
+    logSubs('cues-prime-done', { ms: Date.now() - startedAt, windowed });
+  } catch (error) {
+    logSubs('cues-prime-failed', { error: String(error?.message ?? error) });
+  }
 }
 
 /** Mirror the chosen files into the bar, so the page says what it is holding. */
@@ -1622,10 +1859,15 @@ function paintTime() {
  */
 function paintDifficulty() {
   const duration = els.video.duration;
-  els.cues.replaceChildren();
   // Before metadata arrives the duration is 0 or NaN, so every percentage would be
-  // Infinity and the band would be drawn off the end of the bar. Nothing to paint yet.
-  if (!settings.difficulty || !Number.isFinite(duration) || duration <= 0) return;
+  // Infinity and the band would be drawn off the end of the bar. Nothing to paint yet. And
+  // while the background fill is still reading the film, the band is held back rather than
+  // drawn as a fragment: it appears once, whole, when `cuesComplete` turns true.
+  if (!settings.difficulty || !cuesComplete || !Number.isFinite(duration) || duration <= 0) {
+    els.cues.replaceChildren();
+    paintedRuns = new Map();
+    return;
+  }
 
   /** The level a cue carries, or 0 for none. */
   const levelOfCue = (cue) => {
@@ -1658,15 +1900,45 @@ function paintDifficulty() {
     runs.push({ level, start: cue.start, end: endOf(cue) });
   }
 
-  for (const run of runs) {
-    const mark = document.createElement('span');
+  // **Keep the spans already drawn and only add the new.** The band is repainted whenever
+  // the marks change (a setting, a track pick), and rebuilding would re-create every span
+  // each time, which the browser paints as a flicker across the whole band. Keys are the
+  // run's own rounded geometry, so the same run pressed again is the same element and a
+  // genuinely new run is a new key.
+  const styles = (mark, run) => {
     mark.style.left = `${(run.start / duration) * 100}%`;
     mark.style.width = `${Math.max(0.3, ((run.end - run.start) / duration) * 100)}%`;
     // 60% alpha: the band is a hint under the track, and the played region has to stay
     // readable over it.
     mark.style.background = `color-mix(in srgb, ${levelColour(run.level, levelCount)} 60%, transparent)`;
+  };
+
+  const next = new Map();
+  for (const run of runs) {
+    const key = `${run.level}:${run.start.toFixed(2)}`;
+    const existing = paintedRuns.get(key);
+    if (existing) {
+      // The same run seen again, reused rather than rebuilt, so it does not fade a second
+      // time.
+      styles(existing, run);
+      next.set(key, existing);
+      continue;
+    }
+    const mark = document.createElement('span');
+    styles(mark, run);
+    // The band arrives at once when the read completes, and this is what makes it arrive
+    // rather than snap. The class is removed on the next frame, so the transition runs once
+    // and the span settles at full opacity.
+    mark.classList.add('band-new');
     els.cues.append(mark);
+    requestAnimationFrame(() => mark.classList.remove('band-new'));
+    next.set(key, mark);
   }
+  // Remove spans whose run no longer exists, which happens on a track or list change.
+  for (const [key, mark] of paintedRuns) {
+    if (!next.has(key)) mark.remove();
+  }
+  paintedRuns = next;
 }
 
 /** Whether the scrubber is being dragged, which suppresses the tick's writes to it. */
@@ -2441,6 +2713,12 @@ els.video.addEventListener('seeking', () => {
 // `seeked`, not `seeking`: reported once the new position is real.
 els.video.addEventListener('seeked', () => {
   reportPosition(true);
+  // A seek OUTSIDE the cues already held is served by reading that window now, rather than
+  // waiting for the background fill to walk there. Without this, seeking an hour into a film
+  // whose fill is still near the start shows no captions for as long as the walk takes, which
+  // on a large file is the whole fill duration. The read is index-served and bounded, the
+  // same shape as the first pass, so it lands in a frame or two.
+  void primeWindowAt(els.video.currentTime);
   // `redrawCaptions` uses the PLAYING cue, so seeking into a gap fades the finished
   // line rather than putting it back, and records what is on screen for the next
   // `timeupdate`.

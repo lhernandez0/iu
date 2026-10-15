@@ -111,9 +111,14 @@ No language tag here
  * neither. The cues are one every 30 seconds so a window and the full file are clearly
  * different lists.
  *
+ * `label` distinguishes two long tracks in one file: a study track and a gloss track whose
+ * text is different, so a test can tell which line is which rather than seeing the same
+ * words on both.
+ *
  * @param {number} count
+ * @param {string} [label]
  */
-function longSrt(count) {
+function longSrt(count, label = 'Line') {
   const rows = [];
   for (let i = 0; i < count; i++) {
     const start = i * 30;
@@ -122,7 +127,36 @@ function longSrt(count) {
       const sec = String(s % 60).padStart(2, '0');
       return `00:${m}:${sec},000`;
     };
-    rows.push(`${i + 1}\n${stamp(start)} --> ${stamp(start + 4)}\nLine ${i + 1} long\n`);
+    rows.push(`${i + 1}\n${stamp(start)} --> ${stamp(start + 4)}\n${label} ${i + 1} long\n`);
+  }
+  return rows.join('\n');
+}
+
+/**
+ * A long CHINESE track, ten minutes, cues every 30 seconds.
+ *
+ * **Chinese because the difficulty band is painted from the MARKS a word list produces.**
+ * The band is held back until the whole film is read, and the test for that needs a film
+ * long enough to need the background fill AND a study track a word list can actually mark.
+ * English has no list, so an English fixture would draw no band whether the read was done or
+ * not, and a test on it would pass while asserting nothing. The text is real Chinese so the
+ * marks are real, not a stub the dictionary happens to skip.
+ *
+ * @param {number} count
+ */
+function longChineseSrt(count) {
+  const rows = [];
+  // Enough distinct sentences that the band is not one level for the whole film, which
+  // would make it a single span and hide a paint that produced one block.
+  const lines = ['你好，世界', '我喜欢学习中文', '今天天气很好', '他去了学校', '我们喝茶吧'];
+  for (let i = 0; i < count; i++) {
+    const start = i * 30;
+    const stamp = (s) => {
+      const m = String(Math.floor(s / 60)).padStart(2, '0');
+      const sec = String(s % 60).padStart(2, '0');
+      return `00:${m}:${sec},000`;
+    };
+    rows.push(`${i + 1}\n${stamp(start)} --> ${stamp(start + 4)}\n${lines[i % lines.length]}\n`);
   }
   return rows.join('\n');
 }
@@ -132,6 +166,14 @@ writeFileSync(join(OUT, 'zh.srt'), CHINESE_SRT);
 writeFileSync(join(OUT, 'ja.ass'), JAPANESE_ASS);
 writeFileSync(join(OUT, 'untagged.srt'), UNTAGGED_SRT);
 writeFileSync(join(OUT, 'long.srt'), longSrt(20));
+// Two long tracks with different text, for the fixture where the SECOND line and the
+// windowed fill meet. See `long-dual.mkv`.
+writeFileSync(join(OUT, 'long-study.srt'), longSrt(20, 'Study'));
+writeFileSync(join(OUT, 'long-gloss.srt'), longSrt(20, 'Gloss'));
+// A long CHINESE track, for the band fixture. Chinese on purpose: the band is painted from
+// the marks a word list produces, and a track in a language with no list would draw no band
+// however long the film is, which would make a band test pass or fail for the wrong reason.
+writeFileSync(join(OUT, 'long-zh.srt'), longChineseSrt(20));
 
 // --- The fixtures ------------------------------------------------------------
 //
@@ -293,10 +335,50 @@ ffmpeg([
   'long-subs.mkv',
 ]);
 
+// **Ten minutes AND two subtitle tracks, which is the combination the existing fixtures
+// each missed one half of.** `long-subs.mkv` windows but has no second track, so nothing
+// asserted the second line against a growing study list; `three-tracks.mkv` has a second
+// track but is six seconds, which one window covers, so the fill never ran. A blank second
+// line partway through a long film needed BOTH to be caught, and neither fixture had both.
+console.log('long-dual.mkv, ten minutes with a study track and a gloss track');
+ffmpeg([
+  '-f', 'lavfi', '-i', 'testsrc=duration=600:size=160x90:rate=5',
+  '-i', 'long-study.srt',
+  '-i', 'long-gloss.srt',
+  '-map', '0:v', '-map', '1', '-map', '2',
+  '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+  '-c:s', 'srt',
+  // The STUDY track is Japanese and the gloss English. That order matters: the viewer picks
+  // a MARKABLE language for the study line when nothing is stored, Japanese is markable and
+  // English is not, so the study line lands on the Japanese track by itself and the gloss is
+  // then chosen from the ENGLISH one. With the languages the other way the auto-pick takes
+  // the gloss track as the study line, and selecting the gloss hits the same-track guard and
+  // is dropped, which is a test that would pass while asserting nothing.
+  '-metadata:s:s:0', 'language=jpn', '-metadata:s:s:0', 'title=Study',
+  '-metadata:s:s:1', 'language=eng', '-metadata:s:s:1', 'title=Gloss',
+  'long-dual.mkv',
+]);
+
+// **Ten minutes with a MARKABLE study track, for the difficulty band's timing.** The band
+// is painted from marks, so this is the only long fixture where a band can appear at all:
+// `long-subs.mkv` and `long-dual.mkv` are both text a word list cannot mark, and their band
+// is empty however the timing works. Chinese, because that is a language the bundled lists
+// cover.
+console.log('long-band.mkv, ten minutes with a markable Chinese track');
+ffmpeg([
+  '-f', 'lavfi', '-i', 'testsrc=duration=600:size=160x90:rate=5',
+  '-i', 'long-zh.srt',
+  '-map', '0:v', '-map', '1',
+  '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+  '-c:s', 'srt',
+  '-metadata:s:s:0', 'language=zho',
+  'long-band.mkv',
+]);
+
 // The source subtitle files are inputs, not fixtures, every one of them is
 // embedded in a container above, so leaving them loose would put four stray files
 // in the directory for no reason.
-for (const temp of ['en.srt', 'zh.srt', 'ja.ass', 'untagged.srt', 'long.srt']) {
+for (const temp of ['en.srt', 'zh.srt', 'ja.ass', 'untagged.srt', 'long.srt', 'long-study.srt', 'long-gloss.srt', 'long-zh.srt']) {
   rmSync(join(OUT, temp), { force: true });
 }
 console.log('\nfixtures written to test/mkv/');

@@ -507,6 +507,13 @@ async function cueClusterRange(window, cuesIndex, segmentStart, fromSeconds, toS
 
   let firstPosition = null;
   let lastPosition = null;
+  // The cluster AFTER the window, so the range can END just past the last cue the window
+  // wants. Ending at the last cue's OWN cluster start drops that cluster entirely: measured
+  // on a ten minute file whose cues are one per cluster, a 300s window returned 8 of the 10
+  // cues it should, silently losing the two nearest the boundary. The next cue point's
+  // position is the start of the next cluster, which is exactly where the window's last
+  // cluster ends.
+  let afterPosition = null;
   while (cursor < body.length) {
     const id = readVint(body, cursor, true);
     if (!id) break;
@@ -553,17 +560,20 @@ async function cueClusterRange(window, cuesIndex, segmentStart, fromSeconds, toS
       if (time !== null && position !== null) {
         if (time >= wantedFrom && firstPosition === null) firstPosition = position;
         if (time <= wantedTo) lastPosition = position;
-        if (time > wantedTo && firstPosition !== null) break;
+        if (time > wantedTo && firstPosition !== null) {
+          afterPosition = position;
+          break;
+        }
       }
     }
     cursor = end;
   }
 
   if (firstPosition === null || lastPosition === null) return null;
-  // The end of the range is the START of the next cluster the index names, or the start of
-  // the index itself when this is the last window, since clusters precede `Cues`.
-  let endOffset = cuesIndex.offset;
-  if (lastPosition > firstPosition) endOffset = segmentStart + lastPosition;
+  // The end of the range is the START of the cluster after the window, so the window's own
+  // last cluster is included. With no such cluster the window runs to the index itself, and
+  // clusters precede `Cues` in every file a muxer writes, so that is the end of the media.
+  const endOffset = afterPosition !== null ? segmentStart + afterPosition : cuesIndex.offset;
   return { start: segmentStart + firstPosition, end: endOffset };
 }
 
