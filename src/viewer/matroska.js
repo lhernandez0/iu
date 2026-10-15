@@ -961,6 +961,7 @@ export async function readMatroska({ read, size, trackNumbers, window: timeWindo
   // which is slow but correct.
   let walkStart = segmentStart;
   let walkEnd = segmentEnd;
+  let windowed = false;
   if (timeWindow) {
     const index = await findCues(window, segmentStart);
     if (index) {
@@ -975,6 +976,7 @@ export async function readMatroska({ read, size, trackNumbers, window: timeWindo
       if (range) {
         walkStart = Math.max(segmentStart, range.start);
         walkEnd = Math.min(segmentEnd, range.end);
+        windowed = true;
       }
     }
   }
@@ -1098,7 +1100,12 @@ export async function readMatroska({ read, size, trackNumbers, window: timeWindo
   // `timecodeScale` is returned so a conformance test can assert it was READ rather
   // than defaulted, a wrong value produces plausible timestamps, so only knowing
   // the value distinguishes "correct" from "silently ten times off".
-  return { tracks, cues, truncated, timecodeScale };
+  //
+  // `windowed` says whether the requested time window was ACTUALLY applied, which is the
+  // caller's signal that the result is a partial read and the rest still needs reading. It
+  // is false when no window was asked for, and also when one was asked for but the file has
+  // no `Cues` index, in which case the whole file was walked and nothing more is owed.
+  return { tracks, cues, truncated, timecodeScale, windowed };
 }
 
 /**

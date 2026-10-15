@@ -1090,6 +1090,80 @@ section('Dolby audio keeps playing past the first buffer window');
   await page9.close();
 }
 
+section('a long file reads its captions from the container index, not the whole file');
+
+{
+  // **The failure this catches is a viewer that waits a minute for subtitles.** A caption
+  // track's blocks live inside the video's clusters, so reading them meant walking the whole
+  // file: measured, one track on a 25 GB film cost 3281 reads and 27.5 GB, and the browser
+  // took 79 seconds to reach the first caption. The container's `Cues` index names the
+  // clusters for a window of time, and the viewer now reads a window first and fills the
+  // rest in the background.
+  //
+  // `long-subs.mkv` is ten minutes with a cue every 30 seconds, so its window and its whole
+  // file are clearly different lists. The assertion is that a caption is available EARLY,
+  // and that a caption near the END of the file is reachable after the fill, because a
+  // windowed read that never filled would pass the first half and fail the second.
+  const reader = await context.newPage();
+  await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await reader.waitForTimeout(800);
+
+  const t0 = Date.now();
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'long-subs.mkv'));
+
+  // A caption at the very start, which is what the first window covers. The element is
+  // PAUSED inside the first cue rather than left playing, so the wait cannot drift past the
+  // four-second cue and read an empty line for a position that was captioned.
+  const early = await reader
+    .waitForFunction(
+      () => {
+        const video = document.getElementById('video');
+        video.muted = true;
+        video.pause();
+        video.currentTime = 1;
+        return (document.getElementById('caption-primary')?.textContent ?? '').length > 0;
+      },
+      null,
+      { timeout: 30000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  const earlyMs = Date.now() - t0;
+  check('a caption appears near the start', early, true);
+  // The first pass is a window, so it must be well under the ~10s a full scan of a file this
+  // size takes, let alone the minutes a 25 GB one did.
+  check('and it arrives without reading the whole file', earlyMs < 15000, true);
+
+  const earlyText = await reader.evaluate(() =>
+    document.getElementById('caption-primary').textContent.replace(/\s+/g, ' ').trim().slice(0, 16),
+  );
+  // The first cue, so a window that read the WRONG region would show something else.
+  check('and it is the first cue', /Line 1/.test(earlyText), true);
+
+  // Now a cue near the END, and INSIDE it: the last cue is "Line 20" at 570s for four
+  // seconds, so 571 lands in it while 590 would land past it and correctly show nothing.
+  // The fill pass has to have completed for this to be drawn, so a windowed read that never
+  // filled would fail here, which is why both ends of the file are asserted rather than only
+  // the start. Paused again, for the same drift reason.
+  await reader.evaluate(() => {
+    const video = document.getElementById('video');
+    video.muted = true;
+    video.pause();
+    video.currentTime = 571;
+  });
+  const late = await reader
+    .waitForFunction(
+      () => (document.getElementById('caption-primary')?.textContent ?? '').includes('Line 20'),
+      null,
+      { timeout: 60000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  check('and a cue near the end is reachable, so the rest was filled in', late, true);
+
+  await reader.close();
+}
+
 section('a DTS file is transcoded too, the third codec WebCodecs lacks');
 
 {

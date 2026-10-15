@@ -101,10 +101,37 @@ const UNTAGGED_SRT = `1
 No language tag here
 `;
 
+/**
+ * A long SRT whose cues are spread across ten minutes.
+ *
+ * **This exists to prove the caption INDEX bounds the read, which no short fixture can.**
+ * The windowed first pass reads only the clusters for a window of time, so the property to
+ * test is that a cue EARLY in the file is readable without reading the whole thing, and a
+ * cue ten minutes in is still reachable. A six-second fixture has one cluster and proves
+ * neither. The cues are one every 30 seconds so a window and the full file are clearly
+ * different lists.
+ *
+ * @param {number} count
+ */
+function longSrt(count) {
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    const start = i * 30;
+    const stamp = (s) => {
+      const m = String(Math.floor(s / 60)).padStart(2, '0');
+      const sec = String(s % 60).padStart(2, '0');
+      return `00:${m}:${sec},000`;
+    };
+    rows.push(`${i + 1}\n${stamp(start)} --> ${stamp(start + 4)}\nLine ${i + 1} long\n`);
+  }
+  return rows.join('\n');
+}
+
 writeFileSync(join(OUT, 'en.srt'), ENGLISH_SRT);
 writeFileSync(join(OUT, 'zh.srt'), CHINESE_SRT);
 writeFileSync(join(OUT, 'ja.ass'), JAPANESE_ASS);
 writeFileSync(join(OUT, 'untagged.srt'), UNTAGGED_SRT);
+writeFileSync(join(OUT, 'long.srt'), longSrt(20));
 
 // --- The fixtures ------------------------------------------------------------
 //
@@ -250,10 +277,26 @@ ffmpeg([
   'one-dts.mkv',
 ]);
 
+// **Ten minutes with a caption every 30 seconds, to test the caption INDEX.** The windowed
+// first pass reads only the cluster range its `Cues` index names, so the property worth
+// pinning is that a cue early in the file is available quickly and a cue late in it is
+// still reachable, which needs a file long enough to have many clusters and cues spread
+// across them. Silent, because the captions are the subject.
+console.log('long-subs.mkv, ten minutes with cues spread across it');
+ffmpeg([
+  '-f', 'lavfi', '-i', 'testsrc=duration=600:size=160x90:rate=5',
+  '-i', 'long.srt',
+  '-map', '0:v', '-map', '1',
+  '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+  '-c:s', 'srt',
+  '-metadata:s:s:0', 'language=eng',
+  'long-subs.mkv',
+]);
+
 // The source subtitle files are inputs, not fixtures, every one of them is
 // embedded in a container above, so leaving them loose would put four stray files
 // in the directory for no reason.
-for (const temp of ['en.srt', 'zh.srt', 'ja.ass', 'untagged.srt']) {
+for (const temp of ['en.srt', 'zh.srt', 'ja.ass', 'untagged.srt', 'long.srt']) {
   rmSync(join(OUT, temp), { force: true });
 }
 console.log('\nfixtures written to test/mkv/');
