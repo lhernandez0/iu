@@ -1859,6 +1859,12 @@ function paintTime() {
  */
 function paintDifficulty() {
   const duration = els.video.duration;
+  // Published on the element so the state is observable from outside: the band is either
+  // held back or it is not, and an assertion about WHEN it is drawn should be able to read
+  // that rather than infer it from a span count sampled at some moment, which races the
+  // read. Set here, before any span is appended, so a mutation observer sees the value that
+  // was in force when the span was added.
+  els.cues.dataset.readComplete = String(cuesComplete);
   // Before metadata arrives the duration is 0 or NaN, so every percentage would be
   // Infinity and the band would be drawn off the end of the bar. Nothing to paint yet. And
   // while the background fill is still reading the film, the band is held back rather than
@@ -1926,6 +1932,14 @@ function paintDifficulty() {
     }
     const mark = document.createElement('span');
     styles(mark, run);
+    // **Stamped with the state at CREATION, which is what makes the timing assertable.** A
+    // test that samples the band at some moment races the read: on a small fixture the fill
+    // finishes in tens of milliseconds, so a span added while reading and a span added after
+    // are indistinguishable by the time anyone looks. This attribute records, on the span
+    // itself, whether the read was complete when the span was drawn, so the assertion reads
+    // the fact rather than a snapshot of it. It is always 'true' in correct code, since the
+    // guard above never reaches here while reading, and that is the point.
+    mark.dataset.drawnComplete = String(cuesComplete);
     // The band arrives at once when the read completes, and this is what makes it arrive
     // rather than snap. The class is removed on the next frame, so the transition runs once
     // and the span settles at full opacity.

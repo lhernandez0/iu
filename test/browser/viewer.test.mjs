@@ -1235,39 +1235,59 @@ section('the difficulty band appears whole, only once the film is read');
   // **The band is drawn from the marks on the WHOLE film, and it is held back until the
   // read is complete.** Painting it while the background fill is still going would draw a
   // fragment that grows in pieces, which reads as a glitch. So the property to pin is
-  // TIMING: on a file that needs a background fill, the band is EMPTY while the fill runs
-  // and appears complete after. `long-band.mkv` is the fixture for this because it is long
-  // enough to be windowed AND its study track is Chinese, which has a word list, so marks
-  // exist and an empty band can only mean "held back". A file whose study track cannot be
-  // marked is empty either way, and `three-tracks.mkv` is six seconds, one window, so the
-  // fill never runs and the two states are indistinguishable.
+  // TIMING: no span is ever added while the film is still being read. `long-band.mkv` is the
+  // fixture for this because it is long enough to be windowed AND its study track is Chinese,
+  // which has a word list, so marks exist and a missing band can only mean "held back". A file
+  // whose study track cannot be marked is empty either way, and `three-tracks.mkv` is six
+  // seconds, one window, so the fill never runs and the two states are indistinguishable.
   const reader = await context.newPage();
   await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
   await reader.waitForTimeout(800);
+
+  // **Warm the dictionary FIRST, on a short file, and this is what makes the test bite.**
+  // The band is painted from marked cues, and marks need the dictionary, which is fetched.
+  // On a small fixture the fetch and the read both finish in milliseconds, so whether a
+  // paint lands mid-read is a coin toss and the test passes with or without the guard. On a
+  // real film the dictionary is local and instant while the read takes seconds, so a paint
+  // WOULD land mid-read, which is exactly the case the guard exists for. Warming the
+  // dictionary on `three-tracks.mkv` (six seconds, so its read is trivial) makes marks
+  // available before the long read starts, so the fill's own paints are the only paints and
+  // the guard is the only thing deciding whether they happen.
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await reader.selectOption('#study-track', 'zh');
+  await reader
+    .waitForFunction(() => document.querySelectorAll('#cues span').length > 0, null, { timeout: 30000 })
+    .catch(() => {});
+
   await reader.setInputFiles('#pick-files', join(FIXTURES, 'long-band.mkv'));
   // Chosen explicitly, so the study list follows the Chinese track whatever the ambient
-  // stored preference is, the same reasoning the band section above uses.
+  // stored preference is, the same reasoning the band section above uses. Same language as
+  // the warm-up, so the cached dictionary is reused and no fetch is in flight.
   await reader.selectOption('#study-track', 'zh');
 
-  // Wait for the first caption, so the first pass has landed and the fill has certainly
-  // STARTED. At this instant the band must still be empty: reading is in progress.
-  await reader.waitForFunction(
-    () => (document.getElementById('caption-primary')?.textContent ?? '').length > 0,
-    null,
-    { timeout: 30000 },
-  );
-  const during = await reader.evaluate(() => document.querySelectorAll('#cues span').length);
+  // Wait for the read to finish, which the element publishes, rather than waiting on the
+  // band's appearance, which would be circular when the band is what is being tested.
+  await reader.waitForFunction(() => document.getElementById('cues').dataset.readComplete === 'true', null, {
+    timeout: 60000,
+  });
+  // One paint after completion, so the band drawn at completion is in the DOM.
+  await reader.waitForTimeout(500);
 
-  // Now wait for the fill to finish. `cues-fill-done` is not observable from the page, so
-  // the signal is the band itself appearing, with a generous timeout for the ten minute read.
-  const appeared = await reader
-    .waitForFunction(() => document.querySelectorAll('#cues span').length > 0, null, { timeout: 60000 })
-    .then(() => true)
-    .catch(() => false);
-  const after = await reader.evaluate(() => document.querySelectorAll('#cues span').length);
+  // **Read from each span's OWN stamp, not from the container's state now.** Checking the
+  // container races the read: a span drawn mid-read would be observed after the read finished
+  // and look correct, so the test would pass on the very regression it exists to catch. The
+  // span carries `drawnComplete`, set at creation, so this reads what was true when the span
+  // was drawn.
+  const band = await reader.evaluate(() => {
+    const spans = [...document.querySelectorAll('#cues span')];
+    return {
+      stamps: spans.map((span) => span.dataset.drawnComplete),
+      count: spans.length,
+    };
+  });
 
-  check('the band is empty while the film is still being read', during, 0);
-  check('and it appears once the read is done', appeared && after > 0, true);
+  check('no band run is drawn while the film is still being read', band.stamps.every((s) => s === 'true'), true);
+  check('and the band is drawn once the read is done', band.count > 0, true);
 
   await reader.close();
 }
