@@ -72,6 +72,26 @@
         </div>
 
         <!--
+          The command feedback: the transient readout a command leaves behind.
+
+          **A command with no feedback is a command you cannot tell apart from a
+          dropped one.** Every player shows something when you press play, seek or
+          change the speed, and its absence is what makes a learner press a key again
+          to see whether it worked. One element per corner, because the POSITION is
+          part of the message: a seek reads on the side it moves towards, a play or
+          pause in the middle, a speed or captions change on the other side.
+
+          `aria-hidden` and not a live region: this repeats what the viewer just did
+          and what the controls already announce, so reading it aloud would be noise
+          over the thing it duplicates.
+        -->
+        <div class="feedback" id="feedback" aria-hidden="true">
+          <span class="feedback-badge" id="feedback-left"></span>
+          <span class="feedback-badge feedback-centre" id="feedback-centre"></span>
+          <span class="feedback-badge" id="feedback-right"></span>
+        </div>
+
+        <!--
           The control bar.
 
           ONE lifecycle, not two: it fades when the pointer is idle and returns on
@@ -154,7 +174,7 @@
             </button>
             <button type="button" class="button icon-button primary" id="play" aria-label="Play" title="Play">
               <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path id="play-path" d="M8 5.5v13l11-6.5z" fill="currentColor" />
+                <path id="play-path" d="M7 6v12l10-6z" fill="currentColor" />
               </svg>
             </button>
             <button type="button" class="button icon-button" id="forward" aria-label="Forward 5 seconds" title="Forward 5 seconds">

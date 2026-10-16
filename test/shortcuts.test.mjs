@@ -116,14 +116,34 @@ section('modifiers are never intercepted');
   check('but Shift is allowed, so ? still works', resolveShortcut(key('?')), 'help');
 }
 
-section('a focused control keeps the key');
+section('a focused control keeps the key only when it takes text');
 
 {
-  // At the element level rather than by key, so `k` in a search field inserts a `k`
-  // instead of toggling playback, which is the bug this rule exists for.
-  for (const tagName of ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON']) {
-    check(`${tagName} swallows k`, resolveShortcut(key('k', { target: { tagName } })), null);
+  // Text entry keeps the key, so `k` in a search field inserts a `k` instead of toggling
+  // playback. The TYPE is checked, not the tag, because that distinction is the bug this
+  // replaced: a file input is `<input>` too, and treating it as a text field meant `Space`
+  // reopened the file dialog.
+  for (const tagName of ['INPUT', 'TEXTAREA']) {
+    check(`${tagName} (text) swallows k`, resolveShortcut(key('k', { target: { tagName, type: 'text' } })), null);
   }
+  check('a search field swallows k', resolveShortcut(key('k', { target: { tagName: 'INPUT', type: 'search' } })), null);
+  check('a number field swallows k', resolveShortcut(key('k', { target: { tagName: 'INPUT', type: 'number' } })), null);
+  check('an input with no type reads as text', resolveShortcut(key('k', { target: { tagName: 'INPUT' } })), null);
+  check('a select swallows k', resolveShortcut(key('k', { target: { tagName: 'SELECT' } })), null);
+  check('a textarea swallows k', resolveShortcut(key('k', { target: { tagName: 'TEXTAREA' } })), null);
+  // A rich-text area has no tag that says so, which is why it is checked separately.
+  check('a contenteditable swallows k', resolveShortcut(key('k', { target: { tagName: 'DIV', isContentEditable: true } })), null);
+
+  // **The file picker must NOT swallow Space**, which is the bug: it is an `<input>`, it
+  // keeps focus after a file is chosen, and Space is the key that activates it. So the
+  // player owns Space there and playback toggles instead of the dialog reopening.
+  check('a file input does NOT swallow Space', resolveShortcut(key(' ', { target: { tagName: 'INPUT', type: 'file' } })), 'play');
+  check('nor does a checkbox', resolveShortcut(key('k', { target: { tagName: 'INPUT', type: 'checkbox' } })), 'play');
+  check('nor a range', resolveShortcut(key('k', { target: { tagName: 'INPUT', type: 'range' } })), 'play');
+  // A button keeps Enter for itself, so taking Space from it costs a keyboard user
+  // nothing and gives the player Space everywhere, which is what a learner expects.
+  check('a button does NOT swallow Space', resolveShortcut(key(' ', { target: { tagName: 'BUTTON' } })), 'play');
+
   // Anything else is the player's, so the guard cannot be "only BODY works", which
   // would break the common case of the event targeting a div inside the page.
   check('a div does not swallow k', resolveShortcut(key('k', { target: { tagName: 'DIV' } })), 'play');

@@ -1618,6 +1618,187 @@ section('the keyboard shortcuts drive the player, and the help panel lists them'
   await page12.close();
 }
 
+section('Space plays even with the file picker focused');
+
+{
+  // **The bug this catches: choosing a file left the hidden file input FOCUSED, and the
+  // guard treated every `<input>` as a text field, so `Space` activated the picker and
+  // reopened the file dialog instead of toggling playback.** The learner had no way to
+  // tell the picker was the active control, because it is `visually-hidden`.
+  //
+  // The fix is that the guard reads the input's TYPE: a file picker must not swallow a key
+  // that is not for typing. This is asserted through the real element after a real file
+  // choice, because the bug only exists once the input has actually been used and kept
+  // focus, which no hermetic test can reproduce.
+  const page13 = await context.newPage();
+  await page13.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page13.waitForTimeout(800);
+  // Focus the picker by clicking its LABEL, which is what a learner does, then choose a
+  // file. The click is what transfers focus to the hidden input.
+  await page13.click('label[for="pick-files"]').catch(() => {});
+  await page13.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await page13.waitForFunction(() => (document.getElementById('video')?.duration ?? 0) > 0, null, { timeout: 15000 });
+  await page13.evaluate(() => {
+    const video = document.getElementById('video');
+    video.muted = true;
+    video.pause();
+    video.currentTime = 0;
+  });
+
+  // The picker has focus, which is the state that broke.
+  const focused = await page13.evaluate(() => document.activeElement?.id ?? '');
+  check('the file picker is the focused element', focused, 'pick-files');
+
+  await page13.keyboard.press(' ');
+  await page13.waitForTimeout(300);
+  const played = await page13.evaluate(() => !document.getElementById('video').paused);
+  check('and Space still toggles playback', played, true);
+
+  await page13.close();
+}
+
+section('every command leaves a visible trace');
+
+{
+  // **A command with no feedback cannot be told from a dropped one.** The badges are the
+  // readout the browser tests can see; what they must pin is that a real command TURNS ONE
+  // ON, and that the seek badge names the step, because a badge that only ever showed a
+  // fixed icon would pass a "something appeared" check while telling the learner nothing.
+  const page14 = await context.newPage();
+  await page14.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await page14.waitForTimeout(800);
+  await page14.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  // **Captions forced ON, because the setting persists across pages in this context.** An
+  // earlier section presses `c` to test the toggle, which writes `captionsOn: false` to
+  // storage, and the caption row (which holds the track picker) is hidden while captions
+  // are off. Without this the picker is present but not visible, and the select retries
+  // against a hidden element until it times out.
+  await page14.evaluate(() => {
+    if (document.getElementById('captions')?.getAttribute('aria-pressed') === 'false') {
+      document.getElementById('captions').click();
+    }
+  });
+  // The option must exist before it can be chosen: the picker is populated once the
+  // container has been read, and selecting earlier retries against a disabled select.
+  await page14.waitForFunction(() => document.querySelector('#study-track option[value="en"]') !== null, null, {
+    timeout: 15000,
+  });
+  // The ENGLISH track, explicitly, and it is the one with MORE THAN ONE cue. The
+  // auto-pick prefers Chinese, whose single cue leaves `next line` with nowhere to go, so
+  // a line-stepping assertion on it would pass for the wrong reason: the correct
+  // behaviour there IS to flash nothing, which is indistinguishable from a broken badge.
+  await page14.selectOption('#study-track', 'en');
+  await page14.waitForFunction(() => (document.getElementById('video')?.duration ?? 0) > 0, null, { timeout: 15000 });
+  await page14.evaluate(() => {
+    const video = document.getElementById('video');
+    video.muted = true;
+    video.pause();
+    video.currentTime = 0;
+  });
+
+  /** The three badges, with their shown flag and text. */
+  const badges = () =>
+    page14.evaluate(() => ({
+      left: document.getElementById('feedback-left')?.dataset.shown === 'true',
+      leftText: document.getElementById('feedback-left')?.textContent ?? '',
+      centre: document.getElementById('feedback-centre')?.dataset.shown === 'true',
+      centreText: document.getElementById('feedback-centre')?.textContent ?? '',
+      right: document.getElementById('feedback-right')?.dataset.shown === 'true',
+      rightText: document.getElementById('feedback-right')?.textContent ?? '',
+    }));
+
+  // A forward seek: the RIGHT badge, naming the step.
+  await page14.keyboard.press('l');
+  const forward = await badges();
+  check('a forward seek shows the right badge', forward.right, true);
+  check('and it names the step', forward.rightText, '+5');
+
+  // A backward seek: the LEFT badge, on the side it moves towards.
+  await page14.keyboard.press('j');
+  const back = await badges();
+  check('a backward seek shows the LEFT badge', back.left, true);
+  check('and it names the step', back.leftText, '-5');
+
+  // Play: the CENTRE badge, which is where a transport state reads.
+  await page14.keyboard.press('k');
+  const play = await badges();
+  check('play shows the centre badge', play.centre, true);
+
+  // **The play and pause marks must be the SAME SIZE and the same position.** They are
+  // different ink in a shared viewBox, and an earlier revision drew each to its own bounds,
+  // so tapping play and pause in quick succession resized and nudged the mark, which reads
+  // as a flicker on the one control a learner taps most. Both the glyph box and the badge
+  // box are measured, because a mismatch in either shows up as a jump.
+  const playIcon = await page14.evaluate(() => {
+    const svg = document.querySelector('#feedback-centre .feedback-icon');
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const badge = document.getElementById('feedback-centre').getBoundingClientRect();
+    return { w: Math.round(rect.width), h: Math.round(rect.height), bw: Math.round(badge.width), bh: Math.round(badge.height) };
+  });
+  // Toggle to pause, and measure the same two boxes.
+  await page14.keyboard.press('k');
+  await page14.waitForTimeout(150);
+  const pauseIcon = await page14.evaluate(() => {
+    const svg = document.querySelector('#feedback-centre .feedback-icon');
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const badge = document.getElementById('feedback-centre').getBoundingClientRect();
+    return { w: Math.round(rect.width), h: Math.round(rect.height), bw: Math.round(badge.width), bh: Math.round(badge.height) };
+  });
+  check('the play and pause glyph boxes are the same size', playIcon && pauseIcon ? { w: playIcon.w, h: playIcon.h } : null, pauseIcon ? { w: pauseIcon.w, h: pauseIcon.h } : undefined);
+  check('and the badge box does not change between them', playIcon && pauseIcon ? { bw: playIcon.bw, bh: playIcon.bh } : null, pauseIcon ? { bw: pauseIcon.bw, bh: pauseIcon.bh } : undefined);
+
+  // A number key: the centre badge, naming the percentage so the key teaches itself.
+  await page14.keyboard.press('5');
+  const jump = await badges();
+  check('a jump shows the percentage', jump.centreText, '50%');
+
+  // Line stepping: the badge names the ACTION, not the line's text. The caption for the
+  // line stepped to is already on screen, so echoing it here duplicated the caption in a
+  // smaller font and made it ambiguous whether the badge was the line or a report about
+  // it. Asserted on the word "line", which the caption text of this fixture never
+  // contains, so a regression back to echoing the text fails here.
+  //
+  // The position is set INSIDE THE FIRST CUE deliberately, and the wait is required: the
+  // assignment is asynchronous, and a keypress sent before it lands reads the OLD position,
+  // where no cue has started and `nextCue` returns early with nothing to report. `]` only
+  // reports when a next cue EXISTS, so testing from the end of the film (where the `5` jump
+  // left the playhead) would pass for the wrong reason.
+  await page14.evaluate(() => {
+    const video = document.getElementById('video');
+    video.pause();
+    video.currentTime = 1;
+  });
+  await page14.waitForFunction(() => document.getElementById('video').currentTime >= 0.9, null, { timeout: 5000 });
+  await page14.keyboard.press(']');
+  const next = await badges();
+  check('stepping to the next line says so', /next line/i.test(next.centreText), true);
+  check('and it does not echo the caption text', !next.centreText.includes('Hello'), true);
+
+  await page14.keyboard.press('[');
+  const prev = await badges();
+  check('stepping back says so', /previous line/i.test(prev.centreText), true);
+
+  await page14.keyboard.press('\\');
+  const replay = await badges();
+  check('and replay says so', /replay/i.test(replay.centreText), true);
+
+  // A speed change: the right badge, labelled as the picker labels it.
+  await page14.keyboard.press('>');
+  const speed = await badges();
+  check('a speed change shows the new rate', /1\.25|1\.5|2/.test(speed.rightText), true);
+  check('and it is labelled with the times sign', speed.rightText.includes('\u00d7'), true);
+
+  // The badges CLEAR, or the readout would sit over the picture forever. Waited past the
+  // fade, which is what makes this an assertion about the timer rather than the fade.
+  await page14.waitForTimeout(1000);
+  const cleared = await badges();
+  check('and the badges clear on their own', cleared.left && cleared.centre && cleared.right, false);
+
+  await page14.close();
+}
+
 await closeAll();
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

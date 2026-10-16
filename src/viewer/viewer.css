@@ -1063,3 +1063,107 @@ body {
   color: var(--muted, #98a2b3);
   font-size: 0.9em;
 }
+
+/* --- Command feedback ----------------------------------------------------- */
+
+/*
+ * The transient readout a command leaves behind.
+ *
+ * A grid across the picture with one badge per cell, so a badge's POSITION is fixed by
+ * the layout rather than by its text: the left badge always reads at the left edge
+ * whatever it says, which is what lets "back" and "forward" be told apart at a glance
+ * without reading either. Absolutely positioned over the picture and `pointer-events:
+ * none`, so it never intercepts a click meant for the video.
+ */
+.feedback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 6%;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.feedback-badge {
+  justify-self: start;
+  /* A fixed minimum width, so a badge does not resize as its content changes. Without
+     this the box grew and shrank between a seek and a speed, which made the badge jump
+     every time a command ran. */
+  min-width: 4.5em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  background: rgba(8, 10, 14, 0.72);
+  color: var(--fg);
+  /* **Scaled for the PICTURE, not for a control row.** These badges sit over the video
+     rather than under it, so they are read at a glance from across the room and have to
+     be big: sized from the viewport's short side like the caption card, so they grow with
+     the window and stop, and roughly double the previous ceiling on a 1440p display,
+     which is what was asked for. */
+  font-size: clamp(26px, 4.6vmin, 72px);
+  font-weight: 600;
+  white-space: nowrap;
+  /* Hidden by default and shown by the data attribute, so a command only has to set
+     text and a flag rather than create and destroy elements mid-playback. */
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+/*
+ * The transport glyph inside a badge.
+ *
+ * **One box for both glyphs, so the badge cannot change size when the state flips.** The
+ * play triangle and the pause bars are different ink, and sizing them to their own content
+ * made the badge a different width for each, which is the jump you see when tapping play
+ * and pause in quick succession. A fixed square makes the two interchangeable and keeps the
+ * mark centred on the same point whichever is showing.
+ */
+.feedback-icon {
+  width: 1.25em;
+  height: 1.25em;
+  flex: 0 0 auto;
+  display: block;
+  /* Centred on its own box rather than on the text baseline, so the glyph and any text
+     sit on one line rather than the glyph sinking below it. */
+  align-self: center;
+}
+
+/*
+ * A badge that is ONLY a glyph, which is how play and pause report.
+ *
+ * The minimum width exists so a badge does not resize as its TEXT changes, and a glyph-only
+ * badge has no text: holding the width would draw a wide empty box around one symbol. The
+ * square padding instead makes it a compact mark, and because both transport glyphs share
+ * one box the play and the pause marks are exactly the same size to the pixel.
+ */
+.feedback-badge.feedback-glyph-only {
+  min-width: 0;
+  padding: 8px 14px;
+}
+
+/* The centre badge, where play/pause and the absolute jumps read. */
+.feedback-centre {
+  justify-self: center;
+}
+
+/* The right badge, where a forward seek and any setting change reads. It is the LAST
+   cell, so it is pushed to the end of the grid rather than left at its start. */
+.feedback-badge:last-child {
+  justify-self: end;
+}
+
+.feedback-badge[data-shown='true'] {
+  opacity: 1;
+}
+
+/* Respect the reader's motion preference: the badge appears rather than fades. */
+@media (prefers-reduced-motion: reduce) {
+  .feedback-badge {
+    transition: none;
+  }
+}

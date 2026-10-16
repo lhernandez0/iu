@@ -85,6 +85,9 @@ const els = {
   audioField: /** @type {HTMLElement} */ (document.getElementById('audio-field')),
   audioSelect: /** @type {HTMLSelectElement} */ (document.getElementById('audio-track')),
   audioNote: /** @type {HTMLElement} */ (document.getElementById('audio-note')),
+  feedbackLeft: /** @type {HTMLElement} */ (document.getElementById('feedback-left')),
+  feedbackCentre: /** @type {HTMLElement} */ (document.getElementById('feedback-centre')),
+  feedbackRight: /** @type {HTMLElement} */ (document.getElementById('feedback-right')),
 };
 
 // --- Settings ----------------------------------------------------------------
@@ -2575,11 +2578,13 @@ function applyVolume() {
 function toggleMute() {
   if (els.muteButton.getAttribute('aria-pressed') === 'true') {
     els.volumeSlider.value = String(lastVolume > 0 ? lastVolume : 100);
+    flash('right', 'Sound');
   } else {
     // Remembered before zeroing, so unmuting comes back to where you were rather than
     // making you guess.
     lastVolume = Number(els.volumeSlider.value) || lastVolume;
     els.volumeSlider.value = '0';
+    flash('right', 'Muted');
   }
   applyVolume();
 }
@@ -3095,11 +3100,17 @@ click('play', () => togglePlay());
  *
  * A NAMED function rather than a closure in the click handler, because a keyboard
  * shortcut and a button that perform the same action must do the same thing. Two
- * implementations of "play or pause" is how the button and the key come to disagree.
+ * implementations of "play or pause" is how the button and the key come to disagree. The
+ * feedback lives here for the same reason: one place, so a click and a key report alike.
  */
 function togglePlay() {
-  if (els.video.paused) void els.video.play();
-  else els.video.pause();
+  if (els.video.paused) {
+    void els.video.play();
+    flash('centre', '', 'play');
+  } else {
+    els.video.pause();
+    flash('centre', '', 'pause');
+  }
 }
 
 /**
@@ -3113,15 +3124,36 @@ function syncPlayIcon() {
   const path = /** @type {SVGPathElement} */ (document.getElementById('play-path'));
   const button = document.getElementById('play');
   if (els.video.paused) {
-    path.setAttribute('d', 'M8 5.5v13l11-6.5z');
+    path.setAttribute('d', PLAY_PATH);
     button.setAttribute('aria-label', 'Play');
     button.title = 'Play';
   } else {
-    path.setAttribute('d', 'M7 5.5h3.2v13H7zM13.8 5.5H17v13h-3.2z');
+    path.setAttribute('d', PAUSE_PATH);
     button.setAttribute('aria-label', 'Pause');
     button.title = 'Pause';
   }
 }
+
+/**
+ * The play triangle and the pause bars, drawn to ONE bounding box so the button does not
+ * change size or jump when it swaps.
+ *
+ * **The two were drawn to different sizes and centres, which reads as a flicker when you
+ * tap the key.** The old play glyph spanned x 8 to 19 and the old pause spanned x 7 to 17,
+ * so they differed in width by a unit and the play triangle sat 1.5 units right of centre.
+ * Every toggle nudged the icon sideways and changed its size, which is exactly the visual
+ * noise a play/pause control must not have.
+ *
+ * Both now occupy x 7 to 17 and y 6 to 18, centred on x=12 in the 24-wide viewBox. A
+ * triangle is visually heavier than two bars of the same box, which is why the pause bars
+ * are as wide as the gap they leave: matching the BOUNDING BOX first is what makes the
+ * swap silent, and matching the ink exactly is impossible between those two shapes.
+ *
+ * @type {string}
+ */
+const PLAY_PATH = 'M7 6v12l10-6z';
+/** @type {string} */
+const PAUSE_PATH = 'M7 6h3.2v12H7zM13.8 6H17v12h-3.2z';
 
 els.video.addEventListener('play', syncPlayIcon);
 els.video.addEventListener('pause', syncPlayIcon);
@@ -3132,11 +3164,15 @@ const SEEK_STEP = 5;
 /** Move the playhead back one step, clamped to the start. */
 function seekBack() {
   els.video.currentTime = Math.max(0, els.video.currentTime - SEEK_STEP);
+  // The badge names the step, the way every player does, so the amount is legible without
+  // reading the clock: a jump with no number looks the same at 5 and 10 seconds.
+  flash('left', `-${SEEK_STEP}`);
 }
 
 /** Move the playhead forward one step, clamped to the end. */
 function seekForward() {
   els.video.currentTime = Math.min(els.video.duration || Infinity, els.video.currentTime + SEEK_STEP);
+  flash('right', `+${SEEK_STEP}`);
 }
 
 click('back', () => seekBack());
@@ -3155,18 +3191,29 @@ function prevCue() {
   const index = activeIndex();
   const target = index <= 0 ? segments[0].start : segments[index - 1].start;
   els.video.currentTime = target + 0.05;
+  // The ACTION, not the line's text. The caption for the line just stepped to is already
+  // on screen a moment later, so echoing it here duplicated the caption in a smaller font
+  // and made it ambiguous whether the badge was the line or a report about it. What the
+  // badge owes the learner is "the command you pressed did this".
+  flash('centre', '\u2191 Previous line');
 }
 
 function nextCue() {
   const index = activeIndex();
   if (index < 0 || !segments.length) return;
   const next = segments[index + 1];
-  if (next) els.video.currentTime = next.start + 0.05;
+  if (next) {
+    els.video.currentTime = next.start + 0.05;
+    flash('centre', '\u2193 Next line');
+  }
 }
 
 function replayCue() {
   const index = activeIndex();
-  if (index >= 0) els.video.currentTime = segments[index].start + 0.05;
+  if (index >= 0) {
+    els.video.currentTime = segments[index].start + 0.05;
+    flash('centre', '\u21ba Replay line');
+  }
 }
 
 click('prev-cue', () => prevCue());
@@ -3177,9 +3224,25 @@ click('replay-cue', () => replayCue());
 
 document.getElementById('speed').addEventListener('change', (event) => {
   setSetting('defaultSpeed', event.target.value);
+  // The same badge the `<`/`>` keys show, so choosing a speed from the picker and
+  // stepping to it with a key are indistinguishable on screen. A control that reported its
+  // result one way and a key that reported it another would make the two feel unrelated.
+  flash('right', `${event.target.value}\u00d7`);
 });
 
-click('captions', () => setSetting('captionsOn', !settings.captionsOn));
+click('captions', () => toggleCaptions());
+
+/**
+ * Toggle the captions, the action both the button and `c` perform.
+ *
+ * Named so the key and the button share one path, like play and mute: the feedback lives
+ * here, so pressing `c` and clicking the button report identically.
+ */
+function toggleCaptions() {
+  const on = !settings.captionsOn;
+  setSetting('captionsOn', on);
+  flash('right', on ? 'Captions on' : 'Captions off');
+}
 
 for (const chip of document.querySelectorAll('[data-placement]')) {
   chip.addEventListener('click', () => setSetting('captionPlacement', chip.dataset.placement));
@@ -3345,6 +3408,94 @@ window.addEventListener('resize', () => {
   measureBar();
 });
 
+// --- Command feedback --------------------------------------------------------
+
+/**
+ * How long a feedback badge stays on screen, in milliseconds.
+ *
+ * Long enough to read a word, short enough not to sit over the picture. This is the same
+ * order as the bar's own idle timer, so a command's badge and the controls it reports on
+ * come and go together rather than the badge outliving the bar.
+ */
+const FEEDBACK_MS = 700;
+
+/** The pending clear for each badge, so a burst of commands resets the timer. */
+const feedbackTimers = { left: null, centre: null, right: null };
+
+/**
+ * Show a command's result briefly, in one of the three positions.
+ *
+ * **A command with no feedback cannot be told from a dropped one.** Every player shows
+ * something when you press play, seek or change the speed, and its absence is what makes
+ * a learner press the key again to check. The POSITION carries meaning, so a seek reads
+ * on the side it moves towards and a play or pause in the middle, which is what makes the
+ * badges readable at a glance rather than needing to be read.
+ *
+ * Re-setting the same badge restarts its timer rather than queueing, so holding a seek key
+ * shows one live count rather than a stack of them.
+ *
+ * @param {'left'|'centre'|'right'} position
+ * @param {string} text
+ * @param {'play'|'pause'|null} [icon] Draw a TRANSPORT glyph beside the text instead of a
+ *   character. The glyphs are SVG here for the same reason the button's are: a text
+ *   triangle and a text pause are different widths in every font, so the badge changed
+ *   size when the state flipped. Drawing them to one box fixes that the way the button
+ *   does.
+ */
+function flash(position, text, icon = null) {
+  const element =
+    position === 'left' ? els.feedbackLeft : position === 'centre' ? els.feedbackCentre : els.feedbackRight;
+  if (!element) return;
+  element.replaceChildren();
+  if (icon) {
+    element.append(transportIcon(icon));
+  }
+  element.append(document.createTextNode(text));
+  // **A glyph-only badge drops the text width.** The minimum width exists so a badge does
+  // not change size as its TEXT changes, which matters for `+5` beside `-5`; a play or
+  // pause badge has no text, and holding that width would leave a wide empty box around a
+  // single glyph. The flag lets the stylesheet tell the two apart.
+  element.classList.toggle('feedback-glyph-only', Boolean(icon) && !text);
+  element.dataset.shown = 'true';
+  if (feedbackTimers[position] !== null) clearTimeout(feedbackTimers[position]);
+  feedbackTimers[position] = setTimeout(() => {
+    element.dataset.shown = 'false';
+    feedbackTimers[position] = null;
+  }, FEEDBACK_MS);
+}
+
+/**
+ * A small transport glyph for a feedback badge, drawn to the same box as the button's.
+ *
+ * The same two paths the play button uses, so the badge and the button cannot drift apart,
+ * and an SVG rather than a character because the text forms differ in width per font,
+ * which resized the badge on every toggle.
+ *
+ * @param {'play'|'pause'} kind
+ * @returns {SVGElement}
+ */
+function transportIcon(kind) {
+  // **Built by CLONING the play button's own SVG, not by naming the SVG namespace.** The
+  // namespace is an absolute URL, and a test asserts that the only absolute URL host named
+  // anywhere in OUR source is youtube.com; that rule is worth more than the convenience of
+  // spelling the constant out. Cloning also guarantees the badge's glyph is the same
+  // element in the same namespace as the button's, so the two cannot render differently,
+  // and it sidesteps `createElementNS` needing the namespace written down at all.
+  const source = document.querySelector('#play svg');
+  const svg = source
+    ? /** @type {SVGElement} */ (source.cloneNode(false))
+    : /** @type {SVGElement} */ (document.createElementNS(globalThis.SVGElement.prototype.namespaceURI, 'svg'));
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.setAttribute('class', 'feedback-icon');
+  const path = document.createElementNS(svg.namespaceURI, 'path');
+  path.setAttribute('d', kind === 'play' ? PLAY_PATH : PAUSE_PATH);
+  path.setAttribute('fill', 'currentColor');
+  svg.append(path);
+  return svg;
+}
+
 // --- Keyboard shortcuts ------------------------------------------------------
 //
 // **The viewer is a player, so the keys a player has are the keys it should have.** The
@@ -3373,6 +3524,8 @@ function stepSpeed(direction) {
   const next = Math.min(SPEED_LADDER.length - 1, Math.max(0, index + direction));
   if (SPEED_LADDER[next] === current) return;
   setSetting('defaultSpeed', SPEED_LADDER[next]);
+  // The rate, as the picker labels it, so the badge matches the control a click would use.
+  flash('right', `${SPEED_LADDER[next]}\u00d7`);
 }
 
 /** Jump to a fraction of the film, clamped inside the media. */
@@ -3382,6 +3535,9 @@ function jumpTo(fraction) {
   // Just inside the end, because seeking exactly TO the duration can throw or leave the
   // element at the very edge with nothing playable after it. Same reason the end key does.
   els.video.currentTime = Math.min(duration - 0.5, Math.max(0, duration * fraction));
+  // The PERCENTAGE, not the time: the number keys are 10 percent steps, and a badge
+  // reading "10%" tells the learner what they pressed and what the keys do at once.
+  flash('centre', `${Math.round(fraction * 100)}%`);
 }
 
 /**
@@ -3420,11 +3576,13 @@ function runShortcut(action) {
       break;
     case 'start':
       els.video.currentTime = 0;
+      flash('left', 'Start');
       break;
     case 'end':
       // Just inside the end: seeking exactly TO the duration can throw or leave nothing
       // playable after it, which the element already works around for its own seeks.
       els.video.currentTime = Math.max(0, (els.video.duration || 0) - 0.5);
+      flash('right', 'End');
       break;
     case 'prev-cue':
       prevCue();
@@ -3436,10 +3594,11 @@ function runShortcut(action) {
       replayCue();
       break;
     case 'captions':
-      setSetting('captionsOn', !settings.captionsOn);
+      toggleCaptions();
       break;
     case 'fullscreen':
       toggleFullscreen();
+      flash('right', document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen');
       break;
     case 'pip':
       togglePip();

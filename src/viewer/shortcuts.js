@@ -125,20 +125,63 @@ const KEY_TO_ACTION = {
 };
 
 /**
- * The elements a keypress belongs to rather than to the player.
+ * The input types that take TEXT, where a letter or a space must reach the field.
+ *
+ * `file`, `checkbox`, `radio`, `range`, `button` and the rest are deliberately absent.
+ * A file input is the one that bit: it is `<input>`, so a tagName-only guard treated it
+ * as a text field, and after a file was chosen it kept FOCUS, so `Space` activated it and
+ * reopened the file dialog instead of toggling playback. A control that is not for typing
+ * has no claim on a letter key.
+ *
+ * @type {Set<string>}
+ */
+const TEXT_ENTRY_TYPES = new Set([
+  'text',
+  'search',
+  'url',
+  'tel',
+  'email',
+  'password',
+  'number',
+  'date',
+  'datetime-local',
+  'month',
+  'week',
+  'time',
+]);
+
+/**
+ * Whether a keypress belongs to the focused element rather than to the player.
  *
  * **A shortcut that fires while a text field has focus is a bug, not a feature.** The
- * letters that drive playback are the same letters someone types into a field, so `k`
- * inside an input must insert `k` and never toggle playback. `button` is included for a
- * different reason: `Space` and `Enter` ACTIVATE a focused button, so handling `Space`
- * ourselves while the Fullscreen button has focus would both toggle playback and press
- * the button.
+ * letters that drive playback are the same letters someone types, so `k` inside a field
+ * must insert `k` and never toggle playback. This takes the ELEMENT, not its tag, because
+ * the tag alone cannot tell a search box from a file picker and that conflation is exactly
+ * what reopened the file dialog on `Space`.
  *
- * @param {string} tagName
+ * Two things are deliberately NOT blocked, both because the viewer is a player first:
+ *   - **`SELECT`** is blocked: `Space` opens the dropdown and the arrows change the
+ *     option, so those keys belong to the control while it has focus.
+ *   - **`BUTTON` and a `file` input are NOT blocked.** A button is activated by `Enter`
+ *     as well, so taking `Space` from it costs a keyboard user nothing, and giving the
+ *     player `Space` everywhere else is what a learner expects from a video. This is a
+ *     deliberate trade: `Space` is play/pause even with a control focused, and `Enter`
+ *     still operates the control.
+ *
+ * @param {{tagName?: string, type?: string, isContentEditable?: boolean}|null} target
  * @returns {boolean}
  */
-function isTypingTarget(tagName) {
-  return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || tagName === 'BUTTON';
+function isTypingTarget(target) {
+  if (!target) return false;
+  // A rich-text area has no tagName that says so.
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (tag === 'INPUT') {
+    // An input with no `type` reads as `text`, which is what the browser does too.
+    return TEXT_ENTRY_TYPES.has((target.type || 'text').toLowerCase());
+  }
+  return false;
 }
 
 /**
@@ -153,7 +196,9 @@ function isTypingTarget(tagName) {
  *    is quit. A player that swallowed those would be fighting the operating system, and
  *    the fight is always lost, so it is not started. `Shift` is exempt because `?` IS
  *    Shift+`/` on most layouts and the help key would be unusable without it.
- * 2. **Never in a text field or on a button**, see `isTypingTarget`.
+ * 2. **Never in a text field.** Decided by the ELEMENT, not its tag, see
+ *    `isTypingTarget`: a file picker is an `<input>` and must not swallow `Space`, while
+ *    a search box must.
  * 3. **Never if something already handled it.** YouTube's own player has its own
  *    keyboard layer and runs in the same document; if it has called `preventDefault`, the
  *    key was theirs and acting on it too would double the effect, a 10 second skip
@@ -164,7 +209,8 @@ function isTypingTarget(tagName) {
  *
  * @param {{
  *   key: string, repeat?: boolean, ctrlKey?: boolean, metaKey?: boolean,
- *   altKey?: boolean, defaultPrevented?: boolean, target?: {tagName?: string}|null,
+ *   altKey?: boolean, defaultPrevented?: boolean,
+ *   target?: {tagName?: string, type?: string, isContentEditable?: boolean}|null,
  * }} event
  * @returns {string|null}
  */
@@ -176,9 +222,8 @@ export function resolveShortcut(event) {
   // Rule 3, checked before the table so a key the page already consumed is not even
   // looked up.
   if (event.defaultPrevented) return null;
-  // Rule 2.
-  const tag = event.target?.tagName;
-  if (typeof tag === 'string' && isTypingTarget(tag)) return null;
+  // Rule 2, on the element rather than the tag.
+  if (isTypingTarget(event.target ?? null)) return null;
 
   const action = KEY_TO_ACTION[event.key.toLowerCase()];
   if (!action) return null;
