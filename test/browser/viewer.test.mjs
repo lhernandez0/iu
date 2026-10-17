@@ -271,6 +271,148 @@ section('the study picker shows the track the captions actually draw');
   await reader.close();
 }
 
+section('the picker, the captions and the marks describe ONE track');
+
+{
+  // **This is the invariant that every previous fix violated.** Seven times, "the picker
+  // showed one track and the captions drew another" was reported; seven times the fix was
+  // a scenario and the invariant stayed broken. This asserts the RULE instead: after a
+  // stale stored preference (from a file that had a Chinese track) is applied to a file
+  // that has none, the value the picker SHOWS, the caption the viewer DRAWS, and the
+  // language the caption is MARKED against must all be the same track, and no picker may
+  // show a value that is not one of this file's options.
+  //
+  // The two files mirror the production report exactly: a Chinese file first, then an
+  // English-and-Japanese file, sharing one worker and one settings bucket.
+  //
+  // **The PANEL is open, and that is load-bearing.** The panel drives the worker, the
+  // worker sends `SET_TRACK` to the viewer, and THAT write is the second authority over
+  // the viewer's own transcript: it used to replace the viewer's segments while leaving the
+  // viewer's language, so the pickers, the marks and the band followed one track and the
+  // captions another. Without a panel open the message never fires and this test passes on
+  // the broken code, which is exactly why the bug shipped seven times.
+  const reader = await context.newPage();
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/src/sidepanel/sidepanel.html`);
+  await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await reader.waitForTimeout(800);
+
+  // File A: establish a Chinese study choice and an HSK list, the state that seeds it.
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'three-tracks.mkv'));
+  await reader.waitForFunction(() => document.querySelector('#study-track option[value="zh"]') !== null, null, { timeout: 15000 });
+  await reader.selectOption('#study-track', 'zh');
+  await reader.waitForTimeout(500);
+
+  // File B: English and Japanese only, NO Chinese and NO zh-TW. The stored `zh` cannot
+  // resolve here, which is the whole point. The wait is for FILE B's OWN track list, not
+  // for a caption: a caption is already on screen from file A, so waiting on that read
+  // file A's state and made this test assert the previous file.
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'long-dual.mkv'));
+  await reader.waitForFunction(
+    () => {
+      const values = [...document.querySelectorAll('#study-track option')].map((o) => o.value);
+      return values.includes('ja') && !values.includes('zh');
+    },
+    null,
+    { timeout: 30000 },
+  );
+  await reader.waitForTimeout(1500);
+
+  const invariant = await reader.evaluate(() => {
+    const select = document.getElementById('study-track');
+    const shown = select.selectedOptions[0];
+    // Every option's value, so a shown value absent from them is detectable.
+    const values = [...select.options].map((o) => o.value);
+    const caption = document.getElementById('caption-primary')?.textContent ?? '';
+    return {
+      shownValue: select.value,
+      shownLabel: shown?.textContent ?? '',
+      isAnOption: values.includes(select.value),
+      values,
+      caption,
+    };
+  });
+
+  // 1. The picker shows a track THIS FILE has. A stale `zh` fails this: the option does
+  //    not exist, so the browser falls back to option 0 while the value still reads `zh`.
+  check('the study picker shows one of this file\'s own tracks', invariant.isAnOption, true);
+  // 2. It did not cling to the Chinese choice from the previous file, which is the
+  //    production symptom.
+  check('and it is NOT the stale Chinese choice', invariant.shownValue === 'zh' || invariant.shownValue === 'zh-TW', false);
+  // 3. The caption is drawn, so the picker is not describing an empty screen.
+  check('a caption is actually drawn', invariant.caption.length > 0, true);
+  // 4. The drawn caption is the file's JAPANESE track's text, so the picker and the screen
+  //    agree about WHICH track, not merely that some track is up.
+  check('and the drawn caption is the track the picker names', /Study/.test(invariant.caption), true);
+
+  await reader.close();
+  await panel.close();
+}
+
+section('a stale choice cannot leave the marks describing the wrong language');
+
+{
+  // The other half of the invariant, on a file whose study track CAN be marked. `long-band.mkv`
+  // is ten minutes of real Chinese, so if the list resolves to the drawn track's language the
+  // caption carries marks; if the list is stale (Japanese JLPT from a previous file) the
+  // caption renders plain, which is the "no dictionary" symptom.
+  const reader = await context.newPage();
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/src/sidepanel/sidepanel.html`);
+  await reader.goto(`chrome-extension://${extensionId}/src/viewer/viewer.html`);
+  await reader.waitForTimeout(800);
+
+  // File A: a Japanese file, leaving JLPT stored.
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'long-dual.mkv'));
+  await reader.waitForFunction(() => document.querySelector('#study-track option[value="ja"]') !== null, null, { timeout: 15000 });
+  await reader.selectOption('#study-track', 'ja');
+  await reader.waitForTimeout(500);
+
+  // File B: Chinese. The stored Japanese choice cannot mark it, so the list must follow
+  // the DRAWN track and Chinese marks must appear.
+  await reader.setInputFiles('#pick-files', join(FIXTURES, 'long-band.mkv'));
+  await reader.waitForFunction(
+    () => {
+      const values = [...document.querySelectorAll('#study-track option')].map((o) => o.value);
+      return values.includes('zh');
+    },
+    null,
+    { timeout: 30000 },
+  );
+  await reader.selectOption('#study-track', 'zh');
+  // Wait for a caption to be PLAYING, not merely for the track to load: the cues start at
+  // 0.5s and the marks only exist on a drawn cue. Asserting on marks before a cue is up
+  // tests the timing, not the marking.
+  await reader.evaluate(() => {
+    const video = document.getElementById('video');
+    video.muted = true;
+    video.pause();
+    video.currentTime = 1;
+  });
+  await reader
+    .waitForFunction(() => (document.getElementById('caption-primary')?.textContent ?? '').length > 0, null, { timeout: 20000 })
+    .catch(() => {});
+  // The marks are applied when the dictionary lands, a beat after the cue, so give the
+  // dictionary its moment rather than racing it.
+  await reader.waitForTimeout(2000);
+
+  const marked = await reader.evaluate(() => ({
+    marks: document.getElementById('caption-primary')?.querySelectorAll('*').length ?? 0,
+    list: document.getElementById('word-list')?.value ?? '',
+    selected: document.getElementById('study-track')?.value ?? '',
+    caption: document.getElementById('caption-primary')?.textContent ?? '',
+  }));
+
+  check('the picker names the Chinese track', marked.selected, 'zh');
+  // The marks exist, which requires the word list to have followed the DRAWN track and not
+  // the stale Japanese one. This is the assertion that would have failed for seven rounds.
+  check('a Chinese caption is drawn to mark', marked.caption.length > 0, true);
+  check('and the caption is marked, so the list followed the drawn track', marked.marks > 0, true);
+
+  await reader.close();
+  await panel.close();
+}
+
 section('machine translation is refused for a local file, visibly');
 
 {

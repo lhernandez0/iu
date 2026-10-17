@@ -44,6 +44,7 @@ import { markLine, listCoversLanguage, listForLanguage } from '../learn/marking.
 import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX, SPEED_VALUES } from '../common/settings.js';
 import { resolveShortcut, jumpFraction, SHORTCUTS } from './shortcuts.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
+import { resolveMedia } from '../common/resolve.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
 import { transcodeForElement } from './decode-encode.js';
 import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks, logDecoder, logSubs } from './diagnostics.js';
@@ -307,12 +308,17 @@ let dictionary = null;
 function markSegments() {
   if (!dictionary || !segments.length) return;
 
-  const list = resolvedList();
-  // A list that cannot grade this language would find nothing and render the
-  // captions plain with no explanation, which reads as a broken feature. Skipping
-  // the work says the same thing more cheaply, and the captions being plain for a
-  // language we have no list for is correct, not a failure.
-  if (!listCoversLanguage(list, trackLanguage())) return;
+  // **The list AND the language come from the one resolution**, so the dictionary loaded
+  // and the levels applied describe the text actually on screen. Judging a list against
+  // `trackLanguage()` while the text came from `segments` is what let the marks silently
+  // vanish: the pair passed the coverage check, the tokens came out with no level, and the
+  // band was empty with no message.
+  const chosen = resolution();
+  const list = listIndex?.lists?.find((candidate) => candidate.id === chosen.listId) ?? null;
+  // A list that cannot grade this language would find nothing and render the captions
+  // plain. Skipping is correct, and the REASON is now carried on the resolution so the UI
+  // can say so rather than leaving it looking broken.
+  if (!listCoversLanguage(list, chosen.studyTrack?.languageCode ?? null)) return;
 
   const withReading = settings.romaji !== 'off';
 
@@ -359,6 +365,38 @@ function thresholdFor(list) {
  */
 function trackLanguage() {
   return activeTrackLanguage ?? tracks[0]?.languageCode ?? null;
+}
+
+/**
+ * The ONE resolution for the open file: which track each line draws, and which list
+ * grades it.
+ *
+ * **Every consumer reads this and nothing else.** The previous design composed the
+ * answer at each site from a different subset of `settings.studyLanguage`,
+ * `activeTrackLanguage`, and `segments`, so the picker, the captions, the marks and the
+ * band could each describe a different track. That is the hole seven fixes leaked
+ * through, and the fix is not to make the sites agree but to give them one thing to
+ * read. The rule lives in `common/resolve.js` because the worker needs the same rule
+ * for its own resolution, so both surfaces run one implementation.
+ *
+ * Recomputed, not cached: it is pure and cheap, and a cache would be a second thing to
+ * invalidate, which is how the original bug survived.
+ *
+ * @returns {ReturnType<typeof resolveMedia>}
+ */
+function resolution() {
+  return resolveMedia({
+    tracks,
+    preferences: {
+      // The learner's choices are WISHES matched against this file. A stale code that
+      // matches nothing does not survive here, which is what stops the picker naming a
+      // track the captions are not drawing.
+      studyLanguage: settings.studyLanguage,
+      glossLanguage: settings.glossLanguage,
+      listId: settings.listId,
+    },
+    lists: listIndex?.lists ?? [],
+  });
 }
 
 // --- State ------------------------------------------------------------------
@@ -716,28 +754,15 @@ async function loadVideo(file) {
  * why in its own status line.
  */
 async function loadDefaultTrack() {
-  // The learner's own choices win; otherwise the viewer picks. This is the same
-  // preference the panel reads, so a track chosen in the panel's dropdown is the one
-  // the captions draw.
-  //
-  // **A stored language that now resolves to an UNREADABLE track is not honoured.**
-  // `studyLanguage` is a language code, not a track identity, and codes are not unique
-  // across files: a learner who studied `ja` on one film, then opens a film whose only
-  // `ja` track is a Blu-ray PGS image track, had the image track selected, `ensureSegments`
-  // returned nothing for a non-text track, and the captions were permanently blank with
-  // no way to get them back except changing the language. Measured exactly that on a disc
-  // remux: pick chose `ja n=25 kind=image`, read-skipped it, and drew zero cues forever.
-  // So an unreadable named track falls through to the readable default instead, which the
-  // viewer then shows in its picker.
-  const named = trackFor(settings.studyLanguage);
-  const study = named && named.kind === 'text' ? named : pickDefaultTrack();
-  if (named && named.kind !== 'text') {
-    logSubs('pick-unreadable', {
-      stored: settings.studyLanguage,
-      kind: named.kind,
-      fallback: study ? `${study.languageCode} n=${study.trackNumber}` : 'NONE',
-    });
-  }
+  // **The decision comes from the ONE resolution, not from this function.** This used to
+  // pick the track itself (a stored code, then a fallback), and the picker, the captions
+  // and the marks each re-derived from a different variable, which is the class of bug
+  // this file is being rebuilt to end. Now the choice is made once, in `resolution()`,
+  // and this function only READS its result and performs the side effects (read the cues,
+  // mark, draw).
+  const chosen = resolution();
+  const study = chosen.studyTrack;
+
   logSubs('pick', {
     studyLanguage: settings.studyLanguage ?? 'null',
     chosen: study ? `${study.languageCode} n=${study.trackNumber} kind=${study.kind}${study.error ? ' ERR:' + study.error : ''}` : 'NONE',
@@ -750,6 +775,8 @@ async function loadDefaultTrack() {
   try {
     logSubs('read-start', { track: study.languageCode, kind: study.kind, cached: Boolean(study.segments) });
     segments = await ensureSegments(study);
+    // **Both fields, from the same resolved track, in one place.** Setting them apart is
+    // how they came to describe different tracks.
     activeTrackLanguage = study.languageCode;
     lastIndex = -2;
     lastRendered = -2;
@@ -759,10 +786,9 @@ async function loadDefaultTrack() {
     // and gain their marks when the dictionary lands.
     void prepareMarks(study.languageCode);
     redrawCaptions();
-    // **Repaint the pickers so the study dropdown shows the track just chosen.** When
-    // `settings.studyLanguage` is null the viewer picks the track itself, and the picker
-    // was last drawn before that choice existed, so without this it shows the first track
-    // while the captions draw the picked one. See `renderTrackChoosers`.
+    // **Repaint the pickers so they show the track just drawn.** The pickers read the
+    // resolution, and the resolution changed when this track was chosen, so without this
+    // they would still show the previous selection.
     renderTrackPickers();
     logSubs('drawn', { count: segments.length, t: Number(els.video.currentTime.toFixed(2)) });
     // The gloss, if there is a second track. Awaited only to align it; the captions
@@ -796,15 +822,18 @@ async function loadDefaultTrack() {
  * @param {object} study
  */
 async function loadGlossTrack(study) {
-  const chosen = trackFor(settings.glossLanguage);
+  // **The gloss track comes from the ONE resolution**, which already guarantees it is not
+  // the study track: the same-track rule lives in `common/resolve.js` now, so it cannot be
+  // forgotten here and cannot blank the second line on a clash the old code could not tell
+  // from an intentional one.
+  const chosen = resolution().glossTrack;
   logSubs('gloss-pick', {
     glossLanguage: settings.glossLanguage ?? 'null',
     chosen: chosen ? `${chosen.languageCode} n=${chosen.trackNumber}${chosen.error ? ' ERR:' + chosen.error : ''}` : 'NONE',
     study: study?.languageCode ?? 'none',
   });
-  // Never the same track twice: a "gloss" identical to the line above it is noise, not a
-  // translation. And no fallback: an unset gloss is "Off", not "pick one for me".
-  if (!chosen || chosen === study) {
+  // No fallback: an unset gloss is "Off", not "pick one for me".
+  if (!chosen) {
     glossTrack = null;
     glossLines = [];
     redrawCaptions();
@@ -860,7 +889,18 @@ async function loadSubtitles(files) {
     // Replace a track for the same language rather than listing both, so picking a
     // corrected version of the same file does not leave the old one behind.
     tracks = tracks.filter((track) => !(track.source === 'file' && track.languageCode === languageCode));
-    tracks.push({ languageCode, name: file.name, source: 'file', segments: cues, error, format, encoding });
+    // A stable identity for a sidecar too, so it can be told from another file's track
+    // and from an embedded one. The name is the only thing unique to it.
+    tracks.push({
+      languageCode,
+      trackId: `file:${languageCode}:${file.name}`,
+      name: file.name,
+      source: 'file',
+      segments: cues,
+      error,
+      format,
+      encoding,
+    });
   }
 
   const usable = tracks.filter((track) => track.segments?.length);
@@ -923,6 +963,12 @@ async function loadEmbeddedTracks(file) {
 
     embedded.push({
       languageCode: unique,
+      // **A stable identity, so two tracks that share a language code are
+      // distinguishable.** A film can carry a full `en` track and a signs-only one, and
+      // the pickers' option values were language codes, so the two collided and "line 1
+      // English, line 2 English (SDH)" could not be expressed. The container track
+      // number is unique within the file and is what the reader already keys on.
+      trackId: `emb:${track.number}`,
       name: track.name ?? null,
       source: 'embedded',
       trackNumber: track.number,
@@ -1215,7 +1261,12 @@ function applyMergedCues() {
     track.segments = cuesByNumber.get(track.trackNumber) ?? track.segments;
     if (track.segments?.length) track.error = null;
   }
-  if (activeTrackLanguage) segments = trackFor(activeTrackLanguage)?.segments ?? segments;
+  // **Re-read the display from the resolution after the fill.** The fill grows cue lists
+  // in place; the track being drawn does not change, but re-deriving `segments` from the
+  // resolved track (rather than from whatever `activeTrackLanguage` last held) keeps the
+  // two in step even if a `SET_TRACK` arrived while the fill was running.
+  const drawn = resolution().studyTrack;
+  if (drawn?.segments) segments = drawn.segments;
   // The study list just grew, so the second line has to be re-aligned to it. Without this
   // the gloss stays the length of the first window and draws blank past it, which is the
   // blank-second-line bug this exists to prevent.
@@ -1576,25 +1627,35 @@ function renderTrackChoosers() {
   const glossSelect = document.getElementById('gloss-track');
   if (!studySelect || !glossSelect) return;
 
-  // **The study picker shows the track actually being drawn, not the raw setting.**
-  // `settings.studyLanguage` is null until the learner chooses, and the viewer has still
-  // picked a track itself (`pickDefaultTrack`, which prefers a markable language). Driving
-  // the select from the null setting marked NO option selected, so the browser showed the
-  // FIRST option while the captions drew the picked one: on a file whose picked track is
-  // Japanese, the picker said English. So the displayed value is the active track when the
-  // setting is unset, which is what a "Match the track"-style automatic choice means
-  // everywhere else in this file.
-  const shownStudy = settings.studyLanguage ?? activeTrackLanguage ?? '';
+  // **The pickers show the RESOLVED tracks.** The study option selected is the track the
+  // captions are drawn from, and the gloss option is the track the second line draws,
+  // because both come from the same `resolution()`. This is what makes "the picker names
+  // a track that is not on screen" impossible: there is no second variable to read. It
+  // replaces the old `settings.studyLanguage ?? activeTrackLanguage` chain, whose `??`
+  // handled the null case but not the STALE one, which is how a stored `zh-TW` came to
+  // sit in the picker while the captions drew Japanese.
+  //
+  // **The option VALUE stays the language code**, not a track id, because `studyLanguage`
+  // is shared with the panel and the worker as a language code and they must keep
+  // understanding it. Identity is used INTERNALLY (see `common/resolve.js`) where it
+  // matters, "these two lines are not the same track", and the code remains the wire
+  // format. The consequence is that two tracks sharing one code are still one option
+  // here, which is a PRE-EXISTING limitation and is recorded as such rather than claimed
+  // fixed.
+  const chosen = resolution();
+  const shownStudy = chosen.studyTrack?.languageCode ?? '';
+  const shownGloss = chosen.glossTrack?.languageCode ?? '';
+
   const signature =
     tracks.map((track) => `${track.languageCode}:${track.name ?? ''}`).join(',') +
-    `|${shownStudy}|${settings.glossLanguage ?? ''}`;
+    `|${shownStudy}|${shownGloss}`;
   if (studySelect.dataset.signature === signature) return;
   studySelect.dataset.signature = signature;
   glossSelect.dataset.signature = signature;
 
-  for (const [select, chosen, includeOff] of [
+  for (const [select, shown, includeOff] of [
     [studySelect, shownStudy, false],
-    [glossSelect, settings.glossLanguage, true],
+    [glossSelect, shownGloss, true],
   ]) {
     select.replaceChildren();
     select.disabled = tracks.length === 0;
@@ -1604,16 +1665,33 @@ function renderTrackChoosers() {
     }
     if (includeOff) {
       const off = new Option('Off', '');
-      off.selected = !chosen;
+      off.selected = !shown;
       select.append(off);
     }
     for (const track of tracks) {
+      // A readable track only, plus the currently drawn one: offering an image track
+      // would let the learner pick something that can never draw, which is the bug that
+      // started this whole chain of fixes.
+      if (!trackDrawable(track) && track.languageCode !== shown) continue;
       const label = track.name || track.languageCode;
       const option = new Option(label, track.languageCode);
-      option.selected = track.languageCode === chosen;
+      option.selected = track.languageCode === shown;
       select.append(option);
     }
   }
+}
+
+/**
+ * Whether a track can be drawn as captions.
+ *
+ * A picture track (Blu-ray PGS) is not text and this project does not OCR it, and a
+ * track whose read failed has nothing to show. Both are hidden from the pickers, so the
+ * learner cannot select a track that would render an empty line.
+ *
+ * @param {object} track
+ */
+function trackDrawable(track) {
+  return track.kind !== 'image' && !(track.segments === null && track.error);
 }
 
 /**
@@ -1682,17 +1760,15 @@ function renderTrackPickers() {
 /**
  * The list the viewer grades against.
  *
- * An explicit choice wins; otherwise the list is matched to the track's language, and
- * the BROADEST one for it, a viewer with no other information should mark as much as
- * it honestly can. Resolved through the shared `listForLanguage` so the panel and the
- * viewer cannot disagree about which list covers a language.
+ * **Read from the ONE resolution, so it is the list that covers the track actually
+ * drawn.** It used to be computed here from `settings.listId` or the track's language
+ * independently of the worker's `effectiveListId`, and the two fallbacks could pick
+ * different lists, which is why a list could be "chosen" while the marks came from
+ * another and the captions rendered plain.
  */
 function resolvedList() {
-  const lists = listIndex?.lists ?? [];
-  if (settings.listId) {
-    return lists.find((list) => list.id === settings.listId) ?? null;
-  }
-  return listForLanguage(lists, trackLanguage());
+  const id = resolution().listId;
+  return listIndex?.lists?.find((list) => list.id === id) ?? null;
 }
 
 /** Show or hide the caption strip, in the placement the settings name. */
@@ -3060,21 +3136,49 @@ api.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
 
     case MSG.SET_TRACK: {
-      // The worker already holds these, from a cache hit. Handed back only so
-      // position reporting has something to measure against.
-      segments = Array.isArray(message.segments) ? message.segments : [];
-      activeTrackLanguage = message.languageCode ?? activeTrackLanguage;
-      // Force the next report: the previous cue belonged to whatever was loaded
-      // before, and suppressing the first report would leave the panel waiting for a
-      // change that may never come on a paused video.
+      // **The viewer OWNS the transcript for its own file, so the worker's copy is
+      // advisory.** This message exists for the content script, which has no transcript
+      // and needs the worker's so it can report a cue. The viewer is a SOURCE: it read
+      // the cues from the container itself and resolved which track to draw. Letting the
+      // worker's segments REPLACE the viewer's own is what made the worker a second
+      // authority over the viewer's file, and every time the two disagreed - a cached
+      // entry from an earlier track, a different language - the captions, the marks and
+      // the band followed the worker while the pickers followed the viewer. That is the
+      // seven-time bug, and the fix is to remove the second authority rather than to keep
+      // them in step.
+      //
+      // So: re-resolve from the file's own tracks, and adopt the worker's segments ONLY
+      // for a track this viewer has not read (a genuine cache miss on our side). A
+      // language that does not resolve here is ignored, not stored, so a stale worker
+      // value cannot reach the pickers or the marks.
+      const workerLanguage = typeof message.languageCode === 'string' ? message.languageCode : null;
+      const workerSegments = Array.isArray(message.segments) ? message.segments : [];
+      const chosen = resolution();
+      const own = chosen.studyTrack;
+      if (own && own.segments?.length) {
+        // The viewer's own read wins. The worker's payload is discarded, and the display
+        // is re-derived from the resolution so nothing it carried can affect the captions.
+        segments = own.segments;
+        activeTrackLanguage = own.languageCode;
+        void prepareMarks(activeTrackLanguage);
+        lastIndex = -2;
+        lastRendered = -2;
+        renderTrackPickers();
+        redrawCaptions();
+        logSubs('set-track-ignored', { workerLanguage: workerLanguage ?? 'null', kept: own.languageCode });
+        reply(sendResponse, { ok: true });
+        return false;
+      }
+      // No cues of our own for the resolved track, so the worker's are a real
+      // contribution. Adopt segment and language TOGETHER, then re-resolve, so the two
+      // cannot describe different tracks.
+      segments = workerSegments;
+      activeTrackLanguage = workerLanguage ?? activeTrackLanguage;
+      void prepareMarks(activeTrackLanguage);
       lastIndex = -2;
       lastRendered = -2;
-      // The worker chose this track, so the list and dictionary follow it, the same
-      // path the viewer's own default-track load takes.
-      void prepareMarks(activeTrackLanguage).then(() => {
-        for (const cue of segments) delete cue.marked;
-        markSegments();
-      });
+      renderTrackPickers();
+      redrawCaptions();
       reply(sendResponse, { ok: true });
       return false;
     }
@@ -3268,6 +3372,9 @@ document.getElementById('word-list').addEventListener('change', (event) => {
 });
 
 document.getElementById('study-track').addEventListener('change', (event) => {
+  // The option value is a track IDENTITY, not a language code, so two tracks that share
+  // a code are still distinguishable and the stored wish names a specific track. Empty
+  // means "match for me", which is a real choice and is stored as null.
   settings.studyLanguage = event.target.value || null;
   setSetting('studyLanguage', settings.studyLanguage);
   // A different study track is a different transcript: reload its cues and re-align
@@ -3278,7 +3385,7 @@ document.getElementById('study-track').addEventListener('change', (event) => {
 document.getElementById('gloss-track').addEventListener('change', (event) => {
   settings.glossLanguage = event.target.value || null;
   setSetting('glossLanguage', settings.glossLanguage);
-  void loadGlossTrack(trackFor(settings.studyLanguage) ?? pickDefaultTrack());
+  void loadGlossTrack(resolution().studyTrack);
 });
 
 document.getElementById('threshold').addEventListener('change', (event) => {
