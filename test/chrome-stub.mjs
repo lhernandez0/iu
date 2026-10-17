@@ -43,6 +43,7 @@ export function installChromeStub(options = {}) {
     trackPayload = null,
     storage = {},
     storageDelay = 0,
+    storageAsyncEvents = false,
     contexts = [],
   } = options;
 
@@ -178,6 +179,21 @@ export function installChromeStub(options = {}) {
         for (const handler of [...listeners]) handler(changes, area);
       };
 
+      /*
+       * **`storageAsyncEvents` makes the change event late, as Chrome delivers it.**
+       * Chrome fires `storage.onChanged` AFTER the write commits, not inside `set()`.
+       * The default here is synchronous, which is what the whole existing suite was
+       * written against and what it counts ticks for; a test that needs the real
+       * ordering, because it is constructing a lost-update window, opts in.
+       *
+       * A stub that closes a race the product has is worse than no test, so the option
+       * exists; a stub that changes 260 other assertions is worse than the race, so it
+       * is not the default.
+       */
+      const deliver = storageAsyncEvents
+        ? (area, changes) => setTimeout(() => notify(area, changes), 0)
+        : notify;
+
       const areaFor = (bucket, source) => ({
         get: async (key) => {
           // A real storage read is not instant. Making it visibly slow is what
@@ -195,7 +211,7 @@ export function installChromeStub(options = {}) {
           // A write with nothing in it does not fire in Chrome either, and firing
           // here would make a listener-count assertion depend on how many times a
           // value was redundantly re-persisted.
-          if (Object.keys(changes).length) notify(source, changes);
+          if (Object.keys(changes).length) deliver(source, changes);
         },
         remove: async (key) => {
           const keys = Array.isArray(key) ? key : [key];
@@ -204,7 +220,7 @@ export function installChromeStub(options = {}) {
             changes[k] = { oldValue: bucket[k] };
             delete bucket[k];
           }
-          if (Object.keys(changes).length) notify(source, changes);
+          if (Object.keys(changes).length) deliver(source, changes);
         },
       });
 

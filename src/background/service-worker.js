@@ -19,7 +19,7 @@
 import { MSG, TARGET } from '../common/messages.js';
 import { errorText, codeError } from '../common/errors.js';
 import { alignSecondary } from '../common/transcript.js';
-import { defaults, normalise, toStorage, storageKey, definition, SETTINGS_AREA } from '../common/settings.js';
+import { defaults, normalise, storageKey, definition, SETTINGS_AREA } from '../common/settings.js';
 import { providerFor, providerNames } from '../common/providers.js';
 import {
   loadDictionary,
@@ -1891,6 +1891,9 @@ async function restoreSettings() {
     // answer and not worth failing startup over.
     settings = defaults();
   }
+  // What storage is believed to hold, so a write can send only what CHANGED.
+  // See `persistSettings`.
+  published = cloneSettings(settings);
 }
 
 /**
@@ -1911,8 +1914,63 @@ function settingsStore() {
   return api.storage?.[SETTINGS_AREA] ?? api.storage.local;
 }
 
-function persistSettings() {
-  settingsStore().set(toStorage(settings)).catch(() => {});
+/**
+ * What storage is believed to hold, so a write can send only the keys that changed.
+ *
+ * Compared against the worker's in-memory `settings` on every write, so a key this
+ * worker did not touch is left out of the write and a concurrent change to it by
+ * another surface survives. Set at restore, on every write we make, and on every
+ * `onChanged` we accept, since all three mean the believed-storage state moved.
+ *
+ * @type {Record<string, any>}
+ */
+let published = {};
+
+/** @param {object} value @returns {Record<string, any>} */
+function cloneSettings(value) {
+  return JSON.parse(JSON.stringify(value ?? {}));
+}
+
+/**
+ * Write the settings the worker holds, merging over a FRESH read of storage.
+ *
+ * **The smallest fix for a lost-update race.** `persistSettings` used to write the
+ * whole object from this worker's in-memory copy, while the viewer writes with a
+ * fresh read plus a single-key merge. Both write the SAME storage key (all settings
+ * live under one key), so whichever wrote second replaced the other's work wholesale:
+ * a viewer changing the caption fade could be silently reverted by a worker write
+ * that had read storage before that change and knew nothing about it.
+ *
+ * The viewer could not be moved to whole-object writes (it does not know every key),
+ * so the worker is moved to the viewer's shape instead: re-read, fold in only the
+ * keys THIS worker actually changed, and write. The window is now one read to one
+ * write, which the viewer already accepted, rather than an unbounded one measured
+ * from the worker's last read. `published` is what keeps a concurrent change to a
+ * DIFFERENT key out of the fold.
+ */
+async function persistSettings() {
+  const next = cloneSettings(settings);
+  const changed = {};
+  for (const [id, value] of Object.entries(next)) {
+    if (JSON.stringify(published[id]) !== JSON.stringify(value)) changed[id] = value;
+  }
+  // Nothing moved (a redundant call), so there is nothing to write and no window
+  // to open.
+  if (!Object.keys(changed).length) return;
+  try {
+    const stored = await settingsStore().get(storageKey);
+    // The stored object may carry a key this worker does not know about, or one
+    // another surface changed since `published`; both are preserved because the
+    // merge starts from what is actually there.
+    const merged = { ...(stored?.[storageKey] ?? {}), ...changed };
+    await settingsStore().set({ [storageKey]: merged });
+    // The believed state is what we just wrote, not what we intended, so a key
+    // another surface changed in the window is not re-sent on the next call.
+    published = cloneSettings(merged);
+  } catch {
+    // Storage unavailable. The change stays in memory and the next successful
+    // write carries it, which is the same degradation the whole-object write had.
+  }
 }
 
 /**
@@ -1940,10 +1998,18 @@ api.storage.onChanged.addListener((changes, areaName) => {
   const next = normalise(changes[storageKey].newValue);
   // Our own write echoes back here. Rebuilding on it would double every rebuild,
   // so identical values stop here.
-  if (JSON.stringify(next) === JSON.stringify(settings)) return;
+  if (JSON.stringify(next) === JSON.stringify(settings)) {
+    // Even when nothing is rebuilt, storage moved, so the believed state is
+    // refreshed; without this a later `persistSettings` would re-send keys that
+    // came from our own write and are already stored.
+    published = cloneSettings(next);
+    return;
+  }
 
   const previous = settings;
   settings = next;
+  // Another surface changed storage, so what we believe it holds has changed too.
+  published = cloneSettings(next);
 
   // Rebuild only when something that affects the ROWS moved. A pure presentation
   // change (text size, view mode, which script a reading is drawn in) is applied by
