@@ -3795,8 +3795,7 @@ function renderLicences() {
   const body = document.createDocumentFragment();
   const lead = document.createElement('p');
   lead.className = 'licences-lead';
-  lead.textContent =
-    'This extension is MIT licensed. It displays dictionary data from the sources below, each under its own licence, with the change made to it stated.';
+  lead.textContent = 'Dictionary data comes from the sources below. Each is used under its own licence.';
   body.append(lead);
 
   for (const entry of SOURCES) {
@@ -3818,12 +3817,6 @@ function renderLicences() {
     row.append(name, licence, changes);
     body.append(row);
   }
-
-  const foot = document.createElement('p');
-  foot.className = 'licences-foot';
-  foot.textContent =
-    'The full notices, with the exact revision and content hash each dictionary was built from, ship as THIRD-PARTY.md and THIRD-PARTY-NOTES.md.';
-  body.append(foot);
 
   panel.replaceChildren(body);
   panel.dataset.built = 'true';

@@ -1065,16 +1065,11 @@ body {
  * second card style would be a second set of those to keep in step. Only the CONTENT
  * differs, and only the content is styled below.
  */
-.licences-lead,
-.licences-foot {
+.licences-lead {
   margin: 0 0 12px;
   color: var(--muted, #98a2b3);
   font-size: 0.85em;
   line-height: 1.45;
-}
-
-.licences-foot {
-  margin: 12px 0 0;
 }
 
 /* A rule between works, so a long source name wrapping to two lines does not read as

@@ -657,8 +657,7 @@ function renderLicencesView() {
 
   const intro = document.createElement('p');
   intro.className = 'licences-intro';
-  intro.textContent =
-    'Definitions and readings come from the word lists below. Each is used under its own licence, and the change made to it is stated.';
+  intro.textContent = 'Definitions and readings come from the sources below. Each is used under its own licence.';
   els.settingsBody.append(intro);
 
   const list = document.createElement('section');
@@ -686,12 +685,6 @@ function renderLicencesView() {
   }
 
   els.settingsBody.append(list);
-
-  const note = document.createElement('p');
-  note.className = 'licences-note';
-  note.textContent =
-    'The full notices, with the exact revision and content hash each dictionary was built from, ship with the extension as THIRD-PARTY.md and THIRD-PARTY-NOTES.md.';
-  els.settingsBody.append(note);
 }
 
 /**
