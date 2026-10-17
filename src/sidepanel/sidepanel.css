@@ -86,11 +86,10 @@ body {
  * header's button swaps the body. These rules only style the rows, which are read
  * rather than operated.
  *
- * The rows DO honour `--text-scale`, unlike the old footnote: this is a page the
- * reader opened on purpose, so it follows the size they set for reading.
+ * The rows DO honour `--text-scale`: this is a page the reader opened on purpose, so
+ * it follows the size they set for reading.
  */
-.licences-intro,
-.licences-note {
+.licences-intro {
   margin: 0 0 10px;
   padding: 0 2px;
   color: var(--muted);
@@ -98,32 +97,7 @@ body {
   line-height: 1.45;
 }
 
-.licences-note {
-  margin: 10px 0 0;
-}
-
-/* The link to the shipped notice, styled as a link: a bordered button at the foot of
-   a paragraph of text would compete with the header's Licences button, which is the
-   real navigation on this page. */
-.licences-open {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
-}
-
-.licences-open:hover,
-.licences-open:focus-visible {
-  color: var(--fg);
-}
-
-/* One work: its full name, the licence it is used under, and the change made. A
-   grid so the licence and the name start at the same x and the list reads as a
-   table of three facts per work rather than as prose. */
+/* One work: its full name, the licence it is used under, and the change made. */
 .source-row {
   padding: 8px 10px;
   border-bottom: 1px solid #1b2029;

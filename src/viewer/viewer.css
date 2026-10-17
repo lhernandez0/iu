@@ -1057,62 +1057,48 @@ body {
   text-align: center;
 }
 
-/* Where a key differs from YouTube's, or has no counterpart there. Dimmer, because it
-   is context for the key rather than part of its name. */
-.shortcut-note {
+/*
+ * The licences panel.
+ *
+ * Reuses `.shortcuts` for the card: position, size, background, the close button and
+ * the scroll behaviour are all the same, because it is the same kind of thing and a
+ * second card style would be a second set of those to keep in step. Only the CONTENT
+ * differs, and only the content is styled below.
+ */
+.licences-lead {
+  margin: 0 0 12px;
   color: var(--muted, #98a2b3);
-  font-size: 0.9em;
+  font-size: 0.85em;
+  line-height: 1.45;
 }
 
-/*
- * The Licences list, the panel's second section.
- *
- * A rule above it, because it is not more keys and a learner scrolling the card
- * should see where the shortcuts end. Plain rows rather than a definition list, so
- * the panel's keys stay the only `<dl>` the shortcut test counts.
- */
-.shortcut-sources {
-  margin-top: 16px;
-  padding-top: 4px;
+/* A rule between works, so a long source name wrapping to two lines does not read as
+   running into the licence below it. */
+.licence-row {
+  padding: 9px 0;
   border-top: 1px solid var(--edge);
 }
 
-.shortcut-source + .shortcut-source {
-  margin-top: 8px;
-}
-
-.shortcut-source-name {
+.licence-name {
   margin: 0;
   font-size: 0.9em;
   line-height: 1.35;
 }
 
-/* The licence and the required change note, dimmer than the work's name. */
-.shortcut-source-detail {
-  margin: 1px 0 0;
-  color: var(--muted, #98a2b3);
-  font-size: 0.82em;
-  line-height: 1.35;
-}
-
-/* The link to the full notice, styled as a link so it reads as an action rather than
-   as another row of licence text. */
-.shortcut-source-open {
-  margin-top: 10px;
-  padding: 0;
-  border: 0;
-  background: none;
+/* The licence identifier, in the accent: it is what a reader scanning for "what is
+   this under" is looking for. */
+.licence-id {
+  margin: 2px 0 0;
   color: var(--accent, #7aa2f7);
-  font: inherit;
-  font-size: 0.85em;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  cursor: pointer;
+  font-size: 0.82em;
 }
 
-.shortcut-source-open:hover,
-.shortcut-source-open:focus-visible {
-  color: var(--text);
+/* The required indication of changes, dimmer than the work's name. */
+.licence-changes {
+  margin: 2px 0 0;
+  color: var(--muted, #98a2b3);
+  font-size: 0.8em;
+  line-height: 1.35;
 }
 
 /* --- Command feedback ----------------------------------------------------- */

@@ -3711,6 +3711,9 @@ function runShortcut(action) {
     case 'pip':
       togglePip();
       break;
+    case 'licences':
+      toggleLicences();
+      break;
     case 'help':
       toggleHelp();
       break;
@@ -3765,82 +3768,78 @@ function renderHelp() {
       }
       const label = document.createElement('dd');
       label.textContent = entry.label;
-      // Where a key differs from YouTube's, or has no counterpart, say so. The point of a
-      // help panel is to answer "but YouTube does X", and a bare list cannot.
-      if (entry.yt) {
-        const note = document.createElement('span');
-        note.className = 'shortcut-note';
-        note.textContent = ` (${entry.yt})`;
-        label.append(note);
-      }
       list.append(keys, label);
     }
     body.append(list);
   }
-  // The Sources list rides in the SAME reference panel as the keys, as a second
-  // section. Both are "a list of facts read while playing", so a learner opens one
-  // place they already know rather than a third floating surface in a player that
-  // has two. The panel is non-modal, so the video keeps playing behind it, which is
-  // what makes it the right home for text someone reads mid-film.
-  body.append(buildLicencesSection());
+  panel.replaceChildren(body);
+  panel.dataset.built = 'true';
+}
+
+/** Whether the licences panel is open. */
+let licencesOpen = false;
+
+/**
+ * A work in the licences panel: its source, its licence and the change made to it.
+ *
+ * Built from `SOURCES`, the same module the side panel's view reads, so the two screens
+ * that show dictionary-derived words cannot state different attributions. Static rows
+ * rather than a `<dl>`: a work carries three facts rather than a term and a definition,
+ * and a definition list here would be counted by the shortcut test, which measures the
+ * help card's keys by `#shortcuts dt`.
+ */
+function renderLicences() {
+  const panel = document.getElementById('licences');
+  if (!panel || panel.dataset.built === 'true') return;
+
+  const body = document.createDocumentFragment();
+  const lead = document.createElement('p');
+  lead.className = 'licences-lead';
+  lead.textContent = 'Dictionary data comes from the sources below. Each is used under its own licence.';
+  body.append(lead);
+
+  for (const entry of SOURCES) {
+    const row = document.createElement('div');
+    row.className = 'licence-row';
+
+    const name = document.createElement('p');
+    name.className = 'licence-name';
+    name.textContent = entry.name;
+
+    const licence = document.createElement('p');
+    licence.className = 'licence-id';
+    licence.textContent = entry.licence;
+
+    const changes = document.createElement('p');
+    changes.className = 'licence-changes';
+    changes.textContent = entry.changes;
+
+    row.append(name, licence, changes);
+    body.append(row);
+  }
+
   panel.replaceChildren(body);
   panel.dataset.built = 'true';
 }
 
 /**
- * The licence acknowledgement as a list: one row per work, with its licence and the
- * change made to it.
+ * Show or hide the licences panel, in the same place and of the same kind as the help
+ * card.
  *
- * Mirrors the panel's licences view and reads the same `SOURCES` module, so the two
- * screens that show dictionary-derived words cannot state different attributions.
- *
- * Deliberately NOT a `<dl>`: a work carries three facts (name, licence, change)
- * rather than a term and a definition, and a definition list here would also be
- * counted by the shortcut test, which measures the panel's keys by `#shortcuts dt`.
- * Plain rows keep the keys the only definition list in the card.
+ * **The two panels are mutually exclusive.** They occupy the same corner, so showing
+ * both would stack one on the other and neither would be readable. Opening one closes
+ * the other, which is also what a reader expects from two toggles in the same slot.
  */
-function buildLicencesSection() {
-  const heading = document.createElement('h3');
-  heading.textContent = 'Licences';
-
-  const group = document.createElement('section');
-  group.className = 'shortcut-sources';
-  group.id = 'viewer-sources';
-  group.append(heading);
-
-  for (const entry of SOURCES) {
-    const row = document.createElement('div');
-    row.className = 'shortcut-source';
-
-    const name = document.createElement('p');
-    name.className = 'shortcut-source-name';
-    name.textContent = entry.name;
-
-    const detail = document.createElement('p');
-    detail.className = 'shortcut-source-detail';
-    detail.textContent = `${entry.licence}. ${entry.changes}`;
-
-    row.append(name, detail);
-    group.append(row);
+function toggleLicences() {
+  licencesOpen = !licencesOpen;
+  const panel = document.getElementById('licences');
+  if (!panel) return;
+  if (licencesOpen) {
+    renderLicences();
+    if (helpOpen) toggleHelp();
   }
-
-  // The complete notice, the same file the panel opens, reached the same way: from the
-  // extension's own package, so the URL is `chrome-extension://` and the one-host guard
-  // that forbids an `https` host other than youtube.com in `src/` stays intact.
-  const open = document.createElement('button');
-  open.type = 'button';
-  open.className = 'shortcut-source-open';
-  open.textContent = 'Open the full notice';
-  open.addEventListener('click', () => {
-    const url = api.runtime.getURL('THIRD-PARTY.md');
-    // Same optional chain as the panel's handler: `tabs.create` in the extension, and
-    // `window.open` only so the stub-hosted preview does not throw.
-    if (api.tabs?.create) void api.tabs.create({ url });
-    else globalThis.open?.(url, '_blank');
-  });
-  group.append(open);
-
-  return group;
+  panel.hidden = !licencesOpen;
+  if (licencesOpen) panel.querySelector('button')?.focus();
 }
 
 function toggleHelp() {
@@ -3848,7 +3847,12 @@ function toggleHelp() {
   const panel = document.getElementById('shortcuts');
   const button = document.getElementById('help');
   if (!panel) return;
-  if (helpOpen) renderHelp();
+  if (helpOpen) {
+    renderHelp();
+    // The two panels share the same corner, so only one may be open. See
+    // `toggleLicences` for the other half of this.
+    if (licencesOpen) toggleLicences();
+  }
   panel.hidden = !helpOpen;
   button?.setAttribute('aria-pressed', String(helpOpen));
   // Focus moves into the panel so a keyboard user is not left with focus on a hidden
@@ -3858,11 +3862,18 @@ function toggleHelp() {
 
 click('help', () => toggleHelp());
 click('help-close', () => toggleHelp());
+click('licences-close', () => toggleLicences());
 
 document.addEventListener('keydown', (event) => {
-  // Escape closes the panel, and only when it is open, so the key stays available to the
-  // browser otherwise. Not routed through `resolveShortcut`: this is not a player action.
-  if (helpOpen && event.key === 'Escape') {
+  // Escape closes whichever panel is open, and only then, so the key stays available to
+  // the browser otherwise. Not routed through `resolveShortcut`: this is not a player
+  // action. The licences panel is checked FIRST, because it is the one drawn on top when
+  // both were opened in the same frame.
+  if (event.key !== 'Escape') return;
+  if (licencesOpen) {
+    event.preventDefault();
+    toggleLicences();
+  } else if (helpOpen) {
     event.preventDefault();
     toggleHelp();
   }

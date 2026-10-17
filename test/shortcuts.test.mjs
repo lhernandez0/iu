@@ -71,6 +71,15 @@ section('the shortcut table');
   // do what it says.
   const shown = SHORTCUTS.flatMap((e) => e.keys);
   check('no key is claimed by two actions', new Set(shown).size, shown.length);
+
+  // A label is a NAME, and nothing else belongs on screen. The table used to carry a
+  // `yt` field that the help panel printed in a parenthetical after the label, so the
+  // card a learner scans for a key read "Back 5 seconds (other players step 10)". The
+  // divergence is a fact about the MAPPING and lives in the module's comments, not in
+  // the UI. Asserted on the labels rather than on the absence of a field, because a
+  // parenthetical would still be wrong if it were written into the label itself.
+  const chatty = SHORTCUTS.filter((e) => /[()[\]]/.test(e.label)).map((e) => `${e.id}: ${e.label}`);
+  check('no label carries a parenthetical or a bracket note', chatty, []);
 }
 
 // --- Resolution: the happy path ----------------------------------------------

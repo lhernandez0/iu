@@ -533,6 +533,19 @@ section('every dictionary source is named on the licences screens');
   const shippedLine = /^SHIPPED := ([\s\S]*?)(?=\n\n)/m.exec(makefile)?.[1] ?? '';
   const shipped = shippedLine.replace(/\\\n/g, ' ').split(/\s+/).filter(Boolean);
   check('and it is in the Makefile SHIPPED list', shipped.includes('THIRD-PARTY.md'), true);
+
+  // The licences panel that the viewer's `A` key opens. It is built from `SOURCES` at
+  // runtime, so its CONTENT is checked in the browser tier; here the check is that the
+  // markup declares it at all, so a rename in `viewer.html` fails here rather than as a
+  // key that opens nothing.
+  const viewerHtml = readFileSync(join(ROOT, 'src', 'viewer', 'viewer.html'), 'utf8');
+  check('the viewer declares the licences panel', /id="licences"/.test(viewerHtml), true);
+  check('and a close control for it', /id="licences-close"/.test(viewerHtml), true);
+
+  // A key that opens the panel, on the same table the card renders, so the shortcut and
+  // the panel cannot drift apart.
+  const shortcuts = readFileSync(join(ROOT, 'src', 'viewer', 'shortcuts.js'), 'utf8');
+  check('a shortcut is bound to the licences', /id: 'licences'/.test(shortcuts), true);
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

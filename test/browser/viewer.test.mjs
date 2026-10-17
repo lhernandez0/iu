@@ -1745,17 +1745,56 @@ section('the keyboard shortcuts drive the player, and the help panel lists them'
       rows: document.querySelectorAll('#shortcuts dt').length,
       expected: SHORTCUTS.length,
       hasToggleKey: [...document.querySelectorAll('#shortcuts kbd')].some((k) => k.textContent === 'C'),
+      // The rendered text a learner actually reads. A note the script appends would not
+      // be in the label, so this is the check that catches a parenthetical ON SCREEN
+      // rather than one in the table.
+      descriptions: [...document.querySelectorAll('#shortcuts dd')].map((el) => el.textContent),
     };
   });
   check('? opens the shortcut panel', help.open, true);
   check('and it lists every shortcut in the table', help.rows, help.expected);
   check('and the panel names the captions key', help.hasToggleKey, true);
+  check(
+    'and no rendered description carries an editorial note',
+    help.descriptions.filter((text) => /[()[\]]/.test(text)),
+    [],
+  );
 
   // Escape closes it, so the panel is dismissable from the keyboard that opened it.
   await page12.keyboard.press('Escape');
   await page12.waitForTimeout(200);
   const closed = await page12.evaluate(() => document.getElementById('shortcuts')?.hidden);
   check('and Escape closes it', closed, true);
+
+  // `a` opens the licences panel, the same KIND of card as the help, in the same corner.
+  // It is built from `SOURCES` at runtime, so this is the only place its content can be
+  // checked against the module rather than against a promise that a markup file matches.
+  await page12.keyboard.press('a');
+  await page12.waitForTimeout(200);
+  const licences = await page12.evaluate(async () => {
+    const { SOURCES } = await import('../common/sources.js');
+    const panel = document.getElementById('licences');
+    return {
+      open: !panel?.hidden,
+      // One row per source, compared to the module rather than a literal, so a source
+      // added to the list shows up here as a mismatch rather than passing.
+      rows: panel ? panel.querySelectorAll('.licence-row').length : -1,
+      expected: SOURCES.length,
+      named: [...(panel?.querySelectorAll('.licence-name') ?? [])].map((el) => el.textContent),
+      expectedNames: SOURCES.map((s) => s.name),
+      helpClosed: document.getElementById('shortcuts')?.hidden,
+    };
+  });
+  check('a opens the licences panel', licences.open, true);
+  check('and it lists every source', licences.rows, licences.expected);
+  check('with the expected names', licences.named, licences.expectedNames);
+  // The two panels share a corner, so opening one must close the other or they overlap.
+  check('and opening the licences closed the help', licences.helpClosed, true);
+
+  await page12.keyboard.press('Escape');
+  await page12.waitForTimeout(200);
+  const licencesClosed = await page12.evaluate(() => document.getElementById('licences')?.hidden);
+  check('and Escape closes the licences', licencesClosed, true);
 
   await page12.close();
 }

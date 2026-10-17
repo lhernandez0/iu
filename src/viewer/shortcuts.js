@@ -11,7 +11,7 @@
  * YouTube's player has a set of shortcuts its users already know, and this viewer plays
  * YouTube videos, so matching them where it costs nothing is the difference between keys
  * that are remembered and keys that have to be looked up. The set below starts from
- * YouTube's list and diverges in exactly three places, each deliberate:
+ * YouTube's list and diverges in exactly five places, each deliberate:
  *
  *   - `j` and `l` are 5 seconds, not 10, because the viewer's OWN buttons step 5 and a
  *     shortcut that disagreed with the button beside it would be a trap.
@@ -21,6 +21,16 @@
  *   - Previous/next/replay LINE have no YouTube equivalent, so they get `[`, `]` and `\`:
  *     a cluster that sits together on the keyboard, where the brackets read as "one back,
  *     one forward" and the odd one out is the odd action.
+ *   - `i` is picture in picture. YouTube puts that in a miniplayer elsewhere; a local file
+ *     has no page to put one in, so it is bound here.
+ *   - `a` is for About. The licences have no YouTube equivalent and are not a player
+ *     action at all, which is why the key is a letter nobody associates with playback.
+ *
+ * **What a key does is here; why it differs is in this comment, not in the app.** The
+ * help panel used to print a parenthetical after the label ("(other players step 10)")
+ * and that was wrong twice over: it put editorial notes in a card meant to be scanned for
+ * a key, and it made the panel a document to read rather than a list to consult. The
+ * divergence is a fact about the MAPPING, so it lives with the mapping.
  *
  * ## The keys deliberately NOT bound
  *
@@ -41,7 +51,6 @@
  *
  * @type {Array<{
  *   id: string, keys: string[], label: string, group: string,
- *   yt?: string, note?: string,
  * }>}
  */
 export const SHORTCUTS = [
@@ -52,8 +61,8 @@ export const SHORTCUTS = [
   { id: 'speed-up', keys: ['>'], label: 'Faster', group: 'Playback' },
 
   // --- Seeking --------------------------------------------------------------
-  { id: 'back', keys: ['J', '\u2190'], label: 'Back 5 seconds', group: 'Seeking', yt: 'other players step 10' },
-  { id: 'forward', keys: ['L', '\u2192'], label: 'Forward 5 seconds', group: 'Seeking', yt: 'other players step 10' },
+  { id: 'back', keys: ['J', '\u2190'], label: 'Back 5 seconds', group: 'Seeking' },
+  { id: 'forward', keys: ['L', '\u2192'], label: 'Forward 5 seconds', group: 'Seeking' },
   { id: 'start', keys: ['Home'], label: 'Jump to the start', group: 'Seeking' },
   { id: 'end', keys: ['End'], label: 'Jump to the end', group: 'Seeking' },
   { id: 'jump-1', keys: ['1'], label: 'Jump to 10%', group: 'Seeking' },
@@ -68,15 +77,16 @@ export const SHORTCUTS = [
   { id: 'jump-0', keys: ['0'], label: 'Jump to the start', group: 'Seeking' },
 
   // --- Lines, this viewer's own controls ------------------------------------
-  { id: 'prev-cue', keys: ['['], label: 'Previous line', group: 'Lines', yt: 'this viewer only' },
-  { id: 'next-cue', keys: [']'], label: 'Next line', group: 'Lines', yt: 'this viewer only' },
-  { id: 'replay-cue', keys: ['\\'], label: 'Replay this line', group: 'Lines', yt: 'this viewer only' },
+  { id: 'prev-cue', keys: ['['], label: 'Previous line', group: 'Lines' },
+  { id: 'next-cue', keys: [']'], label: 'Next line', group: 'Lines' },
+  { id: 'replay-cue', keys: ['\\'], label: 'Replay this line', group: 'Lines' },
 
   // --- Display --------------------------------------------------------------
   { id: 'captions', keys: ['C'], label: 'Captions on / off', group: 'Display' },
   { id: 'fullscreen', keys: ['F'], label: 'Fullscreen on / off', group: 'Display' },
-  { id: 'pip', keys: ['I'], label: 'Picture in picture', group: 'Display', yt: 'a miniplayer elsewhere' },
-  { id: 'help', keys: ['?'], label: 'Show this list', group: 'Display', yt: 'the common key for this' },
+  { id: 'pip', keys: ['I'], label: 'Picture in picture', group: 'Display' },
+  { id: 'licences', keys: ['A'], label: 'Licences and sources', group: 'Display' },
+  { id: 'help', keys: ['?'], label: 'Show this list', group: 'Display' },
 ];
 
 /** Every action id, for a test to check the wiring covers them all. */
@@ -121,6 +131,7 @@ const KEY_TO_ACTION = {
   c: 'captions',
   f: 'fullscreen',
   i: 'pip',
+  a: 'licences',
   '?': 'help',
 };
 

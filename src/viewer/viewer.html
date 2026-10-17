@@ -461,6 +461,24 @@
       <div class="shortcuts" id="shortcuts" role="region" aria-label="Keyboard shortcuts" hidden>
         <button type="button" class="shortcut-close" id="help-close" aria-label="Close the shortcut list">Close</button>
       </div>
+
+      <!--
+        The licences panel.
+
+        The same kind of card as the shortcut list beside it, and NOT a page: a learner
+        reads it WHILE playing, so it must not stop the video or need navigating back
+        from, which is the same reason the help card is not `<dialog>`. It is a separate
+        panel rather than a second section of the help card because the two are
+        different documents, and one made the other something to scroll past.
+
+        Empty in the markup on purpose, exactly like the help card: the list is built
+        from `SOURCES` by the script, so the panel and the side panel's view cannot
+        disagree about what is bundled. Left empty in the HTML, a source added in one
+        place and not the other would go unnoticed.
+      -->
+      <div class="shortcuts licences" id="licences" role="region" aria-label="Licences and sources" hidden>
+        <button type="button" class="shortcut-close" id="licences-close" aria-label="Close the licences">Close</button>
+      </div>
     </main>
 
     <script type="module" src="viewer.js"></script>
