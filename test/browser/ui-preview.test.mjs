@@ -322,18 +322,20 @@ try {
     check('and states a licence', licences.licenced, true);
     check('and there is a button to the full notice', licences.noticeButton.length > 0, true);
 
-    // The button opens the shipped notice. The preview's mock `getURL` answers
-    // `/THIRD-PARTY.md` and there is no `tabs` API, so the handler falls back to
-    // `window.open`, which Playwright sees as a popup. This proves the handler runs and
-    // resolves a real file rather than throwing on a missing API or a dead path.
+    // The button opens the licences PAGE. The preview's mock `getURL` answers a
+    // root-relative path and there is no `tabs` API, so the handler falls back to
+    // `window.open`, which Playwright sees as a popup. Vite serves `src/` from the repo
+    // root, so the resolved URL loads the real page rather than 404ing, which proves the
+    // handler runs and the path is real.
     const popupPromise = page.waitForEvent('popup', { timeout: 4000 }).catch(() => null);
     await page.click('#settings-body .licences-open');
     const popup = await popupPromise;
-    check('the notice button opens the document', Boolean(popup), true);
+    check('the notice button opens the licences page', Boolean(popup), true);
     if (popup) {
       await popup.waitForLoadState('domcontentloaded').catch(() => {});
       const text = await popup.evaluate(() => document.body.innerText).catch(() => '');
-      check('and the document it opens is the notice', /Third-party notices/i.test(text), true);
+      check('and the page it opens lists the sources', /CC-CEDICT/.test(text), true);
+      check('with the heading, not a raw file', /^Licences/m.test(text), true);
       await popup.close();
     }
     check('and clicking it raised no error', errors, []);

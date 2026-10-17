@@ -1,0 +1,107 @@
+/*
+ * The licences page.
+ *
+ * Deliberately the same tokens as `viewer.css` rather than an import of it: this is a
+ * page of text, not a player, and pulling the player's stylesheet in for six colour
+ * values would carry the whole layout with it. The values are the theme's, kept equal
+ * by hand, which is cheap because they have changed once.
+ *
+ * Light and dark are both handled through `color-scheme` and `light-dark()`: a page
+ * about licence text is one a reader may well open at a desk in daylight, and a page
+ * that forced dark would be the only white-text surface in the product.
+ */
+:root {
+  --bg: light-dark(#ffffff, #12141a);
+  --fg: light-dark(#1a1d24, #e6e8ee);
+  --muted: light-dark(#5c6472, #8b93a7);
+  --accent: light-dark(#2f5fd0, #7aa2f7);
+  --surface: light-dark(#f4f6f9, #1b1e25);
+  --edge: light-dark(#dce0e8, #262b38);
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* A readable column, centred, with breathing room. `ch` rather than px so the measure
+   stays right whatever the reader's base font size is. */
+.page {
+  max-width: 62ch;
+  margin: 0 auto;
+  padding: 40px 20px 64px;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  margin: 32px 0 10px;
+  font-size: 17px;
+  letter-spacing: 0.01em;
+}
+
+.lead {
+  margin: 0;
+  color: var(--muted);
+}
+
+.group {
+  margin-top: 8px;
+}
+
+.sources {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.source {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--edge);
+}
+
+.source:last-child {
+  border-bottom: none;
+}
+
+.source-name {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* The licence identifier, in the accent, because it is the thing a reader scanning for
+   "what is this under" is looking for. */
+.source-licence {
+  margin: 2px 0 0;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+/* The required indication of changes, dimmer: it is not part of the work's name. */
+.source-changes {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+code {
+  padding: 1px 5px;
+  border: 1px solid var(--edge);
+  border-radius: 5px;
+  background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+}

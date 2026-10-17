@@ -533,6 +533,37 @@ section('every dictionary source is named on the licences screens');
   const shippedLine = /^SHIPPED := ([\s\S]*?)(?=\n\n)/m.exec(makefile)?.[1] ?? '';
   const shipped = shippedLine.replace(/\\\n/g, ' ').split(/\s+/).filter(Boolean);
   check('and it is in the Makefile SHIPPED list', shipped.includes('THIRD-PARTY.md'), true);
+
+  // The licences PAGE, which the viewer's `A` key and the panel's button both open. It
+  // is STATIC markup, so nothing at runtime keeps it in step with `SOURCES`, and it is
+  // the surface a learner actually reads. Each source's display name and licence must
+  // appear, or the page a reader is sent to is missing a work the app displays.
+  const pagePath = join(ROOT, 'src', 'licences', 'licences.html');
+  check('the licences page exists', existsSync(pagePath), true);
+
+  if (existsSync(pagePath)) {
+    const page = readFileSync(pagePath, 'utf8');
+    // Whitespace collapsed, because a long source name wraps in the markup and a
+    // literal substring match would miss it.
+    const flat = page.replace(/\s+/g, ' ');
+
+    const absentNames = SOURCES.filter((s) => !flat.includes(s.name));
+    check('every source name is on the page', absentNames.map((s) => s.name), []);
+
+    const absentLicences = SOURCES.filter((s) => !flat.includes(s.licence));
+    check('and every source licence is on the page', absentLicences.map((s) => s.licence), []);
+
+    // No script: the page holds no state, so a script is only a way for it to render
+    // empty when a module fails to load. Asserted as an absence so it is not added
+    // "for consistency" later.
+    check('the page has no script', /<script/i.test(page), false);
+
+    // No web host. This is an HTML file, not a `.js` one, so `test/manifest.test.mjs`'s
+    // hostname scan does not cover it, and this is the check that keeps it from quietly
+    // becoming a surface that links out to the network.
+    const hosts = [...page.matchAll(/https?:\/\/([A-Za-z0-9_.-]+)/g)].map((m) => m[1]);
+    check('and it links to no external host', hosts, []);
+  }
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

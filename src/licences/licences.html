@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU, licences</title>
+    <link rel="stylesheet" href="licences.css" />
+  </head>
+  <body>
+    <!--
+      The licences page.
+
+      A page of its own rather than a section in a player's help panel, reached by the
+      `A` key in the viewer and by the Licences button in the side panel. The reason is
+      that a list of keys and a list of licences are different documents: mixing them
+      made the shortcut card something a learner had to scroll past the legal text to
+      read, and the licence text something a learner only found if they knew to press
+      `?`. EDRDG's own licence names "a separate screen accessed from a menu" as the
+      sanctioned shape for attribution, so a page is the intended form, not a workaround.
+
+      Static markup with no script on purpose. The list changes when a dictionary is
+      added, which is a code change, not a runtime one, and `test/licence.test.mjs`
+      asserts the names here match the data. A script would add a failure mode (a page
+      that renders empty when the module 404s) for no state it needs to hold.
+    -->
+    <main class="page">
+      <h1>Licences</h1>
+
+      <p class="lead">
+        This extension is MIT licensed. It displays dictionary data from the sources
+        below, each used under its own licence, with the change made to it stated. None
+        of the dictionary data is covered by the MIT licence, and it cannot be
+        relicensed.
+      </p>
+
+      <section class="group" aria-labelledby="sources-heading">
+        <h2 id="sources-heading">Dictionary sources</h2>
+
+        <ul class="sources">
+          <li class="source">
+            <p class="source-name">CC-CEDICT via TeaPearce/chinese-english-dictionary</p>
+            <p class="source-licence">CC BY-SA 4.0</p>
+            <p class="source-changes">Reformatted and subset.</p>
+          </li>
+          <li class="source">
+            <p class="source-name">JMdict (EDRDG, Jim Breen) via scriptin/jmdict-simplified</p>
+            <p class="source-licence">CC BY-SA 4.0</p>
+            <p class="source-changes">Reformatted and subset to the common entries.</p>
+          </li>
+          <li class="source">
+            <p class="source-name">open-anki-jlpt-decks (Jamie Sinclair)</p>
+            <p class="source-licence">MIT</p>
+            <p class="source-changes">JLPT levels only.</p>
+          </li>
+          <li class="source">
+            <p class="source-name">
+              NIKL 한국어 학습용 어휘 목록 (National Institute of Korean Language), via
+              julienshim/combined_korean_vocabulary_list
+            </p>
+            <p class="source-licence">KOGL Type 1</p>
+            <p class="source-changes">NIKL levels only.</p>
+          </li>
+          <li class="source">
+            <p class="source-name">
+              Open Yonsei Korean Vocabulary (Amulopapa67), a community companion to the
+              six-volume Yonsei course, not affiliated with Yonsei University
+            </p>
+            <p class="source-licence">CC BY-SA 3.0</p>
+            <p class="source-changes">Definitions, readings and course levels only.</p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="group" aria-labelledby="full-heading">
+        <h2 id="full-heading">Full licence texts</h2>
+        <p>
+          The complete notices, with the exact revisions and content hashes each
+          dictionary was built from, ship with the extension as
+          <code>THIRD-PARTY.md</code> and <code>THIRD-PARTY-NOTES.md</code>, and are in
+          the repository beside this source.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

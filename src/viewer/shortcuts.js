@@ -76,6 +76,11 @@ export const SHORTCUTS = [
   { id: 'captions', keys: ['C'], label: 'Captions on / off', group: 'Display' },
   { id: 'fullscreen', keys: ['F'], label: 'Fullscreen on / off', group: 'Display' },
   { id: 'pip', keys: ['I'], label: 'Picture in picture', group: 'Display', yt: 'a miniplayer elsewhere' },
+  // `A` for About. The licences are not a player action, so this is not a YouTube key
+  // and says so: it opens a page, and the page is where the source list lives rather
+  // than this card, so the card stays a list of KEYS rather than becoming a document a
+  // learner has to scroll past to find the seek keys.
+  { id: 'licences', keys: ['A'], label: 'Licences and sources', group: 'Display', yt: 'this viewer only' },
   { id: 'help', keys: ['?'], label: 'Show this list', group: 'Display', yt: 'the common key for this' },
 ];
 
@@ -121,6 +126,7 @@ const KEY_TO_ACTION = {
   c: 'captions',
   f: 'fullscreen',
   i: 'pip',
+  a: 'licences',
   '?': 'help',
 };
 
