@@ -879,6 +879,41 @@ section('changing a setting is remembered');
   check('the nonsense size fell back to the default', stub.storage.settings?.fontSize, 13);
 }
 
+section('a worker write does not clobber a concurrent writer\'s key');
+
+{
+  // **The lost-update race, and the smallest fix for it.** The worker used to write
+  // the WHOLE settings object from its in-memory copy, while the viewer writes with a
+  // fresh read plus a single-key merge, and both write the SAME storage key. A viewer
+  // change landing between the worker's last read and its next write was silently
+  // reverted: `captionFade` set to 0.2 goes back to the default.
+  //
+  // `storageAsyncEvents` is REQUIRED here and is opt-in because it is the real Chrome
+  // ordering: `storage.onChanged` fires after the write commits, not inside `set()`.
+  // With the default synchronous stub the event lands before the worker's write, the
+  // window does not exist, and this test passes on the broken code, which it did until
+  // the ordering was made faithful.
+  const stub = await boot({ ...TRACK(GERMAN), storageDelay: 20, storageAsyncEvents: true });
+
+  // **The window, constructed deliberately.** The viewer's write and the worker's own
+  // write-start happen in the SAME tick, so the viewer's change is in storage while the
+  // worker's in-memory copy does not know about it (its `onChanged` has not run). That is
+  // the production interleaving: the viewer writes, and before the event reaches the
+  // worker, the worker commits a write of its own.
+  const viewerWrite = stub.chromeStorage.local.set({
+    settings: { ...stub.storage.settings, captionFade: 0.2 },
+  });
+  stub.sendFromPanel({ type: 'set-setting', id: 'fontSize', value: 18 });
+  await viewerWrite;
+  // Long enough for the worker's re-read (storageDelay) plus its write to settle.
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  check('the worker\'s own change landed', stub.storage.settings?.fontSize, 18);
+  // The load-bearing assertion: on the old whole-object write this is GONE, because the
+  // worker serialised a memory copy taken before the viewer's change reached it.
+  check('and the concurrent viewer change survived', stub.storage.settings?.captionFade, 0.2);
+}
+
 section('the choices a learner makes are all reported back in the learning block');
 
 {
