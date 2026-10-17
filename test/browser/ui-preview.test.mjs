@@ -266,6 +266,94 @@ try {
     await context.close();
   }
 
+  // --- The licences view -----------------------------------------------------
+  //
+  // The Licences button swaps the settings body for the licence list, in the same
+  // view under the same header. Nothing else covers it: it is a mode of the settings
+  // view, and the markup parity test only checks that the ids EXIST in both files, not
+  // that the button does anything. A button that toggled its own label and nothing
+  // else would pass every other check here and show a reader the settings they were
+  // already looking at.
+  console.log('\nlicences, the settings body swapped in place');
+
+  {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(`console: ${message.text()}`);
+    });
+
+    await page.goto(`http://127.0.0.1:${PORT}/tools/ui/?scenario=bilingual`, { waitUntil: 'load' });
+    await page.waitForFunction(() => document.querySelectorAll('#transcript .row').length > 0, {
+      timeout: 5000,
+    });
+
+    await page.click('#settings-toggle');
+    await page.waitForTimeout(150);
+    const opened = await page.evaluate(() => ({
+      title: document.getElementById('settings-title').textContent,
+      button: document.getElementById('licences-toggle').textContent.trim(),
+      groups: [...document.querySelectorAll('#settings-body .settings-group-title')].length,
+    }));
+    check('the gear opens Settings', opened.title, 'Settings');
+    check('with the button offering Licences', opened.button, 'Licences');
+    check('and the settings groups are rendered', opened.groups > 0, true);
+
+    await page.click('#licences-toggle');
+    await page.waitForTimeout(150);
+    const licences = await page.evaluate(() => ({
+      title: document.getElementById('settings-title').textContent,
+      button: document.getElementById('licences-toggle').textContent.trim(),
+      rows: document.querySelectorAll('#settings-body .source-row').length,
+      // The settings controls must be GONE, not merely hidden behind the list, or the
+      // view is two pages deep and the reader is scrolling past selects.
+      controls: document.querySelectorAll('#settings-body select, #settings-body input').length,
+      named: [...document.querySelectorAll('#settings-body .source-name')].every((el) => el.textContent.trim().length > 0),
+      licenced: [...document.querySelectorAll('#settings-body .source-licence')].every((el) => /\S/.test(el.textContent)),
+      noticeButton: document.querySelector('#settings-body .licences-open')?.textContent.trim() ?? '',
+    }));
+    check('the Licences button switches the view', licences.title, 'Licences');
+    check('and the button now offers Settings', licences.button, 'Settings');
+    check('the licence list rendered', licences.rows > 0, true);
+    check('the settings controls are gone', licences.controls, 0);
+    check('every row names a work', licences.named, true);
+    check('and states a licence', licences.licenced, true);
+    check('and there is a button to the full notice', licences.noticeButton.length > 0, true);
+
+    // The button opens the shipped notice. The preview's mock `getURL` answers
+    // `/THIRD-PARTY.md` and there is no `tabs` API, so the handler falls back to
+    // `window.open`, which Playwright sees as a popup. This proves the handler runs and
+    // resolves a real file rather than throwing on a missing API or a dead path.
+    const popupPromise = page.waitForEvent('popup', { timeout: 4000 }).catch(() => null);
+    await page.click('#settings-body .licences-open');
+    const popup = await popupPromise;
+    check('the notice button opens the document', Boolean(popup), true);
+    if (popup) {
+      await popup.waitForLoadState('domcontentloaded').catch(() => {});
+      const text = await popup.evaluate(() => document.body.innerText).catch(() => '');
+      check('and the document it opens is the notice', /Third-party notices/i.test(text), true);
+      await popup.close();
+    }
+    check('and clicking it raised no error', errors, []);
+
+    await page.click('#licences-toggle');
+    await page.waitForTimeout(150);
+    const back = await page.evaluate(() => ({
+      title: document.getElementById('settings-title').textContent,
+      rows: document.querySelectorAll('#settings-body .source-row').length,
+      groups: [...document.querySelectorAll('#settings-body .settings-group-title')].length,
+    }));
+    check('and the toggle returns to Settings', back.title, 'Settings');
+    check('with the licence rows gone', back.rows, 0);
+    check('and the settings groups back', back.groups > 0, true);
+
+    check('no console or page error', errors, []);
+
+    await context.close();
+  }
+
   // --- The mark comparison sheet --------------------------------------------
   //
   // `marks.html` had no coverage at all, and it is a page whose whole job is to

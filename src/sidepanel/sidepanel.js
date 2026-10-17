@@ -14,6 +14,7 @@
 import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
 import { definition, forSettingsView } from '../common/settings.js';
+import { SOURCES } from '../common/sources.js';
 import { providerNames } from '../common/providers.js';
 import { attachHover, showEntry, hide as hidePopover, renderTokens, renderReading, setReadingSettings } from '../common/marks.js';
 
@@ -76,7 +77,9 @@ const els = {
   save: /** @type {HTMLButtonElement} */ (document.getElementById('save')),
   settingsToggle: /** @type {HTMLButtonElement} */ (document.getElementById('settings-toggle')),
   settingsView: /** @type {HTMLElement} */ (document.getElementById('settings-view')),
+  settingsTitle: /** @type {HTMLElement} */ (document.getElementById('settings-title')),
   settingsBody: /** @type {HTMLElement} */ (document.getElementById('settings-body')),
+  licencesToggle: /** @type {HTMLButtonElement} */ (document.getElementById('licences-toggle')),
   learningBar: /** @type {HTMLElement} */ (document.querySelector('.bar.learning')),
   footer: /** @type {HTMLElement} */ (document.querySelector('footer.bar')),
 };
@@ -116,6 +119,14 @@ const view = {
   state: null,
   /** Whether the panel is showing the settings view instead of the transcript. */
   settingsOpen: false,
+  /**
+   * Whether the settings body is showing the licences INSTEAD of the settings.
+   *
+   * A mode of the settings view rather than a view of its own: the same section, the
+   * same header, the same gear as the only way out. The button in the header swaps the
+   * body, so a reader glances at the licences and is one click from where they were.
+   */
+  licencesOpen: false,
   /**
    * The last cue the worker reported, kept across a row rebuild.
    *
@@ -574,6 +585,14 @@ function renderLearning(state) {
 function renderSettingsView(learning, state) {
   if (!els.settingsBody) return;
 
+  // The licences mode REPLACES the settings, so it is decided here rather than by a
+  // second renderer the open path would have to call. One place builds the body, so
+  // the two modes cannot both append and leave the other's rows behind.
+  if (view.licencesOpen) {
+    renderLicencesView();
+    return;
+  }
+
   const definitions = forSettingsView();
   const signature = definitions
     .map((setting) => `${setting.id}:${String(learning[setting.id])}:${optionSignature(setting, state)}`)
@@ -605,6 +624,134 @@ function renderSettingsView(learning, state) {
 
     els.settingsBody.append(section);
   }
+}
+
+/**
+ * The licences view: the word lists this extension displays and what each is used under.
+ *
+ * **A mode of the settings view, not a view of its own.** It replaces the settings body
+ * under the same header, so it costs no new region, no navigation and no second close
+ * control in a 360px panel. The header's button swaps the body, which is the whole
+ * interaction.
+ *
+ * Built from `SOURCES` in `src/common/sources.js`, the same list the video viewer
+ * renders in its shortcut panel: both screens display dictionary-derived words, so the
+ * list lives in one module rather than being copied into each.
+ *
+ * **Names, licences and the change note. No URLs, deliberately.** The deeds and source
+ * links are in `THIRD-PARTY.md`, which ships in the package, and this says so.
+ * `test/manifest.test.mjs` fails the build if an absolute host other than `youtube.com`
+ * appears in any `.js` under `src/`, so a `creativecommons.org` link here would break
+ * the build and should: that guard is what keeps the extension unable to reach a second
+ * host. The mirror and upstream are named in full in `name`, so a reader has enough to
+ * find the licence even without the link.
+ */
+function renderLicencesView() {
+  // Its own signature, distinct from the settings one, so the two modes always rebuild
+  // when the button swaps between them and never show the other's rows.
+  const signature = `licences:${SOURCES.length}`;
+  if (els.settingsBody.dataset.signature === signature) return;
+  els.settingsBody.dataset.signature = signature;
+
+  els.settingsBody.replaceChildren();
+
+  const intro = document.createElement('p');
+  intro.className = 'licences-intro';
+  intro.textContent =
+    'Definitions and readings come from the word lists below. Each is used under its own licence, and the change made to it is stated.';
+  els.settingsBody.append(intro);
+
+  const list = document.createElement('section');
+  list.className = 'settings-group';
+  list.id = 'sources';
+
+  for (const entry of SOURCES) {
+    const row = document.createElement('div');
+    row.className = 'source-row';
+
+    const name = document.createElement('p');
+    name.className = 'source-name';
+    name.textContent = entry.name;
+
+    const licence = document.createElement('p');
+    licence.className = 'source-licence';
+    licence.textContent = entry.licence;
+
+    const changes = document.createElement('p');
+    changes.className = 'source-changes';
+    changes.textContent = entry.changes;
+
+    row.append(name, licence, changes);
+    list.append(row);
+  }
+
+  els.settingsBody.append(list);
+
+  const note = document.createElement('p');
+  note.className = 'licences-note';
+  note.append('Full licence texts and links to each source ship with the extension. ');
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'licences-open';
+  open.textContent = 'Open THIRD-PARTY.md';
+  open.addEventListener('click', openThirdPartyNotice);
+  note.append(open);
+  els.settingsBody.append(note);
+}
+
+/**
+ * Open the shipped third-party notice, the complete version, in a new tab.
+ *
+ * The file is opened from the EXTENSION's own package through `runtime.getURL`, so the
+ * URL is the extension's own scheme, not a web one. That is deliberate and it is what
+ * keeps the one-host guard intact: `test/manifest.test.mjs` asserts that no absolute
+ * host other than `youtube.com` appears in a `.js` file under `src/`, and a web link to
+ * the same document would have broken it and, with it, the claim the store listing
+ * makes about where this extension talks. The document itself is identical either way;
+ * only the address it is fetched from differs.
+ *
+ * It is also offline and cannot 404: the Makefile lists `THIRD-PARTY.md` in `SHIPPED`,
+ * so the exact file this opens is always inside the installed extension.
+ */
+function openThirdPartyNotice() {
+  const url = api.runtime.getURL('THIRD-PARTY.md');
+  // `tabs.create` is the extension-correct call and the one the shipping build takes.
+  // It is optional-chained because the preview harness stubs only `runtime`, and the
+  // fallback is `window.open`: not a second design, just what keeps the button from
+  // throwing where there is no tabs API.
+  if (api.tabs?.create) void api.tabs.create({ url });
+  else globalThis.open?.(url, '_blank');
+}
+
+/**
+ * Swap the settings header and body to match the current mode.
+ *
+ * Called from both open paths and from the Licences button, so the title, the button's
+ * own label and the body are set in ONE place and cannot be left describing the other
+ * mode. The title reading "Settings" over a list of licences is the confusing failure
+ * that a second code path would eventually cause.
+ */
+function refreshSettingsChrome() {
+  const licences = view.licencesOpen;
+  if (els.settingsTitle) els.settingsTitle.textContent = licences ? 'Licences' : 'Settings';
+  if (els.licencesToggle) {
+    els.licencesToggle.textContent = licences ? 'Settings' : 'Licences';
+    els.licencesToggle.setAttribute('aria-pressed', String(licences));
+  }
+  renderSettingsView(view.state?.learning ?? {}, view.state ?? {});
+}
+
+/**
+ * Show or hide the licences INSTEAD of the settings, in the same view.
+ *
+ * Opening the settings always starts on Settings, so the licences are something you
+ * step into, not a state the panel can be left in by accident.
+ *
+ * @param {boolean} open
+ */
+function setLicencesOpen(open) {
+  view.licencesOpen = open;
+  refreshSettingsChrome();
 }
 
 /**
@@ -779,6 +926,10 @@ function sendSetting(id, value) {
  */
 function setSettingsOpen(open) {
   view.settingsOpen = open;
+  // Opening always starts on Settings, so the licences are a step you take rather
+  // than a state the panel can be left in. Closing resets it too, so the next open is
+  // predictable whatever the last one ended on.
+  view.licencesOpen = false;
   if (els.settingsView) els.settingsView.hidden = !open;
   if (els.transcript) els.transcript.hidden = open;
   if (els.status) els.status.hidden = open;
@@ -792,10 +943,22 @@ function setSettingsOpen(open) {
   // The reading controls are about the transcript, so they hide with it rather
   // than sitting above a list of settings they do not affect.
   if (els.learningBar) els.learningBar.hidden = open;
+  // The title and the Licences button label are set from the mode in ONE place, so
+  // they cannot be left describing the other mode after a swap or a reopen.
+  if (open) refreshSettingsChrome();
 }
 
 if (els.settingsToggle) {
   els.settingsToggle.addEventListener('click', () => setSettingsOpen(!view.settingsOpen));
+}
+
+// The Licences button swaps the settings body for the licence list, in the SAME
+// view and under the same header. That is the whole point: it costs no new region, no
+// new navigation affordance in a 360px panel, and no second close control, which is
+// what an options page would have added for a page most people open once. The gear is
+// still the only way in and out.
+if (els.licencesToggle) {
+  els.licencesToggle.addEventListener('click', () => setLicencesOpen(!view.licencesOpen));
 }
 
 /**

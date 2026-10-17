@@ -1,479 +1,183 @@
 # Third-party notices
 
-What this project uses from elsewhere, under what licence, and what that obliges
-us to do. Kept in the repository root and committed, because attribution that
-exists only inside a data file is attribution nobody finds.
-
-Three bundled dictionaries, all **share-alike derivative works**. The licence on
-this project's own code (MIT) does **not** cover any of them, and none may be
-relicensed.
-
-| File | Words | Sources | Licence |
-| --- | --- | --- | --- |
-| `src/learn/data/chinese.json` | 11,470 | CC-CEDICT + the official MOE HSK 3.0 word list | CC BY-SA 4.0 |
-| `src/learn/data/japanese.json` | 28,690 | JMdict (EDRDG) + the JLPT lists | CC BY-SA 4.0 |
-| `src/learn/data/korean.json` | 7,738 | NIKL word list + Open Yonsei Korean Vocabulary | CC BY-SA 3.0 |
-
-One piece of third-party MEDIA is also committed, `tools/pages/media/`, a public
-domain film clip for the GitHub Pages demo. It is not a dictionary and carries no
-share-alike obligation; its section is at the end of this file.
-
-Each file declares its own licence in its `meta.licence`, derived by the build from
-the sources it lists in `meta.sources`. Korean is 3.0 because its definitions
-layer is, and share-alike compatibility takes the lower version number when both
-appear.
-
----
-
-## `src/learn/data/chinese.json`, the Chinese dictionary
-
-**Licence: CC BY-SA 4.0**
-
-This is a **derived** work, not a copy. It is CC BY-SA 4.0 and **must remain
-CC BY-SA 4.0**; it cannot be relicensed, and it is not covered by the licence on
-this project's own code.
-
-Derived through, in order:
-
-| Source | What came from it | Licence |
-| --- | --- | --- |
-| [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict) | Definitions, pinyin, traditional forms | CC BY-SA 4.0 |
-| [TeaPearce/chinese-english-dictionary](https://github.com/TeaPearce/chinese-english-dictionary) | The merged and standardised form we consumed (`data/parsed_hsk_enriched.json`) | CC BY-SA 4.0 |
-| HSK 3.0 word list (`data/hsk31-words-pleco.txt` upstream) | HSK levels override the CC-CEDICT-derived ones | Official MOE standard; see below |
-
-**Attribution.** CC-CEDICT is a community dictionary, a continuation of the CEDICT
-project begun by Paul Denisowski in 1997. The compilation we consume is
-**© 2026 Tim Pearce** (*Chinese-English HSK Dictionary*), which is itself a CC BY-SA
-4.0 work derived from CC-CEDICT. CC BY-SA 4.0 requires that we say where the data
-came from, which is what this section is.
-
-**Share-alike.** The licence also requires that improvements and additions be
-shared under the same licence. The changes made here are:
-
-- entries merged by simplified character (done upstream by the standardising step);
-- HSK levels overridden from the HSK 3.0 list;
-- reshaped into keyed objects with abbreviated field names, and with levels
-  *absent* rather than null for unlevelled words.
-
-Those changes are in the committed file, so the derived work is available. The
-build is `tools/build-wordlist.mjs`; see the section below on its input.
-
-**HSK levels, provenance resolved.** The levels come from a word list upstream
-names `hsk31-words-pleco.txt`. Despite the filename, **Pleco is the OCR tool, not
-the author.** The list is the *official HSK 3.0 word list* published by the Chinese
-Ministry of Education (MOE); the file was extracted from the official MOE PDF and
-OCR'd using [Pleco OCR](https://www.pleco.com/). The same MOE source is mirrored and
-re-typed under **MIT** by [`elkmovie/hsk30`](https://github.com/elkmovie/hsk30),
-whose README states: *"Extracted from the official PDF and OCR'ed using Pleco OCR"*,
-so the "Pleco" attribution in the TeaPearce filename is describing the extraction
-method, not a claim of authorship.
-
-What this means for us:
-
-- The levels are drawn from a **government-published exam standard**, and a
-  freely-redistributable (MIT) transcription of the identical data exists. There is
-  no proprietary Pleco work in this file.
-- A word list, words paired with their exam level, is factual reference data and,
-  independently, is published by the MOE for public use. Either way, the exposure
-  flagged in the audit as *unverified* is now closed: the source is the official
-  standard, not Pleco's authorship.
-- We carry **no** MIT obligation from `elkmovie/hsk30` itself, because we do not
-  consume that repository, the levels reached us via TeaPearce's CC BY-SA 4.0
-  redistribution, and that is the licence we honour on the derived file.
-
-### Rebuilding the dictionary
-
-`node tools/build-wordlist.mjs <parsed_hsk_enriched.json>`
-
-The input is **not committed** and is not fetched by the script. It is instead
-**pinned to an exact revision**, so a clean checkout can reproduce the file
-byte-for-byte:
-
-| | |
-| --- | --- |
-| Repository | `TeaPearce/chinese-english-dictionary` |
-| Commit | `a9aea223269eb9820590e5bca783eb299c317439` (2026-08-27) |
-| Blob | `7562130dea9284b99c86c9e8a5b8fe0a2cc003a1` |
-| SHA-256 | `e49bf4a732790bda359376a10ad59a6d4874be3b0dab66f1add907c0fedf3c10` |
-| Path | `data/parsed_hsk_enriched.json` (5,092,448 bytes) |
-
-**Verified 2026-10-06:** fetching that exact revision and rebuilding reproduces
-the committed `chinese.json` exactly, the same 11,470 words, identical levels,
-**zero differing entries**. So the pin is not a claim, it is a tested fact.
-
-The blob hash is recorded *as well as* the commit, because a commit can be
-rewritten or force-pushed while a blob hash cannot. If the commit URL and the hash
-ever disagree, trust the hash.
-
-The choice not to vendor the 5 MB input is deliberate: duplicating someone else's
-data to make a build self-contained is worse than naming the exact revision it came
-from, and the vendored copy would carry the same CC BY-SA obligation anyway.
-
----
-
-## `src/learn/data/japanese.json`, the Japanese dictionary
-
-**Licence: CC BY-SA 4.0**
-
-Also a **derived** work, and also **must remain CC BY-SA 4.0**. Two sources, the
-same shape as the Chinese one: a CC BY-SA dictionary for the words, and an MIT
-list for the exam levels.
-
-| Source | What came from it | Licence |
-| --- | --- | --- |
-| [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) (EDRDG, project begun by Jim Breen, 1991) | Definitions, kana readings, part of speech | CC BY-SA 4.0 |
-| [scriptin/jmdict-simplified](https://github.com/scriptin/jmdict-simplified) | The JSON conversion we consume | CC BY-SA 4.0 (inherited from EDRDG) |
-| [jamsinclair/open-anki-jlpt-decks](https://github.com/jamsinclair/open-anki-jlpt-decks) | JLPT level per word (N1–N5) | **MIT** |
-
-**Attribution.** The dictionary data is the work of the **Electronic Dictionary
-Research and Development Group (EDRDG)**, a project begun by Jim Breen. `jmdict-
-simplified` is a derived distribution and carries the same licence: we credit EDRDG
-as the origin, not the converter. The JLPT levels are from a separately-licensed
-(MIT) list, whose original deck data the project's README credits to
-`chyyran/jlpt-anki-decks` and tanos.co.uk.
-
-**Share-alike.** The changes made here are:
-
-- one entry per written form, so `足` and `脚` each resolve to the same reading;
-- kana readings taken from the **common** form rather than the first listed, and
-  rare-kanji-tagged forms (`rK`) dropped;
-- reshaped into the same keyed-object form as the Chinese dictionary (`p` is the
-  reading, `t` is unused and empty);
-- homograph collisions resolved first-wins (156 expression keys appear in more than
-  one JMdict entry).
-
-Those changes are in the committed file, so the derived work is available.
-
-**Known gaps, recorded because they are limitations of the build, not bugs:**
-
-- **Words absent from JMdict `common`** have no definition and therefore no level.
-  Measured at about 6% of JLPT rows; consuming the full 11.5 MB `jmdict-eng` variant
-  instead would close it at eight times the size.
-
-### Rebuilding the Japanese dictionary
-
-`node tools/build-wordlist.mjs --ja <jmdict.json> --jlpt <dir>`
-
-Pinned to an exact revision, like the Chinese source:
-
-| | |
-| --- | --- |
-| Repository | `scriptin/jmdict-simplified` |
-| Release | `3.6.2+20261005200550` |
-| Asset | `jmdict-eng-common-3.6.2+20261005200550.json.zip` |
-| SHA-256 | `956cb65b95d12d2b81fa550716d53163dbd3c70ca171a9c7dce97d7238c9d87a` |
-| Inner file | `jmdict-eng-common-3.6.2.json` (22,644 entries) |
-| Levels | `jamsinclair/open-anki-jlpt-decks` @ `1ad66734417aca9dbcca6b2d5ee440cb13ab3ba0`, `src/n1.csv … n5.csv` |
-
-**Verified 2026-10-06** by downloading that asset, confirming its size and SHA-256,
-and building from it. The asset hash is recorded rather than copied from
-documentation, a first draft of the build notes quoted the **full** `jmdict-eng`
-asset's hash while naming the `common` file, which the download check caught.
-
-The JLPT CSVs need care that the pin does not cover: the `expression` column uses
-`;` for multi-form words (`足; 脚`) and `～` for counters (`～円`). Treating a cell
-as one literal key silently loses about 10% of levels, so the build splits on `;`
-and strips `～`, whitespace and parentheticals.
-
----
-
-## `src/learn/data/korean.json`, the Korean dictionary
-
-**Licence: CC BY-SA 3.0**
-
-A **derived** work and **must remain share-alike**. Two upstreams, and they are
-unrelated projects that happen to overlap usefully:
-
-| Source | What came from it | Licence |
-| --- | --- | --- |
-| 한국어 학습용 어휘 목록 (National Institute of Korean Language, 2003) | NIKL levels A/B/C | **KOGL Type 1** |
-| [Open Yonsei Korean Vocabulary](https://github.com/Amulopapa67/open-yonsei-korean-vocabulary) | English definitions, text readings, course level | **CC BY-SA 3.0** |
-
-**How the NIKL levels reached us.** Through
-[`julienshim/combined_korean_vocabulary_list`](https://github.com/julienshim/combined_korean_vocabulary_list),
-whose `results.tsv` merges the NIKL and TOPIK lists. That repository is **MIT for
-its code only** and says so plainly: it does not host the source lists, and all
-rights in them remain with their publishers. So the MIT licence does **not** cover
-the level data we consume, and we do not claim it does.
-
-**The NIKL list is licensed, and this is the clause.** The NIKL page for 한국어
-학습용 어휘 목록 ends:
-
-> 공공저작물 자유이용허락 표시 기준(공공누리, KOGL) 제1 유형 조건에 따라
-> 저작물의 출처를 구체적으로 표시한 후 이용할 수 있습니다.
-
-That is **KOGL Type 1** (공공누리 제1유형). Verified against the official KOGL
-certificate, it grants attribution, **derivative works, and commercial use**. It is
-the least restrictive of the KOGL types, not a restricted one, so the obligation is
-the attribution this section provides. KOGL also forbids implying that the public
-body sponsors or endorses this project, which is why nothing here is described as
-endorsed by NIKL or the Ministry of Culture, Sports and Tourism.
-
-**TOPIK is deliberately NOT used.** The level list carries a `topik_level` column
-and we do not read it, which is a licence decision. TOPIK's own terms of use
-(`이용약관`, Article 15, 저작권) state that copyright in all site content belongs to
-TOPIK, that unauthorised reproduction or distribution may be punished under
-copyright law, and that using the content to profit **or to enjoy a corresponding
-benefit** requires TOPIK's permission. Its operator, the National Institute for
-International Education (NIIED), limits free use of its material to personal,
-academic and research purposes. A distributed extension that ships the vocabulary
-is outside that grant, so the column is ignored and no TOPIK list is offered.
-
-**Attribution for the definitions and the course levels.** Open Yonsei Korean
-Vocabulary is an independently maintained community project, **not affiliated with,
-sponsored by or endorsed by Yonsei University** or its Korean Language Institute;
-the name is used only to identify the textbook series it indexes. Its README states:
-project code MIT, **data and generated PDFs CC BY-SA 3.0**, project documentation
-and logo CC BY 4.0. It excludes textbook lessons, example sentences, exercises,
-audio, scanned pages and official visual assets, all of which we likewise do not
-carry.
-
-**Share-alike.** The changes made here are:
-
-- homograph senses merged (NIKL writes `가구03` and `가구04` for two senses of one
-  spelling), keyed on the word without the trailing number;
-- merged senses placed at the **easiest** NIKL grade, never the harder;
-- NIKL grades stored as an ascending `1..3` with the list's own names (`A`, `B`,
-  `C`), the same shape as JLPT's `N5..N1`;
-- the course level taken from the **first volume** a word appears in, stored as
-  `1..6`, and the volume names carried separately;
-- reshaped into the same keyed-object form as the other two dictionaries, with
-  `t` unused and empty;
-- NIKL words with no definition emitted with an empty meaning rather than dropped.
-
-Those changes are in the committed file, so the derived work is available.
-
-**Two lists, because they cover different words.** Measured over the union of the
-two (7,738 words) they overlap by only about 25%: NIKL contributes 1,019 words the
-other does not place, and Yonsei 1,913. Shipping both is what recovers those 2,932
-words, and it is a materially different case from HSK 2.0 and 3.0, which overlap by
-64%.
-
-**Why the course volume is a level, and not just a chapter number.** Measured
-against both NIKL and TOPIK, the mean difficulty of a volume rises at **every one**
-of the six volumes, so the course ordering is a real difficulty ordering. It is also
-not a restatement of NIKL: rank correlation with NIKL is about 0.71, and the middle
-volumes overlap heavily, so it carries information the graded list does not. It is
-additionally the only Korean list whose words all carry a definition, since it is
-the source of them.
-
-**Known gap, recorded because it is a limitation of the build, not a bug:** about
-half of Korean words carry a definition. Words known only to NIKL ship without one,
-because NIKL grades a word but does not gloss it, and its `explanation` column is a
-collocation hint in Korean rather than a meaning. Those words still mark, and the
-popover says it has no definition yet, rather than the word silently vanishing.
-
-### Rebuilding the Korean dictionary
-
-`node tools/build-wordlist.mjs --ko <results.tsv> --ko-yonsei <dir>`
-
-| | |
-| --- | --- |
-| NIKL level list | `julienshim/combined_korean_vocabulary_list`, `results.tsv`, 7,497 rows |
-| SHA-256 | `bb5789e46d818842ed6cc15c7946805ad1aed9fd1d0912d884cc48a8556b9a3c` |
-| Definitions and course levels | `Amulopapa67/open-yonsei-korean-vocabulary` @ `v0.1.0`, `vol-01.json … vol-06.json` |
-
-The aggregator's README documents a history of **swapped `nikl_level`/`topik_level`
-columns**, fixed upstream by tagging entries with their source. The build reads the
-NIKL level only, so a future swap that put letter grades in the wrong column would
-be read here as an absent grade and skipped, rather than mis-levelling a word.
-
-Two columns of the level list are deliberately unused. `explanation` is a
-collocation hint in Korean rather than a definition (`~에 가다` for 가게, "to go to a
-shop") and is empty on 18% of rows, so used as a meaning it would read as a
-non-answer. `rank` is a frequency number and is absent for TOPIK-only words; it is a
-different axis from the level the ramp, the threshold and the badge all read.
-
-## Development dependencies
-
-Not shipped, except as noted below. The extension itself ships **one** third-party
-file, the vendored bundle documented in the next section, and nothing else.
-
-| Package | Licence | Note |
-| --- | --- | --- |
-| `playwright` | Apache-2.0 | Browser test tier and icon rasterising |
-| `vite` | MIT | The side-panel design preview only |
-| `esbuild` | MIT | Bundles `src/vendor/mediabunny.js`; not shipped |
-| `koroman` | MIT | Korean Romanization, generates and verifies the Korean table; not shipped |
-| `wanakana` | MIT | Kana to romaji, generates and verifies the Japanese table; not shipped |
-| `lightningcss`, `lightningcss-linux-x64-gnu` | **MPL-2.0** | Pulled in transitively by Vite |
-
-The two MPL-2.0 packages are the only non-permissive licences in the dependency
-tree. MPL-2.0 is file-level copyleft: it obliges publishing changes to *its* files,
-and imposes nothing on this project. It is not a concern here because they are
-development-only, never bundled, and unmodified. Recorded so that the next person
-does not have to rediscover it.
-
-**`koroman` and `wanakana` are why the readings are generated rather than
-copied.** Two of the three scripts can be read without a dictionary entry, because
-they are algorithmic, and the readings for text the dictionary does not hold come
-from a small table produced by these libraries at build time.
-
-- **Korean.** `koroman` (MIT, no dependencies) implements the National Institute of
-  Korean Language's Revised Romanization including the sound-change rules. The
-  generator reads the three Hangul jamo tables out of it, and a test asserts the
-  result matches the library for **all 11,172 syllables**. A syllable table is
-  exact for a lone syllable and wrong across a boundary (종로 is `jongno`, not
-  `jongro`), so a dictionary entry always wins and the table is only the fallback.
-- **Japanese.** `wanakana` (MIT, no dependencies) converts kana to romaji. The
-  generator reads a table of the kana that occur in the corpus, plus the contracted
-  pairs, and a test asserts the result against the library across all 28,690
-  readings, with the 12 documented differences pinned by name.
-- **Chinese has no table, deliberately.** A hanzi's reading is lexical and context
-  dependent: 阿姨 is `āyí`, not `yí`, and 4,828 of 9,899 multi-character words fail
-  naive concatenation. A character table would be wrong about half the time, so a
-  Chinese word with no entry genuinely has no reading to show.
-
-Both are **development dependencies and are not shipped**. The tables they produce
-are committed as `src/learn/readings.js`, about 7 KB, and a check regenerates it and
-fails on any difference, so a hand-edited table cannot survive.
+Attribution for everything this project uses from elsewhere, and the licence each is
+used under. This file is the notice and ships in the extension package.
+
+**Provenance, verification and rebuild instructions are NOT here.** The exact
+revisions, content hashes and recipes that let you reproduce every bundled file are in
+[`THIRD-PARTY-NOTES.md`](THIRD-PARTY-NOTES.md), which also ships. This file is what you
+skim to learn what is included and under what terms; that one is what you read to
+check it.
+
+The extension's own code is MIT; see [`LICENSE`](LICENSE). **None of the dictionaries
+are covered by it.** All three are share-alike derivative works and must stay that
+way; they cannot be relicensed.
+
+## Components
+
+| Component | Version / revision | Licence | Used for | Ships |
+| --- | --- | --- | --- | --- |
+| CC-CEDICT | via `TeaPearce/chinese-english-dictionary` | CC BY-SA 4.0 | Chinese definitions, pinyin, forms | yes |
+| HSK 3.0 word list (Chinese MOE) | word list `hsk31-words-pleco.txt` | CC BY-SA 4.0 | HSK levels in the Chinese dictionary | yes |
+| JMdict (EDRDG, Jim Breen) | via `scriptin/jmdict-simplified` | CC BY-SA 4.0 | Japanese definitions and readings | yes |
+| open-anki-jlpt-decks | `jamsinclair/open-anki-jlpt-decks` | MIT | JLPT levels in the Japanese dictionary | yes |
+| 한국어 학습용 어휘 목록 (NIKL) | National Institute of Korean Language, 2003 | KOGL Type 1 | NIKL grades in the Korean dictionary | yes |
+| Open Yonsei Korean Vocabulary | `Amulopapa67/open-yonsei-korean-vocabulary` | CC BY-SA 3.0 | Korean definitions, readings, course levels | yes |
+| mediabunny | 1.61.3 | MPL-2.0 | Containers and the conversion pipeline | yes |
+| @mediabunny/ac3 | 1.61.4 | MPL-2.0 | AC-3 / E-AC-3 decode and encode | yes |
+| @mediabunny/dts | 1.61.4 | MPL-2.0 | DTS decode and encode | yes |
+| @mediabunny/aac-encoder | 1.61.4 | MPL-2.0 | AAC encoding where WebCodecs cannot | yes |
+| *Princess Iron Fan* (1941 film) | Internet Archive item `princess_iron_fan` | Public domain | The GitHub Pages demo clip and subtitles | yes |
+| matroska-test-files (IETF CELLAR) | downloaded by `npm run conformance:fetch` | CC BY 3.0 / CC BY 2.5 | Matroska conformance tests | no |
+| Development dependencies | see the table below | Apache-2.0, MIT, MPL-2.0 | Tests, preview, build tooling | no |
+
+## Bundled dictionaries
+
+Each dictionary is a **derived** work assembled from the sources listed for it. It
+declares its own licence in the field `meta.licence`, derived by the build from its
+`meta.sources`. The changes made to each are stated, because every share-alike
+licence here, CC BY-SA and KOGL, requires an indication of changes.
+
+### `src/learn/data/chinese.json`, the Chinese dictionary
+
+**Licence: CC BY-SA 4.0.** A derived work of [CC-CEDICT](https://www.mdbg.net/chinese/dictionary?page=cc-cedict)
+(the community dictionary continued from the CEDICT project begun by Paul Denisowski
+in 1997) as compiled and standardised by `TeaPearce/chinese-english-dictionary`,
+**© 2026 Tim Pearce**, plus the official HSK 3.0 word list of the Chinese Ministry of
+Education (MOE) for the levels. Licence deed:
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); full licence:
+[legalcode](https://creativecommons.org/licenses/by-sa/4.0/legalcode).
+
+Changes: entries merged by simplified character; HSK levels taken from the MOE list;
+reshaped into keyed objects with abbreviated field names, levels *absent* rather than
+null for unlevelled words. The derived file is committed, so the result is available.
+
+### `src/learn/data/japanese.json`, the Japanese dictionary
+
+**Licence: CC BY-SA 4.0.** A derived work of **JMdict**, the work of the Electronic
+Dictionary Research and Development Group (**EDRDG**, project begun by Jim Breen,
+1991), consumed through the `scriptin/jmdict-simplified` JSON conversion, which
+inherits the same licence; we credit EDRDG as the origin, not the converter. The JLPT
+levels come from `open-anki-jlpt-decks`. Licence:
+[EDRDG General Dictionary Licence Statement](https://www.edrdg.org/edrdg/licence.html),
+which grants [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) with
+conditions of its own; see [`THIRD-PARTY-NOTES.md`](THIRD-PARTY-NOTES.md) for how each
+EDRDG clause is met.
+
+Changes: one entry per written form; readings taken from the common form; rare-kanji
+forms dropped; reshaped into the same keyed-object form as the Chinese dictionary;
+homograph collisions resolved first-wins.
+
+### `src/learn/data/korean.json`, the Korean dictionary
+
+**Licence: CC BY-SA 3.0.** A derived work of 한국어 학습용 어휘 목록, published by the
+**National Institute of Korean Language** (2003) for the NIKL grades, under **KOGL
+Type 1** (공공누리 제1유형), and of **Open Yonsei Korean Vocabulary** for the English
+definitions, readings and course levels. Licence deed:
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/); full licence:
+[legalcode](https://creativecommons.org/licenses/by-sa/3.0/legalcode). 3.0 rather than
+4.0 because the definitions layer is 3.0 and share-alike takes the lower version when
+both appear.
+
+Open Yonsei Korean Vocabulary is an independently maintained community project, **not
+affiliated with, sponsored by or endorsed by Yonsei University**; the name identifies
+the textbook series it indexes. KOGL Type 1 likewise forbids implying that the public
+body endorses this project, so nothing here is described as endorsed by NIKL or the
+Ministry of Culture, Sports and Tourism.
+
+Changes: homograph senses merged, keyed on the word without its trailing sense number,
+placed at the easiest grade; NIKL grades stored as an ascending `1..3`; the course
+level taken from the first volume a word appears in; reshaped into the shared
+keyed-object form; NIKL words with no definition emitted with an empty meaning rather
+than dropped. The derived file is committed.
 
 ## `src/vendor/mediabunny.js`, MPL-2.0, and this attribution is required
 
-**The one third-party file that ships inside the extension.** Everything else in
-`src/` is ours. It is a tree-shaken bundle of **four** MPL-2.0 packages:
+The one third-party **code** file that ships inside the extension. It is a tree-shaken
+bundle of four MPL-2.0 packages: `mediabunny`, `@mediabunny/ac3`, `@mediabunny/dts`,
+`@mediabunny/aac-encoder`.
 
-| Package | What it contributes |
-| --- | --- |
-| [mediabunny](https://mediabunny.dev) | Containers (demux and mux) and the conversion pipeline |
-| `@mediabunny/ac3` | The AC-3 and E-AC-3 **decoder and encoder**; WebCodecs has neither, so Dolby audio would play as silence without it |
-| `@mediabunny/dts` | The DTS **decoder and encoder**; WebCodecs has none. An earlier revision excluded DTS believing no permissively-licensed decoder existed, which was untrue for this package |
-| `@mediabunny/aac-encoder` | The AAC **encoder**, for browsers whose WebCodecs has no native AAC encoder |
+**Copyright (c) 2026-present, Vanilagy and contributors.** Mozilla Public License,
+v. 2.0. The full licence is [https://mozilla.org/MPL/2.0/](https://mozilla.org/MPL/2.0/).
+The package's own source-file headers are preserved inside the bundle, so a copy of
+this notice travels with the source it covers. The covered files are unmodified;
+MPL-2.0 is file-level copyleft and imposes nothing on the surrounding project.
 
-| | |
-| --- | --- |
-| Licence | MPL-2.0 (all four) |
-| Generated by | `node tools/build-vendor.mjs` |
-| Why it ships | The viewer decodes and re-encodes audio the browser cannot play, and copies video and remuxes tracks the browser can. |
-| Why they are bundled together | The coder packages import the bare specifier `"mediabunny"`, which a `chrome-extension://` page cannot resolve, so all three are built into one file. |
+## Test fixtures and conformance media
 
-### Why it is committed rather than installed
+`test/synthetic/` is committed and is **our own invented text**; it contains no
+third-party text. `test/fixtures/` holds real captures and is gitignored, never
+committed. `test/mkv/*.mkv` is generated locally by `npm run fixtures` and holds no
+third-party media.
 
-The release ZIP is assembled from `src/` alone, so a file the extension loads at
-runtime cannot come from `node_modules`. Committing generated code is a real cost
-and it is the smaller one here: the alternative is a build step every contributor
-needs before they can package anything.
-
-### Why the licence is not a problem
-
-MPL-2.0 is file-level (weak) copyleft. It obliges publishing modifications to
-**the covered packages' own files**, which we do not modify, and imposes nothing on
-the surrounding project. `licence.test.mjs` asserts that any file in `src/vendor/`
-is named here, so a second bundle cannot be added without this document changing.
-
-### Why the codecs come from packages and not a compiled FFmpeg
-
-An earlier revision shipped a **custom-compiled FFmpeg wasm build** to decode Dolby
-audio. It was retired in favour of the published packages: those decode AC-3 and
-E-AC-3 and encode AAC, they are 3.0 MB smaller raw and 1.4 MB smaller gzipped, and
-they remove a C toolchain from the release path entirely. There is now **no build
-product** in this project.
-
-### Why `esbuild` is a dependency but not a shipped one
-
-It exists only to produce the file above. Nothing in the extension imports it, and
-`licence.test.mjs` still asserts that `package.json` has no runtime `dependencies`,
-which is what keeps a module from being resolved at runtime that the packaging step
-would silently drop.
-
-## Test fixtures
-
-`test/synthetic/` is committed and is **our own invented text**, wearing shapes
-measured from a real capture, real cue counts, timings, silences and renderer
-keys, with our own sentences. It contains no third-party text.
-
-`test/fixtures/` holds the real captures. It is **gitignored and never committed**:
-a capture contains a signed caption URL and the real video's own title, neither of
-which belongs in a repository.
-
-`test/mkv/*.mkv` is generated locally by `npm run fixtures` from an `ffmpeg` test
-pattern, no third-party media at all, and nothing to attribute.
-
-## Conformance suite, CC BY, and this attribution is required
-
-`test/conformance/` holds the [IETF CELLAR working group's Matroska test
-files](https://github.com/ietf-wg-cellar/matroska-test-files), a development
-dependency downloaded by `npm run conformance:fetch`. **Not committed, not
-packaged, and not part of the extension**, nothing in `src/` reads them.
-
-They contain real film samples, both **CC BY**, which obliges attribution:
+`test/conformance/` holds the IETF CELLAR Matroska test files, downloaded by `npm run
+conformance:fetch`. **Not committed, not packaged, not part of the extension.** They
+contain real film samples under **CC BY**, which obliges attribution even though the
+files are not distributed here:
 
 | Source | Licence | Required attribution |
 | --- | --- | --- |
 | Big Buck Bunny (test1, test4, test6) | CC BY 3.0 | `(c) copyright 2008, Blender Foundation / www.bigbuckbunny.org` |
 | Elephants Dream (test2, test3, test5, test7, test8) | CC BY 2.5 | `(c) copyright 2006, Blender Foundation / Netherlands Media Art Institute / www.elephantsdream.org` |
 
-The suite itself is authored by the mkvmerge and libmatroska maintainers and
-exists to check a parser against files written by the people who define the
-format. It found two real parser bugs on its first run, a missing `TimecodeScale`
-read, and an absent `Language` element being treated as unknown rather than as the
-specification's English default. Both are the kind of mistake a single fixture
-generator cannot see.
+## `tools/pages/media/`, public domain
 
-## `tools/pages/media/`, public domain, and this attribution is required
+The GitHub Pages demo ships a five-minute clip and three subtitle tracks, the one
+piece of committed third-party **media**.
 
-The GitHub Pages demo ships a five-minute clip and three subtitle tracks. **This
-is the one piece of third-party media that IS committed**, because unlike the test
-fixtures it is what the deployed demo plays, and a deploy that fetches its own
-content from a flaky source is a deploy that fails for reasons unrelated to the
-code.
+*Princess Iron Fan* (鐵扇公主, 1941), the first Chinese animated feature, directed by
+Wan Laiming and Wan Guchan, from the Internet Archive item
+[`princess_iron_fan`](https://archive.org/details/princess_iron_fan), where it is
+marked **public domain**. Public domain requires no attribution; it is given because
+the source and recipe are what let anyone verify the bytes. The recipe is in
+[`THIRD-PARTY-NOTES.md`](THIRD-PARTY-NOTES.md).
 
-| File | Size | What it is |
+## Development dependencies
+
+**Not shipped**, listed so the obligations are on the record. The release package
+contains one third-party file, the vendored bundle above, and nothing else.
+
+| Package | Licence | Used for |
 | --- | --- | --- |
-| `demo.mp4` | 31.4 MB | 8:00-13:00 of the film, video and audio, **lossless stream copy** |
-| `demo.en.srt` | 2.7 KB | English subtitles for that window, 39 cues |
-| `demo.zh-Hans.srt` | 2.5 KB | Simplified Chinese, 38 cues |
-| `demo.zh-Hant.srt` | 2.5 KB | Traditional Chinese, 38 cues |
+| `playwright` | Apache-2.0 | Browser test tier and icon rasterising |
+| `vite` | MIT | The side-panel design preview only |
+| `esbuild` | MIT | Bundles `src/vendor/mediabunny.js`; not shipped |
+| `koroman` | MIT | Generates and verifies the Korean reading table; not shipped |
+| `wanakana` | MIT | Generates and verifies the Japanese reading table; not shipped |
+| `lightningcss`, `lightningcss-linux-x64-gnu` | MPL-2.0 | Pulled in transitively by Vite |
 
-### Source and licence
+The two MPL-2.0 development packages are unmodified and never bundled, so they impose
+nothing here.
 
-*Princess Iron Fan* (鐵扇公主, 1941), the first Chinese animated feature, directed
-by Wan Laiming (萬籟鳴) and Wan Guchan (萬古蟾). From the Internet Archive:
+## Full licence texts
 
-- Item: <https://archive.org/details/princess_iron_fan>
-- Licence as marked on the item: **Public domain**
-  (`http://creativecommons.org/licenses/publicdomain/`)
-- The archive's own metadata records the `title`, the `year` (1941), the
-  `director`, the `publisher` (China United Film Company) and the `language`
-  (Mandarin Chinese). The demo page shows the title, year and directors; this file
-  is the full record.
+CC BY-SA and MPL-2.0 are referenced by the links above rather than reproduced: each
+licence's own condition is that the licence be **identified by URI**, which a link
+satisfies, and the MPL text also travels with the vendored source. MIT asks for its
+text to be **included**, so it is reproduced here in full.
 
-Public domain means no attribution is legally required. It is given anyway,
-because the source and the exact recipe are what let anyone check that these bytes
-are what they claim to be, which is the same standard the dictionaries are held to.
+### MIT (open-anki-jlpt-decks)
 
-### The video is a stream copy, and that is why the provenance is exact
+```text
+MIT License
 
-`demo.mp4` is **bit-identical to the archive's own video stream**. Nothing is
-re-encoded: `-c copy` re-muxes the existing H.264 and AAC. So the file's content is
-the archive's content, not a transcoded version of it that would need its own
-description.
+Copyright (c) 2020 Jamie Sinclair
 
-This also makes it the SMALLEST option, which is counterintuitive. Measured, all
-at the source's 640x480: the stream copy is 31 MB, while a "near-lossless" re-encode
-is 74 MB (x264 CRF 18), 58 MB (x265 CRF 22) or 48 MB (VP9 CRF 32). The source is
-already only 878 kbps, so re-encoding near-losslessly preserves its existing
-compression artifacts and spends MORE bits than the original encoder did. Re-encoding
-would only get smaller by becoming visibly lossy.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-### Rebuilding it
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-`node tools/pages/fetch-media.mjs` reproduces all four files. The script documents
-the window, the cut, and the retry behaviour; the short version is:
-
-- The window is 8:00-13:00, chosen because that is where the subtitle cue density
-  peaks (38-39 cues in five minutes), so the demo shows marking on real dialogue.
-- The subtitles come from the same item (`princess_iron_fan.srt`,
-  `princess_iron_fan-zh-hans.srt`, `princess_iron_fan-zh-hant.srt`) and are CUT to
-  the window and REBASED to zero, since the originals cover the whole 73 minutes.
-- The Chinese files are converted here to the naming the viewer reads: the
-  language has to be the final dotted segment (`demo.zh-Hant.srt`), because
-  `languageFromFileName` splits on `.` and `_` but not on hyphens, so
-  `princess_iron_fan-zh-hant.srt` would resolve to the bare `zh` and collide with
-  the simplified track.
-
-`demo.mp4` rebuilds byte-identical. The subtitles are normalised on output, so a
-rebuild may differ from the committed copy by a trailing newline; the content is
-the same.
-
-
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

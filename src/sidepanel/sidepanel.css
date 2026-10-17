@@ -79,6 +79,101 @@ body {
   margin-top: auto;
 }
 
+/*
+ * The licences view.
+ *
+ * The same section as the settings view, so it needs no surface of its own: the
+ * header's button swaps the body. These rules only style the rows, which are read
+ * rather than operated.
+ *
+ * The rows DO honour `--text-scale`, unlike the old footnote: this is a page the
+ * reader opened on purpose, so it follows the size they set for reading.
+ */
+.licences-intro,
+.licences-note {
+  margin: 0 0 10px;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: calc(11.5px * var(--text-scale));
+  line-height: 1.45;
+}
+
+.licences-note {
+  margin: 10px 0 0;
+}
+
+/* The link to the shipped notice, styled as a link: a bordered button at the foot of
+   a paragraph of text would compete with the header's Licences button, which is the
+   real navigation on this page. */
+.licences-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.licences-open:hover,
+.licences-open:focus-visible {
+  color: var(--fg);
+}
+
+/* One work: its full name, the licence it is used under, and the change made. A
+   grid so the licence and the name start at the same x and the list reads as a
+   table of three facts per work rather than as prose. */
+.source-row {
+  padding: 8px 10px;
+  border-bottom: 1px solid #1b2029;
+}
+
+.source-row:last-child {
+  border-bottom: none;
+}
+
+.source-name {
+  margin: 0;
+  color: var(--fg);
+  font-size: calc(12px * var(--text-scale));
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.source-licence {
+  margin: 2px 0 0;
+  color: var(--accent);
+  font-size: calc(11.5px * var(--text-scale));
+}
+
+.source-changes {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: calc(11px * var(--text-scale));
+}
+
+/* The Licences button, in the settings header. A plain button rather than a link:
+   it is a navigation control in a header, and it toggles to say "Settings" when the
+   licences are showing, so the same control is how you get back. */
+.settings-licences {
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid #2a2e37;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: calc(11px * var(--text-scale));
+  cursor: pointer;
+}
+
+.settings-licences:hover,
+.settings-licences:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* One language slot: the picker, and the icon that reveals its translate menu. */
 .lang {
   display: flex;
@@ -281,6 +376,38 @@ body.collapsed .status {
   margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+/*
+ * A row of the Sources group: a work, its licence and the change note.
+ *
+ * NOT `.settings-row`: that grid exists to line a control up in a right-hand column,
+ * and this row has no control, so reusing it would add a column that is always empty
+ * and push the text off centre. A plain paragraph in the same group surface is the
+ * honest shape.
+ *
+ * It DOES honour `--text-scale`, unlike the licence notice under the transcript: this
+ * is a page of text the reader chose to open, so it follows the size they set for
+ * reading, where the notice is chrome that must not grow with it.
+ *
+ * The change note is dimmer, the same register as `.shortcut-note` in the viewer: it is
+ * the licence's required "indication of changes", not part of the work's name.
+ */
+.source-row {
+  margin: 0;
+  padding: 7px 10px;
+  border-bottom: 1px solid #1b2029;
+  color: var(--fg);
+  font-size: calc(11.5px * var(--text-scale));
+  line-height: 1.45;
+}
+
+.source-row:last-child {
+  border-bottom: none;
+}
+
+.source-changes {
+  color: var(--muted);
 }
 
 .settings-toggle {

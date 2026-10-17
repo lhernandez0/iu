@@ -216,11 +216,19 @@ section('attribution is where a person would find it');
   // The requirement that made this file exist: CC-CEDICT asks to be told where the
   // data came from. A licence named only inside a 1.2MB data file is not
   // attribution, so the notices file and its content are checked, not assumed.
-  const notices = join(ROOT, 'THIRD-PARTY.md');
-  check('THIRD-PARTY.md exists', existsSync(notices), true);
+  // BOTH shipped files, as one haystack. The notice states WHAT is included and under
+  // which licence; the notes carry the pins, hashes and rationale. The obligation spans
+  // the pair, so the checks read the pair rather than one file, and collapsing runs of
+  // whitespace means a phrase is still found where the prose wraps to a newline.
+  const noticePath = join(ROOT, 'THIRD-PARTY.md');
+  const notesPath = join(ROOT, 'THIRD-PARTY-NOTES.md');
+  check('THIRD-PARTY.md exists', existsSync(noticePath), true);
+  check('THIRD-PARTY-NOTES.md exists', existsSync(notesPath), true);
 
-  if (existsSync(notices)) {
-    const text = readFileSync(notices, 'utf8');
+  if (existsSync(noticePath) && existsSync(notesPath)) {
+    const text = [readFileSync(noticePath, 'utf8'), readFileSync(notesPath, 'utf8')]
+      .join('\n')
+      .replace(/\s+/g, ' ');
     check('it names CC-CEDICT', /CC-CEDICT/.test(text), true);
     check('it names the licence', /CC BY-SA 4\.0/.test(text), true);
     check('it states the share-alike obligation', /share.?alike/i.test(text), true);
@@ -258,6 +266,20 @@ section('attribution is where a person would find it');
     check('it gives the archive.org source', /archive\.org\/details\/princess_iron_fan/.test(text), true);
     check('it records that the video is not re-encoded', /stream copy|\-c copy/.test(text), true);
     check('and names the rebuild command', /tools\/pages\/fetch-media\.mjs/.test(text), true);
+  }
+
+  // MIT is the one licence here whose condition is to INCLUDE its text, not merely to
+  // name it, so the text is asserted present rather than the licence name. This was the
+  // gap a review found: `open-anki-jlpt-decks` shipped its JLPT levels with the project
+  // named and no permission text anywhere, which meets neither the letter nor the point.
+  // CC BY-SA and MPL-2.0 are satisfied by a URI and by the source headers respectively,
+  // so only MIT is reproduced, and only MIT is asserted this way.
+  {
+    const text = readFileSync(join(ROOT, 'THIRD-PARTY.md'), 'utf8');
+    check('the MIT permission text is included', /Permission is hereby granted/.test(text), true);
+    check('with its warranty disclaimer', /WITHOUT WARRANTY OF ANY KIND/.test(text), true);
+    check('and the copyright line it must travel with', /Copyright \(c\) 2020 Jamie Sinclair/.test(text), true);
+    check('the MIT component is still named', /open-anki-jlpt-decks/.test(text), true);
   }
 
   // The notices file existing is not enough: the README is where a reader looks
@@ -447,6 +469,70 @@ section('no committed fixture contains a real video title');
   }
 
   check(`all ${sets.length} fixture set(s) carry a synthetic title`, offenders, []);
+}
+
+section('every dictionary source is named on the licences screens');
+
+{
+  // The UI renders `SOURCES` from `src/common/sources.js`, one row per third-party
+  // work, on the panel's licences view and in the viewer's shortcut panel. This is the
+  // check that keeps that list honest against the DATA: every `meta.sources[]` entry in
+  // every dictionary must be named here, so a fourth dictionary cannot ship with words
+  // on screen that no screen attributes.
+  //
+  // The DIRECTION matters and is deliberate. The data is the source of truth and the UI
+  // list is its projection, so a source in the data with no row is a FAILURE (an
+  // unattributed work), while a row for a work no longer used is not: removing a
+  // dictionary is a build change, and a stale row is caught by a person reading the
+  // page rather than by a test inventing a rule. The `name` is compared in full, not by
+  // prefix, because that is what the two files already agree on.
+  const { SOURCES } = await import('../src/common/sources.js');
+  const named = new Set(SOURCES.map((s) => s.name));
+  const licenceOf = new Map(SOURCES.map((s) => [s.name, s.licence]));
+
+  const index = JSON.parse(readFileSync(join(ROOT, 'src/learn/data/index.json'), 'utf8'));
+
+  const unnamed = [];
+  const mismatched = [];
+  for (const [, rel] of Object.entries(index.dictionaries ?? {})) {
+    const data = JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
+    for (const source of data.meta?.sources ?? []) {
+      if (!named.has(source.name)) {
+        unnamed.push(source.name);
+        continue;
+      }
+      // The licence string is compared too: a row that names a work under the wrong
+      // licence is a false statement to a reader, which is worse than no row, because
+      // it looks like compliance.
+      if (licenceOf.get(source.name) !== source.licence) {
+        mismatched.push(`${source.name}: page says ${licenceOf.get(source.name)}, data says ${source.licence}`);
+      }
+    }
+  }
+
+  check('every dictionary source is named in SOURCES', unnamed, []);
+  check('and every one states the licence the data declares', mismatched, []);
+
+  // A row with no name or no licence would render as a blank line under a heading
+  // that claims to be an acknowledgement, so the list is checked in its own right too.
+  const incomplete = SOURCES.filter((s) => !s.name || !s.licence || !s.changes);
+  check('every SOURCES row names a work, a licence and its change', incomplete.map((s) => s.name ?? '(unnamed)'), []);
+  check('and the list is not empty', SOURCES.length > 0, true);
+
+  // Both screens offer a button that opens `THIRD-PARTY.md` from the extension's own
+  // package, so the exact filename is part of the UI contract. The button is useless if
+  // the file is renamed or stops shipping, and nothing else would notice: the file
+  // existing in the repo is not the same as it being in the installed extension.
+  const notice = join(ROOT, 'THIRD-PARTY.md');
+  check('the notice the buttons open exists', existsSync(notice), true);
+  check('and it is not empty', existsSync(notice) && readFileSync(notice, 'utf8').trim().length > 100, true);
+
+  // Read from the Makefile rather than restated, so the two cannot disagree: this is
+  // the same list `tools/verify-zip.mjs` uses to decide what a built package contains.
+  const makefile = readFileSync(join(ROOT, 'Makefile'), 'utf8');
+  const shippedLine = /^SHIPPED := ([\s\S]*?)(?=\n\n)/m.exec(makefile)?.[1] ?? '';
+  const shipped = shippedLine.replace(/\\\n/g, ' ').split(/\s+/).filter(Boolean);
+  check('and it is in the Makefile SHIPPED list', shipped.includes('THIRD-PARTY.md'), true);
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
