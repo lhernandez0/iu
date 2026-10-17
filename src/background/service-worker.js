@@ -1317,7 +1317,20 @@ async function primeContentPosition(entry) {
   if (!segments?.length) return;
 
   try {
-    await sendToContent(trackedTabId, { type: MSG.SET_TRACK, videoId: entry.videoId, segments });
+    // **The language travels WITH the segments, and that is the fix for a desync that
+    // shipped seven times.** This used to send only `segments`. The viewer replaced its
+    // own cue list with these while KEEPING its own `activeTrackLanguage`, because
+    // `message.languageCode` was never sent and `undefined ?? old` keeps the old value.
+    // The two then described different tracks: the picker and the word list followed the
+    // old language while the captions and the marks followed the new segments, so the
+    // band emptied and the dictionary stopped covering the text. Sending the language
+    // lets the viewer set BOTH together, so they cannot diverge.
+    await sendToContent(trackedTabId, {
+      type: MSG.SET_TRACK,
+      videoId: entry.videoId,
+      languageCode: entry.studyLang ?? null,
+      segments,
+    });
   } catch {
     // The tab went away, or the page refused. Nothing to do: the panel still has
     // the cue from state, and there is no second place to put it.
