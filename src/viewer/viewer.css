@@ -1057,11 +1057,53 @@ body {
   text-align: center;
 }
 
-/* Where a key differs from YouTube's, or has no counterpart there. Dimmer, because it
-   is context for the key rather than part of its name. */
-.shortcut-note {
+/*
+ * The licences panel.
+ *
+ * Reuses `.shortcuts` for the card: position, size, background, the close button and
+ * the scroll behaviour are all the same, because it is the same kind of thing and a
+ * second card style would be a second set of those to keep in step. Only the CONTENT
+ * differs, and only the content is styled below.
+ */
+.licences-lead,
+.licences-foot {
+  margin: 0 0 12px;
   color: var(--muted, #98a2b3);
+  font-size: 0.85em;
+  line-height: 1.45;
+}
+
+.licences-foot {
+  margin: 12px 0 0;
+}
+
+/* A rule between works, so a long source name wrapping to two lines does not read as
+   running into the licence below it. */
+.licence-row {
+  padding: 9px 0;
+  border-top: 1px solid var(--edge);
+}
+
+.licence-name {
+  margin: 0;
   font-size: 0.9em;
+  line-height: 1.35;
+}
+
+/* The licence identifier, in the accent: it is what a reader scanning for "what is
+   this under" is looking for. */
+.licence-id {
+  margin: 2px 0 0;
+  color: var(--accent, #7aa2f7);
+  font-size: 0.82em;
+}
+
+/* The required indication of changes, dimmer than the work's name. */
+.licence-changes {
+  margin: 2px 0 0;
+  color: var(--muted, #98a2b3);
+  font-size: 0.8em;
+  line-height: 1.35;
 }
 
 /* --- Command feedback ----------------------------------------------------- */

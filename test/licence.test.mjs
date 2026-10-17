@@ -534,36 +534,18 @@ section('every dictionary source is named on the licences screens');
   const shipped = shippedLine.replace(/\\\n/g, ' ').split(/\s+/).filter(Boolean);
   check('and it is in the Makefile SHIPPED list', shipped.includes('THIRD-PARTY.md'), true);
 
-  // The licences PAGE, which the viewer's `A` key and the panel's button both open. It
-  // is STATIC markup, so nothing at runtime keeps it in step with `SOURCES`, and it is
-  // the surface a learner actually reads. Each source's display name and licence must
-  // appear, or the page a reader is sent to is missing a work the app displays.
-  const pagePath = join(ROOT, 'src', 'licences', 'licences.html');
-  check('the licences page exists', existsSync(pagePath), true);
+  // The licences panel that the viewer's `A` key opens. It is built from `SOURCES` at
+  // runtime, so its CONTENT is checked in the browser tier; here the check is that the
+  // markup declares it at all, so a rename in `viewer.html` fails here rather than as a
+  // key that opens nothing.
+  const viewerHtml = readFileSync(join(ROOT, 'src', 'viewer', 'viewer.html'), 'utf8');
+  check('the viewer declares the licences panel', /id="licences"/.test(viewerHtml), true);
+  check('and a close control for it', /id="licences-close"/.test(viewerHtml), true);
 
-  if (existsSync(pagePath)) {
-    const page = readFileSync(pagePath, 'utf8');
-    // Whitespace collapsed, because a long source name wraps in the markup and a
-    // literal substring match would miss it.
-    const flat = page.replace(/\s+/g, ' ');
-
-    const absentNames = SOURCES.filter((s) => !flat.includes(s.name));
-    check('every source name is on the page', absentNames.map((s) => s.name), []);
-
-    const absentLicences = SOURCES.filter((s) => !flat.includes(s.licence));
-    check('and every source licence is on the page', absentLicences.map((s) => s.licence), []);
-
-    // No script: the page holds no state, so a script is only a way for it to render
-    // empty when a module fails to load. Asserted as an absence so it is not added
-    // "for consistency" later.
-    check('the page has no script', /<script/i.test(page), false);
-
-    // No web host. This is an HTML file, not a `.js` one, so `test/manifest.test.mjs`'s
-    // hostname scan does not cover it, and this is the check that keeps it from quietly
-    // becoming a surface that links out to the network.
-    const hosts = [...page.matchAll(/https?:\/\/([A-Za-z0-9_.-]+)/g)].map((m) => m[1]);
-    check('and it links to no external host', hosts, []);
-  }
+  // A key that opens the panel, on the same table the card renders, so the shortcut and
+  // the panel cannot drift apart.
+  const shortcuts = readFileSync(join(ROOT, 'src', 'viewer', 'shortcuts.js'), 'utf8');
+  check('a shortcut is bound to the licences', /id: 'licences'/.test(shortcuts), true);
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

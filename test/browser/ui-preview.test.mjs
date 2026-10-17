@@ -312,7 +312,6 @@ try {
       controls: document.querySelectorAll('#settings-body select, #settings-body input').length,
       named: [...document.querySelectorAll('#settings-body .source-name')].every((el) => el.textContent.trim().length > 0),
       licenced: [...document.querySelectorAll('#settings-body .source-licence')].every((el) => /\S/.test(el.textContent)),
-      noticeButton: document.querySelector('#settings-body .licences-open')?.textContent.trim() ?? '',
     }));
     check('the Licences button switches the view', licences.title, 'Licences');
     check('and the button now offers Settings', licences.button, 'Settings');
@@ -320,25 +319,7 @@ try {
     check('the settings controls are gone', licences.controls, 0);
     check('every row names a work', licences.named, true);
     check('and states a licence', licences.licenced, true);
-    check('and there is a button to the full notice', licences.noticeButton.length > 0, true);
-
-    // The button opens the licences PAGE. The preview's mock `getURL` answers a
-    // root-relative path and there is no `tabs` API, so the handler falls back to
-    // `window.open`, which Playwright sees as a popup. Vite serves `src/` from the repo
-    // root, so the resolved URL loads the real page rather than 404ing, which proves the
-    // handler runs and the path is real.
-    const popupPromise = page.waitForEvent('popup', { timeout: 4000 }).catch(() => null);
-    await page.click('#settings-body .licences-open');
-    const popup = await popupPromise;
-    check('the notice button opens the licences page', Boolean(popup), true);
-    if (popup) {
-      await popup.waitForLoadState('domcontentloaded').catch(() => {});
-      const text = await popup.evaluate(() => document.body.innerText).catch(() => '');
-      check('and the page it opens lists the sources', /CC-CEDICT/.test(text), true);
-      check('with the heading, not a raw file', /^Licences/m.test(text), true);
-      await popup.close();
-    }
-    check('and clicking it raised no error', errors, []);
+    check('and no console or page error', errors, []);
 
     await page.click('#licences-toggle');
     await page.waitForTimeout(150);

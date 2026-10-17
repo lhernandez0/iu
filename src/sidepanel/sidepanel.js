@@ -689,38 +689,9 @@ function renderLicencesView() {
 
   const note = document.createElement('p');
   note.className = 'licences-note';
-  note.append('Full licence texts and the sources ship with the extension. ');
-  const open = document.createElement('button');
-  open.type = 'button';
-  open.className = 'licences-open';
-  open.textContent = 'Open the licences page';
-  open.addEventListener('click', openLicencesPage);
-  note.append(open);
+  note.textContent =
+    'The full notices, with the exact revision and content hash each dictionary was built from, ship with the extension as THIRD-PARTY.md and THIRD-PARTY-NOTES.md.';
   els.settingsBody.append(note);
-}
-
-/**
- * Open the licences page, the same one the viewer's `A` key opens.
- *
- * One page, reached from both screens, rather than two surfaces describing the same
- * sources. The page is opened from the EXTENSION's own package through
- * `runtime.getURL`, so the URL is the extension's own scheme, not a web one. That is
- * deliberate and it is what keeps the one-host guard intact: `test/manifest.test.mjs`
- * asserts that no absolute host other than `youtube.com` appears in a `.js` file under
- * `src/`, and a web link would have broken it and, with it, the claim the store listing
- * makes about where this extension talks.
- *
- * It is also offline and cannot 404: `src/licences/` is inside `src/`, which the Makefile
- * ships whole.
- */
-function openLicencesPage() {
-  const url = api.runtime.getURL('src/licences/licences.html');
-  // `tabs.create` is the extension-correct call and the one the shipping build takes.
-  // It is optional-chained because the preview harness stubs only `runtime`, and the
-  // fallback is `window.open`: not a second design, just what keeps the button from
-  // throwing where there is no tabs API.
-  if (api.tabs?.create) void api.tabs.create({ url });
-  else globalThis.open?.(url, '_blank');
 }
 
 /**
