@@ -1064,6 +1064,57 @@ body {
   font-size: 0.9em;
 }
 
+/*
+ * The Licences list, the panel's second section.
+ *
+ * A rule above it, because it is not more keys and a learner scrolling the card
+ * should see where the shortcuts end. Plain rows rather than a definition list, so
+ * the panel's keys stay the only `<dl>` the shortcut test counts.
+ */
+.shortcut-sources {
+  margin-top: 16px;
+  padding-top: 4px;
+  border-top: 1px solid var(--edge);
+}
+
+.shortcut-source + .shortcut-source {
+  margin-top: 8px;
+}
+
+.shortcut-source-name {
+  margin: 0;
+  font-size: 0.9em;
+  line-height: 1.35;
+}
+
+/* The licence and the required change note, dimmer than the work's name. */
+.shortcut-source-detail {
+  margin: 1px 0 0;
+  color: var(--muted, #98a2b3);
+  font-size: 0.82em;
+  line-height: 1.35;
+}
+
+/* The link to the full notice, styled as a link so it reads as an action rather than
+   as another row of licence text. */
+.shortcut-source-open {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent, #7aa2f7);
+  font: inherit;
+  font-size: 0.85em;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.shortcut-source-open:hover,
+.shortcut-source-open:focus-visible {
+  color: var(--text);
+}
+
 /* --- Command feedback ----------------------------------------------------- */
 
 /*

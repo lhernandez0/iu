@@ -45,6 +45,7 @@ import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTIO
 import { resolveShortcut, jumpFraction, SHORTCUTS } from './shortcuts.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { resolveMedia } from '../common/resolve.js';
+import { SOURCES } from '../common/sources.js';
 import { audioTracksSupported, listAudioTracks, streamTrack } from './audio-tracks.js';
 import { transcodeForElement } from './decode-encode.js';
 import { logBanner, logFile, logAudioTracks, logSubtitle, logEmbeddedTracks, logDecoder, logSubs } from './diagnostics.js';
@@ -3776,8 +3777,70 @@ function renderHelp() {
     }
     body.append(list);
   }
+  // The Sources list rides in the SAME reference panel as the keys, as a second
+  // section. Both are "a list of facts read while playing", so a learner opens one
+  // place they already know rather than a third floating surface in a player that
+  // has two. The panel is non-modal, so the video keeps playing behind it, which is
+  // what makes it the right home for text someone reads mid-film.
+  body.append(buildLicencesSection());
   panel.replaceChildren(body);
   panel.dataset.built = 'true';
+}
+
+/**
+ * The licence acknowledgement as a list: one row per work, with its licence and the
+ * change made to it.
+ *
+ * Mirrors the panel's licences view and reads the same `SOURCES` module, so the two
+ * screens that show dictionary-derived words cannot state different attributions.
+ *
+ * Deliberately NOT a `<dl>`: a work carries three facts (name, licence, change)
+ * rather than a term and a definition, and a definition list here would also be
+ * counted by the shortcut test, which measures the panel's keys by `#shortcuts dt`.
+ * Plain rows keep the keys the only definition list in the card.
+ */
+function buildLicencesSection() {
+  const heading = document.createElement('h3');
+  heading.textContent = 'Licences';
+
+  const group = document.createElement('section');
+  group.className = 'shortcut-sources';
+  group.id = 'viewer-sources';
+  group.append(heading);
+
+  for (const entry of SOURCES) {
+    const row = document.createElement('div');
+    row.className = 'shortcut-source';
+
+    const name = document.createElement('p');
+    name.className = 'shortcut-source-name';
+    name.textContent = entry.name;
+
+    const detail = document.createElement('p');
+    detail.className = 'shortcut-source-detail';
+    detail.textContent = `${entry.licence}. ${entry.changes}`;
+
+    row.append(name, detail);
+    group.append(row);
+  }
+
+  // The complete notice, the same file the panel opens, reached the same way: from the
+  // extension's own package, so the URL is `chrome-extension://` and the one-host guard
+  // that forbids an `https` host other than youtube.com in `src/` stays intact.
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.className = 'shortcut-source-open';
+  open.textContent = 'Open the full notice';
+  open.addEventListener('click', () => {
+    const url = api.runtime.getURL('THIRD-PARTY.md');
+    // Same optional chain as the panel's handler: `tabs.create` in the extension, and
+    // `window.open` only so the stub-hosted preview does not throw.
+    if (api.tabs?.create) void api.tabs.create({ url });
+    else globalThis.open?.(url, '_blank');
+  });
+  group.append(open);
+
+  return group;
 }
 
 function toggleHelp() {

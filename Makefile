@@ -48,7 +48,7 @@ ZIP     := $(BUILD)/$(SLUG)-$(VERSION).zip
 # files in the package. It is used below to LINT and to ZIP a directory that has
 # already been filtered.
 SHIPPED := manifest.json icons src \
-           LICENSE README.md THIRD-PARTY.md CHROMEWEBSTORE.md TESTING.md \
+           LICENSE README.md THIRD-PARTY.md THIRD-PARTY-NOTES.md CHROMEWEBSTORE.md TESTING.md \
            AI-USE.md AGENTS.md \
            package.json
 

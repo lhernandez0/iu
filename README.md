@@ -176,7 +176,7 @@ package it; rebuild it with `node tools/build-vendor.mjs` if its version changes
 bundles the container library and the two coder packages that supply Dolby audio
 decoding and AAC encoding, which a browser's own WebCodecs may not have. There is no
 other build product, and the release path needs no compiler. See `THIRD-PARTY.md`
-for what is bundled and why.
+for the obligations and `THIRD-PARTY-NOTES.md` for the pins and the hashes.
 
 ### The commit hook
 
@@ -213,8 +213,8 @@ plain static server you would never see it. The dev server builds with
 `--force-offer`, which blanks that check for the preview, and serves the result under
 `/pages-demo/`, so the page has the same relative-path layout the deploy has.
 
-The media is committed and public domain. [`THIRD-PARTY.md`](THIRD-PARTY.md) records
-its source, licence and the exact recipe that reproduces it.
+The media is committed and public domain. [`THIRD-PARTY-NOTES.md`](THIRD-PARTY-NOTES.md)
+records its source, licence and the exact recipe that reproduces it.
 
 > If you change anything under `tools/pages/`, check it served from a **subpath**, not
 > the domain root. Pages serves a project site from `/<repo>/`, and root-absolute
