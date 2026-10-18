@@ -44,6 +44,7 @@
     "mediabunny": "^1.61.3",
     "playwright": "^1.63.0",
     "vite": "^8.3.3",
-    "wanakana": "^5.3.1"
+    "wanakana": "^5.3.1",
+    "web-ext": "^10.8.0"
   }
 }

@@ -118,7 +118,10 @@ stage: ## Copy the shipping set into build/stage (TARGET=both|chrome|firefox)
 
 .PHONY: lint
 lint: stage ## Validate the staged extension the way both stores will
-	@npx --yes web-ext lint --source-dir $(STAGE) --output json \
+	@# The local install, not `npx --yes`: web-ext is a devDependency now, because the
+	@# Firefox browser test imports its RDP client to install the add-on. Using the
+	@# pinned copy also means the linter and that test run the same version.
+	@node_modules/.bin/web-ext lint --source-dir $(STAGE) --output json \
 		| node tools/check-lint.mjs
 
 .PHONY: pack

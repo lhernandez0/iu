@@ -63,7 +63,72 @@ const ALLOWED = new Set([
   'BlueOak-1.0.0',
   'CC0-1.0',
   'MPL-2.0',
+  'Python-2.0',
+  'Zlib',
 ]);
+
+/**
+ * Packages whose licence FIELD is a bare family name, checked by hand.
+ *
+ * `winreg` declares `"license": "BSD"` with no clause, and its README carries no
+ * licence section. It is a Windows-registry helper, pulled in transitively by
+ * `web-ext` for its Android support, which this project never uses. BSD-2 and BSD-3
+ * are both acceptable here, so the choice between them does not change the answer;
+ * what matters is that it is recorded as inspected rather than waved through by
+ * adding the word "BSD" to the allowlist, which would then accept a future
+ * BSD-4-Clause package that is NOT acceptable.
+ *
+ * @type {Map<string, string>}
+ */
+const INSPECTED_BY_HAND = new Map([
+  ['winreg', 'declares bare "BSD"; BSD-2 and BSD-3 are both acceptable, so the clause does not change the answer'],
+]);
+
+/**
+ * Whether a package's licence FIELD is one we accept, including compound SPDX
+ * expressions.
+ *
+ * `web-ext` (a devDependency, for its Firefox RDP client) brought seven packages whose
+ * `license` field is an EXPRESSION rather than a name: `(MIT OR GPL-3.0-or-later)`,
+ * `(MIT AND Zlib)`, `(BSD-2-Clause OR MIT OR Apache-2.0)`. Comparing the raw string
+ * against an allowlist therefore fails on packages that are in fact perfectly fine,
+ * and the tempting fix, adding those exact strings to the set, would have failed the
+ * next dual-licensed package too.
+ *
+ * So the expression is read the way SPDX defines it:
+ *
+ *   - `A OR B` is satisfied if EITHER is acceptable, because we may take that branch;
+ *   - `A AND B` requires BOTH, because we must comply with both.
+ *
+ * No package here is distributed, and none is runtime: they are the tools that build
+ * and test, which is why a permissive branch is enough rather than a full copyleft
+ * review.
+ *
+ * @param {string} licence
+ * @param {string} [packageName] To look up the hand-inspected exceptions.
+ * @returns {boolean}
+ */
+function licenceAccepted(licence, packageName) {
+  if (packageName && INSPECTED_BY_HAND.has(packageName)) return true;
+  if (ALLOWED.has(licence)) return true;
+  // Strip the parentheses SPDX expressions use for grouping.
+  const expression = String(licence).replace(/[()]/g, ' ').trim();
+  if (!expression) return false;
+
+  // OR binds loosest, so a top-level OR is satisfied by any acceptable alternative.
+  const alternatives = expression.split(/\s+OR\s+/i);
+  if (alternatives.length > 1) {
+    return alternatives.some((alternative) => licenceAccepted(alternative.trim()));
+  }
+
+  // Then AND, which requires every conjunct.
+  const conjuncts = expression.split(/\s+AND\s+/i);
+  if (conjuncts.length > 1) {
+    return conjuncts.every((conjunct) => licenceAccepted(conjunct.trim()));
+  }
+
+  return ALLOWED.has(expression);
+}
 
 /**
  * Every package.json under node_modules, read directly.
@@ -125,7 +190,7 @@ section('every installed dependency carries a licence we have accepted');
     console.log('  (no node_modules, nothing to check)');
   } else {
     const unexpected = [...found.entries()]
-      .filter(([, info]) => !ALLOWED.has(info.licence))
+      .filter(([name, info]) => !licenceAccepted(info.licence, name))
       .map(([name, info]) => `${name}@${info.version} = ${info.licence}`);
 
     check(`all ${found.size} packages are on the allowlist`, unexpected, []);
