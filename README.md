@@ -17,7 +17,8 @@ declares each browser's keys and each ignores the other's.
 
 Until it is listed, install it from the source below.
 [`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the store listing copy, permission
-justifications and privacy disclosure.
+justifications and privacy disclosure. [`AMO-READINESS.md`](AMO-READINESS.md)
+summarizes what is left before a Firefox (AMO) submission.
 
 ## Install from source
 
