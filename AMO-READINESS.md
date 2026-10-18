@@ -1,23 +1,28 @@
 # Firefox (AMO) submission readiness
 
-A one-paragraph status note. The full plan, with the requirement-by-requirement
-table and the measurements it is based on, is a private working document.
+A status note. The full plan, with the requirement-by-requirement table and the
+measurements it is based on, is a private working document.
 
-The extension is structurally close to AMO-ready and the gap is mostly paperwork.
-`make lint` reports **0 errors** and 4 classified warnings, the manifest already
-declares Firefox properly (`browser_specific_settings.gecko`, `sidebar_action`,
-`background.scripts`, and `data_collection_permissions.required: ["none"]`), and
-the code feature-detects the panel API that differs between browsers. The one real
-requirement is **source-code submission**: `src/vendor/mediabunny.js` is a
-minified bundle, so Mozilla requires the original source plus instructions that let
-a reviewer rebuild it to a byte-identical file. That rebuild is **verified to
-reproduce exactly today** (`node tools/build-vendor.mjs`, hash
-`4822d98bd58e08d2a82dfb01f6ce5a8b7310037eaf47b7d86436436f17c7d4ec`), so what is
-missing is the packaging: a source archive, a reviewer-facing README naming the
-build command and the toolchain, and a target that keeps the byte-identical check
-true in CI. After that come the third-party library links pinned to release tags,
-raising `strict_min_version` from 128 to 140 to match the data-consent feature, and
-the honest gap that **nothing currently runs the extension in Firefox**: the
-browser tier is Chromium-only, and the sidebar API is the mechanism most likely to
-differ. Screenshots and the public listing are deliberately last, because the UI is
-still changing.
+The one hard requirement was **source-code submission**, because
+`src/vendor/mediabunny.js` is minified. That is implemented: `make source` produces
+the package a reviewer rebuilds from, `tools/amo/AMO-SOURCE.md` becomes its README,
+and `make verify-source` proves the rebuild is byte-identical to the committed file
+(`4822d98b…`, checked under Node 24, the version Mozilla's reviewers use). The
+package was verified end to end by extracting it and rebuilding from the extracted
+copy, which is exactly the reviewer's procedure.
+
+The **per-browser build target** landed too. `make release TARGET=firefox` emits a
+manifest with no `sidePanel` permission, no `side_panel` and no
+`background.service_worker`, taking `web-ext lint` from 4 warnings to 1; the one
+that remains is Android-only and explained in `tools/check-lint.mjs`. The linter now
+**fails** on an unclassified warning rather than printing it, so the accepted set
+cannot grow quietly.
+
+**What is left.** Screenshots and the AMO listing copy, both deliberately last
+because the UI is still changing, plus `AMO-LISTING.md` for the listing fields that
+have no Chrome equivalent. And one honest gap: **no test executes the extension in
+Firefox.** `test/browser/firefox.test.mjs` attempts a real Firefox and SKIPs with its
+reason on this machine, where Firefox will not load an unsigned sideloaded
+extension; `test/firefox-manifest.test.mjs` covers the cross-browser seam
+structurally in the meantime. `web-ext run` does report the extension installing, so
+this is a gap in the test harness rather than in the extension.

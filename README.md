@@ -31,7 +31,7 @@ tree with `node_modules/` and `docs/` in it.
 2. **Load unpacked** → select the folder.
 3. Open a video, then click the toolbar icon to open the side panel.
 
-**Firefox** (128+):
+**Firefox** (140+):
 
 1. `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on**.
 2. Select `manifest.json` in that folder.
@@ -227,11 +227,28 @@ records its source, licence and the exact recipe that reproduces it.
 
 ```bash
 make release           # stage, lint, zip, verify -> build/iu-language-companion-<version>.zip
+make source            # the source package Mozilla review requires -> build/*-source.zip
 ```
 
 One ZIP serves both stores: the manifest carries each browser's keys and each
-ignores the other's, so there is nothing to build differently for Chrome and
-Firefox. `make help` lists the individual steps (`stage`, `lint`, `zip`, `verify`).
+ignores the other's. `make help` lists the individual steps (`stage`, `lint`, `zip`,
+`verify`, `source`).
+
+A per-browser build is available when a package should declare only its own
+browser's keys and permissions:
+
+```bash
+make release TARGET=chrome
+make release TARGET=firefox    # no sidePanel permission, no side_panel, no service_worker
+```
+
+The manifest is generated from the single source `manifest.json` by
+`tools/make-manifest.mjs`, never from a second checked-in copy, so the two browsers
+cannot disagree about the name, version or description.
+
+`make source` exists because `src/vendor/mediabunny.js` is minified, and Mozilla
+requires the original source plus instructions that let a reviewer rebuild it. That
+rebuild is byte-identical, which `make verify-source` asserts.
 
 The list of what ships lives in the Makefile, and `make verify` asserts the
 archive contains exactly that.
@@ -239,7 +256,8 @@ archive contains exactly that.
 [`TESTING.md`](TESTING.md) covers the tiers, what each suite does and does not
 cover, the panel preview in detail, and where the fixtures come from.
 [`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the Chrome Web Store listing copy,
-permission justifications and privacy disclosure.
+permission justifications and privacy disclosure. [`AMO-READINESS.md`](AMO-READINESS.md)
+holds the Firefox submission status.
 
 ### Cross-browser
 

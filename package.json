@@ -28,6 +28,8 @@
     "test:unit": "node test/unit.test.mjs",
     "ui": "vite --config tools/ui/vite.config.mjs",
     "vendor": "node tools/build-vendor.mjs",
+    "verify-source": "node tools/verify-source.mjs",
+    "source": "make verify-source-zip",
     "wordlists:build": "node tools/build-wordlist.mjs",
     "wordlists:check": "node tools/check-wordlists.mjs",
     "wordlists:fetch": "node tools/fetch-wordlists.mjs"

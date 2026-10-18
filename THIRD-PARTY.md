@@ -103,6 +103,20 @@ The package's own source-file headers are preserved inside the bundle, so a copy
 this notice travels with the source it covers. The covered files are unmodified;
 MPL-2.0 is file-level copyleft and imposes nothing on the surrounding project.
 
+Source for each, pinned to the release tag actually bundled. All four are one
+repository, with the coders in `packages/`, and **the versions differ**: `mediabunny`
+is 1.61.3 while the coders are 1.61.4, so the links point at two tags:
+
+| Package | Source at that tag |
+| --- | --- |
+| `mediabunny` 1.61.3 | <https://github.com/Vanilagy/mediabunny/tree/v1.61.3> |
+| `@mediabunny/ac3` 1.61.4 | <https://github.com/Vanilagy/mediabunny/tree/v1.61.4/packages/ac3> |
+| `@mediabunny/dts` 1.61.4 | <https://github.com/Vanilagy/mediabunny/tree/v1.61.4/packages/dts> |
+| `@mediabunny/aac-encoder` 1.61.4 | <https://github.com/Vanilagy/mediabunny/tree/v1.61.4/packages/aac-encoder> |
+
+The bundle is generated; rebuild it with `node tools/build-vendor.mjs`. That build
+reproduces the committed file byte for byte, which `make verify-source` checks.
+
 ## Test fixtures and conformance media
 
 `test/synthetic/` is committed and is **our own invented text**; it contains no
