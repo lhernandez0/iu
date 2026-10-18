@@ -28,7 +28,7 @@ SHELL := /bin/bash
 NAME    := $(shell node -p "require('./manifest.json').name")
 VERSION := $(shell node -p "require('./manifest.json').version")
 
-# Slug for the filename: "IU Language Companion" -> "iu-language-companion".
+# Slug for the filename: "IU Language Buddy" -> "iu-language-buddy".
 SLUG    := $(shell echo "$(NAME)" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
 
 # WHICH BROWSER THIS BUILD IS FOR.
@@ -64,7 +64,7 @@ ZIP     := $(BUILD)/$(SLUG)-$(VERSION)$(SUFFIX).zip
 # files in the package. It is used below to LINT and to ZIP a directory that has
 # already been filtered.
 SHIPPED := manifest.json icons src \
-           LICENSE README.md THIRD-PARTY.md THIRD-PARTY-NOTES.md CHROMEWEBSTORE.md AMO-READINESS.md TESTING.md \
+           LICENSE README.md THIRD-PARTY.md THIRD-PARTY-NOTES.md CHROMEWEBSTORE.md AMO-READINESS.md AMO-LISTING.md TESTING.md \
            AI-USE.md AGENTS.md \
            package.json
 
@@ -164,7 +164,7 @@ release: verify ## The full pre-submission check
 # absent: they are the repository's, not the reviewer's, and a smaller package is a
 # package that gets read.
 SOURCE_DIR    := $(BUILD)/source
-SOURCE_ROOT   := $(SOURCE_DIR)/iu-language-companion
+SOURCE_ROOT   := $(SOURCE_DIR)/iu-language-buddy
 SOURCE_ZIP    := $(BUILD)/$(SLUG)-$(VERSION)-source.zip
 
 # What a reviewer needs to reproduce the generated file: the source it is built

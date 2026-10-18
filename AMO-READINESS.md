@@ -18,11 +18,15 @@ that remains is Android-only and explained in `tools/check-lint.mjs`. The linter
 **fails** on an unclassified warning rather than printing it, so the accepted set
 cannot grow quietly.
 
-**What is left.** Screenshots and the AMO listing copy, both deliberately last
-because the UI is still changing, plus `AMO-LISTING.md` for the listing fields that
-have no Chrome equivalent. And one honest gap: **no test executes the extension in
-Firefox.** `test/browser/firefox.test.mjs` attempts a real Firefox and SKIPs with its
-reason on this machine, where Firefox will not load an unsigned sideloaded
-extension; `test/firefox-manifest.test.mjs` covers the cross-browser seam
-structurally in the meantime. `web-ext run` does report the extension installing, so
+**What is left.** Screenshots, and only screenshots. Everything else AMO asks for is
+written: `AMO-LISTING.md` holds the listing fields, including the three that exist
+only on AMO (up to two categories, support contact, and Notes for Reviewers, where
+the source package and the library links are pointed at). Screenshots are last
+because the UI is still changing, so one taken now is one to retake.
+
+There is also one honest gap: **no test executes the extension in Firefox.**
+`test/browser/firefox.test.mjs` attempts a real Firefox and SKIPs with its reason on
+this machine, where Firefox will not load an unsigned sideloaded extension;
+`test/firefox-manifest.test.mjs` covers the cross-browser seam structurally in the
+meantime. `web-ext run` does report the extension installing, so
 this is a gap in the test harness rather than in the extension.

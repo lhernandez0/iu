@@ -1,4 +1,4 @@
-# Source code for the IU Language Companion extension
+# Source code for the IU Language Buddy extension
 
 This package accompanies the extension version it is submitted with. It exists
 because the extension ships one **minified** file, and Mozilla's review requires the

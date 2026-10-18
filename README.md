@@ -1,4 +1,4 @@
-# IU Language Companion
+# IU Language Buddy
 
 A Chinese, Japanese and Korean dictionary for video. It reads the subtitles of the
 video you are watching and shows them as a transcript you can look words up in.
@@ -6,8 +6,9 @@ video you are watching and shows them as a transcript you can look words up in.
 YouTube, or a video file on your own computer. Chrome, Edge, Brave and Firefox.
 Free, open source, no account.
 
-> **IU**, *I* and *you*. 友 means **friend** in Hokkien (*iú*), Mandarin (*yǒu*)
-> and Japanese (*tomo*).
+> **IU**, *I* and *you*. 友 means **friend** in every language this reads:
+> Mandarin (*yǒu*), Japanese (*tomo*) and Korean (*u*, 우). And in Hokkien (*iú*),
+> which is where the name came from.
 
 ## Status
 
@@ -18,7 +19,8 @@ declares each browser's keys and each ignores the other's.
 Until it is listed, install it from the source below.
 [`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the Chrome Web Store listing copy,
 permission justifications and privacy disclosure. [`AMO-READINESS.md`](AMO-READINESS.md)
-summarizes what is left before a Firefox (AMO) submission.
+summarizes what is left before a Firefox (AMO) submission, and
+[`AMO-LISTING.md`](AMO-LISTING.md) holds the Firefox listing fields.
 
 ## Install from source
 
@@ -226,7 +228,7 @@ records its source, licence and the exact recipe that reproduces it.
 ### Building the store package
 
 ```bash
-make release           # stage, lint, zip, verify -> build/iu-language-companion-<version>.zip
+make release           # stage, lint, zip, verify -> build/iu-language-buddy-<version>.zip
 make source            # the source package Mozilla review requires -> build/*-source.zip
 ```
 
@@ -257,7 +259,8 @@ archive contains exactly that.
 cover, the panel preview in detail, and where the fixtures come from.
 [`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the Chrome Web Store listing copy,
 permission justifications and privacy disclosure. [`AMO-READINESS.md`](AMO-READINESS.md)
-holds the Firefox submission status.
+holds the Firefox submission status and [`AMO-LISTING.md`](AMO-LISTING.md) its
+listing fields.
 
 ### Cross-browser
 

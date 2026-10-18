@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "IU Language Companion",
+  "name": "IU Language Buddy",
   "version": "0.1.0",
   "description": "A Chinese, Japanese and Korean dictionary for video: unknown words marked in the subtitles, meanings on hover.",
   "minimum_chrome_version": "116",
