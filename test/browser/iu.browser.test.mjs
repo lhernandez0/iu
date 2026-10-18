@@ -1062,16 +1062,21 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
   //
   // Skipped when nothing has been captured: fixtures are local and gitignored, so
   // a machine that has not run `npm run capture` is a setup state, not a broken
-  // build.
+  // build. Announced as SKIP rather than as a parenthetical aside, because the
+  // runner counts SKIP lines and an aside is a skip nobody sees: the suite would
+  // report all-green while one of its two sections never ran.
 
   const captures = listCaptures();
   if (!captures.length) {
-    console.log('\n  (no captures on this machine, run `npm run capture -- <videoId>` to add one)');
+    console.log('  SKIP  no captures on this machine; run `npm run capture -- <videoId>` to add one');
   }
 
   for (const captureId of captures) {
     const capture = captureFor(captureId);
-    if (!capture?.tracks.length) continue;
+    if (!capture?.tracks.length) {
+      console.log(`  SKIP  capture ${captureId} has no tracks`);
+      continue;
+    }
 
     // A capture whose tracks carry no cues is not a video to render, it is a
     // capture that failed to collect any caption bodies, which happens when the
