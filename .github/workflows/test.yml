@@ -94,7 +94,12 @@ jobs:
       # something the harness would then refuse. `--with-deps` also installs the
       # shared libraries Chromium needs, which is the part that is easy to forget
       # and produces a launch failure that reads like a code bug.
-      - run: npx playwright install --with-deps chromium
+      #
+      # FIREFOX too, because `firefox.test.mjs` installs the extension into it. It
+      # skips when no Firefox is present, and the summary check below treats a skip
+      # as a failure, so without this the job would fail for the right reason in the
+      # wrong place.
+      - run: npx playwright install --with-deps chromium firefox
 
       # Run ONCE, capturing the output, then assert on what was captured. The
       # obvious version of this runs the whole tier a second time inside the check,
@@ -112,8 +117,28 @@ jobs:
           # `findChrome` returning null makes every suite SKIP and the runner exit
           # 0, so without this the job would pass while testing nothing, which is
           # the exact failure this workflow exists to prevent.
-          if grep -q 'Skipped: no browser' /tmp/browser.log; then
-            echo "::error::the browser tier skipped, no Chromium was found, so nothing was tested"
+          #
+          # Matched on the RUNNER'S SUMMARY line, not on a string a suite prints.
+          # The previous version grepped for `Skipped: no browser`, which was a
+          # message the runner hardcoded and which was later removed because it was
+          # untrue for suites that skip for other reasons. That quietly disarmed this
+          # guard: the string could no longer appear, so the check could never fire,
+          # and the job would have gone green with nothing tested. Anchoring on the
+          # runner's own summary keeps it working when a suite's wording changes.
+          if grep -qE '^(SKIP|part)  ' /tmp/browser.log; then
+            echo "::error::a browser suite skipped in CI, so that part of the tier did not run"
+            grep -E '^(SKIP|part)  ' /tmp/browser.log || true
+            exit 1
+          fi
+
+          # And independently: the summary must show every suite as `ok`. This catches
+          # a suite that disappeared from the list entirely, which the check above
+          # cannot see.
+          TOTAL=$(grep -cE '^(ok  |FAIL|SKIP|part)  ' /tmp/browser.log || true)
+          PASSED=$(grep -cE '^ok  ' /tmp/browser.log || true)
+          echo "browser suites: $PASSED/$TOTAL ok"
+          if [ "$TOTAL" -eq 0 ] || [ "$PASSED" -ne "$TOTAL" ]; then
+            echo "::error::not every browser suite passed ($PASSED of $TOTAL)"
             exit 1
           fi
 
@@ -172,4 +197,62 @@ jobs:
         with:
           name: extension-zip
           path: build/*.zip
+          if-no-files-found: error
+
+  # The AMO SOURCE PACKAGE, a different artefact with a different job: a reviewer
+  # rebuilds the minified bundle from it and diffs the result.
+  #
+  # Its own job because it is the thing AMO will reject a submission over, and
+  # because it is the only check that proves the REPRODUCIBILITY claim.
+  # `make verify-source-zip` depends on `source`, which depends on
+  # `verify-source`, so this rebuilds the bundle from the committed inputs, fails on
+  # the first differing byte, then builds and verifies the package. A missing
+  # lockfile or a build that no longer reproduces would otherwise be found by a
+  # reviewer rather than by us.
+  source-package:
+    name: source package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+
+      - run: make verify-source-zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amo-source-zip
+          path: build/*-source.zip
+          if-no-files-found: error
+
+  # Both per-browser packages. The split exists so each store receives a manifest
+  # declaring only its own keys, and NOTHING verified that until this job: the
+  # Firefox build passed while `make lint TARGET=chrome` failed, because `web-ext
+  # lint` was being used to validate a Chrome manifest. A matrix over both targets
+  # is what stops that happening again, and `fail-fast: false` so one failing target
+  # does not hide the other's result.
+  per-browser:
+    name: per-browser (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [chrome, firefox]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+
+      - run: make release TARGET=${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-zip-${{ matrix.target }}
+          path: build/*-${{ matrix.target }}.zip
           if-no-files-found: error

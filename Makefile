@@ -117,12 +117,19 @@ stage: ## Copy the shipping set into build/stage (TARGET=both|chrome|firefox)
 	@echo "staged $$(find $(STAGE) -type f | wc -l) files -> $(STAGE) ($(TARGET))"
 
 .PHONY: lint
-lint: stage ## Validate the staged extension the way both stores will
-	@# The local install, not `npx --yes`: web-ext is a devDependency now, because the
-	@# Firefox browser test imports its RDP client to install the add-on. Using the
-	@# pinned copy also means the linter and that test run the same version.
-	@node_modules/.bin/web-ext lint --source-dir $(STAGE) --output json \
-		| node tools/check-lint.mjs
+lint: stage ## Validate the staged extension the way each store will
+	@# `web-ext lint` is a FIREFOX validator. Run against a Chrome-shaped package it
+	@# reports "data_collection_permissions is missing" and "sidePanel is invalid",
+	@# both of which are true of Firefox and irrelevant to Chrome: the first because
+	@# the key is Firefox-only, the second because the permission is Chrome-only.
+	@# So it runs for `both` and `firefox`, and for `chrome` the manifest is checked
+	@# structurally instead of by a tool that does not speak its dialect.
+	@if [ "$(TARGET)" = "chrome" ]; then \
+		node tools/check-chrome-manifest.mjs $(STAGE)/manifest.json; \
+	else \
+		node_modules/.bin/web-ext lint --source-dir $(STAGE) --output json \
+			| node tools/check-lint.mjs; \
+	fi
 
 .PHONY: pack
 pack: lint ## Build the store ZIP from the staged set
