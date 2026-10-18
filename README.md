@@ -13,8 +13,9 @@ Free, open source, no account.
 ## Status
 
 **Not published yet.** The extension works and is being prepared for the **Chrome
-Web Store** and **Firefox Add-ons (AMO)**. One build serves both: the manifest
-declares each browser's keys and each ignores the other's.
+Web Store** and **Firefox Add-ons (AMO)**. One source manifest serves both; each
+store can take the combined package or a per-browser one that declares only its own
+keys.
 
 Until it is listed, install it from the source below.
 [`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the Chrome Web Store listing copy,
@@ -232,9 +233,8 @@ make release           # stage, lint, zip, verify -> build/iu-language-buddy-<ve
 make source            # the source package Mozilla review requires -> build/*-source.zip
 ```
 
-One ZIP serves both stores: the manifest carries each browser's keys and each
-ignores the other's. `make help` lists the individual steps (`stage`, `lint`, `zip`,
-`verify`, `source`).
+The default ZIP carries both browsers' keys and each ignores the other's. `make help`
+lists the individual steps (`stage`, `lint`, `zip`, `verify`, `source`).
 
 A per-browser build is available when a package should declare only its own
 browser's keys and permissions:

@@ -10,6 +10,29 @@ submission and the library links are pointed at.
 
 ---
 
+## What to upload, in order
+
+AMO takes **two** files, and the second is not optional for this extension:
+
+| Step | File | Built by |
+| --- | --- | --- |
+| Upload the version | `build/iu-language-buddy-<version>-firefox.zip` | `make release TARGET=firefox` |
+| Then, when the form asks whether source code is needed: **yes** | `build/iu-language-buddy-<version>-source.zip` | `make source` |
+
+Use the **per-browser** package, not the combined `iu-language-buddy-<version>.zip`.
+Both are valid, but the Firefox one omits `side_panel`, `background.service_worker`
+and the `sidePanel` permission, so AMO's validator has nothing to complain about
+except the Android floor explained in `AMO-READINESS.md`.
+
+The source package is required because `src/vendor/mediabunny.js` is minified.
+Mozilla asks for it as a separate upload after the version passes validation, and it
+must match the version being submitted, so build both from the same tree.
+
+Both artefacts are built and verified in CI on every push (`per-browser` and
+`source-package` jobs), so a green push means both are sound.
+
+---
+
 ## Reusable from the Chrome listing
 
 These are identical on both stores and are already written in
