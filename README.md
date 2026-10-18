@@ -16,8 +16,8 @@ Web Store** and **Firefox Add-ons (AMO)**. One build serves both: the manifest
 declares each browser's keys and each ignores the other's.
 
 Until it is listed, install it from the source below.
-[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the store listing copy, permission
-justifications and privacy disclosure. [`AMO-READINESS.md`](AMO-READINESS.md)
+[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the Chrome Web Store listing copy,
+permission justifications and privacy disclosure. [`AMO-READINESS.md`](AMO-READINESS.md)
 summarizes what is left before a Firefox (AMO) submission.
 
 ## Install from source
@@ -238,8 +238,8 @@ archive contains exactly that.
 
 [`TESTING.md`](TESTING.md) covers the tiers, what each suite does and does not
 cover, the panel preview in detail, and where the fixtures come from.
-[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the listing copy, permission
-justifications and privacy disclosure for both stores.
+[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the Chrome Web Store listing copy,
+permission justifications and privacy disclosure.
 
 ### Cross-browser
 
