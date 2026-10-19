@@ -34,7 +34,7 @@
  * @see Makefile, `make stage TARGET=...`
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -77,5 +77,9 @@ if (target === 'firefox') {
 // not claim to request nothing when it requests three things.
 if (Array.isArray(out.permissions) && out.permissions.length === 0) delete out.permissions;
 
+// A caller may name a path in a directory that does not exist yet (`build/` is
+// gitignored, so CI has none), and failing here would report a missing directory
+// as a manifest problem. `recursive` also makes an existing directory a no-op.
+mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(outFile, `${JSON.stringify(out, null, 2)}\n`);
 console.log(`  ${target}: ${outFile}`);

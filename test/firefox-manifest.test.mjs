@@ -6,26 +6,23 @@
  * actually differ between the two, because those are the parts a browser will reject
  * or silently ignore, and because nothing else runs Firefox (see the note below).
  *
- * ## Why this exists rather than a Firefox run
+ * ## Relationship to the Firefox browser test
  *
- * The browser tier is Chromium-only. A Firefox run was attempted and the environment
- * could not drive it: Firefox segfaults when Playwright launches it with an empty
- * profile here, `about:` pages are not navigable through Playwright, and sideloading
- * an unsigned XPI needs a profile flag that is not settable without one of the two.
- * `web-ext run` DOES install the extension into Firefox ("Installed ... as a temporary
- * add-on"), so the extension is loadable; it is the automated driving that is not
- * available here.
+ * This file asserts what can be checked WITHOUT a browser: the manifest shape and the
+ * API detection. `test/browser/firefox.test.mjs` does the real thing, installing the
+ * package into Firefox and asserting its background script starts. Both are kept:
+ * this one runs in the hermetic tier on every machine, and the browser one covers the
+ * wiring, which no structural assertion can.
  *
- * So this file asserts what can be checked WITHOUT a browser, which is the manifest
- * shape and the API detection, and `test/browser/firefox.test.mjs` attempts the real
- * run and skips with a message when it cannot. A structural test that runs everywhere
- * is worth more than a browser test that never runs, and it is honest about which is
- * which.
+ * Earlier revisions of this header claimed the Firefox run was impossible. It was not.
+ * The obstacle was Playwright's own protocol silencing Firefox's debugger server;
+ * `firefox.launchServer()` leaves it usable. See the browser test's header.
  *
  * Run with: `npm test`
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, mkdtempSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -53,9 +50,18 @@ function section(name) {
   console.log(`\n${name}`);
 }
 
-/** Run `tools/make-manifest.mjs` for a target and return the parsed result. */
+/**
+ * Run `tools/make-manifest.mjs` for a target and return the parsed result.
+ *
+ * The output goes to a fresh temp directory, not to `build/`. Writing into `build/`
+ * made this suite pass locally only because an earlier `make` had created that
+ * directory, and fail in CI where it does not exist, because the tool did not create
+ * its output directory. A test that depends on a directory being left behind by
+ * something else is not testing the tool.
+ */
 function derived(target) {
-  const out = join(ROOT, 'build', `manifest.${target}.test.json`);
+  const dir = mkdtempSync(join(tmpdir(), 'iu-manifest-'));
+  const out = join(dir, `manifest.${target}.json`);
   execFileSync(process.execPath, ['tools/make-manifest.mjs', target, out], { cwd: ROOT });
   return JSON.parse(readFileSync(out, 'utf8'));
 }
@@ -179,6 +185,19 @@ section('the source package gives a reviewer what the rebuild needs');
     check(`the README links ${pkg} at a release tag`, new RegExp(`Vanilagy/mediabunny/tree/v1\\.61\\.[34]`).test(reviewerReadme), true);
   }
   check('and never at a branch', /\/tree\/(main|master)\b/.test(reviewerReadme), false);
+}
+
+section('the tool creates its own output directory');
+
+{
+  // This suite used to write into `build/`, which is gitignored and therefore absent
+  // in CI. It passed locally only because an earlier `make` had left that directory
+  // behind, and failed in CI with ENOENT, which reads as a manifest problem and is
+  // not one. Asserting the nested case here means a caller can name any path.
+  const out = join(mkdtempSync(join(tmpdir(), 'iu-manifest-deep-')), 'a', 'b', 'manifest.json');
+  execFileSync(process.execPath, ['tools/make-manifest.mjs', 'chrome', out], { cwd: ROOT });
+  check('a missing parent directory is created', existsSync(out), true);
+  check('and the file it wrote is a usable manifest', JSON.parse(readFileSync(out, 'utf8')).manifest_version, 3);
 }
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
