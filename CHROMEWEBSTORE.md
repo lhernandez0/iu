@@ -1,4 +1,4 @@
-# Chrome Web Store Listing, IU Language Companion
+# Chrome Web Store Listing, IU Language Buddy
 
 > Last Updated: 2026-10-07
 > **Status: draft.** Nothing here has been submitted. Kept current so publishing is
@@ -7,13 +7,12 @@
 ## Store Listing
 
 **Extension Name**
-IU Language Companion
+IU Language Buddy
 
-<!-- Matches manifest.json "name". 23 characters, inside the store's 75 limit.
+<!-- Matches manifest.json "name". 17 characters, inside both stores' limits.
      The descriptor is not decoration: "IU" alone collides with a K-pop artist on
      a store search, and a bare brand is neither findable nor unambiguous. It names
-     no language on purpose, Korean is next and the name should not expire when it
-     lands. -->
+     no language on purpose, so the name does not expire when another is added. -->
 
 **Short Description**
 
@@ -109,6 +108,18 @@ English
 | Marquee Promo Tile | 1400×560 | ⬜ Not created | |
 
 <!-- Status options: ⬜ Not created | 🟡 Needs update | ✅ Ready -->
+
+### Uploading
+
+| Step | File | Built by |
+| --- | --- | --- |
+| The package | `build/iu-language-buddy-<version>-chrome.zip` | `make release TARGET=chrome` |
+
+Use the **per-browser** package rather than the combined one. Both load, but the Chrome
+one carries no Firefox-only keys, so nothing has to be ignored.
+
+Chrome asks for **no source code**. The minified bundle is only a problem for Mozilla's
+review, which is why `make source` exists and this store never needs it.
 
 ### Screenshot Notes
 
@@ -238,15 +249,44 @@ From the store review checklist. The ones that apply to this extension:
 - [ ] **Every permission has a specific justification**, done above; re-read it
       against `manifest.json` before submitting, since the two drift.
 - [x] **Icons are real files at correct dimensions**, 16/32/48/128 verified.
-- [ ] **At least one screenshot at 1280×800 or 640×400**, none taken yet.
+- [ ] **At least one screenshot at 1280×800 or 640×400**, none taken yet. This is
+      the only item outstanding for either store.
 - [x] **ZIP excludes `node_modules/`, `.git/`, `docs/`, `test/`, `tools/` and every
-      dotfile**, scripted. `make release` stages the shipping set, lints it with
-      `web-ext lint`, zips it and then asserts the archive contains exactly what
-      the Makefile declares. The package is 5.3 MB unpacked and 1.5 MB zipped, of
-      which 4.2 MB unpacked is the two bundled dictionaries. One ZIP serves both
-      stores.
+      dotfile**, scripted. `make release` stages the shipping set, lints it, zips it
+      and then asserts the archive contains exactly what the Makefile declares.
+      Measured: **10.2 MB unpacked, 2.8 MB zipped**, 58 files, of which most of the
+      unpacked size is the three bundled dictionaries. (The figures here used to say
+      5.3 MB and 1.5 MB, which stopped being true when the Japanese and Korean
+      dictionaries were added.)
 - [ ] **Privacy policy URL live**, optional here (no data collection), not written.
 - [ ] **Version bumped in `manifest.json`**, 0.1.0 is the development version.
+
+### Which artefact goes to which store
+
+The extension used to build ONE ZIP for both stores, each browser ignoring the other's
+manifest keys. That still works (`make release`), but each store now also has a package
+that declares only its own keys, which removes the warnings a shared manifest produces:
+
+| Command | Artefact | For |
+| --- | --- | --- |
+| `make release` | `iu-language-buddy-<version>.zip` | either store, the combined manifest |
+| `make release TARGET=chrome` | `...-chrome.zip` | Chrome, no Firefox keys, `sidePanel` requested |
+| `make release TARGET=firefox` | `...-firefox.zip` | AMO, no `side_panel`, no `service_worker`, no `sidePanel` permission |
+| `make source` | `...-source.zip` | **AMO only.** The source submission, which the minified bundle requires |
+
+`make release TARGET=...` is the checked path: all three targets are built and linted in
+CI, and each has its own artifact. The combined ZIP is kept because it is what a
+single-package release uses.
+
+### Linting, and why it differs per target
+
+`web-ext lint` is Mozilla's validator and it is run for `both` and `firefox`. It is NOT
+run for `chrome`, because pointed at a Chrome manifest it raises two warnings that are
+true of Firefox and meaningless for Chrome: a missing `data_collection_permissions`
+(a Firefox-only key) and an invalid `sidePanel` (a Chrome-only permission). The Chrome
+package is checked structurally by `tools/check-chrome-manifest.mjs` instead, for the
+things Chrome actually rejects: unknown top-level keys, a non-dotted version, or a file
+the manifest names that is not in the package.
 
 ## Language Claim, and Why It Is Worded Carefully
 

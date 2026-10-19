@@ -155,7 +155,14 @@ for (const file of files) {
 // The manifest has to be at the archive root. Both stores reject a package where
 // it is nested, and the failure reads as "invalid manifest" rather than "wrong
 // layout", so it is asserted here rather than discovered at upload.
-if (!files.some((file) => relative(sourceDir, file) === 'manifest.json')) {
+//
+// SKIPPED for the AMO SOURCE package (`--source`), which is not an extension and has
+// no manifest at its root: it is a directory of source for a reviewer to build from.
+// The check is what the extension package needs, so it is opt-OUT rather than
+// removed, and the source package asserts its own required files in
+// `tools/verify-source-zip.mjs`.
+const source = process.argv.includes('--source');
+if (!source && !files.some((file) => relative(sourceDir, file) === 'manifest.json')) {
   console.error('manifest.json is not at the root of the staged directory');
   process.exit(1);
 }

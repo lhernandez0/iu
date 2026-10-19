@@ -1,4 +1,4 @@
-# IU Language Companion
+# IU Language Buddy
 
 A Chinese, Japanese and Korean dictionary for video. It reads the subtitles of the
 video you are watching and shows them as a transcript you can look words up in.
@@ -6,18 +6,22 @@ video you are watching and shows them as a transcript you can look words up in.
 YouTube, or a video file on your own computer. Chrome, Edge, Brave and Firefox.
 Free, open source, no account.
 
-> **IU**, *I* and *you*. 友 means **friend** in Hokkien (*iú*), Mandarin (*yǒu*)
-> and Japanese (*tomo*).
+> **IU**, *I* and *you*. 友 means **friend** in every language this reads:
+> Mandarin (*yǒu*), Japanese (*tomo*) and Korean (*u*, 우). And in Hokkien (*iú*),
+> which is where the name came from.
 
 ## Status
 
 **Not published yet.** The extension works and is being prepared for the **Chrome
-Web Store** and **Firefox Add-ons (AMO)**. One build serves both: the manifest
-declares each browser's keys and each ignores the other's.
+Web Store** and **Firefox Add-ons (AMO)**. One source manifest serves both; each
+store can take the combined package or a per-browser one that declares only its own
+keys.
 
 Until it is listed, install it from the source below.
-[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the store listing copy, permission
-justifications and privacy disclosure.
+[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the Chrome Web Store listing copy,
+permission justifications and privacy disclosure. [`AMO-READINESS.md`](AMO-READINESS.md)
+summarizes what is left before a Firefox (AMO) submission, and
+[`AMO-LISTING.md`](AMO-LISTING.md) holds the Firefox listing fields.
 
 ## Install from source
 
@@ -30,7 +34,7 @@ tree with `node_modules/` and `docs/` in it.
 2. **Load unpacked** → select the folder.
 3. Open a video, then click the toolbar icon to open the side panel.
 
-**Firefox** (128+):
+**Firefox** (140+):
 
 1. `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on**.
 2. Select `manifest.json` in that folder.
@@ -225,20 +229,38 @@ records its source, licence and the exact recipe that reproduces it.
 ### Building the store package
 
 ```bash
-make release           # stage, lint, zip, verify -> build/iu-language-companion-<version>.zip
+make release           # stage, lint, zip, verify -> build/iu-language-buddy-<version>.zip
+make source            # the source package Mozilla review requires -> build/*-source.zip
 ```
 
-One ZIP serves both stores: the manifest carries each browser's keys and each
-ignores the other's, so there is nothing to build differently for Chrome and
-Firefox. `make help` lists the individual steps (`stage`, `lint`, `zip`, `verify`).
+The default ZIP carries both browsers' keys and each ignores the other's. `make help`
+lists the individual steps (`stage`, `lint`, `zip`, `verify`, `source`).
+
+A per-browser build is available when a package should declare only its own
+browser's keys and permissions:
+
+```bash
+make release TARGET=chrome
+make release TARGET=firefox    # no sidePanel permission, no side_panel, no service_worker
+```
+
+The manifest is generated from the single source `manifest.json` by
+`tools/make-manifest.mjs`, never from a second checked-in copy, so the two browsers
+cannot disagree about the name, version or description.
+
+`make source` exists because `src/vendor/mediabunny.js` is minified, and Mozilla
+requires the original source plus instructions that let a reviewer rebuild it. That
+rebuild is byte-identical, which `make verify-source` asserts.
 
 The list of what ships lives in the Makefile, and `make verify` asserts the
 archive contains exactly that.
 
 [`TESTING.md`](TESTING.md) covers the tiers, what each suite does and does not
 cover, the panel preview in detail, and where the fixtures come from.
-[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the listing copy, permission
-justifications and privacy disclosure for both stores.
+[`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) holds the Chrome Web Store listing copy,
+permission justifications and privacy disclosure. [`AMO-READINESS.md`](AMO-READINESS.md)
+holds the Firefox submission status and [`AMO-LISTING.md`](AMO-LISTING.md) its
+listing fields.
 
 ### Cross-browser
 

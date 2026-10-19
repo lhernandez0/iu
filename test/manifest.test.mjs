@@ -145,7 +145,7 @@ section('shipped documents do not point at things a viewer cannot have');
   //
   // Scanned rather than imported: the point is the FILE as a viewer receives it,
   // and the failure mode is text in prose that no module ever evaluates.
-  const SHIPPED = ['README.md', 'CHROMEWEBSTORE.md', 'TESTING.md', 'THIRD-PARTY.md', 'THIRD-PARTY-NOTES.md', 'AI-USE.md', 'AGENTS.md'];
+  const SHIPPED = ['README.md', 'CHROMEWEBSTORE.md', 'AMO-READINESS.md', 'AMO-LISTING.md', 'TESTING.md', 'THIRD-PARTY.md', 'THIRD-PARTY-NOTES.md', 'AI-USE.md', 'AGENTS.md'];
   // A path into a gitignored directory, or an ADR reference. ADRs live in docs/,
   // so naming one is the same mistake written a different way.
   const PRIVATE = /docs\/(design-decisions|private)\/|\bADR\s*\d{3,4}\b/;
@@ -361,6 +361,22 @@ section('the permission list is exactly what the privacy claim describes');
     'webNavigation',
     'contextMenus',
   ]);
+
+  // The Firefox floor is tied to the data-consent feature, not chosen freely.
+  // `data_collection_permissions` is only read by Firefox 140 and later, so a floor
+  // below that makes the declaration silently inert on the versions in between: the
+  // key is ignored, and the "no data collected" statement is not shown to a user who
+  // installs there. Declaring `["none"]` makes that harmless in effect, but the
+  // declaration is only honest if the floor lets Firefox read it, so the two are
+  // asserted together rather than the version being left as a loose number.
+  const gecko = manifest.browser_specific_settings?.gecko ?? {};
+  check('Firefox declares a data-collection position', gecko.data_collection_permissions, { required: ['none'] });
+  const floor = Number.parseFloat(String(gecko.strict_min_version ?? '0'));
+  check(
+    'and the minimum Firefox version can read that key',
+    Number.isFinite(floor) && floor >= 140,
+    true,
+  );
 }
 
 section('every provider script is declared in the manifest, or it is never injected');
