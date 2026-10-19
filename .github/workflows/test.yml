@@ -101,6 +101,13 @@ jobs:
       # wrong place.
       - run: npx playwright install --with-deps chromium firefox
 
+      # `firefox.test.mjs` installs the STAGED package, not `src/`, so that what it
+      # loads is what a reviewer would. Without this it skips with "build/stage is
+      # missing", and the summary check below rightly fails the job, since the suite
+      # did not run. Staging is plain file copies, so it costs nothing and needs no
+      # browser.
+      - run: make stage
+
       # Run ONCE, capturing the output, then assert on what was captured. The
       # obvious version of this runs the whole tier a second time inside the check,
       # which doubles the slowest job in the file to answer a question the first
@@ -125,9 +132,29 @@ jobs:
           # guard: the string could no longer appear, so the check could never fire,
           # and the job would have gone green with nothing tested. Anchoring on the
           # runner's own summary keeps it working when a suite's wording changes.
-          if grep -qE '^(SKIP|part)  ' /tmp/browser.log; then
-            echo "::error::a browser suite skipped in CI, so that part of the tier did not run"
-            grep -E '^(SKIP|part)  ' /tmp/browser.log || true
+          #
+          # ONE skip is allowed, and only this one. The real-capture section of
+          # `iu.browser.test.mjs` needs bytes YouTube actually sent, and those
+          # fixtures are gitignored on purpose: they are someone else's video. No
+          # checkout can contain them, so failing on that skip would fail every run
+          # on a reason no fix can reach, and the usual repair would be to weaken
+          # this guard until it caught nothing again. It is named explicitly instead.
+          #
+          # Two checks, because the runner reports a skip two ways and they mean
+          # different things. A `SKIP` row means a whole suite did not run, and no
+          # reason excuses that. A `part` row means a suite ran with one section
+          # skipped, and only the named reason is tolerated. Matching the reason
+          # lines matters: they begin with two spaces, so a pattern anchored on
+          # `SKIP` would never see them and would silently allow nothing.
+          if grep -qE '^SKIP  ' /tmp/browser.log; then
+            echo "::error::a browser suite skipped entirely in CI"
+            grep -E '^SKIP  ' /tmp/browser.log
+            exit 1
+          fi
+
+          ALLOWED='^  iu\.browser\.test\.mjs: no captures on this machine'
+          if grep -E '^  [A-Za-z0-9.-]+\.test\.mjs: ' /tmp/browser.log | grep -vE "$ALLOWED"; then
+            echo "::error::a browser suite skipped a section for a reason CI can fix"
             exit 1
           fi
 
