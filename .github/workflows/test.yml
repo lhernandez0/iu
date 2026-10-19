@@ -158,14 +158,26 @@ jobs:
             exit 1
           fi
 
-          # And independently: the summary must show every suite as `ok`. This catches
-          # a suite that disappeared from the list entirely, which the check above
-          # cannot see.
+          # And independently: count the rows. This catches a `FAIL` suite and a log
+          # where nothing was reported at all.
+          #
+          # It does NOT catch a suite that vanished from the list, which an earlier
+          # comment here claimed. The total is counted from the same log, so a suite
+          # that never printed lowers both numbers and the ratio still balances.
+          # Verified by deleting a row and watching the check pass. What actually
+          # prevents a missing suite is that the runner enumerates the suites in
+          # code, so a suite cannot go unreported without being removed from the
+          # runner as well.
+          #
+          # `part` counts as having run, because the section check above has already
+          # established that any surviving `part` carries the one tolerated reason.
+          # Requiring `ok` here would reintroduce the same failure by another route:
+          # the job would go red on the skip it just decided to allow.
           TOTAL=$(grep -cE '^(ok  |FAIL|SKIP|part)  ' /tmp/browser.log || true)
-          PASSED=$(grep -cE '^ok  ' /tmp/browser.log || true)
-          echo "browser suites: $PASSED/$TOTAL ok"
+          PASSED=$(grep -cE '^(ok|part)  ' /tmp/browser.log || true)
+          echo "browser suites: $PASSED/$TOTAL ran"
           if [ "$TOTAL" -eq 0 ] || [ "$PASSED" -ne "$TOTAL" ]; then
-            echo "::error::not every browser suite passed ($PASSED of $TOTAL)"
+            echo "::error::not every browser suite ran ($PASSED of $TOTAL)"
             exit 1
           fi
 
