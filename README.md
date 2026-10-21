@@ -379,6 +379,56 @@ but it is behind `USE_AUDIO_CAPTURE = false` and has never been run end to end.
 The engine is a stub that emits placeholder events, so the parked path is a
 pipeline test and not a transcriber.
 
+## Parked: WebGPU, and why ASR cannot assume a GPU
+
+If transcription is ever made real, the obvious plan is a small Whisper model on
+WebGPU. The plan depends on a GPU being there, and it frequently is not. Recorded
+here because this was got wrong once by reasoning from a support table instead of
+the version numbers.
+
+**Where WebGPU is on by default:**
+
+| Platform | Status |
+| --- | --- |
+| Chrome/Chromium, desktop | From 113, all OSes, where the driver stack provides a backend |
+| Firefox on Windows | From **141** |
+| Firefox on macOS 26 (Tahoe), Apple Silicon | From **145** |
+| Firefox on Linux | **Never by default.** Release builds need `dom.webgpu.enabled` set in `about:config` |
+| Firefox for Android | No |
+| Chromium on Linux | Only via **Vulkan** or **SwiftShader**. There is no CUDA and no OpenGL backend, so an NVIDIA card alone is not enough |
+
+That last row is the one that surprises people. A machine with a modern NVIDIA
+GPU can still report no WebGPU adapter, because the card becomes a Vulkan device
+only through `libvulkan1` plus an ICD file. WSL2 in particular ships the compute
+driver (`libnvidia-compute-*`) and no graphics stack at all: it can run CUDA and
+cannot present a WebGPU adapter to Chromium. Installed here on 2026-10: no Vulkan
+loader, no ICD, `requestAdapter()` resolves `null`.
+
+Also worth knowing before writing a probe: `about:blank` is **not** a secure
+context, so `navigator.gpu` is undefined there regardless of hardware. Check from
+an extension page or an `https://`/`localhost` page, or the probe measures the
+wrong thing.
+
+Two numbers make this concrete for us. `minimum_chrome_version` is above 113, so
+every Chrome we support has the API. `strict_min_version` for Firefox is **140**,
+one release *below* the Windows default-on version, so a supported configuration
+with no WebGPU at all exists by definition rather than in theory.
+
+**What that obliges, if an engine is ever written:**
+
+1. Feature detection must call `navigator.gpu.requestAdapter()` and check for a
+   non-null adapter. Presence of `navigator.gpu` is not availability: a machine
+   can have the API and no usable device, which is the normal state on a Linux
+   box without Vulkan, and on an `about:blank` page everywhere.
+2. There must be a **WASM** path, and it must be the one that is tested, because
+   it is the only one CI can reach. Our Firefox test runs on Linux, where the
+   flag cannot be set.
+3. Failure must be reported as "this browser has no GPU", not as a broken
+   transcription, or the first bug report will be about the wrong thing.
+
+`test/webgpu.test.mjs` asserts the version floors against these facts and fails
+if shipped code touches `navigator.gpu` without a guard.
+
 ## Licence
 
 Our code, everything in `src/` except `src/vendor/`, plus the icons and the tests,
