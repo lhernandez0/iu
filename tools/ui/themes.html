@@ -60,7 +60,8 @@
         padding: 0 32px 48px;
       }
       .viewers section { min-width: 0; }
-      .viewers .viewer { width: 100%; height: 356px; }
+      #viewer-preview { width: 900px; height: 560px; }
+      .viewers .viewer { width: 100%; height: 460px; }
       .viewers .viewer .v-primary { font-size: 18px; }
       .viewers .viewer .v-secondary { font-size: 12px; }
     </style>
@@ -73,8 +74,9 @@
         panel does not touch the viewer, and the other way round. The viewer is not
         the panel with a different palette, because a video player has to keep the
         picture black and the captions readable over it. Below the pair, every theme
-        is shown on the viewer. The all-panel gallery is
-        <a href="designs.html">on the other page</a>.
+        is shown on the viewer. The bar is docked below the picture here so all
+        three rows are visible; the shipped viewer overlays it. The all-panel gallery
+        is <a href="designs.html">on the other page</a>.
       </p>
       <div class="controls">
         <label>Panel theme <select id="panel-theme"></select></label>
@@ -234,21 +236,163 @@
           <p class="v-primary">今天我要带<span class="m-mark"><ruby>大家<rt>dàjiā</rt></ruby></span>一起去<span class="m-mark"><ruby>看看<rt>kànkan</rt></ruby></span></p>
           <p class="v-secondary">Today I am taking you all to have a look</p>
         </div>
-        <div class="v-bar">
-          <button class="v-icon" type="button" data-play aria-label="Play">&#9654;</button>
-          <div class="v-scrub" aria-hidden="true"><span></span></div>
-          <span class="v-time">0:38 / 2:14</span>
-          <button class="v-icon" type="button" data-cc aria-pressed="true" aria-label="Captions">CC</button>
-          <span class="v-speed">
-            <select aria-label="Speed">
-              <option>1&times;</option>
+      </div>
+      <div class="v-below" hidden>
+        <p class="v-primary">今天我要带<span class="m-mark"><ruby>大家<rt>dàjiā</rt></ruby></span>一起去<span class="m-mark"><ruby>看看<rt>kànkan</rt></ruby></span></p>
+        <p class="v-secondary">Today I am taking you all to have a look</p>
+      </div>
+      <div class="v-bar">
+        <div class="v-row v-row-time">
+          <span class="v-time">0:38</span>
+          <div class="v-scrub">
+            <div class="v-cues" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <input type="range" min="0" max="134" value="38" aria-label="Seek" />
+          </div>
+          <span class="v-time">2:14</span>
+        </div>
+
+        <div class="v-row v-row-transport">
+          <label class="v-icon" title="Open a video or subtitle file" aria-label="Open a video or subtitle file">
+            <input class="visually-hidden" type="file" multiple accept="video/*,.mkv,.mp4,.webm,.srt,.vtt,.ass,.ssa" />
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M3 7a2 2 0 0 1 2-2h3.6l1.7 2.5H19a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+              <path d="M3 11h18" fill="none" stroke="currentColor" stroke-width="1.8" />
+            </svg>
+          </label>
+          <span class="v-filename">market-walk.mkv</span>
+          <span class="v-spacer"></span>
+
+          <button class="v-icon" type="button" aria-label="Back 5 seconds" title="Back 5 seconds">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M11.5 6.5 6 12l5.5 5.5M19 6.5 13.5 12 19 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <button class="v-icon v-play" type="button" data-play aria-pressed="false" aria-label="Play" title="Play">
+            <svg class="v-play-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 5.5v13l10.5-6.5z" fill="currentColor" />
+            </svg>
+            <svg class="v-pause" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor" />
+            </svg>
+          </button>
+          <button class="v-icon" type="button" aria-label="Forward 5 seconds" title="Forward 5 seconds">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12.5 6.5 18 12l-5.5 5.5M5 6.5 10.5 12 5 17.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+
+          <span class="v-divider" aria-hidden="true"></span>
+
+          <button class="v-icon" type="button" aria-label="Previous line" title="Previous line">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 15.5 12 9.5l6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M6 6h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </button>
+          <button class="v-icon" type="button" aria-label="Replay this line" title="Replay this line">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M20 12a8 8 0 1 1-2.4-5.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M20 4.5V10h-5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <button class="v-icon" type="button" aria-label="Next line" title="Next line">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 8.5 12 14.5l6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M6 18h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </button>
+
+          <span class="v-divider" aria-hidden="true"></span>
+
+          <label class="v-field">
+            <span class="v-label">Audio</span>
+            <select class="v-select" aria-label="Audio track">
+              <option>Chinese (AAC 2.0)</option>
+              <option>English (AAC 2.0)</option>
+            </select>
+          </label>
+
+          <button class="v-icon" type="button" data-difficulty aria-pressed="true" aria-label="Hide difficulty band" title="Hide difficulty band">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="2.5" y="9" width="19" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="1.6" />
+              <rect x="5" y="10.5" width="3.5" height="3" rx="1" fill="currentColor" opacity="0.45" />
+              <rect x="9.5" y="10.5" width="5" height="3" rx="1" fill="currentColor" opacity="0.7" />
+              <rect x="15.5" y="10.5" width="3.5" height="3" rx="1" fill="currentColor" />
+            </svg>
+          </button>
+
+          <label class="v-field">
+            <span class="v-label">Speed</span>
+            <select class="v-select" aria-label="Playback speed">
+              <option>0.5&times;</option>
               <option>0.75&times;</option>
+              <option selected>1&times;</option>
               <option>1.25&times;</option>
               <option>1.5&times;</option>
               <option>2&times;</option>
             </select>
-          </span>
-          <button class="v-icon" type="button" aria-label="Fullscreen">&#9974;</button>
+          </label>
+
+          <span class="v-divider" aria-hidden="true"></span>
+
+          <div class="v-volume">
+            <button class="v-icon v-mute" type="button" data-mute aria-pressed="false" aria-label="Mute" title="Mute">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
+                <g class="v-waves">
+                  <path d="M15 9a4.4 4.4 0 0 1 0 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                  <path d="M17.6 6.6a8 8 0 0 1 0 10.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                </g>
+                <g class="v-cross">
+                  <path d="M15.5 9.5l5 5M20.5 9.5l-5 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+                </g>
+              </svg>
+            </button>
+            <input type="range" min="0" max="100" value="80" aria-label="Volume" />
+          </div>
+
+          <button class="v-icon" type="button" data-cc aria-pressed="true" aria-label="Show captions" title="Show captions">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="1.8" />
+              <path d="M10.5 10.3a2.2 2.2 0 1 0 0 3.4M17 10.3a2.2 2.2 0 1 0 0 3.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </button>
+          <button class="v-icon" type="button" aria-label="Picture in picture" title="Picture in picture">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" stroke-width="1.8" />
+              <rect x="12" y="11" width="7" height="5" rx="1" fill="currentColor" />
+            </svg>
+          </button>
+          <button class="v-icon" type="button" aria-label="Fullscreen" title="Fullscreen">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </button>
+          <button class="v-icon" type="button" aria-label="Keyboard shortcuts" title="Keyboard shortcuts" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8" />
+              <path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.6v.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              <circle cx="12" cy="17" r="1.1" fill="currentColor" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="v-row v-row-captions">
+          <span class="v-row-label">Captions</span>
+          <div class="v-seg" role="group" aria-label="Caption position">
+            <button type="button" data-place="overlay" aria-pressed="true">Over</button>
+            <button type="button" data-place="below" aria-pressed="false">Below</button>
+          </div>
+          <label class="v-field"><span class="v-label">Reading</span><select class="v-select" aria-label="Reading placement"><option>Off</option><option selected>Above</option><option>Below</option><option>Marked</option></select></label>
+          <label class="v-field"><span class="v-label">Marks</span><select class="v-select" aria-label="Mark style"><option selected>Underline</option><option>Highlight</option></select></label>
+          <label class="v-field"><span class="v-label">Line 1</span><select class="v-select" aria-label="Subtitle track for the first line"><option selected>Chinese (Simplified)</option><option>English</option></select></label>
+          <label class="v-field"><span class="v-label">Line 2</span><select class="v-select" aria-label="Subtitle track for the second line"><option selected>English</option><option>Off</option></select></label>
+          <label class="v-field"><span class="v-label">Size</span><input class="v-size" type="number" min="12" max="34" step="1" value="20" aria-label="Caption text size" /></label>
+          <label class="v-field"><span class="v-label">List</span><select class="v-select" aria-label="Word list"><option>HSK 2.0</option><option selected>HSK 3.0</option></select></label>
+          <label class="v-field"><span class="v-label">Mark from</span><select class="v-select" aria-label="Highlight from level"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select></label>
         </div>
       </div>
     </template>
@@ -314,6 +458,13 @@
       // The viewer's real controls.
       const cc = viewer.querySelector('[data-cc]');
       const play = viewer.querySelector('[data-play]');
+      const mute = viewer.querySelector('[data-mute]');
+      const difficulty = viewer.querySelector('[data-difficulty]');
+      const overlay = viewer.querySelector('.v-captions');
+      const below = viewer.querySelector('.v-below');
+      const placements = viewer.querySelectorAll('[data-place]');
+      const size = viewer.querySelector('.v-size');
+
       if (cc) {
         cc.addEventListener('click', () => {
           const on = cc.getAttribute('aria-pressed') === 'true';
@@ -326,7 +477,36 @@
           const next = play.getAttribute('aria-pressed') !== 'true';
           play.setAttribute('aria-pressed', String(next));
           play.setAttribute('aria-label', next ? 'Pause' : 'Play');
-          play.textContent = next ? '\u275A\u275A' : '\u25B6';
+          play.title = next ? 'Pause' : 'Play';
+        });
+      }
+      if (mute) {
+        mute.addEventListener('click', () => {
+          const next = mute.getAttribute('aria-pressed') !== 'true';
+          mute.setAttribute('aria-pressed', String(next));
+          mute.setAttribute('aria-label', next ? 'Unmute' : 'Mute');
+        });
+      }
+      if (difficulty) {
+        difficulty.addEventListener('click', () => {
+          const next = difficulty.getAttribute('aria-pressed') !== 'true';
+          difficulty.setAttribute('aria-pressed', String(next));
+          viewer.classList.toggle('v-band-off', !next);
+        });
+      }
+      for (const button of placements) {
+        button.addEventListener('click', () => {
+          const isBelow = button.dataset.place === 'below';
+          for (const other of placements) {
+            other.setAttribute('aria-pressed', String(other === button));
+          }
+          overlay.hidden = isBelow;
+          below.hidden = !isBelow;
+        });
+      }
+      if (size) {
+        size.addEventListener('change', () => {
+          viewer.style.setProperty('--v-caption-size', `${size.value}px`);
         });
       }
 
