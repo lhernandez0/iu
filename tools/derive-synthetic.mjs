@@ -129,63 +129,76 @@ const CHINESE_LINES = [
   '一转眼已经这么多年了',
 ];
 
+/**
+ * English for the Chinese track, **one line per Chinese line, in the same order**.
+ *
+ * This is a translation, not decoration: entry `n` here says what
+ * `CHINESE_LINES[n]` says. That is what a bilingual transcript IS, and the preview
+ * could not show whether alignment worked while the second line was unrelated
+ * prose, which is what it was before this was rewritten. The three `one two three`,
+ * `this is a long line` and `x` entries are gone with it: they were there to make
+ * the layout wrap, and they broke the sense at every third cue. Layout stress
+ * belongs in a line that still means something, and several below are deliberately
+ * long or short for exactly that reason.
+ *
+ * The two lists are the SAME LENGTH on purpose. `padLines` no longer has to hide a
+ * mismatch, so a line added here without one there is a one-for-one edit that
+ * cannot silently shift every pair after it.
+ */
 const ENGLISH_LINES = [
   'Good morning everyone',
-  'one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen',
-  'this is a long line on purpose so the layout has to wrap it somewhere sensible and still keep the row readable at every text size',
-  'x',
-  'Opening the shop at six every morning',
-  'We ordered rice rolls first',
-  'It tasted really good',
-  'Cheap too, twelve yuan',
-  'Then we went next door',
-  'The queue was long',
-  'Waited about twenty minutes',
-  'My friend recommended the signature dish',
-  'It looked appetising',
-  'The first bite was a surprise',
-  'Lots of layers to the flavour',
-  'We also got two iced lemon teas',
-  'Eight yuan each, normal for here',
-  'Walked in the park in the afternoon',
-  'Nice weather, soft light',
-  'Plenty of people running and walking dogs',
-  'We found a bench and sat down',
-  'Talked about work for a while',
-  'He is changing jobs next month',
-  'I wished him luck',
-  'Still thinking about the food on the way home',
-  'Bring the family next time',
-  'Thanks for watching',
+  'Today I am taking you all to have a look',
+  'This shop has been open for thirty years',
+  'The owner says they start preparing at six every morning',
+  'We ordered a rice roll first',
+  'It really tasted good',
+  'Cheap too, only twelve yuan',
+  'Then we went to the one next door',
+  'The queue was especially long',
+  'We waited about twenty minutes for our turn',
+  'A friend recommended I try their signature dish',
+  'It looked appetising straight away',
+  'The first bite was a real surprise',
+  'The texture had a lot of layers',
+  'We also ordered two iced lemon teas',
+  'Eight yuan a cup, a normal price',
+  'In the afternoon we walked in the nearby park',
+  'The weather was good and the sun was not harsh',
+  'Lots of people were running and walking dogs there',
+  'We found a bench and sat down to rest',
+  'And talked about work for a while',
+  'He says he plans to change jobs next month',
+  'I wished him all the best',
+  'On the way home I was still thinking about what we ate today',
+  'Next time I must bring the family again',
+  'Thanks everyone for watching this far',
   'Remember to like and subscribe',
   'See you next time',
-  "That's all for today",
-  'There are more small shops worth a look',
-  'Not enough time, next trip',
-  'Passed a fruit stall on the road',
-  'The mangoes looked fresh',
-  'Bought two jin, fifteen yuan',
-  'The owner threw in an orange',
-  'You do not see that much in a big city',
-  'A new bakery opened by the station',
-  'The croissants were golden in the window',
-  'Could not resist buying one',
-  'Crisp outside, soft inside',
-  'Just right with an americano',
-  // The real English track carries 161 `&amp;` entities, genuine ampersands that
-  // YouTube escapes in XML and leaves bare in JSON3. A cue containing `&` (and the
-  // less-than that must survive as text) is what makes the entity-decoding path
-  // testable at all; without one, both serialisations agree trivially and prove
-  // nothing about escaping.
-  'Salt & pepper, and a 5 < 10 deal on the sign',
-  'That is what a weekend morning is for',
-  'What do you eat for breakfast where you live',
-  'Tell me in the comments',
-  'I will reply to a few',
-  'I used to come here as a kid',
+  'That is all for today',
+  'This street actually has many more small shops worth a look',
+  'Not enough time, we can only leave it for next time',
+  'On the way we passed a fruit stall',
+  'The mangoes looked especially fresh',
+  'Bought two jin, fifteen yuan in total',
+  'The owner even gave us an extra orange',
+  // The real English track carries 161 `&amp;` entities, genuine ampersands YouTube
+  // escapes in XML and leaves bare in JSON3, and a corpus with none of them cannot
+  // exercise the decoding path at all. Kept INSIDE a line that still translates the
+  // Chinese one beside it, rather than as the standalone padding cue it used to be.
+  'You do not see that warmth & friendliness much in a big city',
+  'A new bakery opened next to the subway exit',
+  'The croissants in the window were baked golden',
+  'Could not resist going in to buy one',
+  'Crisp on the outside, very soft inside',
+  'Just right with a cup of americano',
+  'A weekend morning should be spent like this',
+  'What do you usually eat for breakfast where you are',
+  'Welcome to tell me in the comments',
+  'I will pick a few replies',
+  'This shop is one I used to come to as a child',
   'The owner still remembers my name',
-  'Time really does fly',
-  'Hard to believe it has been that many years',
+  'It feels like time really flies',
+  'In a blink it has been so many years',
 ];
 
 /** Deterministic pseudo-random, so re-deriving produces an identical file. */
@@ -203,39 +216,96 @@ function round(value) {
 }
 
 /**
+ * Repeat a line list up to `count`, so a cue index is a list index.
+ *
+ * **This replaces `lines[i % lines.length]` at each track, which is what let two
+ * lists of DIFFERENT lengths drift apart.** With 49 Chinese lines and 50 English
+ * ones, English line `i` and Chinese line `i` stopped corresponding after the first
+ * pass, and every later cue paired unrelated sentences. Padding removes the modulo
+ * from the per-cue path entirely: both lists are exactly `count` long, so index `i`
+ * is the same position in both, by construction.
+ *
+ * Repeating rather than truncating keeps the whole list in the fixture, which is
+ * what makes a scroll-to-the-end test meaningful.
+ *
+ * @param {string[]} lines
+ * @param {number} count
+ * @returns {string[]}
+ */
+function padLines(lines, count) {
+  if (!lines.length) return Array.from({ length: count }, () => '');
+  return Array.from({ length: count }, (_, i) => lines[i % lines.length]);
+}
+
+/**
  * Build one track's cues, in the measured shape.
+ *
+ * **The timing is generated WITH the track that leads, and copied for every other
+ * track, so the two tracks line up cue for cue.** They used to be built
+ * independently: separate seeds for the duration/gap walk, and a separate
+ * `lines[i % lines.length]` lookup. Three things then put a Chinese line and an
+ * English line on the same cue that said completely different things:
+ *
+ *   - the two line lists had different lengths (49 and 50), so the modulo drifted
+ *     by one line per pass and every cue after the first pass was one line out;
+ *   - each track walked its own random durations and gaps, so the cue TIMES
+ *     differed too, and same-index cues were not even simultaneous;
+ *   - the English list carried three deliberate padding lines (a run of number
+ *     words, a very long line, and a one-character line) to exercise wrapping,
+ *     which shifted everything after them by three.
+ *
+ * A bilingual transcript with a second line is the whole point of this viewer, and
+ * a fixture where the translation does not translate anything is a fixture that
+ * cannot show whether alignment works. So timing and index come from ONE track and
+ * the others follow; alignment is now true by construction, not by luck.
  *
  * @param {string[]} lines
  * @param {number} count
  * @param {number} seed
+ * @param {Array<{start: number, duration: number}>} [timing] Reuse these times instead
+ *   of generating new ones, so a gloss track sits exactly where the study track does.
  * @returns {Array<{start: number, duration: number, text: string}>}
  */
-function buildCues(lines, count, seed) {
+function buildCues(lines, count, seed, timing = null) {
   const random = makeRandom(seed);
   const cues = [];
   let cursor = SHAPE.startOffsetSeconds;
 
   for (let i = 0; i < count; i++) {
-    // Duration spread across the FULL measured range, not clustered near the
-    // median. An earlier version weighted everything toward 1.5–2.8s, which looked
-    // plausible and quietly meant the fixture never contained a cue as short as the
-    // real 0.27s or as long as its 4.72s, so nothing that breaks on very short or
-    // very long cues could have been caught. The range is the finding; the shape
-    // has to cover it.
-    //
-    // Every fourth cue is deliberately an extreme, so the ends of the range are
-    // present in a fixture of 403 rather than only in principle.
-    const extreme = i % 4 === 0;
-    const t = extreme ? (i % 8 === 0 ? 0 : 1) : random();
-    const duration = round(SHAPE.minDuration + t * (SHAPE.maxDuration - SHAPE.minDuration));
+    // A track that FOLLOWS another reuses its timing exactly, so the two are
+    // simultaneous. A track that LEADS generates the measured spread.
+    let start;
+    let duration;
+    if (timing) {
+      const shared = timing[i % timing.length];
+      start = shared.start;
+      duration = shared.duration;
+    } else {
+      // Duration spread across the FULL measured range, not clustered near the
+      // median. An earlier version weighted everything toward 1.5–2.8s, which
+      // looked plausible and quietly meant the fixture never contained a cue as
+      // short as the real 0.27s or as long as its 4.72s, so nothing that breaks on
+      // very short or very long cues could have been caught. The range is the
+      // finding; the shape has to cover it.
+      //
+      // Every fourth cue is deliberately an extreme, so the ends of the range are
+      // present in a fixture of 403 rather than only in principle.
+      const extreme = i % 4 === 0;
+      const t = extreme ? (i % 8 === 0 ? 0 : 1) : random();
+      duration = round(SHAPE.minDuration + t * (SHAPE.maxDuration - SHAPE.minDuration));
+      start = round(cursor);
 
-    cues.push({ start: round(cursor), duration, text: lines[i % lines.length] });
+      // Mostly contiguous, which is what real captions are. The long gap is placed
+      // once, in the middle, because a track with no gap never reaches the code
+      // that holds the previous line and dims it.
+      const gap = i === Math.floor(count / 2) ? SHAPE.longGapSeconds : round(random() * 0.8);
+      cursor = round(cursor + duration + gap);
+    }
 
-    // Mostly contiguous, which is what real captions are. The long gap is placed
-    // once, in the middle, because a track with no gap never reaches the code that
-    // holds the previous line and dims it.
-    const gap = i === Math.floor(count / 2) ? SHAPE.longGapSeconds : round(random() * 0.8);
-    cursor = round(cursor + duration + gap);
+    // `lines` is padded to `count` by the caller, so the index is the CUE index.
+    // Wrapping with a modulo was what let a 49-line list and a 50-line list drift
+    // apart; a padded list cannot.
+    cues.push({ start, duration, text: lines[i] });
   }
 
   return cues;
@@ -413,26 +483,47 @@ for (const videoId of complete) {
     }
   }
 
-  // Chinese content for any track whose language is Chinese, English otherwise.
-  const cuesFor = (languageCode) =>
-    /^zh/i.test(languageCode)
-      ? buildCues(CHINESE_LINES, SHAPE.cueCount, 1001)
-      : buildCues(ENGLISH_LINES, SHAPE.cueCount, 2002);
+  // **One track leads, the rest follow its timing.** Chinese is the study track on
+  // this capture, so it generates the measured durations and gaps, and every other
+  // track reuses them cue for cue. That makes the two lines SIMULTANEOUS, which is
+  // what a bilingual transcript is for; generating them independently produced
+  // same-index cues whose times and meanings had nothing to do with each other.
+  const leadLanguage = tracks.find((t) => /^zh/i.test(t.languageCode))?.languageCode
+    ?? tracks[0]?.languageCode
+    ?? '';
+  const leadTiming = buildCues(padLines(CHINESE_LINES, SHAPE.cueCount), SHAPE.cueCount, 1001).map(
+    ({ start, duration }) => ({ start, duration }),
+  );
 
-  const name = `capture-${videoId}`;
+  const cuesFor = (languageCode) => {
+    const lines = /^zh/i.test(languageCode) ? CHINESE_LINES : ENGLISH_LINES;
+    const padded = padLines(lines, SHAPE.cueCount);
+    // The lead track owns the timings; the rest reuse them.
+    return languageCode === leadLanguage
+      ? buildCues(padded, SHAPE.cueCount, 1001)
+      : buildCues(padded, SHAPE.cueCount, 2002, leadTiming);
+  };
+
+  // **A video id of its OWN, and it names the output too.** Two reasons, and the
+  // second is a leak guard.
+  //
+  // Reusing the real id meant the synthetic fixture and the local capture registered
+  // the SAME video in the browser tier's route registry, so both sections fought over
+  // one key and the panel could render either, which showed up as an intermittent "392
+  // cues instead of 403" and very nearly got written off as flake.
+  //
+  // And the directory and the `derivedFrom` fields are COMMITTED, while the capture
+  // they come from is gitignored. Naming either after the real id therefore puts a
+  // real video's identifier into the repository, which is what `test/history.test.mjs`
+  // exists to catch. This tool used to do exactly that, so deriving a corpus re-leaked
+  // the id the last rewrite had removed. The real id is used only to READ the capture;
+  // nothing written out of this tool may carry it.
+  const fixtureId = `iuSynthetic${videoId.slice(-3)}`;
+
+  const name = `capture-${fixtureId}`;
   const out = join(SYNTHETIC, name);
   await rm(out, { recursive: true, force: true });
   await mkdir(out, { recursive: true });
-
-  // A video id of its OWN, not the capture's.
-  //
-  // This matters more than it looks. Reusing the real id meant the synthetic
-  // fixture and the local capture registered the SAME video in the browser tier's
-  // route registry, so both sections fought over one key and the panel could
-  // render either, which showed up as an intermittent "392 cues instead of 403"
-  // and very nearly got written off as flake. A synthetic fixture is not the
-  // video it was derived from, and giving it the same id says otherwise.
-  const fixtureId = `iuSynthetic${videoId.slice(-3)}`;
 
   for (const track of tracks) {
     const cues = cuesFor(track.languageCode);
@@ -446,7 +537,7 @@ for (const videoId of complete) {
           // Says plainly that the text is ours. A fixture whose provenance is
           // unclear is a fixture nobody can safely change.
           text: 'synthetic',
-          derivedFrom: videoId,
+          derivedFrom: fixtureId,
           shape: { cueCount: SHAPE.cueCount, note: 'durations, gaps and offsets measured from the real capture' },
           segments: cues,
         },
@@ -469,7 +560,7 @@ for (const videoId of complete) {
         title: SYNTHETIC_TITLE,
         isLive: false,
         text: 'synthetic',
-        derivedFrom: videoId,
+        derivedFrom: fixtureId,
         derivedAt: new Date().toISOString(),
         // The real values, kept because they ARE the shape: the language codes,
         // the track names, and all 156 translation languages. None of that is
@@ -495,9 +586,9 @@ for (const videoId of complete) {
     join(out, 'shape-report.json'),
     `${JSON.stringify(
       {
-        derivedFrom: videoId,
+        derivedFrom: fixtureId,
         derivedAt: new Date().toISOString(),
-        note: 'Dimensions measured from the real capture; text invented. Compare against test/fixtures/<id>/normalised/.',
+        note: 'Dimensions measured from the real capture; text invented. Compare against the local capture under test/fixtures/.',
         synthetic: SHAPE,
         measured: {
           trackList: video.trackList,
