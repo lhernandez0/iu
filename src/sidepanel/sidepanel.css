@@ -87,6 +87,10 @@ body {
 .bar {
   font-family: var(--font-chrome);
   display: flex;
+  flex-wrap: wrap;
+  /* A flex child's default min-width is its content, which let the footer force
+     the document wider than the panel instead of wrapping. */
+  min-width: 0;
   gap: 8px;
   align-items: center;
   padding: 8px;
@@ -353,13 +357,33 @@ body.collapsed .status {
 }
 
 .settings-row select {
-  max-width: 15ch;
+  max-width: min(15ch, 45%);
   /* A select sized to its content makes the column ragged; a fixed cap makes the
      controls line up, which is the point of the grid. */
 }
 
 .settings-row input[type='number'] {
   width: 6ch;
+}
+
+/* At panel width the label and a control at the largest text size cannot share a
+   row. The label goes above, the control takes the width. The settings view is a
+   scrolling list, so the extra height costs nothing it cannot pay. */
+@media (max-width: 440px) {
+  .settings-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .settings-row select,
+  .settings-row input[type='number'] {
+    width: 100%;
+    max-width: none;
+  }
+
+  .settings-row input[type='checkbox'] {
+    justify-self: start;
+  }
 }
 
 .settings-row input[type='checkbox'] {
