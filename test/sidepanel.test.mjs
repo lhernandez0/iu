@@ -61,9 +61,6 @@ const PANEL_IDS = [
   'follow',
   'status',
   'transcript',
-  'copy',
-  'format',
-  'save',
   'settings-toggle',
   'settings-view',
   'settings-body',
@@ -286,9 +283,11 @@ section('user actions become intents on the port');
   byId.get('gloss').dispatch('change');
   check('selecting a second line sends SET_GLOSS', port.sent.at(-1)?.type, 'set-gloss');
 
-  byId.get('follow').checked = false;
-  byId.get('follow').dispatch('change');
+  const follow = byId.get('follow');
+  follow.setAttribute('aria-pressed', 'true');
+  follow.dispatch('click');
   check('toggling Follow sends nothing', port.sent.some((m) => m.type === 'follow'), false);
+  check('and flips its pressed state', follow.getAttribute('aria-pressed'), 'false');
 }
 
 // --- 8. Swap -----------------------------------------------------------------

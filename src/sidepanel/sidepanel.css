@@ -97,12 +97,6 @@ body {
   border-bottom: 1px solid var(--edge);
 }
 
-.bar:last-child {
-  border-bottom: none;
-  border-top: 1px solid var(--edge);
-  margin-top: auto;
-}
-
 /*
  * The licences view.
  *
@@ -249,7 +243,6 @@ body {
    must not live inside the region it controls. */
 body.collapsed .bar.learning,
 body.collapsed .status {
-  font-family: var(--font-chrome);
   display: none;
 }
 
@@ -514,7 +507,7 @@ body.collapsed .status {
 }
 
 .size-unit {
-  font-size: calc(11px * var(--text-scale));
+  font-size: 11px;
 }
 
 button {
@@ -567,15 +560,34 @@ select:disabled {
   line-height: 1;
 }
 
-.follow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: auto;
+.follow-toggle {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--muted);
-  font-size: calc(12px * var(--text-scale));
   cursor: pointer;
-  white-space: nowrap;
+}
+
+.follow-toggle svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.follow-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .status {
@@ -727,6 +739,30 @@ select:disabled {
   line-height: var(--reading-line-height);
 }
 
+/* The language row's controls are one rectangle too: the selects, the MT labels
+   and the icon buttons all sit on the same 30px line. */
+.bar:not(.learning) select {
+  height: 30px;
+  min-height: 0;
+  padding: 0 6px;
+}
+
+.bar:not(.learning) .line-translate {
+  min-height: 30px;
+  line-height: 1;
+}
+
+.bar:not(.learning) #swap,
+.bar:not(.learning) .layout-toggle,
+.bar:not(.learning) .settings-toggle {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 /* The learning controls, visually separate from the language pickers. */
 .learning {
   /* Tighter than a normal bar, in every dimension that costs height.
@@ -745,8 +781,29 @@ select:disabled {
   padding: 5px;
 }
 
+/* The reading bar is one row of controls, so they are one rectangle. The selects
+   already had a min-height, the size field had a taller input, and the four
+   heights read as four different controls. 28px is the common control height. */
+.learning select,
+.learning .size,
+.learning .follow-toggle {
+  height: 28px;
+  box-sizing: border-box;
+}
+
 .learning select {
-  padding: 3px 6px;
+  min-height: 0;
+  padding: 0 6px;
+}
+
+.learning .size {
+  padding: 0 6px;
+}
+
+.learning .size input {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
 }
 
 .learning-label {

@@ -272,7 +272,7 @@ export function installDomStub(ids = [], { hidden = [] } = {}) {
     getElementById: (id) => byId.get(id) ?? null,
     /**
      * A class lookup, which the panel uses for the two REGIONS it hides as a unit
-     *, the reading bar and the footer, because neither has an id.
+     *, the reading bar, because it has no id.
      *
      * Handles only the simple `.class` form, and returns the first match. That is
      * deliberately narrow: a stub that pretended to be a selector engine would

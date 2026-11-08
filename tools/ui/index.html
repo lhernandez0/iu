@@ -74,6 +74,13 @@
       <select id="reading" aria-label="Where to show the reading"></select>
       <select id="list" aria-label="Word list"></select>
       <select id="threshold" aria-label="Highlight from level"></select>
+      <button type="button" id="follow" class="follow-toggle" aria-pressed="true" aria-label="Follow the current line" title="Follow the current line">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M8 3h8" />
+          <path d="M9.5 3l-1 6L5 12v2h14v-2l-3.5-3-1-6" />
+          <path d="M12 14v7" />
+        </svg>
+      </button>
     </header>
 
     <p id="status" class="status" role="status">Looking for a video…</p>
@@ -89,19 +96,6 @@
     <main id="transcript" class="transcript" aria-label="Transcript">
       <p class="empty">No transcript loaded.</p>
     </main>
-
-    <footer class="bar">
-      <label class="follow">
-        <input type="checkbox" id="follow" checked />
-        Follow
-      </label>
-      <button id="copy" type="button">Copy</button>
-      <select id="format" class="format" aria-label="Export format">
-        <option value="txt">.txt</option>
-        <option value="srt">.srt</option>
-      </select>
-      <button id="save" type="button">Save</button>
-    </footer>
 
     <script type="module" src="/tools/ui/boot.mjs"></script>
   </body>
