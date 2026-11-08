@@ -1,0 +1,350 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU, panel and viewer themes</title>
+    <link rel="stylesheet" href="gallery.css" />
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #0b0c0f;
+        color: #e6e6e6;
+        font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      header { padding: 32px 32px 24px; border-bottom: 1px solid #23252b; }
+      h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
+      .lede { margin: 0; max-width: 78ch; color: #9a9a9a; }
+      .lede a { color: #7aa2f7; }
+      .controls { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 20px; }
+      .controls label {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        color: #9a9a9a;
+        font-size: 10px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+      .controls select {
+        min-width: 220px;
+        padding: 6px 9px;
+        border: 1px solid #333844;
+        border-radius: 6px;
+        background: #1b1e25;
+        color: #e6e6e6;
+        font: 12px/1.4 system-ui, sans-serif;
+      }
+      .pair {
+        display: flex;
+        gap: 32px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        padding: 32px;
+      }
+      .pair section { min-width: 0; }
+      .pair h2,
+      .viewers h2 {
+        margin: 0 0 10px;
+        color: #9a9a9a;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+      .viewers {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(600px, 1fr));
+        gap: 24px;
+        padding: 0 32px 48px;
+      }
+      .viewers section { min-width: 0; }
+      .viewers .viewer { width: 100%; height: 356px; }
+      .viewers .viewer .v-primary { font-size: 18px; }
+      .viewers .viewer .v-secondary { font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Panel and viewer, themed separately</h1>
+      <p class="lede">
+        Pick a theme for each surface. The controls are independent: changing the
+        panel does not touch the viewer, and the other way round. The viewer is not
+        the panel with a different palette, because a video player has to keep the
+        picture black and the captions readable over it. Below the pair, every theme
+        is shown on the viewer. The all-panel gallery is
+        <a href="designs.html">on the other page</a>.
+      </p>
+      <div class="controls">
+        <label>Panel theme <select id="panel-theme"></select></label>
+        <label>Viewer theme <select id="viewer-theme"></select></label>
+      </div>
+    </header>
+
+    <div class="pair">
+      <section>
+        <h2>Panel</h2>
+        <div class="mock" id="panel-preview"></div>
+      </section>
+      <section>
+        <h2>Viewer</h2>
+        <div class="viewer" id="viewer-preview"></div>
+      </section>
+    </div>
+
+    <div class="viewers" id="viewer-grid"></div>
+
+    <template id="panel-mock">
+      <div class="m-top">
+        <div class="m-lang">
+          <span class="m-field">
+            <select aria-label="Learning language">
+              <option selected>Chinese (Simplified)</option>
+              <option>English</option>
+              <option>Japanese</option>
+              <option>Korean</option>
+            </select>
+            <span class="m-caret"></span>
+          </span>
+          <label class="m-mt"><input type="checkbox" /> MT</label>
+        </div>
+        <button class="m-icon" type="button" data-swap aria-label="Swap the two lines">&#8646;</button>
+        <div class="m-lang">
+          <span class="m-field">
+            <select aria-label="Second line">
+              <option>Off</option>
+              <option selected>English</option>
+              <option>Chinese (Simplified)</option>
+              <option>Japanese</option>
+            </select>
+            <span class="m-caret"></span>
+          </span>
+          <label class="m-mt"><input type="checkbox" /> MT</label>
+        </div>
+        <button class="m-icon" type="button" aria-label="Settings">&#9881;</button>
+      </div>
+      <div class="m-tools">
+        <span class="m-field m-small">
+          <select aria-label="View"><option>Full</option><option>Live</option></select>
+          <span class="m-caret"></span>
+        </span>
+        <span class="m-field m-size">
+          <input type="number" value="13" min="10" max="32" aria-label="Text size" />
+          <span class="m-unit">px</span>
+        </span>
+        <span class="m-field m-small">
+          <select aria-label="Reading"><option>Off</option><option selected>Above</option><option>Below</option><option>Marked</option></select>
+          <span class="m-caret"></span>
+        </span>
+        <span class="m-field">
+          <select aria-label="Word list"><option>HSK 2.0</option><option selected>HSK 3.0</option><option>JLPT</option></select>
+          <span class="m-caret"></span>
+        </span>
+        <span class="m-field m-small">
+          <select aria-label="Level"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+          <span class="m-caret"></span>
+        </span>
+        <button
+          class="m-icon m-follow-toggle"
+          type="button"
+          aria-pressed="true"
+          aria-label="Follow the current line"
+          title="Follow the current line"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M8 3h8" />
+            <path d="M9.5 3l-1 6L5 12v2h14v-2l-3.5-3-1-6" />
+            <path d="M12 14v7" />
+          </svg>
+        </button>
+      </div>
+      <div class="m-status">9 lines &middot; Chinese + English &middot; A walk through the market</div>
+      <div class="m-transcript">
+        <div class="m-row">
+          <span class="m-time">0:37</span>
+          <div class="m-lines">
+            <p class="m-primary"><span class="m-mark"><ruby>大家<rt>dàjiā</rt></ruby></span>早安</p>
+            <p class="m-secondary">Good morning everyone</p>
+          </div>
+        </div>
+        <div class="m-row m-active">
+          <span class="m-time">0:38</span>
+          <div class="m-lines">
+            <p class="m-primary">今天我要带<span class="m-mark"><ruby>大家<rt>dàjiā</rt></ruby></span>一起去<span class="m-mark"><ruby>看看<rt>kànkan</rt></ruby></span></p>
+            <p class="m-secondary">Today I am taking you all to have a look</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:39</span>
+          <div class="m-lines">
+            <p class="m-primary">这家店开了<span class="m-mark"><ruby>三十年<rt>sānshí nián</rt></ruby></span>了</p>
+            <p class="m-secondary">This shop has been open for thirty years</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:42</span>
+          <div class="m-lines">
+            <p class="m-primary">我们先从菜单开始</p>
+            <p class="m-secondary">Let us start with the menu</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:45</span>
+          <div class="m-lines">
+            <p class="m-primary">这里的价格很合理</p>
+            <p class="m-secondary">The prices here are very reasonable</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:48</span>
+          <div class="m-lines">
+            <p class="m-primary">我们点一些招牌菜</p>
+            <p class="m-secondary">Let us order some signature dishes</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:51</span>
+          <div class="m-lines">
+            <p class="m-primary">这个汤味道很浓</p>
+            <p class="m-secondary">This soup has a rich flavour</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:54</span>
+          <div class="m-lines">
+            <p class="m-primary">服务也很周到</p>
+            <p class="m-secondary">The service is attentive too</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:57</span>
+          <div class="m-lines">
+            <p class="m-primary">下次我还想来</p>
+            <p class="m-secondary">I would like to come back next time</p>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <template id="viewer-mock">
+      <div class="v-screen">
+        <div class="v-poster"></div>
+        <div class="v-captions">
+          <p class="v-primary">今天我要带<span class="m-mark"><ruby>大家<rt>dàjiā</rt></ruby></span>一起去<span class="m-mark"><ruby>看看<rt>kànkan</rt></ruby></span></p>
+          <p class="v-secondary">Today I am taking you all to have a look</p>
+        </div>
+        <div class="v-bar">
+          <button class="v-icon" type="button" data-play aria-label="Play">&#9654;</button>
+          <div class="v-scrub" aria-hidden="true"><span></span></div>
+          <span class="v-time">0:38 / 2:14</span>
+          <button class="v-icon" type="button" data-cc aria-pressed="true" aria-label="Captions">CC</button>
+          <span class="v-speed">
+            <select aria-label="Speed">
+              <option>1&times;</option>
+              <option>0.75&times;</option>
+              <option>1.25&times;</option>
+              <option>1.5&times;</option>
+              <option>2&times;</option>
+            </select>
+          </span>
+          <button class="v-icon" type="button" aria-label="Fullscreen">&#9974;</button>
+        </div>
+      </div>
+    </template>
+
+    <script>
+      const THEMES = [
+        ['swiss', 'Swiss / International'],
+        ['bauhaus', 'Bauhaus'],
+        ['brutalist', 'Brutalist'],
+        ['editorial', 'Editorial / print'],
+        ['terminal', 'Terminal / CLI'],
+        ['material', 'Material 3'],
+        ['fluent', 'Fluent / Windows 11'],
+        ['rams', 'Minimal / Rams'],
+        ['contrast', 'High contrast'],
+      ];
+
+      const panelSelect = document.getElementById('panel-theme');
+      const viewerSelect = document.getElementById('viewer-theme');
+      for (const [id, name] of THEMES) {
+        panelSelect.append(new Option(name, id));
+        viewerSelect.append(new Option(name, id));
+      }
+
+      const panel = document.getElementById('panel-preview');
+      const viewer = document.getElementById('viewer-preview');
+      const panelTemplate = document.getElementById('panel-mock');
+      const viewerTemplate = document.getElementById('viewer-mock');
+      panel.append(panelTemplate.content.cloneNode(true));
+      viewer.append(viewerTemplate.content.cloneNode(true));
+
+      panelSelect.value = 'swiss';
+      viewerSelect.value = 'swiss';
+      panel.dataset.theme = 'swiss';
+      viewer.dataset.theme = 'swiss';
+
+      panelSelect.addEventListener('change', () => {
+        panel.dataset.theme = panelSelect.value;
+      });
+      viewerSelect.addEventListener('change', () => {
+        viewer.dataset.theme = viewerSelect.value;
+      });
+
+      // The panel's real controls.
+      const swap = panel.querySelector('[data-swap]');
+      const languages = panel.querySelectorAll('.m-lang select');
+      if (swap && languages.length === 2) {
+        swap.addEventListener('click', () => {
+          const first = languages[0].value;
+          const second = languages[1].value;
+          languages[0].value = second;
+          languages[1].value = first;
+        });
+      }
+      const follow = panel.querySelector('.m-follow-toggle');
+      if (follow) {
+        follow.addEventListener('click', () => {
+          const on = follow.getAttribute('aria-pressed') === 'true';
+          follow.setAttribute('aria-pressed', String(!on));
+        });
+      }
+
+      // The viewer's real controls.
+      const cc = viewer.querySelector('[data-cc]');
+      const play = viewer.querySelector('[data-play]');
+      if (cc) {
+        cc.addEventListener('click', () => {
+          const on = cc.getAttribute('aria-pressed') === 'true';
+          cc.setAttribute('aria-pressed', String(!on));
+          viewer.classList.toggle('v-cc-off', on);
+        });
+      }
+      if (play) {
+        play.addEventListener('click', () => {
+          const next = play.getAttribute('aria-pressed') !== 'true';
+          play.setAttribute('aria-pressed', String(next));
+          play.setAttribute('aria-label', next ? 'Pause' : 'Play');
+          play.textContent = next ? '\u275A\u275A' : '\u25B6';
+        });
+      }
+
+      // Every viewer theme, static. `inert` keeps the grid out of the tab order.
+      const grid = document.getElementById('viewer-grid');
+      for (const [id, name] of THEMES) {
+        const section = document.createElement('section');
+        const heading = document.createElement('h2');
+        heading.textContent = name;
+        const item = document.createElement('div');
+        item.className = 'viewer';
+        item.dataset.theme = id;
+        item.setAttribute('inert', '');
+        item.setAttribute('aria-hidden', 'true');
+        item.append(viewerTemplate.content.cloneNode(true));
+        section.append(heading, item);
+        grid.append(section);
+      }
+    </script>
+  </body>
+</html>
