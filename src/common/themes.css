@@ -49,7 +49,7 @@
   --bar-edge: #111;
   --caption-bg: rgba(242, 242, 238, 0.94);
   --caption-fg: #111;
-  --caption-muted: #6b6b66;
+  --caption-muted: #5f5f5a;
   --resume-bg: #f7f7f3;
   --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.15);
   --font-reading: "Helvetica Neue", Helvetica, Arial, "Noto Sans CJK SC", sans-serif;
@@ -67,7 +67,7 @@
   --muted: #555;
   --muted-strong: #333;
   --muted-active: #111;
-  --accent: #e63329;
+  --accent: #c62828;
   --danger: #b00020;
   --edge: #111;
   --edge-strong: #111;
@@ -200,6 +200,7 @@
   --row-active: #9dffb0;
   --row-active-border: #9dffb0;
   --row-active-text: #050805;
+  --muted-active: #0a2a12;
   --row-hover: #0f1a12;
   --accent-soft: #9dffb0;
   --control-bg: #050805;
@@ -304,7 +305,7 @@
   --surface-2: #f3f3ef;
   --surface-3: #ecece8;
   --fg: #131313;
-  --muted: #8a8a84;
+  --muted: #6b6b66;
   --muted-strong: #555;
   --muted-active: #131313;
   --accent: #1a5cff;
@@ -325,7 +326,7 @@
   --control-bg: #fbfbf9;
   --bar-bg: #fbfbf9;
   --bar-fg: #131313;
-  --bar-muted: #8a8a84;
+  --bar-muted: #6b6b66;
   --bar-edge: #e2e2de;
   --caption-bg: rgba(251, 251, 249, 0.95);
   --caption-fg: #131313;
@@ -360,6 +361,7 @@
   --row-active: #ffd400;
   --row-active-border: #fff;
   --row-active-text: #000;
+  --muted-active: #000;
   --row-hover: #1a1a1a;
   --accent-soft: #ffd400;
   --control-bg: #000;
