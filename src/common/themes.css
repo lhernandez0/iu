@@ -1,0 +1,387 @@
+/*
+ * The nine visual languages, applied by `data-theme` on <html>.
+ *
+ * Every block is TOKENS: palette, type, radii, active row, viewer bar and caption
+ * treatment. The structure, the controls and the reading rules are one set, so the
+ * tests do not multiply by nine. A theme that wanted a different layout would be a
+ * different product, not a theme.
+ *
+ * `default` has no block. Removing the attribute is the original look.
+ *
+ * The popover is shared by both surfaces, so a themed document resolves its own
+ * surface and edge rather than the dark defaults.
+ */
+[data-theme] {
+  --popover-bg: var(--surface);
+  --popover-border: var(--edge-strong);
+}
+
+/* --- Swiss / International ------------------------------------------------ */
+[data-theme='swiss'] {
+  color-scheme: light;
+  --bg: #f2f2ee;
+  --surface: #f7f7f3;
+  --surface-2: #ecece6;
+  --surface-3: #e6e6df;
+  --fg: #111;
+  --muted: #6b6b66;
+  --muted-strong: #3a3a36;
+  --muted-active: #222;
+  --accent: #d81e05;
+  --danger: #b00020;
+  --edge: #111;
+  --edge-strong: #111;
+  --edge-soft: #e4e4de;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --on-accent: #fff;
+  --row-active: #f6e6e2;
+  --row-active-border: #d81e05;
+  --row-active-text: #111;
+  --row-hover: #ecece6;
+  --accent-soft: #f6e6e2;
+  --control-bg: #f2f2ee;
+  --bar-bg: #f2f2ee;
+  --bar-fg: #111;
+  --bar-muted: #6b6b66;
+  --bar-edge: #111;
+  --caption-bg: rgba(242, 242, 238, 0.94);
+  --caption-fg: #111;
+  --caption-muted: #6b6b66;
+  --resume-bg: #f7f7f3;
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.15);
+  --font-reading: "Helvetica Neue", Helvetica, Arial, "Noto Sans CJK SC", sans-serif;
+  --font-chrome: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/* --- Bauhaus -------------------------------------------------------------- */
+[data-theme='bauhaus'] {
+  color-scheme: light;
+  --bg: #f3eddc;
+  --surface: #f3eddc;
+  --surface-2: #ece3cd;
+  --surface-3: #e6dcc4;
+  --fg: #111;
+  --muted: #555;
+  --muted-strong: #333;
+  --muted-active: #111;
+  --accent: #e63329;
+  --danger: #b00020;
+  --edge: #111;
+  --edge-strong: #111;
+  --edge-soft: #d8cfb9;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --on-accent: #fff;
+  --row-active: #f2c200;
+  --row-active-border: #1d4ed8;
+  --row-active-text: #111;
+  --row-hover: #ece3cd;
+  --accent-soft: #f2c200;
+  --control-bg: #111;
+  --bar-bg: #111;
+  --bar-fg: #fff;
+  --bar-muted: #cfc7b8;
+  --bar-edge: #111;
+  --caption-bg: #f2c200;
+  --caption-fg: #111;
+  --caption-muted: #333;
+  --resume-bg: #111;
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.2);
+  --font-reading: "Futura", "Century Gothic", "Avant Garde", "Noto Sans CJK SC", sans-serif;
+  --font-chrome: "Futura", "Century Gothic", "Avant Garde", sans-serif;
+}
+
+/* --- Brutalist ------------------------------------------------------------ */
+[data-theme='brutalist'] {
+  color-scheme: light;
+  --bg: #f7f7f2;
+  --surface: #fff;
+  --surface-2: #edede8;
+  --surface-3: #e6e6df;
+  --fg: #000;
+  --muted: #444;
+  --muted-strong: #222;
+  --muted-active: #000;
+  --accent: #000;
+  --danger: #b00020;
+  --edge: #000;
+  --edge-strong: #000;
+  --edge-soft: #000;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --on-accent: #fff;
+  --row-active: #d7ff3f;
+  --row-active-border: #000;
+  --row-active-text: #000;
+  --row-hover: #edede8;
+  --accent-soft: #d7ff3f;
+  --control-bg: #fff;
+  --bar-bg: #fff;
+  --bar-fg: #000;
+  --bar-muted: #444;
+  --bar-edge: #000;
+  --caption-bg: #d7ff3f;
+  --caption-fg: #000;
+  --caption-muted: #333;
+  --resume-bg: #fff;
+  --shadow-card: 4px 4px 0 #000;
+  --font-reading: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-chrome: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* --- Editorial / print ---------------------------------------------------- */
+[data-theme='editorial'] {
+  color-scheme: light;
+  --bg: #f7f1e5;
+  --surface: #f7f1e5;
+  --surface-2: #f2ebdc;
+  --surface-3: #efe7d8;
+  --fg: #1a1a1a;
+  --muted: #7a6a55;
+  --muted-strong: #4a3f33;
+  --muted-active: #1a1a1a;
+  --accent: #7a1f2b;
+  --danger: #9b1c1c;
+  --edge: #c9bca6;
+  --edge-strong: #1a1a1a;
+  --edge-soft: #e0d5c2;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --on-accent: #fff;
+  --row-active: #f3e4de;
+  --row-active-border: #7a1f2b;
+  --row-active-text: #1a1a1a;
+  --row-hover: #efe7d8;
+  --accent-soft: #f3e4de;
+  --control-bg: #f7f1e5;
+  --bar-bg: #f7f1e5;
+  --bar-fg: #1a1a1a;
+  --bar-muted: #7a6a55;
+  --bar-edge: #1a1a1a;
+  --caption-bg: rgba(247, 241, 229, 0.94);
+  --caption-fg: #1a1a1a;
+  --caption-muted: #5c5145;
+  --resume-bg: #f7f1e5;
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.18);
+  --font-reading: Georgia, "Songti SC", "Noto Serif CJK SC", serif;
+  --font-chrome: Georgia, "Times New Roman", serif;
+}
+
+/* --- Terminal / CLI ------------------------------------------------------- */
+[data-theme='terminal'] {
+  color-scheme: dark;
+  --bg: #050805;
+  --surface: #0a0f0b;
+  --surface-2: #081009;
+  --surface-3: #0f1a12;
+  --fg: #9dffb0;
+  --muted: #4f8a5c;
+  --muted-strong: #7fbf8c;
+  --muted-active: #9dffb0;
+  --accent: #d7ff3f;
+  --danger: #ff6b6b;
+  --edge: #2f6b3c;
+  --edge-strong: #2f6b3c;
+  --edge-soft: #16301c;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --on-accent: #050805;
+  --row-active: #9dffb0;
+  --row-active-border: #9dffb0;
+  --row-active-text: #050805;
+  --row-hover: #0f1a12;
+  --accent-soft: #9dffb0;
+  --control-bg: #050805;
+  --bar-bg: #050805;
+  --bar-fg: #9dffb0;
+  --bar-muted: #4f8a5c;
+  --bar-edge: #2f6b3c;
+  --caption-bg: rgba(5, 8, 5, 0.88);
+  --caption-fg: #9dffb0;
+  --caption-muted: #4f8a5c;
+  --resume-bg: #0a0f0b;
+  --shadow-card: 0 6px 18px rgba(0, 0, 0, 0.6);
+  --font-reading: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-chrome: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* --- Material 3 ----------------------------------------------------------- */
+[data-theme='material'] {
+  color-scheme: dark;
+  --bg: #141218;
+  --surface: #211f26;
+  --surface-2: #2b2930;
+  --surface-3: #332f38;
+  --fg: #e6e0e9;
+  --muted: #cac4d0;
+  --muted-strong: #e6e0e9;
+  --muted-active: #eaddff;
+  --accent: #d0bcff;
+  --danger: #ffb4ab;
+  --edge: #49454f;
+  --edge-strong: #49454f;
+  --edge-soft: #332f38;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --on-accent: #381e72;
+  --row-active: #4f378b;
+  --row-active-border: #4f378b;
+  --row-active-text: #eaddff;
+  --row-hover: #2b2930;
+  --accent-soft: #4f378b;
+  --control-bg: #2b2930;
+  --bar-bg: #211f26;
+  --bar-fg: #e6e0e9;
+  --bar-muted: #cac4d0;
+  --bar-edge: #49454f;
+  --caption-bg: #211f26;
+  --caption-fg: #e6e0e9;
+  --caption-muted: #cac4d0;
+  --resume-bg: #2b2930;
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.5);
+  --font-reading: "Roboto", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-chrome: "Roboto", system-ui, sans-serif;
+}
+
+/* --- Fluent / Windows 11 -------------------------------------------------- */
+[data-theme='fluent'] {
+  color-scheme: dark;
+  --bg: #202020;
+  --surface: #2b2b2b;
+  --surface-2: #272727;
+  --surface-3: #2d2d2d;
+  --fg: #fff;
+  --muted: #b3b3b3;
+  --muted-strong: #d6d6d6;
+  --muted-active: #fff;
+  --accent: #60cdff;
+  --danger: #ff99a4;
+  --edge: #3a3a3a;
+  --edge-strong: #3a3a3a;
+  --edge-soft: #2f2f2f;
+  --radius-xs: 2px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --on-accent: #003544;
+  --row-active: #2d2d2d;
+  --row-active-border: #60cdff;
+  --row-active-text: #fff;
+  --row-hover: #2b2b2b;
+  --accent-soft: #2d2d2d;
+  --control-bg: #2b2b2b;
+  --bar-bg: #272727;
+  --bar-fg: #fff;
+  --bar-muted: #b3b3b3;
+  --bar-edge: #3a3a3a;
+  --caption-bg: rgba(32, 32, 32, 0.9);
+  --caption-fg: #fff;
+  --caption-muted: #b3b3b3;
+  --resume-bg: #2b2b2b;
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.45);
+  --font-reading: "Segoe UI Variable", "Segoe UI", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-chrome: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+}
+
+/* --- Minimal / Rams ------------------------------------------------------- */
+[data-theme='rams'] {
+  color-scheme: light;
+  --bg: #fbfbf9;
+  --surface: #fbfbf9;
+  --surface-2: #f3f3ef;
+  --surface-3: #ecece8;
+  --fg: #131313;
+  --muted: #8a8a84;
+  --muted-strong: #555;
+  --muted-active: #131313;
+  --accent: #1a5cff;
+  --danger: #c50000;
+  --edge: #e2e2de;
+  --edge-strong: #c9c9c3;
+  --edge-soft: #ecece8;
+  --radius-xs: 0;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 4px;
+  --on-accent: #fff;
+  --row-active: #eef3ff;
+  --row-active-border: #1a5cff;
+  --row-active-text: #131313;
+  --row-hover: #f1f1ed;
+  --accent-soft: #eef3ff;
+  --control-bg: #fbfbf9;
+  --bar-bg: #fbfbf9;
+  --bar-fg: #131313;
+  --bar-muted: #8a8a84;
+  --bar-edge: #e2e2de;
+  --caption-bg: rgba(251, 251, 249, 0.95);
+  --caption-fg: #131313;
+  --caption-muted: #6b6b66;
+  --resume-bg: #f3f3ef;
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.12);
+  --font-reading: system-ui, -apple-system, "Segoe UI", "Noto Sans CJK SC", sans-serif;
+  --font-chrome: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* --- High contrast -------------------------------------------------------- */
+[data-theme='contrast'] {
+  color-scheme: dark;
+  --bg: #000;
+  --surface: #000;
+  --surface-2: #000;
+  --surface-3: #1a1a1a;
+  --fg: #fff;
+  --muted: #fff;
+  --muted-strong: #fff;
+  --muted-active: #fff;
+  --accent: #ffd400;
+  --danger: #ff6b6b;
+  --edge: #fff;
+  --edge-strong: #fff;
+  --edge-soft: #fff;
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --on-accent: #000;
+  --row-active: #ffd400;
+  --row-active-border: #fff;
+  --row-active-text: #000;
+  --row-hover: #1a1a1a;
+  --accent-soft: #ffd400;
+  --control-bg: #000;
+  --bar-bg: #000;
+  --bar-fg: #fff;
+  --bar-muted: #fff;
+  --bar-edge: #fff;
+  --caption-bg: #000;
+  --caption-fg: #fff;
+  --caption-muted: #fff;
+  --resume-bg: #000;
+  --shadow-card: none;
+  --font-reading: system-ui, -apple-system, "Segoe UI", "Noto Sans CJK SC", sans-serif;
+  --font-chrome: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/*
+ * Two themes use border weight as part of their language. Kept as component
+ * rules rather than a token because the base sheet has several different border
+ * declarations, and a token there would be a refactor disguised as a theme.
+ */
+[data-theme='brutalist'] :is(.bar, .settings-group, .settings-head, .translate-target-row, button, select, .size, .row.active, .v-bar button, .v-bar select, .v-bar input) ,
+[data-theme='contrast'] :is(.bar, .settings-group, .settings-head, .translate-target-row, button, select, .size, .row.active, .v-bar button, .v-bar select, .v-bar input) {
+  border-width: 2px;
+}

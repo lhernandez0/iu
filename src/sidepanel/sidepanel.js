@@ -555,6 +555,7 @@ function renderLearning(state) {
   applyFontSize(learning.fontSize);
   applyView(learning.view);
   applyMarkStyle(learning.markStyle);
+  applyTheme(learning.theme);
 
   renderSettingsView(learning, state);
 }
@@ -1024,6 +1025,20 @@ function applyMarkStyle(mode) {
   const highlight = mode === 'highlight';
   document.documentElement.classList.toggle('mark-highlight', highlight);
   document.documentElement.classList.toggle('mark-underline', !highlight);
+}
+
+/**
+ * Apply the visual language.
+ *
+ * `default` removes the attribute rather than setting it to a string, so the base
+ * stylesheet is exactly the one the project shipped before themes existed.
+ *
+ * @param {string} [theme]
+ */
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (!theme || theme === 'default') delete root.dataset.theme;
+  else root.dataset.theme = theme;
 }
 
 /**

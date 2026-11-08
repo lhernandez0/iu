@@ -62,6 +62,30 @@ const MARK_STYLE_OPTIONS = [
   { value: 'highlight', label: 'Highlight' },
 ];
 
+/**
+ * The visual languages the panel and the viewer can wear.
+ *
+ * The default is the current look. The rest are token themes: same structure,
+ * different palette, type, radius, border weight and active-row treatment. They are
+ * not structural skins, because nine different panel layouts is nine products to
+ * test and maintain. See `src/common/themes.css` for the values.
+ */
+const THEME_OPTIONS = [
+  { value: 'default', label: 'Default' },
+  { value: 'swiss', label: 'Swiss / International' },
+  { value: 'bauhaus', label: 'Bauhaus' },
+  { value: 'brutalist', label: 'Brutalist' },
+  { value: 'editorial', label: 'Editorial / print' },
+  { value: 'terminal', label: 'Terminal / CLI' },
+  { value: 'material', label: 'Material 3' },
+  { value: 'fluent', label: 'Fluent / Windows 11' },
+  { value: 'rams', label: 'Minimal / Rams' },
+  { value: 'contrast', label: 'High contrast' },
+];
+
+/** The theme ids, for the viewer, which reads storage rather than rendering the registry. */
+export const THEME_IDS = THEME_OPTIONS.map((option) => option.value);
+
 /** The base size every other size in the panel is a multiple of. */
 export const BASE_FONT_PX = 13;
 
@@ -496,6 +520,21 @@ export const SETTINGS = [
     options: MARK_STYLE_OPTIONS,
     default: 'underline',
     coerce: (value) => (MARK_STYLE_OPTIONS.some((o) => o.value === value) ? value : 'underline'),
+  },
+  {
+    // The visual language. A token theme: the structure is the same in every one,
+    // so the tests, the controls and the reading rules do not multiply.
+    //
+    // Shared by both surfaces. A panel in Swiss and a viewer in Terminal would be
+    // two products again, which is the thing the themes exist to avoid.
+    id: 'theme',
+    label: 'Theme',
+    group: 'theme',
+    type: 'select',
+    options: THEME_OPTIONS,
+    audience: ['panel', 'viewer'],
+    default: 'default',
+    coerce: (value) => (THEME_OPTIONS.some((option) => option.value === value) ? value : 'default'),
   },
   {
     id: 'studyLanguage',

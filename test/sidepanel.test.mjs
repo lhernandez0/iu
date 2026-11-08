@@ -1025,6 +1025,21 @@ section('the settings view replaces the transcript and comes back');
   void dom;
 }
 
+// --- 13. The visual theme ----------------------------------------------------
+
+section('the visual theme is applied to the document');
+
+{
+  const { lastPort, dom } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings({ theme: 'swiss' }) });
+  await settle();
+  check('a theme sets the document attribute', dom.document.documentElement.dataset.theme, 'swiss');
+
+  lastPort().emit({ type: 'state', state: stateWithSettings({ theme: 'default' }) });
+  await settle();
+  check('and default removes it', dom.document.documentElement.dataset.theme, undefined);
+}
+
 // --- Result ------------------------------------------------------------------
 
 console.log(`\n${checks - failures}/${checks} checks passed`);

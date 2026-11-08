@@ -1,26 +1,3 @@
-/*
- * Styles for the video viewer.
- *
- * Dark, and matching the side panel so the two read as one product. The video is
- * the point of the page: it takes every pixel the controls do not need.
- *
- * ## The one structural idea
- *
- * A COLUMN. `.picture` holds the video and the overlaid bar; `.stage` holds
- * `.picture` plus the optional `below` caption strip. Every `min-height: 0` in this
- * file is load-bearing and has the same cause: a flex child will not shrink below
- * its content's intrinsic size without it, so without those the video wins and the
- * strip below is pushed off the bottom of the page instead of the picture being
- * squeezed. That is the difference between a strip that is pinned and one that
- * overflows, and it is the single most common way this layout breaks.
- *
- * ## Type scale
- *
- * `--caption-size` is set on the root and read by both caption placements, so the
- * size control moves both from one value. The panel's `--text-scale` scheme is not
- * used here because the viewer has one text size to control, not nine.
- */
-
 :root {
   --bg: #12141a;
   --fg: #e6e8ee;
@@ -29,8 +6,30 @@
   --danger: #f7768e;
   --surface: #1b1e25;
   --edge: #262b38;
+  --edge-strong: #333844;
+  --edge-soft: #1e2330;
+  --surface-2: #14161c;
+  --surface-3: #1b1e25;
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --control-bg: rgba(27, 30, 37, 0.92);
+  --accent-soft: #24304a;
+  --on-accent: #0b0d12;
+  --bar-bg: rgba(10, 12, 17, 0.9);
+  --bar-fg: #e6e8ee;
+  --bar-muted: #8b93a7;
+  --bar-edge: #333844;
+  --caption-bg: rgba(8, 10, 14, 0.74);
+  --caption-fg: #e6e8ee;
+  --caption-muted: #8b93a7;
+  --resume-bg: rgba(22, 27, 40, 0.94);
+  --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.45);
   /* Written by the size control. In px rather than a ratio because it is a
      subtitle size, and a subtitle size is a thing people think about in px. */
+  --font-reading: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-chrome: system-ui, -apple-system, "Segoe UI", sans-serif;
   --caption-size: 20px;
   color-scheme: dark;
 }
@@ -50,7 +49,7 @@ body {
   flex-direction: column;
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font: 14px/1.5 var(--font-reading);
 }
 
 /* --- The stage ------------------------------------------------------------ */
@@ -196,8 +195,8 @@ body {
   display: inline-block;
   max-width: min(clamp(28ch, 72vw, 84ch), 94%);
   padding: 4px 14px;
-  border-radius: 6px;
-  background: rgba(8, 10, 14, 0.74);
+  border-radius: var(--radius-sm);
+  background: var(--caption-bg);
   text-align: center;
   /* The one thing on the strip that wants the pointer, for a hovered word's
      definition, the rest of the overlay must not swallow clicks meant for the
@@ -228,6 +227,7 @@ body {
 
 .captions-overlay .caption-line {
   margin: 0;
+  color: var(--caption-fg);
   /* A text shadow rather than a darker fill, so the text stays readable over a
      bright frame without a slab of near-black behind it. */
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
@@ -237,6 +237,7 @@ body {
    because the two are one subtitle rather than two. */
 .captions-overlay .caption-secondary {
   margin-top: 1px;
+  color: var(--caption-muted);
 }
 
 /*
@@ -249,7 +250,7 @@ body {
 .captions-below {
   flex: 0 0 auto;
   padding: 10px 18px;
-  background: #14161c;
+  background: var(--surface-2);
   border-top: 1px solid var(--edge);
   /* A long cue wraps and the strip scrolls rather than growing without bound, it
      is pinned, so unbounded growth would eat the picture. */
@@ -287,9 +288,9 @@ body {
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
-  border: 1px solid #33405c;
-  border-radius: 8px;
-  background: rgba(22, 27, 40, 0.94);
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-md);
+  background: var(--resume-bg);
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   z-index: 3;
 }
@@ -305,17 +306,17 @@ body {
 .resume-go {
   padding: 5px 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
-  color: #0b0d12;
+  color: var(--on-accent);
   font-weight: 600;
   cursor: pointer;
 }
 
 .resume-skip {
   padding: 5px 10px;
-  border: 1px solid #333844;
-  border-radius: 6px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
@@ -325,6 +326,7 @@ body {
 
 .bar {
   position: absolute;
+  font-family: var(--font-chrome);
   left: 0;
   right: 0;
   bottom: 0;
@@ -338,10 +340,11 @@ body {
   padding: 24px 10px 6px;
   background: linear-gradient(
     to bottom,
-    rgba(10, 12, 17, 0) 0,
-    rgba(10, 12, 17, 0.55) 20px,
-    rgba(10, 12, 17, 0.9) 100%
+    transparent 0,
+    color-mix(in srgb, var(--bar-bg) 55%, transparent) 20px,
+    var(--bar-bg) 100%
   );
+  color: var(--bar-fg);
   transition: opacity 200ms ease;
 }
 
@@ -376,7 +379,7 @@ body {
 
 .row-captions {
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  border-top: 1px solid color-mix(in srgb, var(--bar-fg) 7%, transparent);
 }
 
 /* The second row disappears when the captions are off. `[hidden]` rather than a
@@ -392,7 +395,7 @@ body {
 
 .row-label,
 .field-label {
-  color: #808999;
+  color: var(--bar-muted);
   font-size: 10px;
   text-transform: uppercase;
   /* Halved from 0.08em. Seven of these labels sit in the caption row and the tracking
@@ -442,7 +445,7 @@ body {
   height: 8px;
   transform: translateY(-50%);
   pointer-events: none;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 
@@ -506,15 +509,15 @@ body {
     to right,
     var(--accent) 0%,
     var(--accent) var(--played, 0%),
-    rgba(255, 255, 255, 0.18) var(--played, 0%),
-    rgba(255, 255, 255, 0.18) 100%
+    color-mix(in srgb, var(--bar-fg) 18%, transparent) var(--played, 0%),
+    color-mix(in srgb, var(--bar-fg) 18%, transparent) 100%
   );
 }
 
 .scrubber::-moz-range-track {
   height: 4px;
   border-radius: 2px;
-  background: rgba(255, 255, 255, 0.18);
+  background: color-mix(in srgb, var(--bar-fg) 18%, transparent);
 }
 
 .scrubber::-moz-range-progress {
@@ -531,7 +534,7 @@ body {
   margin-top: -4px;
   border: 0;
   border-radius: 50%;
-  background: var(--fg);
+  background: var(--bar-fg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
@@ -540,20 +543,20 @@ body {
   height: 12px;
   border: 0;
   border-radius: 50%;
-  background: var(--fg);
+  background: var(--bar-fg);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .scrubber:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
 }
 
 /* Tabular figures, so the counter does not jitter as the seconds tick, a
    proportional font changes width every time `1` becomes `8`. */
 .time {
-  color: var(--muted);
+  color: var(--bar-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
@@ -686,7 +689,7 @@ body {
 
 .status-text {
   margin: 0;
-  color: var(--muted);
+  color: var(--bar-muted);
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -708,11 +711,11 @@ body {
   justify-content: center;
   gap: 6px;
   padding: 5px 10px;
-  border: 1px solid #333844;
-  border-radius: 6px;
-  background: rgba(27, 30, 37, 0.92);
-  color: var(--fg);
-  font: 12px/1.4 system-ui, sans-serif;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
+  color: var(--bar-fg);
+  font: 12px/1.4 var(--font-chrome);
   cursor: pointer;
   font-variant-numeric: tabular-nums;
   user-select: none;
@@ -746,17 +749,17 @@ body {
 
 .primary {
   background: var(--accent);
-  color: #0b0d12;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
 .primary .icon {
-  color: #0b0d12;
+  color: var(--on-accent);
 }
 
 .button[aria-pressed='true'] {
   border-color: var(--accent);
-  background: #24304a;
+  background: var(--accent-soft);
 }
 
 /* The focus outline must show even when the bar is faded, the rule the `focusin`
@@ -773,18 +776,18 @@ body {
 .divider {
   width: 1px;
   height: 18px;
-  background: #333844;
+  background: var(--edge-strong);
 }
 
 .speed select,
 .field select,
 .field input {
   padding: 4px 6px;
-  border: 1px solid #333844;
-  border-radius: 6px;
-  background: rgba(27, 30, 37, 0.92);
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
+  background: var(--control-bg);
   color: var(--fg);
-  font: 12px/1.4 system-ui, sans-serif;
+  font: 12px/1.4 var(--font-chrome);
 }
 
 /*
@@ -833,11 +836,11 @@ body {
    top-layer by the browser, so it is never clipped by the bar. */
 #speed::picker(select) {
   margin-block-start: 4px;
-  border: 1px solid #333844;
-  border-radius: 8px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--fg);
-  font: 12px/1.4 system-ui, sans-serif;
+  font: 12px/1.4 var(--font-chrome);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
@@ -879,14 +882,14 @@ body {
 }
 
 #speed option:hover {
-  background: #24304a;
+  background: var(--accent-soft);
 }
 
 /* The selected rung is marked by a tinted background AND a border AND the checkmark, not
    by colour alone, so selection survives a colour-blind reading and the high-contrast
    forced-colors mode. */
 #speed option:checked {
-  background: #24304a;
+  background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px var(--accent);
   font-weight: 600;
 }
@@ -908,18 +911,18 @@ body {
    the current value without opening anything. */
 .seg {
   display: inline-flex;
-  border: 1px solid #333844;
-  border-radius: 6px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .seg-button {
   padding: 4px 10px;
   border: 0;
-  border-right: 1px solid #333844;
-  background: rgba(27, 30, 37, 0.92);
+  border-right: 1px solid var(--edge-strong);
+  background: var(--control-bg);
   color: var(--muted);
-  font: 12px/1.4 system-ui, sans-serif;
+  font: 12px/1.4 var(--font-chrome);
   cursor: pointer;
 }
 
@@ -928,7 +931,7 @@ body {
 }
 
 .seg-button[aria-pressed='true'] {
-  background: #24304a;
+  background: var(--accent-soft);
   color: var(--fg);
 }
 
@@ -974,6 +977,7 @@ body {
  */
 .shortcuts {
   position: absolute;
+  font-family: var(--font-chrome);
   top: 12px;
   right: 12px;
   z-index: 5;
@@ -985,7 +989,7 @@ body {
   border-radius: 10px;
   /* Opaque, not translucent: this is dense text, and reading it over a moving picture
      is the one thing a translucent card cannot offer. */
-  background: #14161c;
+  background: var(--surface-2);
   color: var(--text);
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
 }
@@ -1000,7 +1004,7 @@ body {
   right: 12px;
   padding: 2px 8px;
   border: 1px solid var(--edge);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
   font: inherit;
@@ -1050,7 +1054,7 @@ body {
   padding: 1px 6px;
   border: 1px solid var(--edge);
   border-bottom-width: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   background: rgba(255, 255, 255, 0.06);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.92em;
