@@ -14,6 +14,10 @@
     <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC&text=%E5%8F%8B&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500&text=%E5%8F%8B&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Long+Cang&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Zhi+Mang+Xing&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Klee+One&text=%E5%8F%8B&display=swap" rel="stylesheet" />
     <style>
       /*
        * Internal brand workbench. Not shipped, not part of the extension.
@@ -704,6 +708,10 @@
                 <option value="serif">Noto Serif SC</option>
                 <option value="wenkai">LXGW WenKai TC</option>
                 <option value="xiaowei">ZCOOL XiaoWei</option>
+                <option value="mashan">Ma Shan Zheng</option>
+                <option value="longcang">Long Cang</option>
+                <option value="zhimang">Zhi Mang Xing</option>
+                <option value="klee">Klee One</option>
               </select>
             </label>
             <label>
@@ -872,7 +880,8 @@
             <h3>Do not</h3>
             <ul>
               <li>Ship a live font. The final icon must be the outlined glyph, or the constructed paths; the preview may use the font.</li>
-              <li>Use a brush 友, a red seal, a speech bubble, a flag or a translation arrow. They are the wrong register, and they collapse at 16.</li>
+              <li>Assume a brush 友 survives 16px. It is a trial, not a default; use it only if the 16px sample still reads.</li>
+              <li>Use a red seal, a speech bubble, a flag or a translation arrow. They are the wrong register.</li>
               <li>Put IU inside the tile. The mark is 友; the wordmark is IU.</li>
               <li>Recolour the icon per panel theme. The nine themes are the product, not the brand.</li>
               <li>Add a gradient, shadow, bevel or outline.</li>
@@ -959,6 +968,30 @@
           cjk: '"ZCOOL XiaoWei", serif',
           license: 'SIL OFL 1.1',
           note: 'A display serif with more character; test it at 16.',
+        },
+        mashan: {
+          label: 'Ma Shan Zheng',
+          cjk: '"Ma Shan Zheng", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'Brush calligraphy. The most calligraphic test on the page; check 16.',
+        },
+        longcang: {
+          label: 'Long Cang',
+          cjk: '"Long Cang", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'Running brush script. Loose and fast; check 16.',
+        },
+        zhimang: {
+          label: 'Zhi Mang Xing',
+          cjk: '"Zhi Mang Xing", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'A lighter brush hand; check the counters at 16.',
+        },
+        klee: {
+          label: 'Klee One',
+          cjk: '"Klee One", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'Japanese pen calligraphy; quieter than the Chinese brushes.',
         },
       };
 
