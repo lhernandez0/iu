@@ -229,6 +229,40 @@
         border: 1px solid var(--line);
       }
 
+      /* A paper presentation for the Paper treatment. The grain is in the
+         page, not the icon: at 16px a texture is just noise. The tile keeps a
+         flat stock, the ink stays crisp. */
+      .is-paper {
+        background-color: var(--paper);
+        background-image:
+          radial-gradient(circle at 18% 28%, rgba(76, 60, 38, 0.055) 0 0.6px, transparent 0.8px),
+          radial-gradient(circle at 72% 64%, rgba(76, 60, 38, 0.045) 0 0.5px, transparent 0.7px),
+          radial-gradient(circle at 42% 80%, rgba(255, 255, 255, 0.18) 0 0.7px, transparent 0.9px);
+        background-size: 7px 7px, 11px 11px, 9px 9px;
+      }
+
+      .logo-preview.is-paper {
+        border-color: #2a2318;
+        background-color: #f1e8d6;
+        background-image:
+          radial-gradient(circle at 16% 28%, rgba(76, 60, 38, 0.06) 0 0.6px, transparent 0.8px),
+          radial-gradient(circle at 68% 62%, rgba(76, 60, 38, 0.05) 0 0.5px, transparent 0.7px);
+        background-size: 7px 7px, 11px 11px;
+      }
+
+      .logo-preview.is-paper .logo-wordmark { color: #17130d; }
+      .logo-preview.is-paper .logo-wordmark span { color: #5f5546; }
+
+      .ladder-row.paper.is-paper,
+      .lockup.paper.is-paper {
+        background-color: #f1e8d6;
+        background-image:
+          radial-gradient(circle at 18% 30%, rgba(76, 60, 38, 0.055) 0 0.6px, transparent 0.8px),
+          radial-gradient(circle at 72% 64%, rgba(76, 60, 38, 0.045) 0 0.5px, transparent 0.7px),
+          radial-gradient(circle at 42% 80%, rgba(255, 255, 255, 0.18) 0 0.7px, transparent 0.9px);
+        background-size: 7px 7px, 11px 11px, 9px 9px;
+      }
+
       .logo-preview .mark { width: 48px; height: 48px; flex: 0 0 auto; }
       .logo-preview .logo-wordmark { font-family: var(--ui-sans); line-height: 1; }
       .logo-preview strong { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
@@ -930,7 +964,7 @@
 
       const PRESETS = {
         product: { tile: '#4f8cff', glyph: '#ffffff', border: false, borderColor: '#111111' },
-        paper: { tile: '#f4f2ec', glyph: '#111111', border: true, borderColor: '#111111' },
+        paper: { tile: '#efe5d1', glyph: '#17130d', border: true, borderColor: '#2a2318' },
         deep: { tile: '#2f5fd0', glyph: '#ffffff', border: false, borderColor: '#111111' },
         ink: { tile: '#111111', glyph: '#f4f2ec', border: false, borderColor: '#111111' },
       };
@@ -1133,7 +1167,9 @@
 
       const renderStage = () => {
         const stage = $('#stage');
-        stage.style.background = state.groundColor;
+        stage.style.backgroundColor = state.groundColor;
+        const paper = state.preset === 'paper' || state.tileColor === PRESETS.paper.tile;
+        stage.classList.toggle('is-paper', paper);
         const gridColor = lum(state.groundColor) > 0.5 ? '#111111' : '#ffffff';
         $('#stage-mark').innerHTML = svgMark({ size: 220, grid: state.grid, gridColor });
         $('#caption').innerHTML = caption();
@@ -1221,6 +1257,10 @@
         $('#brand-mark').innerHTML = svgMark({ size: 40 });
         $('#hero-mark').innerHTML = svgMark({ size: 160 });
         $('#logo-mark').innerHTML = svgMark({ size: 48 });
+        const paper = state.preset === 'paper' || state.tileColor === PRESETS.paper.tile;
+        $('.logo-preview').classList.toggle('is-paper', paper);
+        for (const row of document.querySelectorAll('.ladder-row.paper')) row.classList.toggle('is-paper', paper);
+        for (const lockup of document.querySelectorAll('.lockup.paper')) lockup.classList.toggle('is-paper', paper);
         $('#hero-caption').textContent = state.glyph === 'typeset'
           ? `${face.label}, ${state.fontWeight}`
           : `${DIRECTIONS[state.direction].label.toLowerCase()}, ${state.weight.toFixed(1)}px stroke`;
