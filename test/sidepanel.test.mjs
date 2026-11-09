@@ -1029,10 +1029,19 @@ section('the settings view replaces the transcript and comes back');
 section('the visual theme is applied to the document');
 
 {
-  const { lastPort, dom } = await bootPanel();
-  lastPort().emit({ type: 'state', state: stateWithSettings({ theme: 'swiss' }) });
+  const { lastPort, dom, byId } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings({ theme: 'swiss', viewerTheme: 'terminal' }) });
   await settle();
-  check('a theme sets the document attribute', dom.document.documentElement.dataset.theme, 'swiss');
+  check('the panel theme sets the document attribute', dom.document.documentElement.dataset.theme, 'swiss');
+  check(
+    'the viewer theme does not change the panel',
+    dom.document.documentElement.dataset.theme,
+    'swiss',
+  );
+  const body = byId.get('settings-body');
+  const labels = body.find((el) => el.classList.contains('settings-label')).map((el) => el.textContent);
+  check('the settings view names the panel theme', labels.includes('Panel theme'), true);
+  check('the settings view names the viewer theme', labels.includes('Viewer theme'), true);
 
   lastPort().emit({ type: 'state', state: stateWithSettings({ theme: 'default' }) });
   await settle();

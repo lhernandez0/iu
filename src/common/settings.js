@@ -522,17 +522,30 @@ export const SETTINGS = [
     coerce: (value) => (MARK_STYLE_OPTIONS.some((o) => o.value === value) ? value : 'underline'),
   },
   {
-    // The visual language. A token theme: the structure is the same in every one,
-    // so the tests, the controls and the reading rules do not multiply.
+    // The panel's visual language. A token theme: the structure is the same in
+    // every one, so the tests, the controls and the reading rules do not multiply.
     //
-    // Shared by both surfaces. A panel in Swiss and a viewer in Terminal would be
-    // two products again, which is the thing the themes exist to avoid.
+    // Panel only. The viewer has `viewerTheme`; a film and a reading panel are
+    // different surfaces and each keeps its own theme.
     id: 'theme',
-    label: 'Theme',
+    label: 'Panel theme',
     group: 'theme',
     type: 'select',
     options: THEME_OPTIONS,
-    audience: ['panel', 'viewer'],
+    audience: ['panel'],
+    default: 'default',
+    coerce: (value) => (THEME_OPTIONS.some((option) => option.value === value) ? value : 'default'),
+  },
+  {
+    // The viewer's visual language. The control is rendered in the panel because
+    // the viewer has no settings view; the viewer reads this key directly from
+    // storage. It is deliberately not the panel's `theme`.
+    id: 'viewerTheme',
+    label: 'Viewer theme',
+    group: 'theme',
+    type: 'select',
+    options: THEME_OPTIONS,
+    audience: ['panel'],
     default: 'default',
     coerce: (value) => (THEME_OPTIONS.some((option) => option.value === value) ? value : 'default'),
   },

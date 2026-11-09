@@ -133,8 +133,8 @@ const DEFAULTS = {
   threshold: null,
   studyLanguage: null,
   glossLanguage: null,
-  // The visual language, shared with the panel.
-  theme: 'default',
+  // The visual language for this surface only. The panel has its own `theme`.
+  viewerTheme: 'default',
 };
 
 /** @type {Record<string, any>} */
@@ -167,7 +167,7 @@ function applyStoredSettings(stored) {
   next.threshold = Number.isFinite(level) && level >= 1 ? Math.floor(level) : null;
   next.studyLanguage = typeof stored.studyLanguage === 'string' && stored.studyLanguage ? stored.studyLanguage : null;
   next.glossLanguage = typeof stored.glossLanguage === 'string' && stored.glossLanguage ? stored.glossLanguage : null;
-  next.theme = THEME_IDS.includes(stored.theme) ? stored.theme : 'default';
+  next.viewerTheme = THEME_IDS.includes(stored.viewerTheme) ? stored.viewerTheme : 'default';
   // **A stored track choice can arrive AFTER a file is open.** The settings read is
   // asynchronous, so a file opened in the moments after the page loads is loaded with the
   // DEFAULTS (both languages null) and the real choices land a moment later. The pickers
@@ -1809,8 +1809,8 @@ function applySettings() {
     els.video.playbackRate = Number(settings.defaultSpeed);
   }
   applyDifficulty();
-  if (settings.theme === 'default') delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = settings.theme;
+  if (settings.viewerTheme === 'default') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = settings.viewerTheme;
 
   // Pushed into the renderer, which reads the placement from the last settings it
   // was given rather than taking it as an argument, the same arrangement the panel

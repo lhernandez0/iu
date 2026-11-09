@@ -1826,6 +1826,7 @@ function learningState(entry = null) {
     // Which visual language the panel and the viewer wear. Sent with the rest of the
     // presentation settings so neither surface reads storage itself.
     theme: settings.theme,
+    viewerTheme: settings.viewerTheme,
     // Where a word's reading goes, and how it is written. Sent like the other
     // presentation settings rather than read from storage by the panel, one owner
     // for settings, and the panel has the value in hand when it renders.

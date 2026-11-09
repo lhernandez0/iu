@@ -597,6 +597,36 @@ section('the time bar, the volume control and the difficulty band');
   check('the caption offset accounts for the taller bar', offset.offset, `${offset.bar}px`);
 }
 
+section('the viewer reads its own theme, not the panel theme');
+
+{
+  await reader.evaluate(async () => {
+    const stored = await chrome.storage.local.get('settings');
+    await chrome.storage.local.set({
+      settings: { ...(stored.settings ?? {}), theme: 'swiss', viewerTheme: 'terminal' },
+    });
+  });
+  await reader.waitForTimeout(250);
+  check(
+    'the viewer applies viewerTheme',
+    await reader.evaluate(() => document.documentElement.dataset.theme ?? null),
+    'terminal',
+  );
+
+  await reader.evaluate(async () => {
+    const stored = await chrome.storage.local.get('settings');
+    await chrome.storage.local.set({
+      settings: { ...(stored.settings ?? {}), theme: 'swiss', viewerTheme: 'default' },
+    });
+  });
+  await reader.waitForTimeout(250);
+  check(
+    'and the panel theme alone does not colour the viewer',
+    await reader.evaluate(() => document.documentElement.dataset.theme ?? null),
+    null,
+  );
+}
+
 section('the speed picker is OUR control, not the operating system dropdown');
 
 {
