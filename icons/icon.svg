@@ -1,34 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="IU">
   <!--
-    The source for every icon size. tools/make-icons.mjs rasterises this into
-    icons/icon-{16,32,48,128}.png.
-
-    Drawn in a 16x16 viewBox on purpose: 16px is the toolbar size, and it is the
-    only size where this can go wrong. Reason in toolbar pixels and every larger
-    size is a clean multiple of something that is known to be legible.
-
-    The letters are PATHS, not text. Rasterising <text> bakes in whatever font
-    the machine happens to have, so the icon would differ per developer and could
-    not be regenerated reproducibly. A path is the same everywhere.
-
-    Geometry (all measurements are outer edges, i.e. including the 2px stroke):
-      tile     0..16, radius 3.5
-      I        x 3.05..5.05
-      gap      1.7px between the I and the U
-      U        x 6.75..12.95
-      margins  3.05 left, 3.05 right, the lockup is optically centred
-      tops     3.4, bottoms 12.6
-
-    The I and U are the same weight and are kerned tight enough to read as one
-    mark rather than two letters, which is what lets two capitals survive at
-    16px instead of turning to mush.
+    Provisional mark: 友 outlined from Zen Kurenaido (SIL OFL 1.1).
+    The font file is not shipped; this outline is. See icons/OFL-ZenKurenaido.txt.
+    The tile is warm paper (#efe5d1), the glyph warm ink (#17130d), the keyline
+    #2a2318. The outline is scaled to the same 14px setting as the review page,
+    so the icon matches the typeset preview.
   -->
-  <rect x="0" y="0" width="16" height="16" rx="3.5" fill="#4f8cff" />
-
-  <g fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round">
-    <!-- I -->
-    <path d="M4.05 4.4 V11.6" />
-    <!-- U -->
-    <path d="M7.75 4.4 V9.5 A2.1 2.1 0 0 0 11.95 9.5 V4.4" />
+  <rect width="16" height="16" rx="3.5" fill="#efe5d1" stroke="#2a2318" stroke-width="0.7"/>
+  <g transform="translate(1.000000 13.6) scale(0.014000 -0.014000)">
+    <path d="M64 -56Q55 -62 44.5 -59.5Q34 -57 29 -48Q24 -39 26.5 -29.0Q29 -19 38 -13Q131 44 207.5 133.0Q284 222 341.5 329.0Q399 436 435 547L116 515Q106 514 98.0 521.0Q90 528 88 538Q87 548 94.0 556.0Q101 564 111 565L451 599Q467 657 476.0 712.5Q485 768 488 820Q488 831 496.0 838.0Q504 845 514 844Q525 844 531.5 836.5Q538 829 538 818Q536 768 527.0 714.0Q518 660 504 604L897 643Q908 645 916.0 638.5Q924 632 925 621Q926 611 919.5 603.0Q913 595 902 593L489 552Q462 462 420.5 373.5Q379 285 325.0 204.5Q271 124 205.5 57.0Q140 -10 64 -56ZM303 -63Q293 -67 283.5 -63.0Q274 -59 270 -49Q266 -39 270.0 -29.5Q274 -20 284 -16Q346 10 409.5 57.5Q473 105 528 166Q481 204 448.0 232.0Q415 260 412 262Q405 269 404.0 279.5Q403 290 410 298Q417 306 427.5 306.5Q438 307 445 300Q446 299 479.0 271.0Q512 243 561 204Q596 247 625.5 293.5Q655 340 676 387L480 355Q470 354 461.5 360.0Q453 366 451 376Q450 387 456.0 395.5Q462 404 472 405L712 443Q726 446 735 435Q745 423 740 410Q718 350 682.0 289.5Q646 229 600 173Q644 139 689.5 107.0Q735 75 773 55Q804 39 839.0 26.0Q874 13 904.5 4.0Q935 -5 954.5 -9.5Q974 -14 974 -14Q985 -16 990.5 -24.5Q996 -33 994 -44Q992 -54 983.5 -59.5Q975 -65 964 -63Q962 -63 941.0 -58.0Q920 -53 888.0 -44.0Q856 -35 819.0 -21.5Q782 -8 749 10Q709 33 660.5 66.5Q612 100 567 135Q507 69 439.0 17.0Q371 -35 303 -63Z" fill="#17130d"/>
   </g>
 </svg>

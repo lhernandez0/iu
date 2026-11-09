@@ -804,8 +804,9 @@
           <p class="specimen-cjk" id="specimen-cjk" lang="zh-Hans">友</p>
         </div>
         <p class="note">
-          The selector changes 友 in the mark, the ladder, the logo preview, the
-          lockups and the specimen. The wordmark stays in the UI font; it is a
+          The page opens at the provisional: Paper, Rounded Square, Paper and
+          ink, Zen Kurenaido 400. The selector changes 友 in the mark, the
+          ladder, the logo preview, the lockups and the specimen. The wordmark stays in the UI font; it is a
           descriptor, not the logo. The page's UI, headings, controls and h1 stay
           fixed. The chosen face is previewed with the live font, and the final
           icon outlines it from the same OFL file. The IBM Plex Sans SC subset is
@@ -904,29 +905,28 @@
           <span class="num">08</span>
           <h2>Decision</h2>
           <p>
-            This is a proposal, not a shipped change. The current icon in
-            <code>icons/</code> is still the IU monogram.
+            Provisional choice: Paper, Rounded Square, Paper and ink, Zen
+            Kurenaido 400. The icon in <code>icons/</code> now uses that
+            outlined 友. It is not final.
           </p>
         </div>
         <div class="decision">
           <p>
-            The logo is the 友 glyph. Choose the hanzi face first, then the tile,
-            colour and treatment. The wordmark is a descriptor in the UI font.
-            The final icon is the chosen glyph outlined from its OFL file, or the
-            constructed fallback. No decision yet; the current icon is still the
-            IU monogram.
+            The page opens at that state. Zen Kurenaido is provisional; it can be
+            replaced with another face, weight, tile or colour, and the icon
+            re-outlined. The wordmark is a descriptor in the UI font; the mark is
+            the 友.
           </p>
           <p>
-            Choose the hanzi face, the colours and the direction. The copy button
-            is disabled for a typeset glyph because the preview is not the final
-            icon; the chosen face is outlined afterwards. The book in
-            <code>docs/BRAND-BOOK.md</code> records the constraints; the current
-            icon does not change until you decide.
+            The typeset preview relies on the live font. The icon does not: the
+            glyph is outlined into <code>icons/icon.svg</code>, and the font file
+            is not shipped. The constructed four-stroke drawing remains the
+            fallback if the face fails at 16px.
           </p>
           <p class="aside">
-            The typeset preview relies on the chosen CJK font. Do not copy the
-            <code>&lt;text&gt;</code> into <code>icons/</code>; outline the chosen
-            glyph first, or use the constructed fallback.
+            The book in <code>docs/BRAND-BOOK.md</code> records the provisional and
+            the constraints. The icon licence is in
+            <code>icons/OFL-ZenKurenaido.txt</code> and the notices.
           </p>
         </div>
       </section>
@@ -1062,17 +1062,17 @@
       };
 
       const state = {
-        direction: 'typeset',
+        direction: 'paper',
         glyph: 'typeset',
         tile: 'rounded',
-        preset: 'product',
-        tileColor: '#4f8cff',
-        glyphColor: '#ffffff',
-        border: false,
-        borderColor: '#111111',
+        preset: 'paper',
+        tileColor: '#efe5d1',
+        glyphColor: '#17130d',
+        border: true,
+        borderColor: '#2a2318',
         groundColor: '#f4f2ec',
         weight: 1.8,
-        font: 'plex',
+        font: 'zenkurenaido',
         fontWeight: 400,
         grid: false,
       };
