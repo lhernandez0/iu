@@ -1024,6 +1024,19 @@ section('the settings view replaces the transcript and comes back');
   void dom;
 }
 
+section('the empty state is one message, not two');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings({}, { rows: [] }) });
+  await settle();
+  check(
+    'the transcript does not add a second empty message',
+    byId.get('transcript').children.length,
+    0,
+  );
+}
+
 // --- 13. The visual theme ----------------------------------------------------
 
 section('the visual theme is applied to the document');

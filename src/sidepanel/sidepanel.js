@@ -1226,13 +1226,7 @@ function renderRows(state) {
   view.activeIndex = -1;
   els.transcript.replaceChildren();
 
-  if (!rows.length) {
-    const empty = document.createElement('p');
-    empty.className = 'empty';
-    empty.textContent = 'No transcript loaded.';
-    els.transcript.append(empty);
-    return;
-  }
+  if (!rows.length) return;
 
   const fragment = document.createDocumentFragment();
   for (const [index, row] of rows.entries()) {

@@ -614,11 +614,6 @@ select:disabled {
   scrollbar-color: var(--edge-strong) transparent;
 }
 
-.transcript .empty {
-  color: var(--muted);
-  font-style: italic;
-  padding: 0 6px;
-}
 
 /* One clickable transcript line. */
 .row {
