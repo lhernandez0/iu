@@ -61,7 +61,7 @@
 /* --- Bauhaus -------------------------------------------------------------- */
 [data-theme='bauhaus'] {
   color-scheme: light;
-  --control-scheme: dark;
+  --control-scheme: light;
   --bg: #f3eddc;
   --surface: #f3eddc;
   --surface-2: #ece3cd;
@@ -85,16 +85,16 @@
   --row-active-text: #111;
   --row-hover: #ece3cd;
   --accent-soft: #f2c200;
-  --control-bg: #111;
-  --bar-bg: #111;
-  --bar-fg: #fff;
-  --bar-muted: #cfc7b8;
-  --bar-danger: #ff8a80;
+  --control-bg: #f3eddc;
+  --bar-bg: #f3eddc;
+  --bar-fg: #111;
+  --bar-muted: #555;
+  --bar-danger: #b00020;
   --bar-edge: #111;
   --caption-bg: #f2c200;
   --caption-fg: #111;
   --caption-muted: #333;
-  --resume-bg: #111;
+  --resume-bg: #f3eddc;
   --shadow-card: 0 6px 24px rgba(0, 0, 0, 0.2);
   --font-reading: "Futura", "Century Gothic", "Avant Garde", "Noto Sans CJK SC", sans-serif;
   --font-chrome: "Futura", "Century Gothic", "Avant Garde", sans-serif;

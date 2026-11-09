@@ -685,7 +685,7 @@ section('the themed viewer controls stay legible');
   await setViewerTheme('bauhaus');
   const bauhaus = await inspect();
   check('the Bauhaus select text is not its own background', bauhaus.select.fg === bauhaus.select.bg, false);
-  check('the Bauhaus bar uses a dark native scheme', bauhaus.select.scheme, 'dark');
+  check('the Bauhaus bar uses a light native scheme', bauhaus.select.scheme, 'light');
   check('the Bauhaus feedback badge is legible', contrast(bauhaus.badge.fg, bauhaus.badge.bg) >= 4.5, true);
   check('the Bauhaus filename is legible on the bar', contrast(bauhaus.chosen, bauhaus.barBg) >= 4.5, true);
   check('the Bauhaus error note is legible on the bar', contrast(bauhaus.note, bauhaus.barBg) >= 4.5, true);
