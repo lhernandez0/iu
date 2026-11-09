@@ -123,6 +123,7 @@ section('modifiers are never intercepted');
   // Shift is the exception, and it has to be: `?` IS Shift+Slash on most layouts, so
   // refusing every shifted key would make the help key unreachable.
   check('but Shift is allowed, so ? still works', resolveShortcut(key('?')), 'help');
+  check('and / is a second help key', resolveShortcut(key('/')), 'help');
 }
 
 section('a focused control keeps the key only when it takes text');
@@ -184,9 +185,10 @@ section('only seeking repeats');
 section('unbound keys are left alone');
 
 {
-  // The keys deliberately not bound. `/` is the browser's quick-find and the viewer
-  // has no search; a chapter key needs a chapter model the parser does not have.
-  check('slash is not bound', resolveShortcut(key('/')), null);
+  // The keys deliberately not bound. A chapter key needs a chapter model the parser
+  // does not have. `/` is no longer here: it opens the help card, because this viewer
+  // has no search box for it to focus.
+  check('slash opens help instead of being unbound', resolveShortcut(key('/')), 'help');
   check('the N playlist key is not bound', resolveShortcut(key('N')), null);
   check('a bare letter that means nothing is not bound', resolveShortcut(key('q')), null);
   check('an unbound repeat is not bound', resolveShortcut(key('q', { repeat: true })), null);

@@ -1889,6 +1889,15 @@ section('the keyboard shortcuts drive the player, and the help panel lists them'
   const closed = await page12.evaluate(() => document.getElementById('shortcuts')?.hidden);
   check('and Escape closes it', closed, true);
 
+  await page12.keyboard.press('/');
+  await page12.waitForTimeout(200);
+  check(
+    '/ also opens the shortcut panel',
+    await page12.evaluate(() => !document.getElementById('shortcuts')?.hidden),
+    true,
+  );
+  await page12.keyboard.press('Escape');
+
   // `a` opens the licences panel, the same KIND of card as the help, in the same corner.
   // It is built from `SOURCES` at runtime, so this is the only place its content can be
   // checked against the module rather than against a promise that a markup file matches.
