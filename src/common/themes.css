@@ -19,6 +19,7 @@
 /* --- Swiss / International ------------------------------------------------ */
 [data-theme='swiss'] {
   color-scheme: light;
+  --control-scheme: light;
   --bg: #f2f2ee;
   --surface: #f7f7f3;
   --surface-2: #ecece6;
@@ -46,6 +47,7 @@
   --bar-bg: #f2f2ee;
   --bar-fg: #111;
   --bar-muted: #6b6b66;
+  --bar-danger: #b00020;
   --bar-edge: #111;
   --caption-bg: rgba(242, 242, 238, 0.94);
   --caption-fg: #111;
@@ -59,6 +61,7 @@
 /* --- Bauhaus -------------------------------------------------------------- */
 [data-theme='bauhaus'] {
   color-scheme: light;
+  --control-scheme: dark;
   --bg: #f3eddc;
   --surface: #f3eddc;
   --surface-2: #ece3cd;
@@ -86,6 +89,7 @@
   --bar-bg: #111;
   --bar-fg: #fff;
   --bar-muted: #cfc7b8;
+  --bar-danger: #ff8a80;
   --bar-edge: #111;
   --caption-bg: #f2c200;
   --caption-fg: #111;
@@ -99,6 +103,7 @@
 /* --- Brutalist ------------------------------------------------------------ */
 [data-theme='brutalist'] {
   color-scheme: light;
+  --control-scheme: light;
   --bg: #f7f7f2;
   --surface: #fff;
   --surface-2: #edede8;
@@ -126,6 +131,7 @@
   --bar-bg: #fff;
   --bar-fg: #000;
   --bar-muted: #444;
+  --bar-danger: #b00020;
   --bar-edge: #000;
   --caption-bg: #d7ff3f;
   --caption-fg: #000;
@@ -139,6 +145,7 @@
 /* --- Editorial / print ---------------------------------------------------- */
 [data-theme='editorial'] {
   color-scheme: light;
+  --control-scheme: light;
   --bg: #f7f1e5;
   --surface: #f7f1e5;
   --surface-2: #f2ebdc;
@@ -166,6 +173,7 @@
   --bar-bg: #f7f1e5;
   --bar-fg: #1a1a1a;
   --bar-muted: #7a6a55;
+  --bar-danger: #b00020;
   --bar-edge: #1a1a1a;
   --caption-bg: rgba(247, 241, 229, 0.94);
   --caption-fg: #1a1a1a;
@@ -179,6 +187,7 @@
 /* --- Terminal / CLI ------------------------------------------------------- */
 [data-theme='terminal'] {
   color-scheme: dark;
+  --control-scheme: dark;
   --bg: #050805;
   --surface: #0a0f0b;
   --surface-2: #081009;
@@ -207,6 +216,7 @@
   --bar-bg: #050805;
   --bar-fg: #9dffb0;
   --bar-muted: #4f8a5c;
+  --bar-danger: #ff6b6b;
   --bar-edge: #2f6b3c;
   --caption-bg: rgba(5, 8, 5, 0.88);
   --caption-fg: #9dffb0;
@@ -220,6 +230,7 @@
 /* --- Material 3 ----------------------------------------------------------- */
 [data-theme='material'] {
   color-scheme: dark;
+  --control-scheme: dark;
   --bg: #141218;
   --surface: #211f26;
   --surface-2: #2b2930;
@@ -247,6 +258,7 @@
   --bar-bg: #211f26;
   --bar-fg: #e6e0e9;
   --bar-muted: #cac4d0;
+  --bar-danger: #ffb4ab;
   --bar-edge: #49454f;
   --caption-bg: #211f26;
   --caption-fg: #e6e0e9;
@@ -260,6 +272,7 @@
 /* --- Fluent / Windows 11 -------------------------------------------------- */
 [data-theme='fluent'] {
   color-scheme: dark;
+  --control-scheme: dark;
   --bg: #202020;
   --surface: #2b2b2b;
   --surface-2: #272727;
@@ -287,6 +300,7 @@
   --bar-bg: #272727;
   --bar-fg: #fff;
   --bar-muted: #b3b3b3;
+  --bar-danger: #ff99a4;
   --bar-edge: #3a3a3a;
   --caption-bg: rgba(32, 32, 32, 0.9);
   --caption-fg: #fff;
@@ -300,6 +314,7 @@
 /* --- Minimal / Rams ------------------------------------------------------- */
 [data-theme='rams'] {
   color-scheme: light;
+  --control-scheme: light;
   --bg: #fbfbf9;
   --surface: #fbfbf9;
   --surface-2: #f3f3ef;
@@ -327,6 +342,7 @@
   --bar-bg: #fbfbf9;
   --bar-fg: #131313;
   --bar-muted: #6b6b66;
+  --bar-danger: #c50000;
   --bar-edge: #e2e2de;
   --caption-bg: rgba(251, 251, 249, 0.95);
   --caption-fg: #131313;
@@ -340,6 +356,7 @@
 /* --- High contrast -------------------------------------------------------- */
 [data-theme='contrast'] {
   color-scheme: dark;
+  --control-scheme: dark;
   --bg: #000;
   --surface: #000;
   --surface-2: #000;
@@ -368,6 +385,7 @@
   --bar-bg: #000;
   --bar-fg: #fff;
   --bar-muted: #fff;
+  --bar-danger: #ffd400;
   --bar-edge: #fff;
   --caption-bg: #000;
   --caption-fg: #fff;
