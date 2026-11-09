@@ -104,7 +104,7 @@
       .mock[data-theme='rams'] { accent-color: #1a5cff; --m-accent: #1a5cff; }
       .mock[data-theme='contrast'] { accent-color: #ffd400; --m-accent: #ffd400; }
 
-      /* --- 1. Swiss / International Typographic --------------------------- */
+      /* --- 1. Swiss ------------------------------------------------------- */
       .mock[data-theme='swiss'] { background: #f2f2ee; color: #111; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
       .mock[data-theme='swiss'] .m-top { border-bottom: 1px solid #111; padding: 12px 12px 10px; gap: 10px; }
       .mock[data-theme='swiss'] .m-field { border-bottom: 1px solid #111; border-radius: 0; padding: 2px 0; min-height: 22px; }
@@ -161,7 +161,7 @@
       .mock[data-theme='brutalist'] .m-primary rt { color: #000; font-weight: 700; }
       .mock[data-theme='brutalist'] .m-secondary { color: #333; }
 
-      /* --- 4. Editorial / print -------------------------------------------- */
+      /* --- 4. Editorial ---------------------------------------------------- */
       .mock[data-theme='editorial'] { background: #f7f1e5; color: #1a1a1a; font-family: Georgia, "Times New Roman", serif; }
       .mock[data-theme='editorial'] .m-top { padding: 14px 14px 10px; border-bottom: 3px double #1a1a1a; gap: 10px; }
       .mock[data-theme='editorial'] .m-field { border-bottom: 1px solid #1a1a1a; padding: 1px 0; min-height: 22px; }
@@ -203,7 +203,7 @@
       .mock[data-theme='terminal'] .m-primary rt { color: #4f8a5c; }
       .mock[data-theme='terminal'] .m-secondary { color: #4f8a5c; }
 
-      /* --- 6. Material 3 --------------------------------------------------- */
+      /* --- 6. Material ----------------------------------------------------- */
       .mock[data-theme='material'] { background: #141218; color: #e6e0e9; font-family: "Roboto", system-ui, sans-serif; }
       .mock[data-theme='material'] .m-top { padding: 12px; gap: 8px; }
       .mock[data-theme='material'] .m-field { background: #2b2930; border-radius: 16px; padding: 6px 10px; min-height: 32px; }
@@ -223,7 +223,7 @@
       .mock[data-theme='material'] .m-primary rt { color: #d0bcff; }
       .mock[data-theme='material'] .m-secondary { color: #cac4d0; }
 
-      /* --- 7. Fluent / Windows 11 ----------------------------------------- */
+      /* --- 7. Fluent ------------------------------------------------------- */
       .mock[data-theme='fluent'] { background: #202020; color: #fff; font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
       .mock[data-theme='fluent'] .m-top { padding: 12px; gap: 8px; border-bottom: 1px solid #3a3a3a; }
       .mock[data-theme='fluent'] .m-field { background: #2b2b2b; border: 1px solid #3a3a3a; border-radius: 6px; min-height: 28px; }
@@ -242,7 +242,7 @@
       .mock[data-theme='fluent'] .m-primary rt { color: #60cdff; }
       .mock[data-theme='fluent'] .m-secondary { color: #b3b3b3; }
 
-      /* --- 8. Minimal / Rams ----------------------------------------------- */
+      /* --- 8. Rams --------------------------------------------------------- */
       .mock[data-theme='rams'] { background: #fbfbf9; color: #131313; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
       .mock[data-theme='rams'] .m-top { padding: 14px 14px 10px; gap: 10px; border-bottom: 1px solid #e2e2de; }
       .mock[data-theme='rams'] .m-field { border: 0; border-bottom: 1px solid #c9c9c3; padding: 1px 0; min-height: 22px; }

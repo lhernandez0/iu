@@ -16,7 +16,7 @@
   --popover-border: var(--edge-strong);
 }
 
-/* --- Swiss / International ------------------------------------------------ */
+/* --- Swiss ---------------------------------------------------------------- */
 [data-theme='swiss'] {
   color-scheme: light;
   --control-scheme: light;
@@ -142,7 +142,7 @@
   --font-chrome: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* --- Editorial / print ---------------------------------------------------- */
+/* --- Editorial ------------------------------------------------------------ */
 [data-theme='editorial'] {
   color-scheme: light;
   --control-scheme: light;
@@ -184,7 +184,7 @@
   --font-chrome: Georgia, "Times New Roman", serif;
 }
 
-/* --- Terminal / CLI ------------------------------------------------------- */
+/* --- Terminal ------------------------------------------------------------- */
 [data-theme='terminal'] {
   color-scheme: dark;
   --control-scheme: dark;
@@ -227,7 +227,7 @@
   --font-chrome: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* --- Material 3 ----------------------------------------------------------- */
+/* --- Material ------------------------------------------------------------- */
 [data-theme='material'] {
   color-scheme: dark;
   --control-scheme: dark;
@@ -269,7 +269,7 @@
   --font-chrome: "Roboto", system-ui, sans-serif;
 }
 
-/* --- Fluent / Windows 11 -------------------------------------------------- */
+/* --- Fluent --------------------------------------------------------------- */
 [data-theme='fluent'] {
   color-scheme: dark;
   --control-scheme: dark;
@@ -311,7 +311,7 @@
   --font-chrome: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
 }
 
-/* --- Minimal / Rams ------------------------------------------------------- */
+/* --- Rams ----------------------------------------------------------------- */
 [data-theme='rams'] {
   color-scheme: light;
   --control-scheme: light;

@@ -72,14 +72,14 @@ const MARK_STYLE_OPTIONS = [
  */
 const THEME_OPTIONS = [
   { value: 'default', label: 'Default' },
-  { value: 'swiss', label: 'Swiss / International' },
+  { value: 'swiss', label: 'Swiss' },
   { value: 'bauhaus', label: 'Bauhaus' },
   { value: 'brutalist', label: 'Brutalist' },
-  { value: 'editorial', label: 'Editorial / print' },
-  { value: 'terminal', label: 'Terminal / CLI' },
-  { value: 'material', label: 'Material 3' },
-  { value: 'fluent', label: 'Fluent / Windows 11' },
-  { value: 'rams', label: 'Minimal / Rams' },
+  { value: 'editorial', label: 'Editorial' },
+  { value: 'terminal', label: 'Terminal' },
+  { value: 'material', label: 'Material' },
+  { value: 'fluent', label: 'Fluent' },
+  { value: 'rams', label: 'Rams' },
   { value: 'contrast', label: 'High contrast' },
 ];
 
