@@ -12,7 +12,7 @@
  */
 
 import { MSG, TARGET } from '../common/messages.js';
-import { formatTimestamp, formatSrtTime, toPlainText } from '../common/transcript.js';
+import { formatTimestamp } from '../common/transcript.js';
 import { definition, forSettingsView } from '../common/settings.js';
 import { SOURCES } from '../common/sources.js';
 import { providerNames } from '../common/providers.js';
@@ -69,19 +69,15 @@ const els = {
   reading: /** @type {HTMLSelectElement} */ (document.getElementById('reading')),
   layout: /** @type {HTMLButtonElement} */ (document.getElementById('layout')),
   fontSize: /** @type {HTMLInputElement} */ (document.getElementById('font-size')),
-  follow: /** @type {HTMLInputElement} */ (document.getElementById('follow')),
+  follow: /** @type {HTMLButtonElement} */ (document.getElementById('follow')),
   status: /** @type {HTMLElement} */ (document.getElementById('status')),
   transcript: /** @type {HTMLElement} */ (document.getElementById('transcript')),
-  copy: /** @type {HTMLButtonElement} */ (document.getElementById('copy')),
-  format: /** @type {HTMLSelectElement} */ (document.getElementById('format')),
-  save: /** @type {HTMLButtonElement} */ (document.getElementById('save')),
   settingsToggle: /** @type {HTMLButtonElement} */ (document.getElementById('settings-toggle')),
   settingsView: /** @type {HTMLElement} */ (document.getElementById('settings-view')),
   settingsTitle: /** @type {HTMLElement} */ (document.getElementById('settings-title')),
   settingsBody: /** @type {HTMLElement} */ (document.getElementById('settings-body')),
   licencesToggle: /** @type {HTMLButtonElement} */ (document.getElementById('licences-toggle')),
   learningBar: /** @type {HTMLElement} */ (document.querySelector('.bar.learning')),
-  footer: /** @type {HTMLElement} */ (document.querySelector('footer.bar')),
 };
 
 /** Bookkeeping only, the transcript itself lives in the service worker. */
@@ -555,6 +551,7 @@ function renderLearning(state) {
   applyFontSize(learning.fontSize);
   applyView(learning.view);
   applyMarkStyle(learning.markStyle);
+  applyTheme(learning.theme);
 
   renderSettingsView(learning, state);
 }
@@ -897,7 +894,6 @@ function setSettingsOpen(open) {
   if (els.settingsView) els.settingsView.hidden = !open;
   if (els.transcript) els.transcript.hidden = open;
   if (els.status) els.status.hidden = open;
-  if (els.footer) els.footer.hidden = open;
   if (els.settingsToggle) {
     els.settingsToggle.setAttribute('aria-pressed', String(open));
     els.settingsToggle.title = open ? 'Back to the transcript' : 'Settings';
@@ -1024,6 +1020,20 @@ function applyMarkStyle(mode) {
   const highlight = mode === 'highlight';
   document.documentElement.classList.toggle('mark-highlight', highlight);
   document.documentElement.classList.toggle('mark-underline', !highlight);
+}
+
+/**
+ * Apply the visual language.
+ *
+ * `default` removes the attribute rather than setting it to a string, so the base
+ * stylesheet is exactly the one the project shipped before themes existed.
+ *
+ * @param {string} [theme]
+ */
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (!theme || theme === 'default') delete root.dataset.theme;
+  else root.dataset.theme = theme;
 }
 
 /**
@@ -1188,48 +1198,11 @@ els.swap.addEventListener('click', () => {
   send({ type: MSG.SET_GLOSS, languageCode: study || null });
 });
 
-els.follow.addEventListener('change', () => {
-  view.autoScroll = els.follow.checked;
+els.follow.addEventListener('click', () => {
+  view.autoScroll = els.follow.getAttribute('aria-pressed') !== 'true';
+  els.follow.setAttribute('aria-pressed', String(view.autoScroll));
   if (view.autoScroll) view.elements[view.activeIndex]?.scrollIntoView({ block: 'nearest' });
 });
-
-els.copy.addEventListener('click', () => {
-  const text = toBilingualText(view.rows.some((row) => row.secondary));
-  if (text) void navigator.clipboard.writeText(text);
-});
-
-els.save.addEventListener('click', () => {
-  if (!view.rows.length) return;
-
-  const bilingual = view.rows.some((row) => row.secondary);
-  const format = els.format.value;
-  const body = format === 'srt' ? toBilingualSrt() : toBilingualText(bilingual);
-  const name = (view.title || 'transcript').replace(/[^\w.-]+/g, '_').slice(0, 60);
-
-  const url = URL.createObjectURL(new Blob([body], { type: 'text/plain' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `${name}.${format}`;
-  link.click();
-  URL.revokeObjectURL(url);
-});
-
-/** Exports carry both languages when a second one is selected. @param {boolean} bilingual */
-function toBilingualText(bilingual) {
-  if (!bilingual) return toPlainText(view.rows);
-  return view.rows.map((row) => (row.secondary ? `${row.text}\n${row.secondary}` : row.text)).join('\n');
-}
-
-function toBilingualSrt() {
-  return view.rows
-    .map((row, index) => {
-      const start = formatSrtTime(row.start);
-      const end = formatSrtTime(row.start + (row.duration || 1));
-      const text = row.secondary ? `${row.text}\n${row.secondary}` : row.text;
-      return `${index + 1}\n${start} --> ${end}\n${text}\n`;
-    })
-    .join('\n');
-}
 
 // --- Rendering --------------------------------------------------------------
 
@@ -1253,13 +1226,7 @@ function renderRows(state) {
   view.activeIndex = -1;
   els.transcript.replaceChildren();
 
-  if (!rows.length) {
-    const empty = document.createElement('p');
-    empty.className = 'empty';
-    empty.textContent = 'No transcript loaded.';
-    els.transcript.append(empty);
-    return;
-  }
+  if (!rows.length) return;
 
   const fragment = document.createDocumentFragment();
   for (const [index, row] of rows.entries()) {

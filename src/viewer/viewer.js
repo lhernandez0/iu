@@ -41,7 +41,7 @@ import { readMatroskaTracks, readMatroska, imageCodecName } from './matroska.js'
 import { segment } from '../learn/segment.js';
 import { indexDictionary, loadIndex, dictionaryPathFor, lookup, levelOf, levelColour } from '../learn/wordlist.js';
 import { markLine, listCoversLanguage, listForLanguage } from '../learn/marking.js';
-import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX, SPEED_VALUES } from '../common/settings.js';
+import { SETTINGS_AREA, storageKey as SETTINGS_KEY, CAPTION_FADE_DEFAULT, CAPTION_FADE_MIN, CAPTION_FADE_MAX, SPEED_VALUES, THEME_IDS } from '../common/settings.js';
 import { resolveShortcut, jumpFraction, SHORTCUTS } from './shortcuts.js';
 import { renderReading, setReadingSettings, attachHover, showEntry, hide as hidePopover } from '../common/marks.js';
 import { resolveMedia } from '../common/resolve.js';
@@ -133,6 +133,8 @@ const DEFAULTS = {
   threshold: null,
   studyLanguage: null,
   glossLanguage: null,
+  // The visual language for this surface only. The panel has its own `theme`.
+  viewerTheme: 'default',
 };
 
 /** @type {Record<string, any>} */
@@ -165,6 +167,7 @@ function applyStoredSettings(stored) {
   next.threshold = Number.isFinite(level) && level >= 1 ? Math.floor(level) : null;
   next.studyLanguage = typeof stored.studyLanguage === 'string' && stored.studyLanguage ? stored.studyLanguage : null;
   next.glossLanguage = typeof stored.glossLanguage === 'string' && stored.glossLanguage ? stored.glossLanguage : null;
+  next.viewerTheme = THEME_IDS.includes(stored.viewerTheme) ? stored.viewerTheme : 'default';
   // **A stored track choice can arrive AFTER a file is open.** The settings read is
   // asynchronous, so a file opened in the moments after the page loads is loaded with the
   // DEFAULTS (both languages null) and the real choices land a moment later. The pickers
@@ -1806,6 +1809,8 @@ function applySettings() {
     els.video.playbackRate = Number(settings.defaultSpeed);
   }
   applyDifficulty();
+  if (settings.viewerTheme === 'default') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = settings.viewerTheme;
 
   // Pushed into the renderer, which reads the placement from the last settings it
   // was given rather than taking it as an argument, the same arrangement the panel

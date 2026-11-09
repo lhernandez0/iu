@@ -61,7 +61,6 @@ injected on demand, so there is nothing to reload.
   track.
 - **Follows playback.** The current line is highlighted and the list scrolls with
   it. Clicking a line seeks the video to that moment.
-- **Exports** the transcript as plain text or an SRT subtitle file.
 
 ## How it works
 

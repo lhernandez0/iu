@@ -114,6 +114,7 @@ function demoPage(viewerHtml, media) {
   const rewrites = [
     ['href="../common/marks.css"', 'href="src/common/marks.css"'],
     ['href="viewer.css"', 'href="src/viewer/viewer.css"'],
+    ['href="../common/themes.css"', 'href="src/common/themes.css"'],
   ];
   for (const [from, to] of rewrites) {
     if (!html.includes(from)) {

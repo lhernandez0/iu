@@ -9,7 +9,7 @@
  */
 
 import { formatTimestamp, formatSrtTime, toPlainText, toSrt, findActiveIndex, findPlayingIndex, captionHoldSeconds, alignSecondary } from '../src/common/transcript.js';
-import { defaults, SETTINGS, byAudience, audienceProblems, SURFACES, forSettingsView, forTranscriptBar, SPEED_VALUES, SPEED_MIN, SPEED_MAX, SPEED_BANDS } from '../src/common/settings.js';
+import { defaults, SETTINGS, byAudience, audienceProblems, SURFACES, forSettingsView, forTranscriptBar, SPEED_VALUES, SPEED_MIN, SPEED_MAX, SPEED_BANDS, THEME_IDS } from '../src/common/settings.js';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -364,6 +364,27 @@ section('the video settings');
       'koreanScript',
     ].sort(),
   );
+
+  check('every design school is a theme option', THEME_IDS, [
+    'default', 'swiss', 'bauhaus', 'brutalist', 'editorial', 'terminal', 'material', 'fluent', 'rams', 'contrast',
+  ]);
+
+  check(
+    'the panel theme is a panel setting',
+    byAudience('panel').some((setting) => setting.id === 'theme'),
+    true,
+  );
+  check(
+    'the viewer theme is a panel setting too',
+    byAudience('panel').some((setting) => setting.id === 'viewerTheme'),
+    true,
+  );
+  check(
+    'the viewer theme is not a viewer-rendered control',
+    byAudience('viewer').some((setting) => setting.id === 'viewerTheme'),
+    false,
+  );
+  check('the viewer theme defaults to default', defaults().viewerTheme, 'default');
 
   // Captions ON by default is a product decision, not a detail: this is a
   // learning tool, so the transcript should be working on first open. Asserted

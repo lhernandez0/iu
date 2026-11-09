@@ -23,6 +23,7 @@ way; they cannot be relicensed.
 | open-anki-jlpt-decks | `jamsinclair/open-anki-jlpt-decks` | MIT | JLPT levels in the Japanese dictionary | yes |
 | 한국어 학습용 어휘 목록 (NIKL) | National Institute of Korean Language, 2003 | KOGL Type 1 | NIKL grades in the Korean dictionary | yes |
 | Open Yonsei Korean Vocabulary | `Amulopapa67/open-yonsei-korean-vocabulary` | CC BY-SA 3.0 | Korean definitions, readings, course levels | yes |
+| Zen Kurenaido | Google Fonts, SIL OFL 1.1 | The 友 glyph in the icon, outlined | yes |
 | mediabunny | 1.61.3 | MPL-2.0 | Containers and the conversion pipeline | yes |
 | @mediabunny/ac3 | 1.61.4 | MPL-2.0 | AC-3 / E-AC-3 decode and encode | yes |
 | @mediabunny/dts | 1.61.4 | MPL-2.0 | DTS decode and encode | yes |
@@ -30,6 +31,15 @@ way; they cannot be relicensed.
 | *Princess Iron Fan* (1941 film) | Internet Archive item `princess_iron_fan` | Public domain | The GitHub Pages demo clip and subtitles | yes |
 | matroska-test-files (IETF CELLAR) | downloaded by `npm run conformance:fetch` | CC BY 3.0 / CC BY 2.5 | Matroska conformance tests | no |
 | Development dependencies | see the table below | Apache-2.0, MIT, MPL-2.0 | Tests, preview, build tooling | no |
+
+## The icon glyph, Zen Kurenaido, SIL OFL 1.1
+
+The 友 glyph in `icons/icon.svg` and the generated `icons/icon-16.png`,
+`icons/icon-32.png`, `icons/icon-48.png` and `icons/icon-128.png` is outlined
+from **Zen Kurenaido**, © 2021 The Zen Kurenaido Project Authors, under the SIL
+Open Font License 1.1. The font file is not shipped; the outline is. The full
+licence is [`icons/OFL-ZenKurenaido.txt`](icons/OFL-ZenKurenaido.txt). The mark
+is provisional and may be replaced.
 
 ## Bundled dictionaries
 

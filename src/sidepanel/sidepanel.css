@@ -5,6 +5,24 @@
   --accent: #4f8cff;
   --danger: #ff6b6b;
   --surface: #1e2128;
+  --surface-2: #1a1d24;
+  --surface-3: #23262e;
+  --edge: #2a2e37;
+  --edge-strong: #333844;
+  --edge-soft: #1b2029;
+  --radius-xs: 3px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --on-accent: #fff;
+  --row-active: #24304a;
+  --row-active-border: #35507f;
+  --row-active-text: #fff;
+  --row-hover: #23262e;
+  --muted-strong: #aab1c0;
+  --muted-active: #c2cbe0;
+  --shadow-card: 0 6px 18px rgb(0 0 0 / 45%);
+  --popover-bg: #1b1e26;
+  --popover-border: #3a3f4b;
 
   /* The type stack for anything a learner READS, as opposed to chrome.
 
@@ -17,6 +35,7 @@
      Not applied to the controls. A font stack with CJK first changes the metrics
      of Latin labels in a toolbar button for no benefit, and the chrome is not
      what anyone is reading. */
+  --font-chrome: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-reading: system-ui, -apple-system, "Segoe UI", "Hiragino Sans",
     "Noto Sans CJK JP", "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC",
     "Microsoft YaHei", sans-serif;
@@ -66,17 +85,16 @@ body {
 }
 
 .bar {
+  font-family: var(--font-chrome);
   display: flex;
+  flex-wrap: wrap;
+  /* A flex child's default min-width is its content, which let the footer force
+     the document wider than the panel instead of wrapping. */
+  min-width: 0;
   gap: 8px;
   align-items: center;
   padding: 8px;
-  border-bottom: 1px solid #2a2e37;
-}
-
-.bar:last-child {
-  border-bottom: none;
-  border-top: 1px solid #2a2e37;
-  margin-top: auto;
+  border-bottom: 1px solid var(--edge);
 }
 
 /*
@@ -100,7 +118,7 @@ body {
 /* One work: its full name, the licence it is used under, and the change made. */
 .source-row {
   padding: 8px 10px;
-  border-bottom: 1px solid #1b2029;
+  border-bottom: 1px solid var(--edge-soft);
 }
 
 .source-row:last-child {
@@ -133,8 +151,8 @@ body {
 .settings-licences {
   margin-left: auto;
   padding: 3px 9px;
-  border: 1px solid #2a2e37;
-  border-radius: 6px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--fg);
   font: inherit;
@@ -198,8 +216,8 @@ body {
   gap: 8px;
   align-items: center;
   padding: 6px 8px;
-  border-bottom: 1px solid #2a2e37;
-  background: #1a1d24;
+  border-bottom: 1px solid var(--edge);
+  background: var(--surface-2);
 }
 
 .translate-target-row[hidden] {
@@ -240,6 +258,7 @@ body.collapsed .status {
  * pushed off screen instead of the view scrolling.
  */
 .settings-view {
+  font-family: var(--font-chrome);
   flex: 1;
   min-height: 0;
   display: flex;
@@ -256,7 +275,7 @@ body.collapsed .status {
   display: flex;
   align-items: center;
   padding: 10px 12px;
-  border-bottom: 1px solid #2a2e37;
+  border-bottom: 1px solid var(--edge);
   /* Pinned, so the heading stays put however far the list is scrolled. */
   position: sticky;
   top: 0;
@@ -285,8 +304,8 @@ body.collapsed .status {
  */
 .settings-group {
   margin-bottom: 12px;
-  border: 1px solid #232833;
-  border-radius: 8px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-md);
   background: var(--surface);
   overflow: hidden;
 }
@@ -294,8 +313,8 @@ body.collapsed .status {
 .settings-group-title {
   margin: 0;
   padding: 7px 10px;
-  background: #1a1e26;
-  border-bottom: 1px solid #232833;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--edge);
   color: var(--muted);
   font-size: calc(10px * var(--text-scale));
   font-weight: 600;
@@ -316,7 +335,7 @@ body.collapsed .status {
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
-  border-bottom: 1px solid #1b2029;
+  border-bottom: 1px solid var(--edge-soft);
   font-size: calc(12px * var(--text-scale));
 }
 
@@ -331,13 +350,33 @@ body.collapsed .status {
 }
 
 .settings-row select {
-  max-width: 15ch;
+  max-width: min(15ch, 45%);
   /* A select sized to its content makes the column ragged; a fixed cap makes the
      controls line up, which is the point of the grid. */
 }
 
 .settings-row input[type='number'] {
   width: 6ch;
+}
+
+/* At panel width the label and a control at the largest text size cannot share a
+   row. The label goes above, the control takes the width. The settings view is a
+   scrolling list, so the extra height costs nothing it cannot pay. */
+@media (max-width: 440px) {
+  .settings-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .settings-row select,
+  .settings-row input[type='number'] {
+    width: 100%;
+    max-width: none;
+  }
+
+  .settings-row input[type='checkbox'] {
+    justify-self: start;
+  }
 }
 
 .settings-row input[type='checkbox'] {
@@ -370,7 +409,7 @@ body.collapsed .status {
 .source-row {
   margin: 0;
   padding: 7px 10px;
-  border-bottom: 1px solid #1b2029;
+  border-bottom: 1px solid var(--edge-soft);
   color: var(--fg);
   font-size: calc(11.5px * var(--text-scale));
   line-height: 1.45;
@@ -430,8 +469,8 @@ body.collapsed .status {
   align-items: center;
   gap: 3px;
   padding: 0 5px 0 3px;
-  border: 1px solid #333844;
-  border-radius: 6px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--muted);
 }
@@ -468,14 +507,14 @@ body.collapsed .status {
 }
 
 .size-unit {
-  font-size: calc(11px * var(--text-scale));
+  font-size: 11px;
 }
 
 button {
   flex: 0 0 auto;
   padding: 6px 12px;
-  border: 1px solid #333844;
-  border-radius: 6px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--fg);
   font: inherit;
@@ -494,7 +533,7 @@ button:disabled {
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
   min-width: 72px;
 }
@@ -503,8 +542,8 @@ select {
   flex: 1 1 0;
   min-width: 0;
   padding: 5px 6px;
-  border: 1px solid #333844;
-  border-radius: 6px;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--fg);
   font: inherit;
@@ -521,15 +560,34 @@ select:disabled {
   line-height: 1;
 }
 
-.follow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-right: auto;
+.follow-toggle {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--muted);
-  font-size: calc(12px * var(--text-scale));
   cursor: pointer;
-  white-space: nowrap;
+}
+
+.follow-toggle svg {
+  display: block;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.follow-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .status {
@@ -553,14 +611,9 @@ select:disabled {
      property and is enough on its own in current Chrome; no vendor prefixes and
      no hand-built track, which is what this used to need. */
   scrollbar-width: thin;
-  scrollbar-color: #343a46 transparent;
+  scrollbar-color: var(--edge-strong) transparent;
 }
 
-.transcript .empty {
-  color: var(--muted);
-  font-style: italic;
-  padding: 0 6px;
-}
 
 /* One clickable transcript line. */
 .row {
@@ -571,7 +624,7 @@ select:disabled {
   margin: 0;
   padding: 4px 7px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: none;
   color: inherit;
   font: inherit;
@@ -587,7 +640,7 @@ select:disabled {
    pointer. Ordering is the only mechanism here: a `.row.active:hover` rule would
    also work but adds a state combinator for something the cascade already says. */
 .row:hover {
-  background: #23262e;
+  background: var(--row-hover);
   border-color: transparent;
 }
 
@@ -600,15 +653,15 @@ select:disabled {
    Drawn with an inset shadow rather than a wider border, because a border grows
    the box and would reflow every row the moment a line became active. */
 .row.active {
-  background: #24304a;
-  border-color: #35507f;
+  background: var(--row-active);
+  border-color: var(--row-active-border);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .row.active .time,
 .row.active .primary,
 .row.active .secondary {
-  color: #fff;
+  color: var(--row-active-text);
 }
 
 /* Between spoken lines: nothing is being said, but the transcript must not go
@@ -644,7 +697,7 @@ select:disabled {
 .row.paused .time,
 .row.paused .primary,
 .row.paused .secondary {
-  color: #aab1c0;
+  color: var(--muted-strong);
 }
 
 /* .next is the preview of the line after the current one, used by the Current
@@ -681,6 +734,30 @@ select:disabled {
   line-height: var(--reading-line-height);
 }
 
+/* The language row's controls are one rectangle too: the selects, the MT labels
+   and the icon buttons all sit on the same 30px line. */
+.bar:not(.learning) select {
+  height: 30px;
+  min-height: 0;
+  padding: 0 6px;
+}
+
+.bar:not(.learning) .line-translate {
+  min-height: 30px;
+  line-height: 1;
+}
+
+.bar:not(.learning) #swap,
+.bar:not(.learning) .layout-toggle,
+.bar:not(.learning) .settings-toggle {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  padding: 0;
+  box-sizing: border-box;
+}
+
 /* The learning controls, visually separate from the language pickers. */
 .learning {
   /* Tighter than a normal bar, in every dimension that costs height.
@@ -699,8 +776,29 @@ select:disabled {
   padding: 5px;
 }
 
+/* The reading bar is one row of controls, so they are one rectangle. The selects
+   already had a min-height, the size field had a taller input, and the four
+   heights read as four different controls. 28px is the common control height. */
+.learning select,
+.learning .size,
+.learning .follow-toggle {
+  height: 28px;
+  box-sizing: border-box;
+}
+
 .learning select {
-  padding: 3px 6px;
+  min-height: 0;
+  padding: 0 6px;
+}
+
+.learning .size {
+  padding: 0 6px;
+}
+
+.learning .size input {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
 }
 
 .learning-label {
@@ -754,7 +852,7 @@ select:disabled {
   margin-left: 4px;
   padding: 0 3px;
   border: 1px solid var(--muted);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   color: var(--muted);
   font-size: calc(9px * var(--text-scale));
   vertical-align: middle;
@@ -769,6 +867,7 @@ select:disabled {
    primary line. */
 .secondary {
   color: var(--muted);
+  font-family: var(--font-reading);
   font-size: calc(12px * var(--text-scale));
   white-space: pre-wrap;
   word-break: break-word;
@@ -790,5 +889,5 @@ select:disabled {
 }
 
 .row.active .secondary {
-  color: #c2cbe0;
+  color: var(--muted-active);
 }

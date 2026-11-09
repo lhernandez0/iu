@@ -34,11 +34,14 @@
  *
  * ## The keys deliberately NOT bound
  *
- * `/` focuses YouTube's search box. The viewer has no search, and stealing `/` from the
- * browser's own quick-find would be taking a key to do nothing. `Shift+N`/`Shift+P` step
- * through a PLAYLIST, which a local file has no concept of, and `Ctrl/⌥+←/→` step
- * chapters, which the container parser does not model. None of them map to anything real
- * here, so none of them are bound rather than bound to a guess.
+ * `Shift+N`/`Shift+P` step through a PLAYLIST, which a local file has no concept of, and
+ * `Ctrl/⌥+←/→` step chapters, which the container parser does not model. None of them
+ * map to anything real here, so none of them are bound rather than bound to a guess.
+ *
+ * `/` is bound to the help card as well as `?`. YouTube uses it for search, but this
+ * viewer has no search box, so the slash would otherwise do nothing. Opening the one
+ * card that explains the keys is a better use of a key a viewer already expects to do
+ * something.
  */
 
 /**
@@ -86,7 +89,7 @@ export const SHORTCUTS = [
   { id: 'fullscreen', keys: ['F'], label: 'Fullscreen on / off', group: 'Display' },
   { id: 'pip', keys: ['I'], label: 'Picture in picture', group: 'Display' },
   { id: 'licences', keys: ['A'], label: 'Licences and sources', group: 'Display' },
-  { id: 'help', keys: ['?'], label: 'Show this list', group: 'Display' },
+  { id: 'help', keys: ['?', '/'], label: 'Show this list', group: 'Display' },
 ];
 
 /** Every action id, for a test to check the wiring covers them all. */
@@ -133,6 +136,7 @@ const KEY_TO_ACTION = {
   i: 'pip',
   a: 'licences',
   '?': 'help',
+  '/': 'help',
 };
 
 /**

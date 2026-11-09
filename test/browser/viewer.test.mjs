@@ -36,6 +36,26 @@ const EXTENSION_ROOT = ROOT;
 let failures = 0;
 let checks = 0;
 
+/** Relative luminance of a computed `rgb(...)` or hex colour. */
+function luminance(color) {
+  let hex = color;
+  const rgb = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)/);
+  if (rgb) {
+    hex = '#' + rgb.slice(1, 4).map((n) => Number(n).toString(16).padStart(2, '0')).join('');
+  }
+  hex = hex.replace('#', '');
+  if (hex.length === 3) hex = [...hex].map((c) => c + c).join('');
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const f = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+
+/** WCAG contrast ratio between two computed colours. */
+function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 /** @param {string} name @param {any} actual @param {any} expected */
 function check(name, actual, expected) {
   checks++;
@@ -597,6 +617,109 @@ section('the time bar, the volume control and the difficulty band');
   check('the caption offset accounts for the taller bar', offset.offset, `${offset.bar}px`);
 }
 
+section('the viewer reads its own theme, not the panel theme');
+
+{
+  await reader.evaluate(async () => {
+    const stored = await chrome.storage.local.get('settings');
+    await chrome.storage.local.set({
+      settings: { ...(stored.settings ?? {}), theme: 'swiss', viewerTheme: 'terminal' },
+    });
+  });
+  await reader.waitForTimeout(250);
+  check(
+    'the viewer applies viewerTheme',
+    await reader.evaluate(() => document.documentElement.dataset.theme ?? null),
+    'terminal',
+  );
+
+  await reader.evaluate(async () => {
+    const stored = await chrome.storage.local.get('settings');
+    await chrome.storage.local.set({
+      settings: { ...(stored.settings ?? {}), theme: 'swiss', viewerTheme: 'default' },
+    });
+  });
+  await reader.waitForTimeout(250);
+  check(
+    'and the panel theme alone does not colour the viewer',
+    await reader.evaluate(() => document.documentElement.dataset.theme ?? null),
+    null,
+  );
+}
+
+section('the themed viewer controls stay legible');
+
+{
+  async function setViewerTheme(theme) {
+    await reader.evaluate(async (theme) => {
+      const stored = await chrome.storage.local.get('settings');
+      await chrome.storage.local.set({
+        settings: { ...(stored.settings ?? {}), theme: 'swiss', viewerTheme: theme },
+      });
+    }, theme);
+    await reader.waitForTimeout(250);
+  }
+
+  const inspect = () =>
+    reader.evaluate(() => {
+      const style = (selector) => getComputedStyle(document.querySelector(selector));
+      return {
+        badge: { fg: style('.feedback-badge').color, bg: style('.feedback-badge').backgroundColor },
+        select: {
+          fg: style('#speed').color,
+          bg: style('#speed').backgroundColor,
+          scheme: style('#speed').colorScheme,
+        },
+        chosen: style('#chosen').color,
+        note: style('#audio-note').color,
+        barBg: style(':root').getPropertyValue('--bar-bg').trim(),
+        segment: { fg: style('.seg-button[aria-pressed="true"]').color, bg: style('.seg-button[aria-pressed="true"]').backgroundColor },
+      };
+    });
+
+  await setViewerTheme('swiss');
+  const swiss = await inspect();
+  check('the Swiss feedback badge is legible', contrast(swiss.badge.fg, swiss.badge.bg) >= 4.5, true);
+  check('the Swiss bar scheme is light', swiss.select.scheme, 'light');
+
+  await setViewerTheme('bauhaus');
+  const bauhaus = await inspect();
+  check('the Bauhaus select text is not its own background', bauhaus.select.fg === bauhaus.select.bg, false);
+  check('the Bauhaus bar uses a light native scheme', bauhaus.select.scheme, 'light');
+  check('the Bauhaus feedback badge is legible', contrast(bauhaus.badge.fg, bauhaus.badge.bg) >= 4.5, true);
+  check('the Bauhaus filename is legible on the bar', contrast(bauhaus.chosen, bauhaus.barBg) >= 4.5, true);
+  check('the Bauhaus error note is legible on the bar', contrast(bauhaus.note, bauhaus.barBg) >= 4.5, true);
+
+  await setViewerTheme('terminal');
+  const terminal = await inspect();
+  check('the Terminal selected segment is legible', contrast(terminal.segment.fg, terminal.segment.bg) >= 4.5, true);
+  check('the Terminal feedback badge is legible', contrast(terminal.badge.fg, terminal.badge.bg) >= 4.5, true);
+
+  await setViewerTheme('default');
+}
+
+section('the caption card and the control bar are not empty rectangles');
+
+{
+  await reader.evaluate(() => {
+    document.getElementById('caption-primary')?.replaceChildren();
+    document.getElementById('caption-secondary')?.replaceChildren();
+  });
+  check(
+    'an empty caption card is not drawn',
+    await reader.evaluate(() => getComputedStyle(document.querySelector('.caption-card')).display),
+    'none',
+  );
+
+  const bar = await reader.evaluate(() => {
+    const style = getComputedStyle(document.getElementById('bar'));
+    return { image: style.backgroundImage, border: style.borderTopWidth, bg: style.backgroundColor };
+  });
+  check('the bar has no fade gradient', bar.image, 'none');
+  check('the bar has a top edge', bar.border, '1px');
+  check('the bar has a real surface colour', bar.bg === 'rgba(0, 0, 0, 0)', false);
+}
+
 section('the speed picker is OUR control, not the operating system dropdown');
 
 {
@@ -623,13 +746,13 @@ section('the speed picker is OUR control, not the operating system dropdown');
       const picker = getComputedStyle(select, '::picker(select)');
       return {
         appearance: trigger.appearance,
-        // The dark surface `--surface` (#1b1e25), not the OS default white. The exact
+        // The control surface `--control-bg`, not the OS default white. The exact
         // bytes are asserted rather than "is dark", so the theme cannot drift unnoticed.
         pickerBackground: picker.backgroundColor,
       };
     });
     check('the select opts into the customizable API', styled.appearance, 'base-select');
-    check('and its dropdown is the bar surface, not OS white', styled.pickerBackground, 'rgb(27, 30, 37)');
+    check('and its dropdown is the control surface, not OS white', styled.pickerBackground, 'rgba(27, 30, 37, 0.92)');
   }
 
   // Behaviour, asserted whatever the styling path: every rung is offered, the grid or
@@ -1765,6 +1888,15 @@ section('the keyboard shortcuts drive the player, and the help panel lists them'
   await page12.waitForTimeout(200);
   const closed = await page12.evaluate(() => document.getElementById('shortcuts')?.hidden);
   check('and Escape closes it', closed, true);
+
+  await page12.keyboard.press('/');
+  await page12.waitForTimeout(200);
+  check(
+    '/ also opens the shortcut panel',
+    await page12.evaluate(() => !document.getElementById('shortcuts')?.hidden),
+    true,
+  );
+  await page12.keyboard.press('Escape');
 
   // `a` opens the licences panel, the same KIND of card as the help, in the same corner.
   // It is built from `SOURCES` at runtime, so this is the only place its content can be

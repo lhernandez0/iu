@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>IU panel, design directions</title>
+    <link rel="stylesheet" href="gallery.css" />
+    <style>
+      /* The gallery shell only. Every mock owns its own visual language below. */
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: #0b0c0f;
+        color: #e6e6e6;
+        font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      header { padding: 32px 32px 24px; border-bottom: 1px solid #23252b; }
+      h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
+      .lede { margin: 0; max-width: 76ch; color: #9a9a9a; }
+      .toc { display: flex; flex-wrap: wrap; gap: 0; margin-top: 18px; font-size: 12px; }
+      .toc a { padding: 2px 0; color: #cfd3dc; text-decoration: none; }
+      .toc a + a::before { content: "  \00b7  "; color: #4a4a4a; }
+      .toc a:hover { color: #fff; text-decoration: underline; }
+      .others { margin-top: 16px; color: #7c7c7c; font-size: 12px; max-width: 90ch; }
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+        gap: 32px;
+        padding: 32px;
+        align-items: start;
+      }
+      .design h2 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+      .design > p { margin: 0 0 12px; min-height: 38px; color: #9a9a9a; font-size: 12.5px; }
+
+</style>
+  </head>
+  <body>
+    <header>
+      <h1>The main panel in nine design schools</h1>
+      <p class="lede">
+        Same content, same states, same 380px width. The controls are real: the menus
+        open, MT toggles, swap exchanges the two languages, and follow is a real
+        toggle. The size field is the same widget type the panel uses. The open menu is the
+        browser's, as it is in the shipped panel. Pick one direction, or parts of
+        two, and I will apply it to the real stylesheet.
+      </p>
+      <nav class="toc" id="toc" aria-label="Design directions"></nav>
+      <p class="others">
+        Also considered, not drawn: Neumorphism (soft extrusion, too low contrast for
+        dense text), Glassmorphism (translucent layers, fragile over a browser panel),
+        Art Deco and De Stijl (ornament and primary geometry, too decorative here),
+        Cyberpunk (neon fatigue), Blueprint (technical grid, better for data than
+        reading), Broadsheet (a denser Editorial), Memphis and Vaporwave (wrong
+        register), Scandinavian and Japanese Ma (close to Minimal, with more air).
+      </p>
+    </header>
+    <main class="gallery" id="gallery"></main>
+
+    <template id="mock">
+      <div class="m-top">
+        <div class="m-lang">
+          <span class="m-field">
+            <select aria-label="Learning language">
+              <option selected>Chinese (Simplified)</option>
+              <option>English</option>
+              <option>Japanese</option>
+              <option>Korean</option>
+            </select>
+            <span class="m-caret"></span>
+          </span>
+          <label class="m-mt"><input type="checkbox" /> MT</label>
+        </div>
+        <button class="m-icon" type="button" data-swap aria-label="Swap the two lines">&#8646;</button>
+        <div class="m-lang">
+          <span class="m-field">
+            <select aria-label="Second line">
+              <option>Off</option>
+              <option selected>English</option>
+              <option>Chinese (Simplified)</option>
+              <option>Japanese</option>
+            </select>
+            <span class="m-caret"></span>
+          </span>
+          <label class="m-mt"><input type="checkbox" /> MT</label>
+        </div>
+        <button class="m-icon" type="button" aria-label="Settings">&#9881;</button>
+      </div>
+      <div class="m-tools">
+        <span class="m-field m-small">
+          <select aria-label="View"><option>Full</option><option>Live</option></select>
+          <span class="m-caret"></span>
+        </span>
+        <span class="m-field m-size">
+          <input type="number" value="13" min="10" max="32" aria-label="Text size" />
+          <span class="m-unit">px</span>
+        </span>
+        <span class="m-field m-small">
+          <select aria-label="Reading"><option>Off</option><option selected>Above</option><option>Below</option><option>Marked</option></select>
+          <span class="m-caret"></span>
+        </span>
+        <span class="m-field">
+          <select aria-label="Word list"><option>HSK 2.0</option><option selected>HSK 3.0</option><option>JLPT</option></select>
+          <span class="m-caret"></span>
+        </span>
+        <span class="m-field m-small">
+          <select aria-label="Level"><option>1</option><option>2</option><option>3</option><option selected>4</option><option>5</option><option>6</option></select>
+          <span class="m-caret"></span>
+        </span>
+        <button
+          class="m-icon m-follow-toggle"
+          type="button"
+          aria-pressed="true"
+          aria-label="Follow the current line"
+          title="Follow the current line"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M8 3h8" />
+            <path d="M9.5 3l-1 6L5 12v2h14v-2l-3.5-3-1-6" />
+            <path d="M12 14v7" />
+          </svg>
+        </button>
+      </div>
+      <div class="m-status">9 lines &middot; Chinese + English &middot; A walk through the market</div>
+      <div class="m-transcript">
+        <div class="m-row">
+          <span class="m-time">0:37</span>
+          <div class="m-lines">
+            <p class="m-primary"><span class="m-mark"><ruby>大家<rt>dàjiā</rt></ruby></span>早安</p>
+            <p class="m-secondary">Good morning everyone</p>
+          </div>
+        </div>
+        <div class="m-row m-active">
+          <span class="m-time">0:38</span>
+          <div class="m-lines">
+            <p class="m-primary">今天我要带<span class="m-mark"><ruby>大家<rt>dàjiā</rt></ruby></span>一起去<span class="m-mark"><ruby>看看<rt>kànkan</rt></ruby></span></p>
+            <p class="m-secondary">Today I am taking you all to have a look</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:39</span>
+          <div class="m-lines">
+            <p class="m-primary">这家店开了<span class="m-mark"><ruby>三十年<rt>sānshí nián</rt></ruby></span>了</p>
+            <p class="m-secondary">This shop has been open for thirty years</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:42</span>
+          <div class="m-lines">
+            <p class="m-primary">我们先从菜单开始</p>
+            <p class="m-secondary">Let us start with the menu</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:45</span>
+          <div class="m-lines">
+            <p class="m-primary">这里的价格很合理</p>
+            <p class="m-secondary">The prices here are very reasonable</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:48</span>
+          <div class="m-lines">
+            <p class="m-primary">我们点一些招牌菜</p>
+            <p class="m-secondary">Let us order some signature dishes</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:51</span>
+          <div class="m-lines">
+            <p class="m-primary">这个汤味道很浓</p>
+            <p class="m-secondary">This soup has a rich flavour</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:54</span>
+          <div class="m-lines">
+            <p class="m-primary">服务也很周到</p>
+            <p class="m-secondary">The service is attentive too</p>
+          </div>
+        </div>
+        <div class="m-row">
+          <span class="m-time">0:57</span>
+          <div class="m-lines">
+            <p class="m-primary">下次我还想来</p>
+            <p class="m-secondary">I would like to come back next time</p>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <script>
+      const THEMES = [
+        { id: 'swiss', name: '1. Swiss', note: 'Strict grid, Helvetica, hairline rules, one red accent, no radius. A newspaper for data.' },
+        { id: 'bauhaus', name: '2. Bauhaus', note: 'Primary colour blocks, bold geometry, round icon buttons, heavy rules. Functional and loud.' },
+        { id: 'brutalist', name: '3. Brutalist', note: 'Monospace, 3px black borders, hard offset shadows, acid green, zero radius.' },
+        { id: 'editorial', name: '4. Editorial', note: 'Warm paper, serif text, small caps, double rules, burgundy accent. Reads like a magazine.' },
+        { id: 'terminal', name: '5. Terminal', note: 'Monospace, phosphor green, bracketed fields, dashed rules, inverse active line.' },
+        { id: 'material', name: '6. Material', note: 'Tonal surfaces, large radii, filled fields, pill actions, one primary container for the active line.' },
+        { id: 'fluent', name: '7. Fluent', note: 'Layered dark surfaces, 6px controls, a thin accent underline, restrained elevation.' },
+        { id: 'rams', name: '8. Minimal / Dieter Rams', note: 'Near-white, thin rules, almost no chrome, one blue accent, alignment doing the work.' },
+        { id: 'contrast', name: '9. High contrast', note: 'Black, white and yellow, 2px borders, no subtlety. A stress test for focus and state.' },
+      ];
+
+      const toc = document.getElementById('toc');
+      const gallery = document.getElementById('gallery');
+      const template = document.getElementById('mock');
+
+      for (const theme of THEMES) {
+        const link = document.createElement('a');
+        link.href = `#${theme.id}`;
+        link.textContent = theme.name.replace(/^\d+\.\s*/, '');
+        toc.append(link);
+
+        const section = document.createElement('section');
+        section.className = 'design';
+        section.id = theme.id;
+
+        const heading = document.createElement('h2');
+        heading.textContent = theme.name;
+        const note = document.createElement('p');
+        note.textContent = theme.note;
+
+        const mock = document.createElement('div');
+        mock.className = 'mock';
+        mock.dataset.theme = theme.id;
+        mock.append(template.content.cloneNode(true));
+
+        section.append(heading, note, mock);
+        gallery.append(section);
+
+        const swap = mock.querySelector('[data-swap]');
+        const languages = mock.querySelectorAll('.m-lang select');
+        if (swap && languages.length === 2) {
+          swap.addEventListener('click', () => {
+            const first = languages[0].value;
+            const second = languages[1].value;
+            languages[0].value = second;
+            languages[1].value = first;
+          });
+        }
+
+        const follow = mock.querySelector('.m-follow-toggle');
+        if (follow) {
+          follow.addEventListener('click', () => {
+            const on = follow.getAttribute('aria-pressed') === 'true';
+            follow.setAttribute('aria-pressed', String(!on));
+          });
+        }
+      }
+    </script>
+  </body>
+</html>

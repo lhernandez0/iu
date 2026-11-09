@@ -316,6 +316,20 @@ section('a second language produces aligned rows');
   check('choice was persisted', storage.settings?.glossLanguage, 'de');
 }
 
+section('a gloss that resolves to the study track is not a second line');
+
+{
+  const { received, sendFromPanel } = await boot(TRACK(GERMAN));
+
+  sendFromPanel({ type: 'set-gloss', languageCode: 'zh-Hans' });
+  await settle();
+
+  const state = received.at(-1)?.state;
+  check('the gloss is recorded', state?.gloss, 'zh-Hans');
+  check('but there is no duplicate second line', state?.rows?.[0]?.secondary, '');
+  check('one row per primary cue', state?.rows?.length, 3);
+}
+
 // --- 3b. Sticky language choices --------------------------------------------
 
 /**
@@ -763,8 +777,8 @@ section('one language on both lines: itself, and its translation');
   stub.sendFromPanel({ type: 'set-gloss', languageCode: 'zh-Hans' });
   await settle();
 
-  check('the same language can be the second line as well as the first', stub.received.at(-1)?.state?.gloss, 'zh-Hans');
-  check('with both lines showing the untranslated text', stub.received.at(-1)?.state?.rows?.[0]?.secondary, '大家早安');
+  check('a same-language gloss is still recorded', stub.received.at(-1)?.state?.gloss, 'zh-Hans');
+  check('but it is not drawn as a duplicate second line', stub.received.at(-1)?.state?.rows?.[0]?.secondary, '');
 
   translateGloss(stub, 'ko');
   await settle();
@@ -783,7 +797,7 @@ section('one language on both lines: itself, and its translation');
   await settle();
 
   const untranslated = stub.received.at(-1)?.state;
-  check('unticking restores the original gloss', untranslated?.rows?.[0]?.secondary, '大家早安');
+  check('unticking removes the duplicate second line', untranslated?.rows?.[0]?.secondary, '');
   check('with the study line unchanged throughout', untranslated?.rows?.[0]?.text, '大家早安');
 }
 

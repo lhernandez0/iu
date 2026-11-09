@@ -61,9 +61,6 @@ const PANEL_IDS = [
   'follow',
   'status',
   'transcript',
-  'copy',
-  'format',
-  'save',
   'settings-toggle',
   'settings-view',
   'settings-body',
@@ -286,9 +283,11 @@ section('user actions become intents on the port');
   byId.get('gloss').dispatch('change');
   check('selecting a second line sends SET_GLOSS', port.sent.at(-1)?.type, 'set-gloss');
 
-  byId.get('follow').checked = false;
-  byId.get('follow').dispatch('change');
+  const follow = byId.get('follow');
+  follow.setAttribute('aria-pressed', 'true');
+  follow.dispatch('click');
   check('toggling Follow sends nothing', port.sent.some((m) => m.type === 'follow'), false);
+  check('and flips its pressed state', follow.getAttribute('aria-pressed'), 'false');
 }
 
 // --- 8. Swap -----------------------------------------------------------------
@@ -1023,6 +1022,43 @@ section('the settings view replaces the transcript and comes back');
   check('for the right setting', sent.at(-1)?.id, 'markStyle');
   check('with the chosen value', sent.at(-1)?.value, 'highlight');
   void dom;
+}
+
+section('the empty state is one message, not two');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings({}, { rows: [] }) });
+  await settle();
+  check(
+    'the transcript does not add a second empty message',
+    byId.get('transcript').children.length,
+    0,
+  );
+}
+
+// --- 13. The visual theme ----------------------------------------------------
+
+section('the visual theme is applied to the document');
+
+{
+  const { lastPort, dom, byId } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings({ theme: 'swiss', viewerTheme: 'terminal' }) });
+  await settle();
+  check('the panel theme sets the document attribute', dom.document.documentElement.dataset.theme, 'swiss');
+  check(
+    'the viewer theme does not change the panel',
+    dom.document.documentElement.dataset.theme,
+    'swiss',
+  );
+  const body = byId.get('settings-body');
+  const labels = body.find((el) => el.classList.contains('settings-label')).map((el) => el.textContent);
+  check('the settings view names the panel theme', labels.includes('Panel theme'), true);
+  check('the settings view names the viewer theme', labels.includes('Viewer theme'), true);
+
+  lastPort().emit({ type: 'state', state: stateWithSettings({ theme: 'default' }) });
+  await settle();
+  check('and default removes it', dom.document.documentElement.dataset.theme, undefined);
 }
 
 // --- Result ------------------------------------------------------------------

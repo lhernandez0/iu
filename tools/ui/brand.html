@@ -1,0 +1,1420 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IU, the 友 mark</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600&family=Source+Sans+3:wght@400;500;600&family=Manrope:wght@400;500;600&family=Newsreader:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Long+Cang&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Zhi+Mang+Xing&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Klee+One&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Yomogi&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Zen+Kurenaido&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Kaisei+Decol&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <style>
+      /*
+       * Internal brand workbench. Not shipped, not part of the extension.
+       *
+       * The page is a decision tool, not a proposal. Every typeface, colour,
+       * tile and stroke here can be changed. The only hard rules are the ones
+       * the browser imposes: 16px legibility, a square icon, and contrast.
+       */
+      @font-face {
+        font-family: "IBM Plex Sans SC";
+        src: url("fonts/ibm-plex-sans-sc-you.woff2") format("woff2");
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+      }
+
+      :root {
+        --paper: #f4f2ec;
+        --paper-deep: #e9e5da;
+        --ink: #111111;
+        --muted: #6b6b66;
+        --line: #d6d2c6;
+        --line-strong: #b7b1a2;
+        --white: #ffffff;
+        --accent: #4f8cff;
+        --ui-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+        --ui-cjk: "IBM Plex Sans SC", "Noto Sans SC", "Noto Serif SC", serif;
+        --brand-sans: "IBM Plex Sans", system-ui, sans-serif;
+        --brand-cjk: "IBM Plex Sans SC", "Noto Sans SC", serif;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color-scheme: light;
+      }
+
+      * { box-sizing: border-box; }
+      html { background: var(--paper); }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 14px/1.55 var(--ui-sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      code, pre, .mono { font-family: var(--mono); }
+      a { color: var(--ink); text-underline-offset: 3px; }
+      button, select, input { font: inherit; color: inherit; }
+      button { cursor: pointer; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+      /* --- Masthead ------------------------------------------------------- */
+
+      .masthead {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 32px 32px 36px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 260px;
+        gap: 40px;
+        align-items: end;
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .brandline {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+
+      .brandline .mark { width: 40px; height: 40px; flex: 0 0 auto; }
+      .wordmark { font-family: var(--ui-sans); line-height: 1.1; }
+      .wordmark strong { display: block; font-size: 17px; font-weight: 600; letter-spacing: 0.01em; }
+      .wordmark span { display: block; color: var(--muted); font-size: 11px; }
+
+      .kicker {
+        margin: 0 0 6px;
+        color: var(--muted);
+        font: 10px/1.4 var(--mono);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: var(--ui-cjk);
+        font-size: clamp(72px, 12vw, 132px);
+        font-weight: 400;
+        line-height: 0.86;
+        letter-spacing: -0.02em;
+      }
+
+      .h1-en {
+        margin: 10px 0 0;
+        font-size: clamp(24px, 4vw, 38px);
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+
+      .lede {
+        margin: 18px 0 0;
+        max-width: 62ch;
+        color: #3c3c38;
+        font-size: 15px;
+        line-height: 1.6;
+      }
+
+      .masthead-mark {
+        border: 1px solid var(--line-strong);
+        padding: 20px;
+        display: grid;
+        place-items: center;
+        background: var(--paper-deep);
+      }
+
+      .masthead-mark .mark { width: 160px; height: 160px; }
+      .masthead-mark p {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font: 10px/1.4 var(--mono);
+        text-align: center;
+      }
+
+      /* --- TOC ------------------------------------------------------------- */
+
+      .toc {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 14px 32px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0 18px;
+        border-bottom: 1px solid var(--line);
+        font: 11px/1.4 var(--mono);
+      }
+
+      .toc a { color: var(--muted); text-decoration: none; }
+      .toc a:hover { color: var(--ink); text-decoration: underline; }
+
+      /* --- Sections -------------------------------------------------------- */
+
+      main { max-width: 1240px; margin: 0 auto; }
+      .section { padding: 40px 32px; border-bottom: 1px solid var(--line); }
+
+      .section-head {
+        display: grid;
+        grid-template-columns: 48px minmax(0, 1fr) minmax(0, 2fr);
+        gap: 16px;
+        align-items: baseline;
+        margin-bottom: 24px;
+      }
+
+      .section-head .num {
+        color: var(--muted);
+        font: 10px/1.4 var(--mono);
+        letter-spacing: 0.08em;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      .section-head p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 70ch;
+      }
+
+      h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+
+      /* --- Workbench ------------------------------------------------------- */
+
+      .bench {
+        display: grid;
+        grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+        gap: 32px;
+        align-items: start;
+      }
+
+      .stage-wrap { min-width: 0; }
+
+      .stage {
+        width: 100%;
+        aspect-ratio: 1;
+        border: 1px solid var(--line-strong);
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background: var(--paper);
+      }
+
+      .stage .mark { width: 220px; height: 220px; max-width: 74%; max-height: 74%; }
+
+      .caption {
+        margin: 10px 0 0;
+        min-height: 2.8em;
+        color: var(--muted);
+        font: 10.5px/1.45 var(--mono);
+      }
+
+      .caption strong { color: var(--ink); font-weight: 600; }
+      .caption .warn { color: #a4341e; }
+
+      .logo-preview {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-top: 14px;
+        padding: 14px;
+        border: 1px solid var(--line);
+      }
+
+      /* A paper presentation for the Paper treatment. The grain is in the
+         page, not the icon: at 16px a texture is just noise. The tile keeps a
+         flat stock, the ink stays crisp. */
+      .is-paper {
+        background-color: var(--paper);
+        background-image:
+          radial-gradient(circle at 18% 28%, rgba(76, 60, 38, 0.055) 0 0.6px, transparent 0.8px),
+          radial-gradient(circle at 72% 64%, rgba(76, 60, 38, 0.045) 0 0.5px, transparent 0.7px),
+          radial-gradient(circle at 42% 80%, rgba(255, 255, 255, 0.18) 0 0.7px, transparent 0.9px);
+        background-size: 7px 7px, 11px 11px, 9px 9px;
+      }
+
+      .logo-preview.is-paper {
+        border-color: #2a2318;
+        background-color: #f1e8d6;
+        background-image:
+          radial-gradient(circle at 16% 28%, rgba(76, 60, 38, 0.06) 0 0.6px, transparent 0.8px),
+          radial-gradient(circle at 68% 62%, rgba(76, 60, 38, 0.05) 0 0.5px, transparent 0.7px);
+        background-size: 7px 7px, 11px 11px;
+      }
+
+      .logo-preview.is-paper .logo-wordmark { color: #17130d; }
+      .logo-preview.is-paper .logo-wordmark span { color: #5f5546; }
+
+      .ladder-row.paper.is-paper,
+      .lockup.paper.is-paper {
+        background-color: #f1e8d6;
+        background-image:
+          radial-gradient(circle at 18% 30%, rgba(76, 60, 38, 0.055) 0 0.6px, transparent 0.8px),
+          radial-gradient(circle at 72% 64%, rgba(76, 60, 38, 0.045) 0 0.5px, transparent 0.7px),
+          radial-gradient(circle at 42% 80%, rgba(255, 255, 255, 0.18) 0 0.7px, transparent 0.9px);
+        background-size: 7px 7px, 11px 11px, 9px 9px;
+      }
+
+      .logo-preview .mark { width: 48px; height: 48px; flex: 0 0 auto; }
+      .logo-preview .logo-wordmark { font-family: var(--ui-sans); line-height: 1; }
+      .logo-preview strong { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+      .logo-preview span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 16px;
+        align-content: start;
+      }
+
+      .controls label {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+        color: var(--muted);
+        font: 10px/1.4 var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .controls select,
+      .controls button {
+        min-height: 32px;
+        padding: 5px 8px;
+        border: 1px solid var(--line-strong);
+        border-radius: 0;
+        background: transparent;
+        color: var(--ink);
+        font: 12px/1.3 var(--ui-sans);
+        letter-spacing: 0;
+        text-transform: none;
+      }
+
+      .controls select { cursor: pointer; }
+
+      .controls .wide { grid-column: 1 / -1; }
+
+      .controls .check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 32px;
+        color: var(--ink);
+        font: 12px/1.3 var(--ui-sans);
+        letter-spacing: 0;
+        text-transform: none;
+        cursor: pointer;
+      }
+
+      .controls .check input { width: 14px; height: 14px; accent-color: var(--accent); margin: 0; }
+
+      .range-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .range-row input[type='range'] { width: 100%; accent-color: var(--accent); }
+
+      .range-row output {
+        min-width: 4.5ch;
+        color: var(--ink);
+        font: 11px/1.3 var(--mono);
+        text-align: right;
+      }
+
+      .controls button:hover:not(:disabled) { border-color: var(--ink); }
+      .controls button:disabled { opacity: 0.4; cursor: default; }
+
+      /* The exact sizes. Two grounds, actual pixels. */
+      .ladder { margin-top: 28px; border: 1px solid var(--line-strong); }
+
+      .ladder-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 20px 28px;
+        min-height: 152px;
+        padding: 20px;
+      }
+
+      .ladder-row + .ladder-row { border-top: 1px solid var(--line-strong); }
+      .ladder-row.paper { background: var(--paper); }
+      .ladder-row.ink { background: var(--ink); }
+
+      .size { margin: 0; display: grid; justify-items: center; gap: 9px; }
+      .size-box { display: grid; place-items: center; }
+      .size figcaption {
+        color: var(--muted);
+        font: 9.5px/1.2 var(--mono);
+        letter-spacing: 0.06em;
+      }
+      .ladder-row.ink .size figcaption { color: #9c9a91; }
+
+      /* --- Directions ------------------------------------------------------ */
+
+      .directions {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 12px;
+      }
+
+      .direction {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        background: transparent;
+        text-align: left;
+      }
+
+      .direction:hover { border-color: var(--line-strong); }
+      .direction[aria-pressed='true'] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+      .direction .mark { width: 56px; height: 56px; }
+      .direction strong { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; }
+      .direction span { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+      .direction em { display: block; margin-top: 6px; color: #8b4a3a; font: normal 9.5px/1.3 var(--mono); }
+
+      /* --- Construction ---------------------------------------------------- */
+
+      .construction {
+        display: grid;
+        grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
+        gap: 32px;
+        align-items: start;
+      }
+
+      .construction > * { min-width: 0; }
+
+      .gridstage {
+        width: 100%;
+        aspect-ratio: 1;
+        border: 1px solid var(--line-strong);
+        background: var(--paper);
+        display: grid;
+        place-items: center;
+      }
+
+      .gridstage .mark { width: 100%; height: 100%; }
+
+      .paths { display: grid; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+      .paths li { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 12px; font-size: 12px; }
+      .paths code { color: var(--ink); font-weight: 500; }
+      .paths span { color: var(--muted); }
+
+      pre {
+        margin: 0;
+        padding: 14px;
+        max-width: 100%;
+        max-height: 300px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        background: #eeeadf;
+        color: #2b2b28;
+        font-size: 11px;
+        line-height: 1.55;
+        white-space: pre;
+      }
+
+      .source-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+      .source-actions button {
+        min-height: 30px;
+        padding: 4px 10px;
+        border: 1px solid var(--line-strong);
+        border-radius: 0;
+        background: transparent;
+        font: 11px/1.3 var(--mono);
+      }
+      .source-actions button:hover:not(:disabled) { border-color: var(--ink); }
+      .source-actions button:disabled { opacity: 0.4; cursor: default; }
+      .source-actions span { color: var(--muted); font: 10px/1.4 var(--mono); }
+
+      /* --- Type ------------------------------------------------------------ */
+
+      .font-options {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 12px;
+      }
+
+      .font-option {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0 14px;
+        align-items: baseline;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        background: transparent;
+        text-align: left;
+      }
+
+      .font-option:hover { border-color: var(--line-strong); }
+      .font-option[aria-pressed='true'] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+      .font-option .sample-cjk { font-size: 40px; line-height: 1; }
+      .font-option .sample { display: none; }
+      .font-option .label { grid-column: 1 / -1; margin-top: 10px; color: var(--ink); font-size: 11.5px; line-height: 1.4; }
+      .font-option .license { grid-column: 1 / -1; color: var(--muted); font: 9.5px/1.4 var(--mono); }
+
+      .font-specimen {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        align-items: end;
+        margin-top: 12px;
+        padding: 24px;
+        border: 1px solid var(--line);
+      }
+
+      .specimen-wordmark {
+        margin: 0;
+        font-family: var(--ui-sans);
+        font-size: clamp(32px, 6vw, 64px);
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+
+      .specimen-wordmark span { color: var(--muted); font-size: 0.32em; font-weight: 400; }
+
+      .specimen-cjk {
+        margin: 0;
+        font-family: var(--brand-cjk);
+        font-size: clamp(64px, 10vw, 120px);
+        line-height: 1;
+      }
+
+      .font-meta { margin: 16px 0 0; color: var(--muted); font: 10.5px/1.5 var(--mono); }
+
+      /* --- Colour ---------------------------------------------------------- */
+
+      .colour-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 12px;
+      }
+
+      .colour-grid label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font: 10px/1.4 var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .colour-grid input[type='color'] {
+        width: 100%;
+        height: 42px;
+        padding: 2px;
+        border: 1px solid var(--line-strong);
+        border-radius: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .colour-grid .inline {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 42px;
+      }
+
+      .colour-grid .inline input[type='checkbox'] { width: 14px; height: 14px; accent-color: var(--accent); margin: 0; }
+
+      .contrast {
+        margin: 18px 0 0;
+        padding: 12px 0;
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        font: 11px/1.5 var(--mono);
+      }
+
+      .contrast strong { font-size: 14px; }
+      .contrast .bad { color: #a4341e; }
+
+      .note { margin: 12px 0 0; max-width: 80ch; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+      /* --- Lockup ---------------------------------------------------------- */
+
+      .lockups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      .lockup {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 20px;
+        border: 1px solid var(--line);
+        font-family: var(--ui-sans);
+      }
+      .lockup .mark { width: 48px; height: 48px; flex: 0 0 auto; }
+      .lockup strong { display: block; font-size: 25px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+      .lockup span { display: block; margin-top: 4px; font-size: 11px; }
+      .lockup.paper { background: var(--paper); color: var(--ink); }
+      .lockup.paper span { color: var(--muted); }
+      .lockup.ink { background: var(--ink); color: var(--paper); }
+      .lockup.ink span { color: #9c9a91; }
+      .lockup.accent { background: var(--accent); color: var(--paper); }
+      .lockup.accent span { color: rgba(244, 242, 236, 0.72); }
+
+      .rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+      .rules ul { margin: 0; padding-left: 18px; color: #3c3c38; }
+      .rules li { margin: 0 0 7px; }
+      .rules h3 { font: 10px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+      .decision { max-width: 78ch; }
+      .decision p { margin: 0 0 12px; }
+      .decision .aside { color: var(--muted); font-size: 12px; }
+
+      footer {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 24px 32px 48px;
+        color: var(--muted);
+        font: 10px/1.5 var(--mono);
+      }
+
+      @media (max-width: 900px) {
+        .masthead { grid-template-columns: 1fr; }
+        .masthead-mark { width: 240px; }
+        .bench, .construction { grid-template-columns: 1fr; }
+        .section-head { grid-template-columns: 40px minmax(0, 1fr); }
+        .section-head p { grid-column: 2; }
+        .lockups { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 620px) {
+        .masthead, .section, .toc, footer { padding-left: 20px; padding-right: 20px; }
+        .controls { grid-template-columns: 1fr; }
+        .controls .wide { grid-column: auto; }
+        .directions { grid-template-columns: 1fr; }
+        .rules { grid-template-columns: 1fr; }
+        .ladder-row { gap: 16px 20px; }
+        .section-head { grid-template-columns: 1fr; gap: 4px; }
+        .section-head p { grid-column: auto; }
+        .section-head .num { display: none; }
+        .font-specimen { grid-template-columns: 1fr; align-items: start; }
+        .specimen-cjk { justify-self: start; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <div class="brandline">
+          <span class="mark" id="brand-mark" aria-hidden="true"></span>
+          <span class="wordmark"><strong>IU</strong><span>Language Buddy</span></span>
+        </div>
+        <p class="kicker">Internal brand book, working page</p>
+        <h1 lang="zh-Hans">友</h1>
+        <p class="h1-en">the mark</p>
+        <p class="lede">
+          IU means I and you. 友 means friend in Mandarin, Japanese, Korean and
+          Hokkien, which is where the name came from. The mark, the type and the
+          colours are all open. This page is the decision tool: switch the
+          direction, the font, the tile and the colours, and judge the actual 16.
+        </p>
+      </div>
+      <div class="masthead-mark">
+        <span class="mark" id="hero-mark" aria-hidden="true"></span>
+        <p id="hero-caption">constructed, 16 grid</p>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Sections">
+      <a href="#workbench">Workbench</a>
+      <a href="#directions">Directions</a>
+      <a href="#construction">Construction</a>
+      <a href="#type">Type</a>
+      <a href="#colour">Colour</a>
+      <a href="#lockup">Lockup</a>
+      <a href="#rules">Rules</a>
+      <a href="#decision">Decision</a>
+    </nav>
+
+    <main>
+      <section class="section" id="workbench">
+        <div class="section-head">
+          <span class="num">01</span>
+          <h2>Workbench</h2>
+          <p>
+            The controls are real and every mark on this page is drawn from the
+            same paths. The ladder below is actual pixels, not a scaled picture.
+            The 16px row is the constraint; if the mark fails there it fails.
+          </p>
+        </div>
+
+        <div class="bench">
+          <div class="stage-wrap">
+            <div class="stage" id="stage">
+              <div id="stage-mark" class="mark" aria-hidden="true"></div>
+            </div>
+            <p class="caption" id="caption"></p>
+            <div class="logo-preview">
+              <span class="mark" id="logo-mark" aria-hidden="true"></span>
+              <div class="logo-wordmark"><strong>IU</strong><span>Language Buddy</span></div>
+            </div>
+          </div>
+
+          <div class="controls">
+            <label>
+              Direction
+              <select id="direction">
+                <option value="typeset">Typeset</option>
+                <option value="constructed">Constructed</option>
+                <option value="paper">Paper</option>
+                <option value="seal">Seal</option>
+                <option value="open">Open</option>
+                <option value="light">Light</option>
+              </select>
+            </label>
+            <label>
+              Tile
+              <select id="tile">
+                <option value="rounded">Rounded square</option>
+                <option value="square">Square</option>
+                <option value="none">None</option>
+              </select>
+            </label>
+            <label>
+              Starting colours
+              <select id="preset">
+                <option value="product">Product accent</option>
+                <option value="paper">Paper and ink</option>
+                <option value="deep">Deep blue</option>
+                <option value="ink">Ink</option>
+                <option value="custom">Custom</option>
+              </select>
+            </label>
+            <label>
+              Hanzi typeface
+              <select id="font">
+                <option value="plex">IBM Plex Sans SC</option>
+                <option value="noto">Noto Sans SC</option>
+                <option value="serif">Noto Serif SC</option>
+                <option value="wenkai">LXGW WenKai TC</option>
+                <option value="xiaowei">ZCOOL XiaoWei</option>
+                <option value="mashan">Ma Shan Zheng</option>
+                <option value="longcang">Long Cang</option>
+                <option value="zhimang">Zhi Mang Xing</option>
+                <option value="klee">Klee One</option>
+                <option value="yomogi">Yomogi</option>
+                <option value="zenkurenaido">Zen Kurenaido</option>
+                <option value="kaisei">Kaisei Decol</option>
+              </select>
+            </label>
+            <label>
+              Font weight
+              <select id="font-weight">
+                <option value="400">Regular</option>
+                <option value="500">Medium</option>
+                <option value="600">Semibold</option>
+              </select>
+            </label>
+            <label class="wide">
+              Stroke (constructed) <span class="range-row"><input id="weight" type="range" min="1.2" max="2.2" step="0.1" value="1.8" /><output id="weight-out">1.8</output></span>
+            </label>
+            <label class="check"><input id="grid" type="checkbox" /> Construction grid on the stage</label>
+            <button id="copy" type="button">Copy SVG</button>
+          </div>
+        </div>
+
+        <div class="ladder" id="ladder" aria-label="Actual size ladder"></div>
+      </section>
+
+      <section class="section" id="directions">
+        <div class="section-head">
+          <span class="num">02</span>
+          <h2>Directions</h2>
+          <p>
+            Typeset is the logo: the chosen hanzi face on a tile. Constructed is
+            the four-stroke fallback for 16px. Paper, Seal and Open are the same
+            typeset glyph in different treatments. Light is the constructed
+            weight variant.
+          </p>
+        </div>
+        <div class="directions" id="directions-grid"></div>
+      </section>
+
+      <section class="section" id="construction">
+        <div class="section-head">
+          <span class="num">03</span>
+          <h2>Construction</h2>
+          <p>
+            The typeset 友 is set on the 16 grid; the four paths below are the
+            constructed fallback. The tile is the field, not a card. If the
+            chosen face collapses at 16, the constructed drawing is the escape
+            hatch, not the default.
+          </p>
+        </div>
+
+        <div class="construction">
+          <div class="gridstage" id="construction-stage"></div>
+          <div>
+            <ul class="paths">
+              <li><code>top</code><span>M3.5 4.6 H13.5</span></li>
+              <li><code>丿</code><span>M7.6 1.8 L3 12.8</span></li>
+              <li><code>又 横撇</code><span>M5.8 7.6 H12.2 L7.2 13.6</span></li>
+              <li><code>又 捺</code><span>M5.8 7.6 L13.4 13.8</span></li>
+            </ul>
+            <pre id="source" aria-label="SVG source"></pre>
+            <div class="source-actions">
+              <button id="copy-source" type="button">Copy SVG</button>
+              <span id="copy-note"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="type">
+        <div class="section-head">
+          <span class="num">04</span>
+          <h2>Type</h2>
+          <p>
+            The logo is the hanzi. Choose the CJK face first; the wordmark is a
+            descriptor in the UI font, not the logo. Every face is SIL OFL, and
+            the final icon will outline the chosen glyph rather than ship a live
+            font.
+          </p>
+        </div>
+
+        <div class="font-options" id="font-options"></div>
+        <div class="font-specimen">
+          <div>
+            <p class="specimen-wordmark" id="specimen-wordmark">IU <span>Language Buddy</span></p>
+            <p class="font-meta" id="font-meta"></p>
+          </div>
+          <p class="specimen-cjk" id="specimen-cjk" lang="zh-Hans">友</p>
+        </div>
+        <p class="note">
+          The page opens at the provisional: Paper, Rounded Square, Paper and
+          ink, Zen Kurenaido 400. The selector changes 友 in the mark, the
+          ladder, the logo preview, the lockups and the specimen. The wordmark stays in the UI font; it is a
+          descriptor, not the logo. The page's UI, headings, controls and h1 stay
+          fixed. The chosen face is previewed with the live font, and the final
+          icon outlines it from the same OFL file. The IBM Plex Sans SC subset is
+          local in <code>tools/ui/fonts/</code> with its OFL; the other CJK faces
+          load from Google Fonts for review. Do not ship a live font.
+        </p>
+      </section>
+
+      <section class="section" id="colour">
+        <div class="section-head">
+          <span class="num">05</span>
+          <h2>Colour</h2>
+          <p>
+            The colours are not fixed. The preset above is a place to start;
+            these fields are the decision. The only hard constraint is contrast,
+            and the tile can be any colour you are willing to test.
+          </p>
+        </div>
+
+        <div class="colour-grid">
+          <label>Tile <input type="color" id="tile-color" value="#4f8cff" /></label>
+          <label>Glyph <input type="color" id="glyph-color" value="#ffffff" /></label>
+          <label>Tile border <span class="inline"><input type="checkbox" id="border" /> <input type="color" id="border-color" value="#111111" /></span></label>
+          <label>Stage ground <input type="color" id="ground-color" value="#f4f2ec" /></label>
+        </div>
+        <p class="contrast" id="contrast"></p>
+        <p class="note" id="colour-note"></p>
+      </section>
+
+      <section class="section" id="lockup">
+        <div class="section-head">
+          <span class="num">06</span>
+          <h2>Lockup</h2>
+          <p>
+            The mark is the meaning; the wordmark is the name. The wordmark uses
+            the chosen font, so this section is also a type test on paper, ink
+            and the current tile colour.
+          </p>
+        </div>
+        <div class="lockups">
+          <div class="lockup paper">
+            <span class="mark lockup-mark" aria-hidden="true"></span>
+            <div><strong>IU</strong><span>Language Buddy</span></div>
+          </div>
+          <div class="lockup ink">
+            <span class="mark lockup-mark" aria-hidden="true"></span>
+            <div><strong>IU</strong><span>Language Buddy</span></div>
+          </div>
+          <div class="lockup accent">
+            <span class="mark lockup-mark" aria-hidden="true"></span>
+            <div><strong>IU</strong><span>Language Buddy</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="rules">
+        <div class="section-head">
+          <span class="num">07</span>
+          <h2>Rules</h2>
+          <p>
+            Principles, not a palette. The type, the colours and the tile are
+            open; these are the things that would make the mark stop working.
+          </p>
+        </div>
+        <div class="rules">
+          <div>
+            <h3>Use</h3>
+            <ul>
+              <li>The chosen 友 glyph as the logo, outlined from its OFL file for the icon.</li>
+              <li>The constructed four-stroke fallback if the face collapses at 16.</li>
+              <li>Any tile and glyph that clear 3:1 for a graphic, and 4.5:1 if the glyph is read as text.</li>
+              <li>A tile shape that holds the glyph: rounded, square or none.</li>
+              <li>Clear space of at least one stroke width.</li>
+              <li>The 16px PNG at 100% as the last check.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Do not</h3>
+            <ul>
+              <li>Ship a live font. The final icon must be the outlined glyph, or the constructed paths; the preview may use the font.</li>
+              <li>Assume a brush 友 survives 16px. It is a trial, not a default; use it only if the 16px sample still reads.</li>
+              <li>Use a red seal, a speech bubble, a flag or a translation arrow. They are the wrong register.</li>
+              <li>Put IU inside the tile. The mark is 友; the wordmark is IU.</li>
+              <li>Recolour the icon per panel theme. The nine themes are the product, not the brand.</li>
+              <li>Add a gradient, shadow, bevel or outline.</li>
+              <li>Let the glyph and its ground fall below 3:1.</li>
+              <li>Stretch, rotate or crop the tile.</li>
+              <li>Put text inside the icon.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="decision">
+        <div class="section-head">
+          <span class="num">08</span>
+          <h2>Decision</h2>
+          <p>
+            Provisional choice: Paper, Rounded Square, Paper and ink, Zen
+            Kurenaido 400. The icon in <code>icons/</code> now uses that
+            outlined 友. It is not final.
+          </p>
+        </div>
+        <div class="decision">
+          <p>
+            The page opens at that state. Zen Kurenaido is provisional; it can be
+            replaced with another face, weight, tile or colour, and the icon
+            re-outlined. The wordmark is a descriptor in the UI font; the mark is
+            the 友.
+          </p>
+          <p>
+            The typeset preview relies on the live font. The icon does not: the
+            glyph is outlined into <code>icons/icon.svg</code>, and the font file
+            is not shipped. The constructed four-stroke drawing remains the
+            fallback if the face fails at 16px.
+          </p>
+          <p class="aside">
+            The book in <code>docs/BRAND-BOOK.md</code> records the provisional and
+            the constraints. The icon licence is in
+            <code>icons/OFL-ZenKurenaido.txt</code> and the notices.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Internal page, not shipped. Workbench: tools/ui/brand.html. Book: docs/BRAND-BOOK.md. Draft November 2026.
+    </footer>
+
+        <script>
+      const PATHS = {
+        top: 'M3.5 4.6H13.5',
+        pie: 'M7.6 1.8L3 12.8',
+        you1: 'M5.8 7.6H12.2L7.2 13.6',
+        you2: 'M5.8 7.6L13.4 13.8',
+      };
+
+      const HANZI_FACES = {
+        plex: {
+          label: 'IBM Plex Sans SC',
+          cjk: '"IBM Plex Sans SC", "Noto Sans SC", serif',
+          license: 'SIL OFL 1.1',
+          note: 'Humanist, open, a real Simplified Chinese face. The starting point.',
+        },
+        noto: {
+          label: 'Noto Sans SC',
+          cjk: '"Noto Sans SC", serif',
+          license: 'SIL OFL 1.1',
+          note: 'Neutral and highly legible; the Source Han Sans family.',
+        },
+        serif: {
+          label: 'Noto Serif SC',
+          cjk: '"Noto Serif SC", serif',
+          license: 'SIL OFL 1.1',
+          note: 'Editorial serif; the Source Han Serif family.',
+        },
+        wenkai: {
+          label: 'LXGW WenKai TC',
+          cjk: '"LXGW WenKai TC", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'Soft and calligraphic. Test the counters at 16.',
+        },
+        xiaowei: {
+          label: 'ZCOOL XiaoWei',
+          cjk: '"ZCOOL XiaoWei", serif',
+          license: 'SIL OFL 1.1',
+          note: 'A display serif with more character; test it at 16.',
+        },
+        mashan: {
+          label: 'Ma Shan Zheng',
+          cjk: '"Ma Shan Zheng", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'Brush calligraphy. The most calligraphic test on the page; check 16.',
+        },
+        longcang: {
+          label: 'Long Cang',
+          cjk: '"Long Cang", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'Running brush script. Loose and fast; check 16.',
+        },
+        zhimang: {
+          label: 'Zhi Mang Xing',
+          cjk: '"Zhi Mang Xing", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'A lighter brush hand; check the counters at 16.',
+        },
+        klee: {
+          label: 'Klee One',
+          cjk: '"Klee One", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'Japanese pen calligraphy; text-like with a slight lean.',
+        },
+        yomogi: {
+          label: 'Yomogi',
+          cjk: '"Yomogi", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'Japanese handwriting; a touch more casual than WenKai.',
+        },
+        zenkurenaido: {
+          label: 'Zen Kurenaido',
+          cjk: '"Zen Kurenaido", cursive',
+          license: 'SIL OFL 1.1',
+          note: 'Japanese pen; text-like, only slightly calligraphic.',
+        },
+        kaisei: {
+          label: 'Kaisei Decol',
+          cjk: '"Kaisei Decol", serif',
+          license: 'SIL OFL 1.1',
+          note: 'A Mincho with a slight calligraphic edge; still text.',
+        },
+      };
+
+      const PRESETS = {
+        product: { tile: '#4f8cff', glyph: '#ffffff', border: false, borderColor: '#111111' },
+        paper: { tile: '#efe5d1', glyph: '#17130d', border: true, borderColor: '#2a2318' },
+        deep: { tile: '#2f5fd0', glyph: '#ffffff', border: false, borderColor: '#111111' },
+        ink: { tile: '#111111', glyph: '#f4f2ec', border: false, borderColor: '#111111' },
+      };
+
+      const OPEN_COLOURS = { tile: '#4f8cff', glyph: '#4f8cff', border: false, borderColor: '#111111' };
+
+      const DIRECTIONS = {
+        typeset: {
+          glyph: 'typeset', tile: 'rounded', preset: 'product',
+          label: 'Typeset',
+          note: 'The chosen hanzi face on the tile. This is the logo.',
+        },
+        constructed: {
+          glyph: 'constructed', tile: 'rounded', preset: 'product', weight: 1.8,
+          label: 'Constructed',
+          note: 'The four-stroke fallback; use it only if the chosen face collapses at 16.',
+        },
+        paper: {
+          glyph: 'typeset', tile: 'rounded', preset: 'paper',
+          label: 'Paper',
+          note: 'The chosen face, ink on paper.',
+        },
+        seal: {
+          glyph: 'typeset', tile: 'square', preset: 'deep',
+          label: 'Seal',
+          note: 'The chosen face, square and deep blue.',
+        },
+        open: {
+          glyph: 'typeset', tile: 'none', preset: 'custom', colours: OPEN_COLOURS,
+          label: 'Open',
+          note: 'The chosen face with no tile; dark grounds only.',
+        },
+        light: {
+          glyph: 'constructed', tile: 'rounded', preset: 'product', weight: 1.4,
+          label: 'Light',
+          note: 'The constructed fallback at 1.4px; too thin at 16.',
+        },
+      };
+
+      const state = {
+        direction: 'paper',
+        glyph: 'typeset',
+        tile: 'rounded',
+        preset: 'paper',
+        tileColor: '#efe5d1',
+        glyphColor: '#17130d',
+        border: true,
+        borderColor: '#2a2318',
+        groundColor: '#f4f2ec',
+        weight: 1.8,
+        font: 'zenkurenaido',
+        fontWeight: 400,
+        grid: false,
+      };
+
+      const $ = (selector) => document.querySelector(selector);
+
+      const lum = (hex) => {
+        const h = hex.replace('#', '');
+        const rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+        const [r, g, b] = rgb.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+
+      const contrast = (a, b) => {
+        const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+        return (hi + 0.05) / (lo + 0.05);
+      };
+
+      const gridPath = (colour, majorOnly = false) => {
+        const fine = [];
+        const major = [];
+        for (let i = 1; i < 16; i += 1) {
+          if (i % 4 === 0) major.push(`M${i} 0V16`, `M0 ${i}H16`);
+          else if (!majorOnly) fine.push(`M${i} 0V16`, `M0 ${i}H16`);
+        }
+        const parts = [];
+        if (fine.length) parts.push(`<path d="${fine.join('')}" stroke="${colour}" stroke-width="0.06" opacity=".28"/>`);
+        if (major.length) parts.push(`<path d="${major.join('')}" stroke="${colour}" stroke-width="0.12" opacity=".42"/>`);
+        return parts.join('');
+      };
+
+      const tileMarkup = (tile, colours) => {
+        if (tile === 'none') return '';
+        const rx = tile === 'square' ? 0 : 3.5;
+        const border = colours.border ? ` stroke="${colours.borderColor}" stroke-width="0.7"` : '';
+        return `<rect width="16" height="16" rx="${rx}" fill="${colours.tile}"${border}/>`;
+      };
+
+      const glyphMarkup = (glyph, colours, weight, cjk, fontWeight) => {
+        if (glyph === 'typeset') {
+          return `<text x="8" y="13.6" text-anchor="middle" font-family='${cjk}' font-size="14" font-weight="${fontWeight}" fill="${colours.glyph}">友</text>`;
+        }
+        const w = weight ?? 1.8;
+        return `<g fill="none" stroke="${colours.glyph}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">
+          <path d="${PATHS.top}"/><path d="${PATHS.pie}"/><path d="${PATHS.you1}"/><path d="${PATHS.you2}"/>
+        </g>`;
+      };
+
+      const coloursFor = (direction) => {
+        const d = DIRECTIONS[direction];
+        return d.colours ?? PRESETS[d.preset] ?? PRESETS.product;
+      };
+
+      const stateColours = () => ({
+        tile: state.tileColor,
+        glyph: state.glyphColor,
+        border: state.border,
+        borderColor: state.borderColor,
+      });
+
+      const svgMark = ({
+        size,
+        direction = state.direction,
+        glyph = state.glyph,
+        tile = state.tile,
+        colours = stateColours(),
+        weight = state.weight,
+        fontWeight = state.fontWeight,
+        font = state.font,
+        grid = false,
+        gridColor = '#111111',
+      }) => {
+        const face = HANZI_FACES[font];
+        const gridMarkup = grid ? gridPath(gridColor) : '';
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" focusable="false">
+          ${tileMarkup(tile, colours)}${glyphMarkup(glyph, colours, weight, face.cjk, fontWeight)}${gridMarkup}
+        </svg>`;
+      };
+
+      const svgSource = () => {
+        const colours = { tile: state.tileColor, glyph: state.glyphColor, border: state.border, borderColor: state.borderColor };
+        const face = HANZI_FACES[state.font];
+        const body = state.glyph === 'typeset'
+          ? `<text x="8" y="13.6" text-anchor="middle" font-family='${face.cjk}' font-size="14" font-weight="${state.fontWeight}" fill="${colours.glyph}">友</text>`
+          : `<g fill="none" stroke="${colours.glyph}" stroke-width="${state.weight}" stroke-linecap="round" stroke-linejoin="round">
+    <path d="${PATHS.top}"/>
+    <path d="${PATHS.pie}"/>
+    <path d="${PATHS.you1}"/>
+    <path d="${PATHS.you2}"/>
+  </g>`;
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="IU">
+  ${tileMarkup(state.tile, colours)}
+  ${body}
+</svg>`;
+      };
+
+      const svgConstruction = () => {
+        const grid = gridPath('#6b6b66', true);
+        const colours = { tile: state.tileColor, glyph: state.glyphColor, border: state.border, borderColor: state.borderColor };
+        const face = HANZI_FACES[state.font];
+        const tile = state.tile === 'none' ? '' : tileMarkup(state.tile, colours);
+        const rx = state.tile === 'square' ? 0 : 3.5;
+        const outline = state.tile === 'none' ? '' : `<rect x="0.25" y="0.25" width="15.5" height="15.5" rx="${rx}" fill="none" stroke="#6b6b66" stroke-width="0.16" stroke-dasharray="0.4 0.4"/>`;
+        const glyph = state.glyph === 'typeset'
+          ? `<text x="8" y="13.6" text-anchor="middle" font-family='${face.cjk}' font-size="14" font-weight="${state.fontWeight}" fill="#111">友</text>`
+          : `<g fill="none" stroke="#111" stroke-width="${state.weight}" stroke-linecap="round" stroke-linejoin="round">
+            <path d="${PATHS.top}"/><path d="${PATHS.pie}"/><path d="${PATHS.you1}"/><path d="${PATHS.you2}"/>
+          </g>`;
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          ${tile}${outline}${glyph}${grid}
+        </svg>`;
+      };
+
+      const effectiveGround = () => (state.tile === 'none' ? state.groundColor : state.tileColor);
+
+      const caption = () => {
+        const ratio = contrast(state.glyphColor, effectiveGround());
+        const text = `${ratio.toFixed(2)}:1`;
+        const status = ratio >= 3 ? text : `<span class="warn">${text} below 3:1</span>`;
+        if (state.glyph === 'typeset') {
+          return `<strong>${DIRECTIONS[state.direction].label}</strong> · ${HANZI_FACES[state.font].label} ${state.fontWeight} · glyph on ${state.tile === 'none' ? 'ground' : 'tile'} · ${status}`;
+        }
+        return `<strong>${DIRECTIONS[state.direction].label}</strong> · ${state.weight.toFixed(1)}px stroke · glyph on ${state.tile === 'none' ? 'ground' : 'tile'} · ${status}`;
+      };
+
+      const sizes = [16, 24, 32, 48, 128];
+
+      const renderLadder = () => {
+        const root = $('#ladder');
+        root.innerHTML = ['paper', 'ink'].map((ground) => `<div class="ladder-row ${ground}">
+          ${sizes.map((size) => `<figure class="size" data-size="${size}">
+            <div class="size-box" data-size="${size}"></div>
+            <figcaption>${size}</figcaption>
+          </figure>`).join('')}
+        </div>`).join('');
+        for (const box of root.querySelectorAll('.size-box')) {
+          const size = Number(box.dataset.size);
+          box.innerHTML = svgMark({ size });
+        }
+      };
+
+      const renderDirections = () => {
+        const root = $('#directions-grid');
+        root.innerHTML = Object.entries(DIRECTIONS).map(([id, d]) => `<button type="button" class="direction" data-direction="${id}" aria-pressed="${id === state.direction}">
+          <span class="mark" aria-hidden="true">${svgMark({ size: 56, direction: id, glyph: d.glyph, tile: d.tile, colours: coloursFor(id), weight: d.weight ?? 1.8 })}</span>
+          <span><strong>${d.label}</strong><span>${d.note}</span></span>
+        </button>`).join('');
+      };
+
+      const renderStage = () => {
+        const stage = $('#stage');
+        stage.style.backgroundColor = state.groundColor;
+        const paper = state.preset === 'paper' || state.tileColor === PRESETS.paper.tile;
+        stage.classList.toggle('is-paper', paper);
+        const gridColor = lum(state.groundColor) > 0.5 ? '#111111' : '#ffffff';
+        $('#stage-mark').innerHTML = svgMark({ size: 220, grid: state.grid, gridColor });
+        $('#caption').innerHTML = caption();
+      };
+
+      const renderConstruction = () => {
+        const previewOnly = state.glyph === 'typeset';
+        $('#construction-stage').innerHTML = svgConstruction();
+        $('#source').textContent = svgSource();
+        $('#copy-source').disabled = previewOnly;
+        $('#copy').disabled = previewOnly;
+        $('#copy-note').textContent = previewOnly
+          ? 'Typeset preview. The final icon outlines this glyph.'
+          : 'This is the 16px constructed master.';
+        $('#copy').textContent = previewOnly ? 'Outline needed' : 'Copy SVG';
+        $('#copy-source').textContent = previewOnly ? 'Outline needed' : 'Copy SVG';
+      };
+
+      const renderFonts = () => {
+        const face = HANZI_FACES[state.font];
+        document.documentElement.style.setProperty('--brand-cjk', face.cjk);
+        $('#font-meta').textContent = `${face.license} · ${face.note}`;
+        $('#specimen-cjk').textContent = '友';
+        for (const button of document.querySelectorAll('.font-option')) {
+          button.setAttribute('aria-pressed', String(button.dataset.font === state.font));
+        }
+      };
+
+      const renderFontOptions = () => {
+        const root = $('#font-options');
+        root.innerHTML = Object.entries(HANZI_FACES).map(([id, p]) => `<button type="button" class="font-option" data-font="${id}" aria-pressed="${id === state.font}">
+          <span class="sample-cjk" style='font-family:${p.cjk}'>友</span>
+          <span class="label">${p.label}</span>
+          <span class="license">${p.license}</span>
+        </button>`).join('');
+      };
+
+      const renderContrast = () => {
+        const ratio = contrast(state.glyphColor, effectiveGround());
+        const text = `${ratio.toFixed(2)}:1`;
+        $('#contrast').innerHTML = `<strong>${text}</strong> glyph on ${state.tile === 'none' ? 'stage ground' : 'tile'} · ${
+          ratio >= 3 ? 'passes 3:1 for a graphic' : '<span class="bad">below 3:1</span>'
+        } · ${ratio >= 4.5 ? 'passes 4.5:1 for text' : 'not text contrast'}`;
+        $('#colour-note').textContent = 'These values are the mark. The preset is only a starting point; change anything that clears the contrast you need.';
+      };
+
+      const renderLockups = () => {
+        for (const mark of document.querySelectorAll('.lockup-mark')) mark.innerHTML = svgMark({ size: 48 });
+      };
+
+      const renderControls = () => {
+        $('#direction').value = state.direction;
+        $('#tile').value = state.tile;
+        $('#preset').value = state.preset;
+        $('#font').value = state.font;
+        $('#font-weight').value = String(state.fontWeight);
+        $('#weight').value = String(state.weight);
+        $('#weight-out').textContent = state.weight.toFixed(1);
+        const constructed = state.glyph === 'constructed';
+        $('#font').disabled = constructed;
+        $('#font-weight').disabled = constructed;
+        $('#weight').disabled = !constructed;
+        $('#grid').checked = state.grid;
+        $('#tile-color').value = state.tileColor;
+        $('#glyph-color').value = state.glyphColor;
+        $('#border').checked = state.border;
+        $('#border-color').value = state.borderColor;
+        $('#ground-color').value = state.groundColor;
+      };
+
+      const render = () => {
+        const face = HANZI_FACES[state.font];
+        document.documentElement.style.setProperty('--brand-cjk', face.cjk);
+        document.documentElement.style.setProperty('--accent', state.tile === 'none' ? state.glyphColor : state.tileColor);
+        renderControls();
+        renderStage();
+        renderLadder();
+        renderConstruction();
+        renderLockups();
+        renderFonts();
+        renderContrast();
+        for (const button of document.querySelectorAll('.direction')) {
+          button.setAttribute('aria-pressed', String(button.dataset.direction === state.direction));
+        }
+        $('#brand-mark').innerHTML = svgMark({ size: 40 });
+        $('#hero-mark').innerHTML = svgMark({ size: 160 });
+        $('#logo-mark').innerHTML = svgMark({ size: 48 });
+        const paper = state.preset === 'paper' || state.tileColor === PRESETS.paper.tile;
+        $('.logo-preview').classList.toggle('is-paper', paper);
+        for (const row of document.querySelectorAll('.ladder-row.paper')) row.classList.toggle('is-paper', paper);
+        for (const lockup of document.querySelectorAll('.lockup.paper')) lockup.classList.toggle('is-paper', paper);
+        $('#hero-caption').textContent = state.glyph === 'typeset'
+          ? `${face.label}, ${state.fontWeight}`
+          : `${DIRECTIONS[state.direction].label.toLowerCase()}, ${state.weight.toFixed(1)}px stroke`;
+      };
+
+      const applyColours = (colours) => {
+        state.tileColor = colours.tile;
+        state.glyphColor = colours.glyph;
+        state.border = colours.border;
+        state.borderColor = colours.borderColor;
+      };
+
+      const applyPreset = (id) => {
+        if (id === 'custom') {
+          state.preset = 'custom';
+          render();
+          return;
+        }
+        const p = PRESETS[id];
+        if (!p) return;
+        state.preset = id;
+        applyColours(p);
+        render();
+      };
+
+      const applyDirection = (id) => {
+        const d = DIRECTIONS[id];
+        state.direction = id;
+        state.glyph = d.glyph;
+        state.tile = d.tile;
+        state.weight = d.weight ?? 1.8;
+        state.preset = d.preset;
+        applyColours(d.colours ?? PRESETS[d.preset] ?? PRESETS.product);
+        render();
+      };
+
+      const setCustom = () => {
+        state.preset = 'custom';
+      };
+
+      const copy = async (button) => {
+        if (state.glyph === 'typeset') return;
+        try {
+          await navigator.clipboard.writeText(svgSource());
+          const old = button.textContent;
+          button.textContent = 'Copied';
+          setTimeout(() => { button.textContent = old; }, 1200);
+        } catch {
+          button.textContent = 'Select the source';
+          setTimeout(() => { button.textContent = 'Copy SVG'; }, 1600);
+        }
+      };
+
+      $('#direction').addEventListener('change', (event) => applyDirection(event.target.value));
+      $('#tile').addEventListener('change', (event) => { state.tile = event.target.value; render(); });
+      $('#preset').addEventListener('change', (event) => applyPreset(event.target.value));
+      $('#font').addEventListener('change', (event) => { state.font = event.target.value; render(); });
+      $('#font-weight').addEventListener('change', (event) => { state.fontWeight = Number(event.target.value); render(); });
+      $('#weight').addEventListener('input', (event) => { state.weight = Number(event.target.value); render(); });
+      $('#grid').addEventListener('change', (event) => { state.grid = event.target.checked; render(); });
+      $('#copy').addEventListener('click', (event) => copy(event.currentTarget));
+      $('#copy-source').addEventListener('click', (event) => copy(event.currentTarget));
+
+      for (const [id, key] of [['tile-color', 'tileColor'], ['glyph-color', 'glyphColor'], ['border-color', 'borderColor']]) {
+        $('#' + id).addEventListener('input', (event) => {
+          state[key] = event.target.value;
+          setCustom();
+          render();
+        });
+      }
+
+      $('#border').addEventListener('change', (event) => {
+        state.border = event.target.checked;
+        setCustom();
+        render();
+      });
+
+      $('#ground-color').addEventListener('input', (event) => {
+        state.groundColor = event.target.value;
+        render();
+      });
+
+      $('#directions-grid').addEventListener('click', (event) => {
+        const button = event.target.closest('.direction');
+        if (button) applyDirection(button.dataset.direction);
+      });
+
+      $('#font-options').addEventListener('click', (event) => {
+        const button = event.target.closest('.font-option');
+        if (!button) return;
+        state.font = button.dataset.font;
+        render();
+      });
+
+      renderFontOptions();
+      render();
+    </script>
+
+  </body>
+</html>

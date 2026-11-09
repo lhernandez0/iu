@@ -121,7 +121,7 @@
   line-height: 1.1;
   /* Dimmer than the text it annotates. Annotation is secondary by definition, the
      marks are the thing being pointed at, and they keep the strong colour. */
-  color: var(--muted, #8b93a7);
+  color: var(--muted);
   /* Pinyin runs long, and a reading that wraps breaks the association it exists to
      make. */
   white-space: nowrap;
@@ -132,7 +132,7 @@
   display: block;
   margin-top: 2px;
   line-height: 1.35;
-  color: var(--muted, #8b93a7);
+  color: var(--muted);
   /* Visible here in a way it is not in ruby, because the reading is one run rather
      than a word at a time. */
   word-spacing: 0.12em;
@@ -156,10 +156,10 @@
   z-index: 10;
   max-width: 260px;
   padding: 8px 10px;
-  border: 1px solid #3a3f4b;
-  border-radius: 6px;
-  background: #1b1e26;
-  box-shadow: 0 6px 18px rgb(0 0 0 / 45%);
+  border: 1px solid var(--popover-border);
+  border-radius: var(--radius-md);
+  background: var(--popover-bg);
+  box-shadow: var(--shadow-card);
   font-size: calc(12px * var(--text-scale, 1));
   line-height: 1.45;
   pointer-events: none;

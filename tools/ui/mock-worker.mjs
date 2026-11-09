@@ -323,6 +323,10 @@ export function createMockWorker(scenario) {
         // show the other treatment, and a missing value would look identical to a
         // deliberate one. The mock reports what the worker reports.
         markStyle: settings.markStyle,
+        // The visual language, reported the way the worker reports it. Without it
+        // the preview could not show a theme at all, and an absent value would look
+        // identical to the default.
+        theme: settings.theme,
         // The reading placement and tone style, reported the way the worker
         // reports them, the panel reads all three from `learning`, and a preview
         // that omitted them would render no readings whatever was selected.

@@ -237,7 +237,7 @@ subtitles of the video you are already watching.
 
 | Version | Date | Summary |
 |---------|------|---------|
-| 0.1.0 | - | Not submitted. Reading YouTube subtitles in the side panel with word-list marking, hover definitions, bilingual tracks and export; plus a viewer for a local MKV or MP4 that reads the subtitle tracks inside the file and lets you choose the audio track. |
+| 0.1.0 | - | Not submitted. Reading YouTube subtitles in the side panel with word-list marking, hover definitions, bilingual tracks; plus a viewer for a local MKV or MP4 that reads the subtitle tracks inside the file and lets you choose the audio track. |
 
 <!-- No entry above is a real submission. The table exists so the first real one
      has somewhere to go. -->

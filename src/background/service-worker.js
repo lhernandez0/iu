@@ -1536,9 +1536,18 @@ function rebuildRows(entry) {
     entry.markedWith = null;
   }
 
-  const primary = entry.tracks.get(trackKey(entry.studyLang ?? '', effectiveTranslation(entry, 'study')))?.segments ?? [];
-  const secondary = entry.glossLang
-    ? entry.tracks.get(trackKey(entry.glossLang, effectiveTranslation(entry, 'gloss')))?.segments ?? []
+  const primaryKey = trackKey(entry.studyLang ?? '', effectiveTranslation(entry, 'study'));
+  const primary = entry.tracks.get(primaryKey)?.segments ?? [];
+  // A gloss that resolves to the SAME track as the study is not a second line.
+  // Aligning the study against itself put every line's own text on the line below
+  // it, which read as duplicated subtitles. The key, not the language alone,
+  // because a translated gloss into the same language is a genuinely different
+  // track and must survive.
+  const glossKey = entry.glossLang
+    ? trackKey(entry.glossLang, effectiveTranslation(entry, 'gloss'))
+    : null;
+  const secondary = glossKey && glossKey !== primaryKey
+    ? entry.tracks.get(glossKey)?.segments ?? []
     : [];
   const aligned = secondary.length && primary.length ? alignSecondary(primary, secondary) : null;
 
@@ -1823,6 +1832,10 @@ function learningState(entry = null) {
     // than being read from storage by the panel, one owner for settings, and the
     // panel already has the value in hand when it renders.
     markStyle: settings.markStyle,
+    // Which visual language the panel and the viewer wear. Sent with the rest of the
+    // presentation settings so neither surface reads storage itself.
+    theme: settings.theme,
+    viewerTheme: settings.viewerTheme,
     // Where a word's reading goes, and how it is written. Sent like the other
     // presentation settings rather than read from storage by the panel, one owner
     // for settings, and the panel has the value in hand when it renders.
