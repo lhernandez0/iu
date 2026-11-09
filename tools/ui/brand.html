@@ -13,6 +13,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500&text=%E5%8F%8B&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC&text=%E5%8F%8B&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500&text=%E5%8F%8B&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&text=%E5%8F%8B&display=swap" rel="stylesheet" />
     <style>
       /*
        * Internal brand workbench. Not shipped, not part of the extension.
@@ -83,7 +84,7 @@
       }
 
       .brandline .mark { width: 40px; height: 40px; flex: 0 0 auto; }
-      .wordmark { font-family: var(--brand-sans); line-height: 1.1; }
+      .wordmark { font-family: var(--ui-sans); line-height: 1.1; }
       .wordmark strong { display: block; font-size: 17px; font-weight: 600; letter-spacing: 0.01em; }
       .wordmark span { display: block; color: var(--muted); font-size: 11px; }
 
@@ -218,6 +219,20 @@
 
       .caption strong { color: var(--ink); font-weight: 600; }
       .caption .warn { color: #a4341e; }
+
+      .logo-preview {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-top: 14px;
+        padding: 14px;
+        border: 1px solid var(--line);
+      }
+
+      .logo-preview .mark { width: 48px; height: 48px; flex: 0 0 auto; }
+      .logo-preview .logo-wordmark { font-family: var(--ui-sans); line-height: 1; }
+      .logo-preview strong { display: block; font-size: 28px; font-weight: 600; letter-spacing: -0.01em; }
+      .logo-preview span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
 
       .controls {
         display: grid;
@@ -413,8 +428,8 @@
 
       .font-option:hover { border-color: var(--line-strong); }
       .font-option[aria-pressed='true'] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-      .font-option .sample { font-size: 26px; line-height: 1.1; }
-      .font-option .sample-cjk { font-size: 26px; line-height: 1.1; justify-self: end; }
+      .font-option .sample-cjk { font-size: 40px; line-height: 1; }
+      .font-option .sample { display: none; }
       .font-option .label { grid-column: 1 / -1; margin-top: 10px; color: var(--ink); font-size: 11.5px; line-height: 1.4; }
       .font-option .license { grid-column: 1 / -1; color: var(--muted); font: 9.5px/1.4 var(--mono); }
 
@@ -430,7 +445,7 @@
 
       .specimen-wordmark {
         margin: 0;
-        font-family: var(--brand-sans);
+        font-family: var(--ui-sans);
         font-size: clamp(32px, 6vw, 64px);
         font-weight: 600;
         line-height: 1;
@@ -506,7 +521,7 @@
         gap: 14px;
         padding: 20px;
         border: 1px solid var(--line);
-        font-family: var(--brand-sans);
+        font-family: var(--ui-sans);
       }
       .lockup .mark { width: 48px; height: 48px; flex: 0 0 auto; }
       .lockup strong { display: block; font-size: 25px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
@@ -611,18 +626,22 @@
               <div id="stage-mark" class="mark" aria-hidden="true"></div>
             </div>
             <p class="caption" id="caption"></p>
+            <div class="logo-preview">
+              <span class="mark" id="logo-mark" aria-hidden="true"></span>
+              <div class="logo-wordmark"><strong>IU</strong><span>Language Buddy</span></div>
+            </div>
           </div>
 
           <div class="controls">
             <label>
               Direction
               <select id="direction">
+                <option value="typeset">Typeset</option>
                 <option value="constructed">Constructed</option>
                 <option value="paper">Paper</option>
                 <option value="seal">Seal</option>
                 <option value="open">Open</option>
                 <option value="light">Light</option>
-                <option value="full">Source glyph</option>
               </select>
             </label>
             <label>
@@ -644,18 +663,25 @@
               </select>
             </label>
             <label>
-              Typeface
+              Hanzi typeface
               <select id="font">
-                <option value="plex">IBM Plex Sans + IBM Plex Sans SC</option>
-                <option value="source">Source Sans 3 + Noto Sans SC</option>
-                <option value="inter">Inter + Noto Sans SC</option>
-                <option value="manrope">Manrope + LXGW WenKai TC</option>
-                <option value="newsreader">Newsreader + Noto Serif SC</option>
-                <option value="grotesk">Space Grotesk + Noto Sans SC</option>
+                <option value="plex">IBM Plex Sans SC</option>
+                <option value="noto">Noto Sans SC</option>
+                <option value="serif">Noto Serif SC</option>
+                <option value="wenkai">LXGW WenKai TC</option>
+                <option value="xiaowei">ZCOOL XiaoWei</option>
+              </select>
+            </label>
+            <label>
+              Font weight
+              <select id="font-weight">
+                <option value="400">Regular</option>
+                <option value="500">Medium</option>
+                <option value="600">Semibold</option>
               </select>
             </label>
             <label class="wide">
-              Stroke <span class="range-row"><input id="weight" type="range" min="1.2" max="2.2" step="0.1" value="1.8" /><output id="weight-out">1.8</output></span>
+              Stroke (constructed) <span class="range-row"><input id="weight" type="range" min="1.2" max="2.2" step="0.1" value="1.8" /><output id="weight-out">1.8</output></span>
             </label>
             <label class="check"><input id="grid" type="checkbox" /> Construction grid on the stage</label>
             <button id="copy" type="button">Copy SVG</button>
@@ -670,9 +696,10 @@
           <span class="num">02</span>
           <h2>Directions</h2>
           <p>
-            Six drawings, not six palettes. Click one to load it above, then
-            change anything. The source glyph is a reference only; it is typeset
-            and cannot be shipped as the mark.
+            Typeset is the logo: the chosen hanzi face on a tile. Constructed is
+            the four-stroke fallback for 16px. Paper, Seal and Open are the same
+            typeset glyph in different treatments. Light is the constructed
+            weight variant.
           </p>
         </div>
         <div class="directions" id="directions-grid"></div>
@@ -683,10 +710,10 @@
           <span class="num">03</span>
           <h2>Construction</h2>
           <p>
-            A 16 by 16 grid, a 3.5 radius tile, four paths and one stroke weight.
-            The 丿 starts above the top bar and crosses it; the 又 is a horizontal
-            with two diagonals meeting under it. The tile is the field, not a
-            card.
+            The typeset 友 is set on the 16 grid; the four paths below are the
+            constructed fallback. The tile is the field, not a card. If the
+            chosen face collapses at 16, the constructed drawing is the escape
+            hatch, not the default.
           </p>
         </div>
 
@@ -713,10 +740,10 @@
           <span class="num">04</span>
           <h2>Type</h2>
           <p>
-            Open fonts only, all SIL OFL. The pair sets the logo wordmark and the
-            友 reference; the constructed mark does not use a font. The page's own
-            chrome and its h1 stay in IBM Plex Sans, so the selector cannot
-            re-typeset the book. The default is a starting point, not a verdict.
+            The logo is the hanzi. Choose the CJK face first; the wordmark is a
+            descriptor in the UI font, not the logo. Every face is SIL OFL, and
+            the final icon will outline the chosen glyph rather than ship a live
+            font.
           </p>
         </div>
 
@@ -729,13 +756,13 @@
           <p class="specimen-cjk" id="specimen-cjk" lang="zh-Hans">友</p>
         </div>
         <p class="note">
-          The selector changes the wordmark in the brandline, the lockups and the
-          specimen, plus the typeset 友 reference. The page's UI, headings,
-          controls and h1 stay fixed. The page loads the Latin fonts from Google
-          Fonts for review. The IBM Plex Sans SC subset is local in
-          <code>tools/ui/fonts/</code>, with its OFL beside it. The chosen font must be self-hosted in brand assets; the
-          extension panel keeps its system stack, so no font becomes a runtime
-          dependency.
+          The selector changes 友 in the mark, the ladder, the logo preview, the
+          lockups and the specimen. The wordmark stays in the UI font; it is a
+          descriptor, not the logo. The page's UI, headings, controls and h1 stay
+          fixed. The chosen face is previewed with the live font, and the final
+          icon outlines it from the same OFL file. The IBM Plex Sans SC subset is
+          local in <code>tools/ui/fonts/</code> with its OFL; the other CJK faces
+          load from Google Fonts for review. Do not ship a live font.
         </p>
       </section>
 
@@ -799,10 +826,10 @@
           <div>
             <h3>Use</h3>
             <ul>
-              <li>The constructed mark, not a CJK font glyph.</li>
+              <li>The chosen 友 glyph as the logo, outlined from its OFL file for the icon.</li>
+              <li>The constructed four-stroke fallback if the face collapses at 16.</li>
               <li>Any tile and glyph that clear 3:1 for a graphic, and 4.5:1 if the glyph is read as text.</li>
               <li>A tile shape that holds the glyph: rounded, square or none.</li>
-              <li>An open font for the wordmark, self-hosted with its OFL if it is shipped.</li>
               <li>Clear space of at least one stroke width.</li>
               <li>The 16px PNG at 100% as the last check.</li>
             </ul>
@@ -810,7 +837,7 @@
           <div>
             <h3>Do not</h3>
             <ul>
-              <li>Set the shipped mark in a font. The icon generator has no font, and a font would make the icon differ per machine.</li>
+              <li>Ship a live font. The final icon must be the outlined glyph, or the constructed paths; the preview may use the font.</li>
               <li>Use a brush 友, a red seal, a speech bubble, a flag or a translation arrow. They are the wrong register, and they collapse at 16.</li>
               <li>Put IU inside the tile. The mark is 友; the wordmark is IU.</li>
               <li>Recolour the icon per panel theme. The nine themes are the product, not the brand.</li>
@@ -834,22 +861,23 @@
         </div>
         <div class="decision">
           <p>
-            No decision yet. The page exists to make one. The starting point is
-            the Constructed mark, IBM Plex Sans, and the current product accent,
-            but the type, the colours, the tile, the stroke and the wordmark are
-            all open.
+            The logo is the 友 glyph. Choose the hanzi face first, then the tile,
+            colour and treatment. The wordmark is a descriptor in the UI font.
+            The final icon is the chosen glyph outlined from its OFL file, or the
+            constructed fallback. No decision yet; the current icon is still the
+            IU monogram.
           </p>
           <p>
-            Choose the font pair, the colours and the direction, then copy the
-            SVG. The book in <code>docs/BRAND-BOOK.md</code> records the
-            constraints; the page is the working surface. The current icon does
-            not change until you decide.
+            Choose the hanzi face, the colours and the direction. The copy button
+            is disabled for a typeset glyph because the preview is not the final
+            icon; the chosen face is outlined afterwards. The book in
+            <code>docs/BRAND-BOOK.md</code> records the constraints; the current
+            icon does not change until you decide.
           </p>
           <p class="aside">
-            The “Source glyph” is 友 typeset in the chosen font. It is a
-            reference only, and the page relies on the machine having a CJK font.
-            Do not copy it into <code>icons/</code>; the shipped mark must be the
-            constructed path set.
+            The typeset preview relies on the chosen CJK font. Do not copy the
+            <code>&lt;text&gt;</code> into <code>icons/</code>; outline the chosen
+            glyph first, or use the constructed fallback.
           </p>
         </div>
       </section>
@@ -859,7 +887,7 @@
       Internal page, not shipped. Workbench: tools/ui/brand.html. Book: docs/BRAND-BOOK.md. Draft November 2026.
     </footer>
 
-    <script>
+        <script>
       const PATHS = {
         top: 'M3.5 4.6H13.5',
         pie: 'M7.6 1.8L3 12.8',
@@ -867,48 +895,36 @@
         you2: 'M5.8 7.6L13.4 13.8',
       };
 
-      const FONT_PAIRS = {
+      const HANZI_FACES = {
         plex: {
-          label: 'IBM Plex Sans + IBM Plex Sans SC',
-          sans: '"IBM Plex Sans", system-ui, sans-serif',
+          label: 'IBM Plex Sans SC',
           cjk: '"IBM Plex Sans SC", "Noto Sans SC", serif',
           license: 'SIL OFL 1.1',
-          note: 'Humanist Latin and its Chinese sibling. A starting point, not a verdict.',
+          note: 'Humanist, open, a real Simplified Chinese face. The starting point.',
         },
-        source: {
-          label: 'Source Sans 3 + Noto Sans SC',
-          sans: '"Source Sans 3", system-ui, sans-serif',
+        noto: {
+          label: 'Noto Sans SC',
           cjk: '"Noto Sans SC", serif',
           license: 'SIL OFL 1.1',
-          note: 'A softer humanist Latin; Noto for the character.',
+          note: 'Neutral and highly legible; the Source Han Sans family.',
         },
-        inter: {
-          label: 'Inter + Noto Sans SC',
-          sans: '"Inter", system-ui, sans-serif',
-          cjk: '"Noto Sans SC", serif',
-          license: 'SIL OFL 1.1',
-          note: 'Neutral and highly legible, with little character.',
-        },
-        manrope: {
-          label: 'Manrope + LXGW WenKai TC',
-          sans: '"Manrope", system-ui, sans-serif',
-          cjk: '"LXGW WenKai TC", cursive',
-          license: 'SIL OFL 1.1',
-          note: 'Geometric Latin against a calligraphic 友; the widest contrast in the set.',
-        },
-        newsreader: {
-          label: 'Newsreader + Noto Serif SC',
-          sans: '"Newsreader", Georgia, serif',
+        serif: {
+          label: 'Noto Serif SC',
           cjk: '"Noto Serif SC", serif',
           license: 'SIL OFL 1.1',
-          note: 'Editorial serif; the reading register, not the toolbar.',
+          note: 'Editorial serif; the Source Han Serif family.',
         },
-        grotesk: {
-          label: 'Space Grotesk + Noto Sans SC',
-          sans: '"Space Grotesk", system-ui, sans-serif',
-          cjk: '"Noto Sans SC", serif',
+        wenkai: {
+          label: 'LXGW WenKai TC',
+          cjk: '"LXGW WenKai TC", cursive',
           license: 'SIL OFL 1.1',
-          note: 'A display grotesque with a technical edge.',
+          note: 'Soft and calligraphic. Test the counters at 16.',
+        },
+        xiaowei: {
+          label: 'ZCOOL XiaoWei',
+          cjk: '"ZCOOL XiaoWei", serif',
+          license: 'SIL OFL 1.1',
+          note: 'A display serif with more character; test it at 16.',
         },
       };
 
@@ -922,40 +938,41 @@
       const OPEN_COLOURS = { tile: '#4f8cff', glyph: '#4f8cff', border: false, borderColor: '#111111' };
 
       const DIRECTIONS = {
+        typeset: {
+          glyph: 'typeset', tile: 'rounded', preset: 'product',
+          label: 'Typeset',
+          note: 'The chosen hanzi face on the tile. This is the logo.',
+        },
         constructed: {
-          tile: 'rounded', preset: 'product', weight: 1.8,
+          glyph: 'constructed', tile: 'rounded', preset: 'product', weight: 1.8,
           label: 'Constructed',
-          note: 'The four strokes redrawn on the 16 grid. A starting point, not a verdict.',
+          note: 'The four-stroke fallback; use it only if the chosen face collapses at 16.',
         },
         paper: {
-          tile: 'rounded', preset: 'paper', weight: 1.8,
+          glyph: 'typeset', tile: 'rounded', preset: 'paper',
           label: 'Paper',
-          note: 'Ink on a paper tile. For light, editorial surfaces.',
+          note: 'The chosen face, ink on paper.',
         },
         seal: {
-          tile: 'square', preset: 'deep', weight: 1.9,
+          glyph: 'typeset', tile: 'square', preset: 'deep',
           label: 'Seal',
-          note: 'Square, deep blue, 1.9px. A store or social variant.',
+          note: 'The chosen face, square and deep blue.',
         },
         open: {
-          tile: 'none', preset: 'custom', colours: OPEN_COLOURS, weight: 1.8,
+          glyph: 'typeset', tile: 'none', preset: 'custom', colours: OPEN_COLOURS,
           label: 'Open',
-          note: 'No tile, accent glyph. For dark, controlled surfaces only.',
+          note: 'The chosen face with no tile; dark grounds only.',
         },
         light: {
-          tile: 'rounded', preset: 'product', weight: 1.4,
+          glyph: 'constructed', tile: 'rounded', preset: 'product', weight: 1.4,
           label: 'Light',
-          note: '1.4px. The counters open at 32px; the 16px sample thins out.',
-        },
-        full: {
-          tile: 'rounded', preset: 'product', weight: null,
-          label: 'Source glyph',
-          note: 'Typeset 友. Reference only; it depends on a font.',
+          note: 'The constructed fallback at 1.4px; too thin at 16.',
         },
       };
 
       const state = {
-        direction: 'constructed',
+        direction: 'typeset',
+        glyph: 'typeset',
         tile: 'rounded',
         preset: 'product',
         tileColor: '#4f8cff',
@@ -965,6 +982,7 @@
         groundColor: '#f4f2ec',
         weight: 1.8,
         font: 'plex',
+        fontWeight: 400,
         grid: false,
       };
 
@@ -1002,9 +1020,9 @@
         return `<rect width="16" height="16" rx="${rx}" fill="${colours.tile}"${border}/>`;
       };
 
-      const glyphMarkup = (direction, colours, weight, cjk) => {
-        if (direction === 'full') {
-          return `<text x="8" y="13.6" text-anchor="middle" font-family='${cjk}' font-size="14" fill="${colours.glyph}">友</text>`;
+      const glyphMarkup = (glyph, colours, weight, cjk, fontWeight) => {
+        if (glyph === 'typeset') {
+          return `<text x="8" y="13.6" text-anchor="middle" font-family='${cjk}' font-size="14" font-weight="${fontWeight}" fill="${colours.glyph}">友</text>`;
         }
         const w = weight ?? 1.8;
         return `<g fill="none" stroke="${colours.glyph}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">
@@ -1017,18 +1035,37 @@
         return d.colours ?? PRESETS[d.preset] ?? PRESETS.product;
       };
 
-      const svgMark = ({ size, direction = state.direction, tile = state.tile, colours = coloursFor(direction), weight = state.weight, grid = false, gridColor = '#111111' }) => {
+      const stateColours = () => ({
+        tile: state.tileColor,
+        glyph: state.glyphColor,
+        border: state.border,
+        borderColor: state.borderColor,
+      });
+
+      const svgMark = ({
+        size,
+        direction = state.direction,
+        glyph = state.glyph,
+        tile = state.tile,
+        colours = stateColours(),
+        weight = state.weight,
+        fontWeight = state.fontWeight,
+        font = state.font,
+        grid = false,
+        gridColor = '#111111',
+      }) => {
+        const face = HANZI_FACES[font];
         const gridMarkup = grid ? gridPath(gridColor) : '';
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" focusable="false">
-          ${tileMarkup(tile, colours)}${glyphMarkup(direction, colours, weight, FONT_PAIRS[state.font].cjk)}${gridMarkup}
+          ${tileMarkup(tile, colours)}${glyphMarkup(glyph, colours, weight, face.cjk, fontWeight)}${gridMarkup}
         </svg>`;
       };
 
       const svgSource = () => {
         const colours = { tile: state.tileColor, glyph: state.glyphColor, border: state.border, borderColor: state.borderColor };
-        const cjk = FONT_PAIRS[state.font].cjk;
-        const body = state.direction === 'full'
-          ? `<text x="8" y="13.6" text-anchor="middle" font-family='${cjk}' font-size="14" fill="${colours.glyph}">友</text>`
+        const face = HANZI_FACES[state.font];
+        const body = state.glyph === 'typeset'
+          ? `<text x="8" y="13.6" text-anchor="middle" font-family='${face.cjk}' font-size="14" font-weight="${state.fontWeight}" fill="${colours.glyph}">友</text>`
           : `<g fill="none" stroke="${colours.glyph}" stroke-width="${state.weight}" stroke-linecap="round" stroke-linejoin="round">
     <path d="${PATHS.top}"/>
     <path d="${PATHS.pie}"/>
@@ -1044,11 +1081,12 @@
       const svgConstruction = () => {
         const grid = gridPath('#6b6b66', true);
         const colours = { tile: state.tileColor, glyph: state.glyphColor, border: state.border, borderColor: state.borderColor };
+        const face = HANZI_FACES[state.font];
         const tile = state.tile === 'none' ? '' : tileMarkup(state.tile, colours);
         const rx = state.tile === 'square' ? 0 : 3.5;
         const outline = state.tile === 'none' ? '' : `<rect x="0.25" y="0.25" width="15.5" height="15.5" rx="${rx}" fill="none" stroke="#6b6b66" stroke-width="0.16" stroke-dasharray="0.4 0.4"/>`;
-        const glyph = state.direction === 'full'
-          ? `<text x="8" y="13.6" text-anchor="middle" font-family='${FONT_PAIRS[state.font].cjk}' font-size="14" fill="#111">友</text>`
+        const glyph = state.glyph === 'typeset'
+          ? `<text x="8" y="13.6" text-anchor="middle" font-family='${face.cjk}' font-size="14" font-weight="${state.fontWeight}" fill="#111">友</text>`
           : `<g fill="none" stroke="#111" stroke-width="${state.weight}" stroke-linecap="round" stroke-linejoin="round">
             <path d="${PATHS.top}"/><path d="${PATHS.pie}"/><path d="${PATHS.you1}"/><path d="${PATHS.you2}"/>
           </g>`;
@@ -1060,15 +1098,13 @@
       const effectiveGround = () => (state.tile === 'none' ? state.groundColor : state.tileColor);
 
       const caption = () => {
-        const direction = DIRECTIONS[state.direction].label;
-        if (state.direction === 'full') {
-          return `<strong>${direction}</strong> · typeset glyph · reference only, not shippable`;
-        }
         const ratio = contrast(state.glyphColor, effectiveGround());
         const text = `${ratio.toFixed(2)}:1`;
         const status = ratio >= 3 ? text : `<span class="warn">${text} below 3:1</span>`;
-        const tile = state.tile === 'none' ? 'ground' : 'tile';
-        return `<strong>${direction}</strong> · ${state.weight.toFixed(1)}px stroke · glyph on ${tile} · ${status}`;
+        if (state.glyph === 'typeset') {
+          return `<strong>${DIRECTIONS[state.direction].label}</strong> · ${HANZI_FACES[state.font].label} ${state.fontWeight} · glyph on ${state.tile === 'none' ? 'ground' : 'tile'} · ${status}`;
+        }
+        return `<strong>${DIRECTIONS[state.direction].label}</strong> · ${state.weight.toFixed(1)}px stroke · glyph on ${state.tile === 'none' ? 'ground' : 'tile'} · ${status}`;
       };
 
       const sizes = [16, 24, 32, 48, 128];
@@ -1090,8 +1126,8 @@
       const renderDirections = () => {
         const root = $('#directions-grid');
         root.innerHTML = Object.entries(DIRECTIONS).map(([id, d]) => `<button type="button" class="direction" data-direction="${id}" aria-pressed="${id === state.direction}">
-          <span class="mark" aria-hidden="true">${svgMark({ size: 56, direction: id, tile: d.tile, colours: coloursFor(id), weight: d.weight ?? 1.8 })}</span>
-          <span><strong>${d.label}</strong><span>${d.note}</span>${id === 'full' ? '<em>reference only</em>' : ''}</span>
+          <span class="mark" aria-hidden="true">${svgMark({ size: 56, direction: id, glyph: d.glyph, tile: d.tile, colours: coloursFor(id), weight: d.weight ?? 1.8 })}</span>
+          <span><strong>${d.label}</strong><span>${d.note}</span></span>
         </button>`).join('');
       };
 
@@ -1104,23 +1140,22 @@
       };
 
       const renderConstruction = () => {
+        const previewOnly = state.glyph === 'typeset';
         $('#construction-stage').innerHTML = svgConstruction();
         $('#source').textContent = svgSource();
-        $('#copy-source').disabled = state.direction === 'full';
-        $('#copy').disabled = state.direction === 'full';
-        $('#copy-note').textContent = state.direction === 'full'
-          ? 'Typeset glyph, not for shipping.'
-          : 'This is the 16px master.';
-        $('#copy').textContent = state.direction === 'full' ? 'Reference only' : 'Copy SVG';
-        $('#copy-source').textContent = state.direction === 'full' ? 'Reference only' : 'Copy SVG';
+        $('#copy-source').disabled = previewOnly;
+        $('#copy').disabled = previewOnly;
+        $('#copy-note').textContent = previewOnly
+          ? 'Typeset preview. The final icon outlines this glyph.'
+          : 'This is the 16px constructed master.';
+        $('#copy').textContent = previewOnly ? 'Outline needed' : 'Copy SVG';
+        $('#copy-source').textContent = previewOnly ? 'Outline needed' : 'Copy SVG';
       };
 
       const renderFonts = () => {
-        const pair = FONT_PAIRS[state.font];
-        document.documentElement.style.setProperty('--brand-sans', pair.sans);
-        document.documentElement.style.setProperty('--brand-cjk', pair.cjk);
-        $('#font-meta').textContent = `${pair.license} · ${pair.note}`;
-        $('#specimen-wordmark').innerHTML = `IU <span>Language Buddy</span>`;
+        const face = HANZI_FACES[state.font];
+        document.documentElement.style.setProperty('--brand-cjk', face.cjk);
+        $('#font-meta').textContent = `${face.license} · ${face.note}`;
         $('#specimen-cjk').textContent = '友';
         for (const button of document.querySelectorAll('.font-option')) {
           button.setAttribute('aria-pressed', String(button.dataset.font === state.font));
@@ -1129,8 +1164,7 @@
 
       const renderFontOptions = () => {
         const root = $('#font-options');
-        root.innerHTML = Object.entries(FONT_PAIRS).map(([id, p]) => `<button type="button" class="font-option" data-font="${id}" aria-pressed="${id === state.font}">
-          <span class="sample" style='font-family:${p.sans}'>IU</span>
+        root.innerHTML = Object.entries(HANZI_FACES).map(([id, p]) => `<button type="button" class="font-option" data-font="${id}" aria-pressed="${id === state.font}">
           <span class="sample-cjk" style='font-family:${p.cjk}'>友</span>
           <span class="label">${p.label}</span>
           <span class="license">${p.license}</span>
@@ -1155,9 +1189,13 @@
         $('#tile').value = state.tile;
         $('#preset').value = state.preset;
         $('#font').value = state.font;
+        $('#font-weight').value = String(state.fontWeight);
         $('#weight').value = String(state.weight);
         $('#weight-out').textContent = state.weight.toFixed(1);
-        $('#weight').disabled = state.direction === 'full';
+        const constructed = state.glyph === 'constructed';
+        $('#font').disabled = constructed;
+        $('#font-weight').disabled = constructed;
+        $('#weight').disabled = !constructed;
         $('#grid').checked = state.grid;
         $('#tile-color').value = state.tileColor;
         $('#glyph-color').value = state.glyphColor;
@@ -1167,9 +1205,8 @@
       };
 
       const render = () => {
-        const pair = FONT_PAIRS[state.font];
-        document.documentElement.style.setProperty('--brand-sans', pair.sans);
-        document.documentElement.style.setProperty('--brand-cjk', pair.cjk);
+        const face = HANZI_FACES[state.font];
+        document.documentElement.style.setProperty('--brand-cjk', face.cjk);
         document.documentElement.style.setProperty('--accent', state.tile === 'none' ? state.glyphColor : state.tileColor);
         renderControls();
         renderStage();
@@ -1183,8 +1220,9 @@
         }
         $('#brand-mark').innerHTML = svgMark({ size: 40 });
         $('#hero-mark').innerHTML = svgMark({ size: 160 });
-        $('#hero-caption').textContent = state.direction === 'full'
-          ? 'typeset reference'
+        $('#logo-mark').innerHTML = svgMark({ size: 48 });
+        $('#hero-caption').textContent = state.glyph === 'typeset'
+          ? `${face.label}, ${state.fontWeight}`
           : `${DIRECTIONS[state.direction].label.toLowerCase()}, ${state.weight.toFixed(1)}px stroke`;
       };
 
@@ -1211,6 +1249,7 @@
       const applyDirection = (id) => {
         const d = DIRECTIONS[id];
         state.direction = id;
+        state.glyph = d.glyph;
         state.tile = d.tile;
         state.weight = d.weight ?? 1.8;
         state.preset = d.preset;
@@ -1223,7 +1262,7 @@
       };
 
       const copy = async (button) => {
-        if (state.direction === 'full') return;
+        if (state.glyph === 'typeset') return;
         try {
           await navigator.clipboard.writeText(svgSource());
           const old = button.textContent;
@@ -1239,6 +1278,7 @@
       $('#tile').addEventListener('change', (event) => { state.tile = event.target.value; render(); });
       $('#preset').addEventListener('change', (event) => applyPreset(event.target.value));
       $('#font').addEventListener('change', (event) => { state.font = event.target.value; render(); });
+      $('#font-weight').addEventListener('change', (event) => { state.fontWeight = Number(event.target.value); render(); });
       $('#weight').addEventListener('input', (event) => { state.weight = Number(event.target.value); render(); });
       $('#grid').addEventListener('change', (event) => { state.grid = event.target.checked; render(); });
       $('#copy').addEventListener('click', (event) => copy(event.currentTarget));
@@ -1278,5 +1318,6 @@
       renderFontOptions();
       render();
     </script>
+
   </body>
 </html>
