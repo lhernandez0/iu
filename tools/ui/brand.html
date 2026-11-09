@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IU, the 友 mark</title>
+    <style>
+      /*
+       * Internal brand workbench. Not shipped, not part of the extension.
+       *
+       * Paper, ink and one blue, because the book is about a reading tool and
+       * because the theme galleries next door are already dark. The controls are
+       * the browser's own, the sizes are actual pixels, and the 16px row is the
+       * one that decides the mark.
+       */
+      :root {
+        --paper: #f4f2ec;
+        --paper-deep: #e9e5da;
+        --ink: #111111;
+        --muted: #6b6b66;
+        --blue: #4f8cff;
+        --deep: #2f5fd0;
+        --line: #d6d2c6;
+        --line-strong: #b7b1a2;
+        --white: #ffffff;
+        --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+        --cjk: "WenQuanYi Zen Hei", "Noto Sans CJK SC", "Noto Serif CJK SC", serif;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color-scheme: light;
+      }
+
+      * { box-sizing: border-box; }
+      html { background: var(--paper); }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font: 14px/1.55 var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      code, pre, .mono { font-family: var(--mono); }
+      a { color: var(--deep); text-underline-offset: 3px; }
+      button, select, input { font: inherit; color: inherit; }
+      button { cursor: pointer; }
+      :focus-visible { outline: 2px solid var(--deep); outline-offset: 2px; }
+
+      /* --- Masthead ------------------------------------------------------- */
+
+      .masthead {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 32px 32px 36px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 260px;
+        gap: 40px;
+        align-items: end;
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .brandline {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+
+      .brandline .mark { width: 40px; height: 40px; flex: 0 0 auto; }
+      .wordmark { line-height: 1.1; }
+      .wordmark strong { display: block; font-size: 17px; font-weight: 650; letter-spacing: 0.01em; }
+      .wordmark span { display: block; color: var(--muted); font-size: 11px; }
+
+      .kicker {
+        margin: 0 0 6px;
+        color: var(--muted);
+        font: 10px/1.4 var(--mono);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        font-family: var(--cjk);
+        font-size: clamp(72px, 12vw, 132px);
+        font-weight: 400;
+        line-height: 0.86;
+        letter-spacing: -0.02em;
+      }
+
+      .h1-en {
+        margin: 10px 0 0;
+        font-size: clamp(24px, 4vw, 38px);
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: -0.02em;
+      }
+
+      .lede {
+        margin: 18px 0 0;
+        max-width: 62ch;
+        color: #3c3c38;
+        font-size: 15px;
+        line-height: 1.6;
+      }
+
+      .masthead-mark {
+        border: 1px solid var(--line-strong);
+        padding: 20px;
+        display: grid;
+        place-items: center;
+        background: var(--paper-deep);
+      }
+
+      .masthead-mark .mark { width: 160px; height: 160px; }
+      .masthead-mark p {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font: 10px/1.4 var(--mono);
+        text-align: center;
+      }
+
+      /* --- TOC ------------------------------------------------------------- */
+
+      .toc {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 14px 32px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0 18px;
+        border-bottom: 1px solid var(--line);
+        font: 11px/1.4 var(--mono);
+      }
+
+      .toc a { color: var(--muted); text-decoration: none; }
+      .toc a:hover { color: var(--ink); text-decoration: underline; }
+
+      /* --- Sections -------------------------------------------------------- */
+
+      main { max-width: 1240px; margin: 0 auto; }
+      .section { padding: 40px 32px; border-bottom: 1px solid var(--line); }
+
+      .section-head {
+        display: grid;
+        grid-template-columns: 48px minmax(0, 1fr) minmax(0, 2fr);
+        gap: 16px;
+        align-items: baseline;
+        margin-bottom: 24px;
+      }
+
+      .section-head .num {
+        color: var(--muted);
+        font: 10px/1.4 var(--mono);
+        letter-spacing: 0.08em;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      .section-head p {
+        margin: 0;
+        color: var(--muted);
+        max-width: 70ch;
+      }
+
+      h3 { margin: 0 0 8px; font-size: 13px; font-weight: 650; }
+
+      /* --- Workbench ------------------------------------------------------- */
+
+      .bench {
+        display: grid;
+        grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+        gap: 32px;
+        align-items: start;
+      }
+
+      .stage-wrap { min-width: 0; }
+
+      .stage {
+        width: 100%;
+        aspect-ratio: 1;
+        border: 1px solid var(--line-strong);
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+      }
+
+      .stage[data-ground='paper'] { background: var(--paper); }
+      .stage[data-ground='ink'] { background: var(--ink); }
+      .stage[data-ground='blue'] { background: var(--blue); }
+
+      .stage .mark { width: 220px; height: 220px; max-width: 74%; max-height: 74%; }
+
+      .caption {
+        margin: 10px 0 0;
+        min-height: 2.8em;
+        color: var(--muted);
+        font: 10.5px/1.45 var(--mono);
+      }
+
+      .caption strong { color: var(--ink); font-weight: 600; }
+      .caption .warn { color: #a4341e; }
+
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 16px;
+        align-content: start;
+      }
+
+      .controls label {
+        display: grid;
+        gap: 5px;
+        min-width: 0;
+        color: var(--muted);
+        font: 10px/1.4 var(--mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .controls select,
+      .controls input[type='number'],
+      .controls button {
+        min-height: 32px;
+        padding: 5px 8px;
+        border: 1px solid var(--line-strong);
+        border-radius: 0;
+        background: transparent;
+        color: var(--ink);
+        font: 12px/1.3 var(--sans);
+        letter-spacing: 0;
+        text-transform: none;
+      }
+
+      .controls select { cursor: pointer; }
+
+      .controls .wide { grid-column: 1 / -1; }
+
+      .controls .check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 32px;
+        color: var(--ink);
+        font: 12px/1.3 var(--sans);
+        letter-spacing: 0;
+        text-transform: none;
+        cursor: pointer;
+      }
+
+      .controls .check input { width: 14px; height: 14px; accent-color: var(--blue); margin: 0; }
+
+      .range-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .range-row input[type='range'] {
+        width: 100%;
+        accent-color: var(--blue);
+      }
+
+      .range-row output {
+        min-width: 4.5ch;
+        color: var(--ink);
+        font: 11px/1.3 var(--mono);
+        text-align: right;
+      }
+
+      .controls button:hover:not(:disabled) { border-color: var(--ink); }
+      .controls button:disabled { opacity: 0.4; cursor: default; }
+
+      /* The exact sizes. Two grounds, actual pixels, the 16 is not a picture
+         of 16, it is 16. */
+      .ladder { margin-top: 28px; border: 1px solid var(--line-strong); }
+
+      .ladder-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 20px 28px;
+        min-height: 152px;
+        padding: 20px;
+      }
+
+      .ladder-row + .ladder-row { border-top: 1px solid var(--line-strong); }
+      .ladder-row.paper { background: var(--paper); }
+      .ladder-row.ink { background: var(--ink); }
+
+      .size {
+        margin: 0;
+        display: grid;
+        justify-items: center;
+        gap: 9px;
+      }
+
+      .size-box { display: grid; place-items: center; }
+
+      .size figcaption {
+        color: var(--muted);
+        font: 9.5px/1.2 var(--mono);
+        letter-spacing: 0.06em;
+      }
+
+      .ladder-row.ink .size figcaption { color: #9c9a91; }
+
+      /* --- Directions ------------------------------------------------------ */
+
+      .directions {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 12px;
+      }
+
+      .direction {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr);
+        gap: 14px;
+        align-items: start;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 0;
+        background: transparent;
+        text-align: left;
+      }
+
+      .direction:hover { border-color: var(--line-strong); }
+      .direction[aria-pressed='true'] { border-color: var(--deep); box-shadow: inset 0 0 0 1px var(--deep); }
+      .direction .mark { width: 56px; height: 56px; }
+      .direction strong { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 650; }
+      .direction span { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.45; }
+      .direction em { display: block; margin-top: 6px; color: #8b4a3a; font: normal 9.5px/1.3 var(--mono); }
+
+      /* --- Construction ---------------------------------------------------- */
+
+      .construction {
+        display: grid;
+        grid-template-columns: minmax(260px, 380px) minmax(0, 1fr);
+        gap: 32px;
+        align-items: start;
+      }
+
+      .construction > * { min-width: 0; }
+
+      .gridstage {
+        width: 100%;
+        aspect-ratio: 1;
+        border: 1px solid var(--line-strong);
+        background: var(--paper);
+        display: grid;
+        place-items: center;
+      }
+
+      .gridstage .mark { width: 100%; height: 100%; }
+
+      .paths { display: grid; gap: 8px; margin: 0 0 18px; padding: 0; list-style: none; }
+      .paths li { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 12px; font-size: 12px; }
+      .paths code { color: var(--deep); }
+      .paths span { color: var(--muted); }
+
+      pre {
+        margin: 0;
+        padding: 14px;
+        max-width: 100%;
+        max-height: 300px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        background: #eeeadf;
+        color: #2b2b28;
+        font-size: 11px;
+        line-height: 1.55;
+        white-space: pre;
+      }
+
+      .source-actions { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+      .source-actions button {
+        min-height: 30px;
+        padding: 4px 10px;
+        border: 1px solid var(--line-strong);
+        border-radius: 0;
+        background: transparent;
+        font: 11px/1.3 var(--mono);
+      }
+      .source-actions button:hover:not(:disabled) { border-color: var(--ink); }
+      .source-actions button:disabled { opacity: 0.4; cursor: default; }
+      .source-actions span { color: var(--muted); font: 10px/1.4 var(--mono); }
+
+      /* --- Lockup ---------------------------------------------------------- */
+
+      .lockups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+      .lockup {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 20px;
+        border: 1px solid var(--line);
+      }
+      .lockup .mark { width: 48px; height: 48px; flex: 0 0 auto; }
+      .lockup strong { display: block; font-size: 25px; font-weight: 600; line-height: 1; letter-spacing: -0.01em; }
+      .lockup span { display: block; margin-top: 4px; font-size: 11px; }
+      .lockup.paper { background: var(--paper); color: var(--ink); }
+      .lockup.paper span { color: var(--muted); }
+      .lockup.ink { background: var(--ink); color: var(--paper); }
+      .lockup.ink span { color: #9c9a91; }
+      .lockup.blue { background: var(--blue); color: var(--white); }
+      .lockup.blue span { color: #e4edff; }
+
+      /* --- Palette and rules ----------------------------------------------- */
+
+      .palette { width: 100%; border-collapse: collapse; font-size: 12px; }
+      .palette th, .palette td { padding: 10px 12px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+      .palette th { color: var(--muted); font: 9.5px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500; }
+      .palette td:first-child { width: 52px; }
+      .swatch { display: block; width: 32px; height: 32px; border: 1px solid var(--line-strong); }
+      .palette code { font-size: 11px; }
+      .palette .ratio { color: var(--muted); }
+
+      .rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
+      .rules ul { margin: 0; padding-left: 18px; color: #3c3c38; }
+      .rules li { margin: 0 0 7px; }
+      .rules h3 { font: 10px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+      .decision { max-width: 78ch; }
+      .decision p { margin: 0 0 12px; }
+      .decision .aside { color: var(--muted); font-size: 12px; }
+
+      footer {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 24px 32px 48px;
+        color: var(--muted);
+        font: 10px/1.5 var(--mono);
+      }
+
+      @media (max-width: 900px) {
+        .masthead { grid-template-columns: 1fr; }
+        .masthead-mark { width: 240px; }
+        .bench, .construction { grid-template-columns: 1fr; }
+        .section-head { grid-template-columns: 40px minmax(0, 1fr); }
+        .section-head p { grid-column: 2; }
+        .lockups { grid-template-columns: 1fr; }
+      }
+
+      @media (max-width: 620px) {
+        .masthead, .section, .toc, footer { padding-left: 20px; padding-right: 20px; }
+        .controls { grid-template-columns: 1fr; }
+        .controls .wide { grid-column: auto; }
+        .directions { grid-template-columns: 1fr; }
+        .rules { grid-template-columns: 1fr; }
+        .ladder-row { gap: 16px 20px; }
+        .section-head { grid-template-columns: 1fr; gap: 4px; }
+        .section-head p { grid-column: auto; }
+        .section-head .num { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <div class="brandline">
+          <span class="mark" id="brand-mark" aria-hidden="true"></span>
+          <span class="wordmark"><strong>IU</strong><span>Language Buddy</span></span>
+        </div>
+        <p class="kicker">Internal brand book, working page</p>
+        <h1 lang="zh-Hans">友</h1>
+        <p class="h1-en">the mark</p>
+        <p class="lede">
+          IU means I and you. 友 means friend in Mandarin, Japanese, Korean and
+          Hokkien, which is where the name came from. The icon has to say that in
+          16 pixels, on a toolbar, without a Chinese font, and without becoming a
+          generic character tile. This page is the workbench. The written case is
+          in <code>docs/BRAND-BOOK.md</code>.
+        </p>
+      </div>
+      <div class="masthead-mark">
+        <span class="mark" id="hero-mark" aria-hidden="true"></span>
+        <p id="hero-caption">constructed, 16 grid</p>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Sections">
+      <a href="#workbench">Workbench</a>
+      <a href="#directions">Directions</a>
+      <a href="#construction">Construction</a>
+      <a href="#lockup">Lockup</a>
+      <a href="#palette">Palette</a>
+      <a href="#rules">Rules</a>
+      <a href="#decision">Decision</a>
+    </nav>
+
+    <main>
+      <section class="section" id="workbench">
+        <div class="section-head">
+          <span class="num">01</span>
+          <h2>Workbench</h2>
+          <p>
+            The controls are real and every mark on this page is drawn from the
+            same paths. The ladder below is actual pixels, not a scaled picture.
+            The 16px row is the constraint; if the mark fails there it fails.
+          </p>
+        </div>
+
+        <div class="bench">
+          <div class="stage-wrap">
+            <div class="stage" id="stage" data-ground="paper">
+              <div id="stage-mark" class="mark" aria-hidden="true"></div>
+            </div>
+            <p class="caption" id="caption"></p>
+          </div>
+
+          <div class="controls">
+            <label>
+              Direction
+              <select id="direction">
+                <option value="constructed">Constructed</option>
+                <option value="paper">Paper</option>
+                <option value="seal">Seal</option>
+                <option value="open">Open</option>
+                <option value="light">Light</option>
+                <option value="full">Source glyph</option>
+              </select>
+            </label>
+            <label>
+              Tile
+              <select id="tile">
+                <option value="rounded">Rounded square</option>
+                <option value="square">Square</option>
+                <option value="none">None</option>
+              </select>
+            </label>
+            <label>
+              Colour
+              <select id="palette">
+                <option value="blue">Blue tile, white glyph</option>
+                <option value="paper">Paper tile, ink glyph</option>
+                <option value="seal">Deep blue tile, white glyph</option>
+                <option value="ink">Ink tile, paper glyph</option>
+                <option value="open">No tile, blue glyph</option>
+                <option value="mono">No tile, ink glyph</option>
+              </select>
+            </label>
+            <label>
+              Ground
+              <select id="ground">
+                <option value="paper">Paper</option>
+                <option value="ink">Ink</option>
+                <option value="blue">Blue</option>
+              </select>
+            </label>
+            <label class="wide">
+              Stroke <span class="range-row"><input id="weight" type="range" min="1.2" max="2.2" step="0.1" value="1.8" /><output id="weight-out">1.8</output></span>
+            </label>
+            <label class="check"><input id="grid" type="checkbox" /> Construction grid on the stage</label>
+            <button id="copy" type="button">Copy SVG</button>
+          </div>
+        </div>
+
+        <div class="ladder" id="ladder" aria-label="Actual size ladder"></div>
+      </section>
+
+      <section class="section" id="directions">
+        <div class="section-head">
+          <span class="num">02</span>
+          <h2>Directions</h2>
+          <p>
+            Six drawings, not six palettes. Click one to load it above. The
+            source glyph is a reference only; it is typeset and cannot be
+            shipped as the mark.
+          </p>
+        </div>
+        <div class="directions" id="directions-grid"></div>
+      </section>
+
+      <section class="section" id="construction">
+        <div class="section-head">
+          <span class="num">03</span>
+          <h2>Construction</h2>
+          <p>
+            A 16 by 16 grid, a 3.5 radius tile, four paths and one stroke weight.
+            The 丿 starts above the top bar and crosses it; the 又 is a horizontal
+            with two diagonals meeting under it. The tile is the field, not a
+            card.
+          </p>
+        </div>
+
+        <div class="construction">
+          <div class="gridstage" id="construction-stage"></div>
+          <div>
+            <ul class="paths">
+              <li><code>top</code><span>M3.5 4.6 H13.5</span></li>
+              <li><code>丿</code><span>M7.6 1.8 L3 12.8</span></li>
+              <li><code>又 横撇</code><span>M5.8 7.6 H12.2 L7.2 13.6</span></li>
+              <li><code>又 捺</code><span>M5.8 7.6 L13.4 13.8</span></li>
+            </ul>
+            <pre id="source" aria-label="SVG source"></pre>
+            <div class="source-actions">
+              <button id="copy-source" type="button">Copy SVG</button>
+              <span id="copy-note"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="lockup">
+        <div class="section-head">
+          <span class="num">04</span>
+          <h2>Lockup</h2>
+          <p>
+            The mark is the meaning; the wordmark is the name. The wordmark is the
+            interface's own sans, not a custom logotype, so there is no font to
+            license or ship.
+          </p>
+        </div>
+        <div class="lockups">
+          <div class="lockup paper">
+            <span class="mark lockup-mark" aria-hidden="true"></span>
+            <div><strong>IU</strong><span>Language Buddy</span></div>
+          </div>
+          <div class="lockup ink">
+            <span class="mark lockup-mark" aria-hidden="true"></span>
+            <div><strong>IU</strong><span>Language Buddy</span></div>
+          </div>
+          <div class="lockup blue">
+            <span class="mark lockup-mark" aria-hidden="true"></span>
+            <div><strong>IU</strong><span>Language Buddy</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="palette">
+        <div class="section-head">
+          <span class="num">05</span>
+          <h2>Palette</h2>
+          <p>
+            One blue, one ink, one paper. The blue is the existing accent, so the
+            icon does not introduce a second brand colour. The deep blue is for
+            the seal and for small white glyphs where 3.22:1 is too tight.
+          </p>
+        </div>
+        <table class="palette">
+          <thead>
+            <tr><th></th><th>Name</th><th>Hex</th><th>Use</th><th>Contrast</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="swatch" style="background:#4f8cff"></span></td><td>Brand blue</td><td><code>#4f8cff</code></td><td>Tile, links, the mark</td><td class="ratio">white 3.22:1, ink 5.87:1, paper 2.87:1</td></tr>
+            <tr><td><span class="swatch" style="background:#2f5fd0"></span></td><td>Deep blue</td><td><code>#2f5fd0</code></td><td>Seal, small white glyphs</td><td class="ratio">white 5.72:1, paper 5.11:1</td></tr>
+            <tr><td><span class="swatch" style="background:#111111"></span></td><td>Ink</td><td><code>#111111</code></td><td>Text, paper variant glyph</td><td class="ratio">paper 16.87:1, white 18.88:1</td></tr>
+            <tr><td><span class="swatch" style="background:#f4f2ec"></span></td><td>Paper</td><td><code>#f4f2ec</code></td><td>Tile, page ground</td><td class="ratio">ink 16.87:1</td></tr>
+            <tr><td><span class="swatch" style="background:#ffffff"></span></td><td>White</td><td><code>#ffffff</code></td><td>Glyph on blue</td><td class="ratio">blue 3.22:1, deep 5.72:1</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="section" id="rules">
+        <div class="section-head">
+          <span class="num">06</span>
+          <h2>Rules</h2>
+          <p>
+            Ten rules that keep the mark from turning into a character tile, a
+            language-app cliché, or a mark that only works at 128.
+          </p>
+        </div>
+        <div class="rules">
+          <div>
+            <h3>Use</h3>
+            <ul>
+              <li>The constructed mark, not a CJK font glyph.</li>
+              <li>The tile on the manifest icon, at 16, 32, 48 and 128.</li>
+              <li>White on brand blue as the primary; ink on paper as the editorial variant.</li>
+              <li>The wordmark in the interface sans, at 600 for IU and 400 for the descriptor.</li>
+              <li>Clear space of at least one stroke width on every side.</li>
+              <li>The 16px PNG at 100% as the final test, not the 512px SVG.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Do not</h3>
+            <ul>
+              <li>Set the mark in a font. The icon generator has no font, and a font would make the icon differ per machine.</li>
+              <li>Use a brush 友, a red seal, a speech bubble, a flag or a translation arrow. They are the wrong register and they collapse at 16.</li>
+              <li>Put IU inside the tile. The mark is 友; the wordmark is IU.</li>
+              <li>Recolour the icon per panel theme. The nine themes are the product, not the brand.</li>
+              <li>Add a gradient, shadow, bevel or outline.</li>
+              <li>Use the open blue glyph on paper: 2.87:1 is below the 3:1 non-text threshold.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="decision">
+        <div class="section-head">
+          <span class="num">07</span>
+          <h2>Decision</h2>
+          <p>
+            This is a proposal, not a shipped change. The current icon in
+            <code>icons/</code> is still the IU monogram.
+          </p>
+        </div>
+        <div class="decision">
+          <p>
+            The recommendation is <strong>Constructed</strong>: the 1.8px 友 on a
+            rounded blue tile, white glyph, at every size. It is the only
+            direction that stays original, survives 16px, and keeps the meaning
+            of the name. The Paper and Seal variants are secondary expressions,
+            not alternate manifests. The Open mark is for inline use on dark
+            grounds.
+          </p>
+          <p>
+            What is still open: whether the tile should stay blue or move to
+            paper, whether the 1.8 stroke is too heavy at 32, and whether the
+            wordmark should sit beside the mark or below it. The 16px row and the
+            page are the review.
+          </p>
+          <p class="aside">
+            The “Source glyph” is 友 typeset in WenQuanYi Zen Hei. It is on this
+            page for comparison only, and the page relies on the machine having a
+            CJK font. Do not copy it into <code>icons/</code>; the shipped mark must
+            be the constructed path set.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Internal page, not shipped. Workbench: tools/ui/brand.html. Book: docs/BRAND-BOOK.md. Draft November 2026.
+    </footer>
+
+    <script>
+      const PATHS = {
+        top: 'M3.5 4.6H13.5',
+        pie: 'M7.6 1.8L3 12.8',
+        you1: 'M5.8 7.6H12.2L7.2 13.6',
+        you2: 'M5.8 7.6L13.4 13.8',
+      };
+
+      const PALETTES = {
+        blue: { tile: '#4f8cff', glyph: '#ffffff', border: null, name: 'blue tile' },
+        paper: { tile: '#f4f2ec', glyph: '#111111', border: '#111111', name: 'paper tile' },
+        seal: { tile: '#2f5fd0', glyph: '#ffffff', border: null, name: 'deep blue tile' },
+        ink: { tile: '#111111', glyph: '#f4f2ec', border: null, name: 'ink tile' },
+        open: { tile: null, glyph: '#4f8cff', border: null, name: 'no tile' },
+        mono: { tile: null, glyph: '#111111', border: null, name: 'no tile' },
+      };
+
+      const DIRECTIONS = {
+        constructed: {
+          tile: 'rounded', palette: 'blue', weight: 1.8,
+          label: 'Constructed',
+          note: 'The four strokes redrawn on the 16 grid. The working default.',
+        },
+        paper: {
+          tile: 'rounded', palette: 'paper', weight: 1.8,
+          label: 'Paper',
+          note: 'Ink on a paper tile. For light, editorial surfaces.',
+        },
+        seal: {
+          tile: 'square', palette: 'seal', weight: 1.9,
+          label: 'Seal',
+          note: 'Square, deep blue, 1.9px. A store or social variant.',
+        },
+        open: {
+          tile: 'none', palette: 'open', weight: 1.8,
+          label: 'Open',
+          note: 'No tile, blue glyph. For dark, controlled surfaces only.',
+        },
+        light: {
+          tile: 'rounded', palette: 'blue', weight: 1.4,
+          label: 'Light',
+          note: '1.4px. The counters open at 32px; the 16px sample thins out.',
+        },
+        full: {
+          tile: 'rounded', palette: 'blue', weight: null,
+          label: 'Source glyph',
+          note: 'WQY Zen Hei 友, typeset. Reference only; it depends on a font.',
+        },
+      };
+
+      const GROUNDS = { paper: '#f4f2ec', ink: '#111111', blue: '#4f8cff' };
+
+      const state = {
+        direction: 'constructed',
+        tile: 'rounded',
+        palette: 'blue',
+        weight: 1.8,
+        ground: 'paper',
+        grid: false,
+      };
+
+      const $ = (selector) => document.querySelector(selector);
+
+      const lum = (hex) => {
+        const h = hex.replace('#', '');
+        const rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+        const [r, g, b] = rgb.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+
+      const contrast = (a, b) => {
+        const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+        return (hi + 0.05) / (lo + 0.05);
+      };
+
+      const gridPath = (color, majorOnly = false) => {
+        const fine = [];
+        const major = [];
+        for (let i = 1; i < 16; i += 1) {
+          if (i % 4 === 0) major.push(`M${i} 0V16`, `M0 ${i}H16`);
+          else if (!majorOnly) fine.push(`M${i} 0V16`, `M0 ${i}H16`);
+        }
+        const parts = [];
+        if (fine.length) parts.push(`<path d="${fine.join('')}" stroke="${color}" stroke-width="0.06" opacity=".28"/>`);
+        if (major.length) parts.push(`<path d="${major.join('')}" stroke="${color}" stroke-width="0.12" opacity=".42"/>`);
+        return parts.join('');
+      };
+
+      const tileMarkup = (tile, palette) => {
+        if (tile === 'none') return '';
+        const rx = tile === 'square' ? 0 : 3.5;
+        const p = PALETTES[palette];
+        const border = p.border ? ` stroke="${p.border}" stroke-width="0.7"` : '';
+        return `<rect width="16" height="16" rx="${rx}" fill="${p.tile}"${border}/>`;
+      };
+
+      const glyphMarkup = (direction, palette, weight) => {
+        const p = PALETTES[palette];
+        if (direction === 'full') {
+          return `<text x="8" y="13.6" text-anchor="middle" font-family="WenQuanYi Zen Hei, Noto Sans CJK SC, Noto Serif CJK SC, serif" font-size="14" fill="${p.glyph}">友</text>`;
+        }
+        const w = weight ?? DIRECTIONS[direction].weight ?? 1.8;
+        return `<g fill="none" stroke="${p.glyph}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">
+          <path d="${PATHS.top}"/><path d="${PATHS.pie}"/><path d="${PATHS.you1}"/><path d="${PATHS.you2}"/>
+        </g>`;
+      };
+
+      const svgMark = ({ size, direction = state.direction, tile = state.tile, palette = state.palette, weight = state.weight, grid = false, gridColor = '#111111' }) => {
+        const gridMarkup = grid ? gridPath(gridColor) : '';
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true" focusable="false">
+          ${tileMarkup(tile, palette)}${glyphMarkup(direction, palette, weight)}${gridMarkup}
+        </svg>`;
+      };
+
+      const svgSource = () => {
+        const p = PALETTES[state.palette];
+        const body = state.direction === 'full'
+          ? `<text x="8" y="13.6" text-anchor="middle" font-family="WenQuanYi Zen Hei, Noto Sans CJK SC, Noto Serif CJK SC, serif" font-size="14" fill="${p.glyph}">友</text>`
+          : `<g fill="none" stroke="${p.glyph}" stroke-width="${state.weight}" stroke-linecap="round" stroke-linejoin="round">
+    <path d="${PATHS.top}"/>
+    <path d="${PATHS.pie}"/>
+    <path d="${PATHS.you1}"/>
+    <path d="${PATHS.you2}"/>
+  </g>`;
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" role="img" aria-label="IU">
+  ${tileMarkup(state.tile, state.palette)}
+  ${body}
+</svg>`;
+      };
+
+      const svgConstruction = () => {
+        const grid = gridPath('#6b6b66', true);
+        const tile = state.tile === 'none' ? '' : tileMarkup(state.tile, state.palette);
+        const rx = state.tile === 'square' ? 0 : 3.5;
+        const outline = state.tile === 'none' ? '' : `<rect x="0.25" y="0.25" width="15.5" height="15.5" rx="${rx}" fill="none" stroke="#6b6b66" stroke-width="0.16" stroke-dasharray="0.4 0.4"/>`;
+        const glyph = state.direction === 'full'
+          ? `<text x="8" y="13.6" text-anchor="middle" font-family="WenQuanYi Zen Hei, Noto Sans CJK SC, Noto Serif CJK SC, serif" font-size="14" fill="#111">友</text>`
+          : `<g fill="none" stroke="#111" stroke-width="${state.weight}" stroke-linecap="round" stroke-linejoin="round">
+            <path d="${PATHS.top}"/><path d="${PATHS.pie}"/><path d="${PATHS.you1}"/><path d="${PATHS.you2}"/>
+          </g>`;
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          ${tile}${outline}${glyph}${grid}
+        </svg>`;
+      };
+
+      const caption = () => {
+        const p = PALETTES[state.palette];
+        const direction = DIRECTIONS[state.direction].label;
+        if (state.direction === 'full') {
+          return `<strong>${direction}</strong> · typeset glyph · reference only, not shippable`;
+        }
+        const ground = state.tile === 'none' ? GROUNDS[state.ground] : p.tile;
+        const ratio = contrast(p.glyph, ground);
+        const text = `${ratio.toFixed(2)}:1`;
+        const contrastText = ratio >= 3 ? text : `<span class="warn">${text} below 3:1</span>`;
+        return `<strong>${direction}</strong> · ${state.weight.toFixed(1)}px stroke · ${p.name} · ${contrastText}`;
+      };
+
+      const sizes = [16, 24, 32, 48, 128];
+
+      const ladderMarkup = () => ['paper', 'ink'].map((ground) => `<div class="ladder-row ${ground}">
+        ${sizes.map((size) => `<figure class="size" data-size="${size}">
+          <div class="size-box" data-size="${size}"></div>
+          <figcaption>${size}</figcaption>
+        </figure>`).join('')}
+      </div>`).join('');
+
+      const renderLadder = () => {
+        const root = $('#ladder');
+        root.innerHTML = ladderMarkup();
+        for (const box of root.querySelectorAll('.size-box')) {
+          const size = Number(box.dataset.size);
+          box.innerHTML = svgMark({ size });
+        }
+      };
+
+      const renderDirections = () => {
+        const root = $('#directions-grid');
+        root.innerHTML = Object.entries(DIRECTIONS).map(([id, d]) => `<button type="button" class="direction" data-direction="${id}" aria-pressed="${id === state.direction}">
+          <span class="mark" aria-hidden="true">${svgMark({ size: 56, direction: id, tile: d.tile, palette: d.palette, weight: d.weight ?? 1.8 })}</span>
+          <span><strong>${d.label}</strong><span>${d.note}</span>${id === 'full' ? '<em>reference only</em>' : ''}</span>
+        </button>`).join('');
+      };
+
+      const renderStage = () => {
+        const stage = $('#stage');
+        stage.dataset.ground = state.ground;
+        const gridColor = state.ground === 'paper' ? '#111111' : '#ffffff';
+        $('#stage-mark').innerHTML = svgMark({ size: 220, grid: state.grid, gridColor });
+        $('#caption').innerHTML = caption();
+      };
+
+      const renderConstruction = () => {
+        $('#construction-stage').innerHTML = svgConstruction();
+        $('#source').textContent = svgSource();
+        $('#copy-source').disabled = state.direction === 'full';
+        $('#copy').disabled = state.direction === 'full';
+        $('#copy-note').textContent = state.direction === 'full'
+          ? 'Typeset glyph, not for shipping.'
+          : 'This is the 16px master.';
+        $('#copy').textContent = state.direction === 'full' ? 'Reference only' : 'Copy SVG';
+        $('#copy-source').textContent = state.direction === 'full' ? 'Reference only' : 'Copy SVG';
+      };
+
+      const renderLockups = () => {
+        for (const mark of document.querySelectorAll('.lockup-mark')) mark.innerHTML = svgMark({ size: 48 });
+      };
+
+      const renderControls = () => {
+        $('#direction').value = state.direction;
+        $('#tile').value = state.tile;
+        $('#palette').value = state.palette;
+        $('#ground').value = state.ground;
+        $('#weight').value = String(state.weight);
+        $('#weight-out').textContent = state.weight.toFixed(1);
+        $('#weight').disabled = state.direction === 'full';
+        $('#grid').checked = state.grid;
+      };
+
+      const render = () => {
+        renderControls();
+        renderStage();
+        renderLadder();
+        renderConstruction();
+        renderLockups();
+        for (const button of document.querySelectorAll('.direction')) {
+          button.setAttribute('aria-pressed', String(button.dataset.direction === state.direction));
+        }
+        $('#brand-mark').innerHTML = svgMark({ size: 40 });
+        $('#hero-mark').innerHTML = svgMark({ size: 160 });
+        $('#hero-caption').textContent = state.direction === 'full'
+          ? 'typeset reference'
+          : `${DIRECTIONS[state.direction].label.toLowerCase()}, ${state.weight.toFixed(1)}px stroke`;
+      };
+
+      const applyDirection = (id) => {
+        const d = DIRECTIONS[id];
+        state.direction = id;
+        state.tile = d.tile;
+        state.palette = d.palette;
+        state.weight = d.weight ?? 1.8;
+        render();
+      };
+
+      const copy = async (button) => {
+        if (state.direction === 'full') return;
+        try {
+          await navigator.clipboard.writeText(svgSource());
+          const old = button.textContent;
+          button.textContent = 'Copied';
+          setTimeout(() => { button.textContent = old; }, 1200);
+        } catch {
+          button.textContent = 'Select the source';
+          setTimeout(() => { button.textContent = 'Copy SVG'; }, 1600);
+        }
+      };
+
+      $('#direction').addEventListener('change', (event) => applyDirection(event.target.value));
+      $('#tile').addEventListener('change', (event) => { state.tile = event.target.value; render(); });
+      $('#palette').addEventListener('change', (event) => { state.palette = event.target.value; render(); });
+      $('#ground').addEventListener('change', (event) => { state.ground = event.target.value; render(); });
+      $('#weight').addEventListener('input', (event) => { state.weight = Number(event.target.value); render(); });
+      $('#grid').addEventListener('change', (event) => { state.grid = event.target.checked; render(); });
+      $('#copy').addEventListener('click', (event) => copy(event.currentTarget));
+      $('#copy-source').addEventListener('click', (event) => copy(event.currentTarget));
+
+      $('#directions-grid').addEventListener('click', (event) => {
+        const button = event.target.closest('.direction');
+        if (button) applyDirection(button.dataset.direction);
+      });
+
+      renderDirections();
+      render();
+    </script>
+  </body>
+</html>
