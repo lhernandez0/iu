@@ -218,6 +218,14 @@ body {
  * `CAPTION_FADE_OUT_MS` in `viewer.js` waits this long before emptying the element.
  * The two must agree; they are 300ms in both places.
  */
+/* No text, no card. The padding and background otherwise draw a small empty
+   subtitle bar in every gap between cues. `:has` is supported by the browsers this
+   extension requires. */
+.caption-card:not(:has(.caption-line:not(:empty))),
+.captions-below:not(:has(.caption-line:not(:empty))) {
+  display: none;
+}
+
 .caption-card,
 .captions-below {
   transition: opacity 300ms ease;
@@ -336,16 +344,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  /* The extra top padding is the FADE, not spacing. The gradient needs room to
-     reach full transparency before the element ends, or its top edge is a visible
-     horizontal seam over a bright frame. */
-  padding: 24px 10px 6px;
-  background: linear-gradient(
-    to bottom,
-    transparent 0,
-    color-mix(in srgb, var(--bar-bg) 55%, transparent) 20px,
-    var(--bar-bg) 100%
-  );
+  /* A flat themed surface, not a gradient. The old transparent-to-bar fade needed
+     24px of padding and read as a pale band above the scrubber on every light
+     theme. The top edge is now a deliberate rule. */
+  padding: 6px 10px;
+  background: var(--bar-bg);
+  border-top: 1px solid var(--bar-edge);
   color: var(--bar-fg);
   color-scheme: var(--control-scheme, dark);
   transition: opacity 200ms ease;

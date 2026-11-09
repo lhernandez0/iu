@@ -698,6 +698,28 @@ section('the themed viewer controls stay legible');
   await setViewerTheme('default');
 }
 
+section('the caption card and the control bar are not empty rectangles');
+
+{
+  await reader.evaluate(() => {
+    document.getElementById('caption-primary')?.replaceChildren();
+    document.getElementById('caption-secondary')?.replaceChildren();
+  });
+  check(
+    'an empty caption card is not drawn',
+    await reader.evaluate(() => getComputedStyle(document.querySelector('.caption-card')).display),
+    'none',
+  );
+
+  const bar = await reader.evaluate(() => {
+    const style = getComputedStyle(document.getElementById('bar'));
+    return { image: style.backgroundImage, border: style.borderTopWidth, bg: style.backgroundColor };
+  });
+  check('the bar has no fade gradient', bar.image, 'none');
+  check('the bar has a top edge', bar.border, '1px');
+  check('the bar has a real surface colour', bar.bg === 'rgba(0, 0, 0, 0)', false);
+}
+
 section('the speed picker is OUR control, not the operating system dropdown');
 
 {
