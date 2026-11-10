@@ -45,6 +45,8 @@ const WORKER_URL = './transcode-worker.js';
  * It stays comfortably above the window size so ordinary back-and-forth within a minute
  * never forces a re-produce.
  */
+import { logDecoder } from './diagnostics.js';
+
 const EVICT_BEHIND_SECONDS = 60;
 
 /**
@@ -141,11 +143,11 @@ function ensureWorker() {
     // never speaks, so without this a film plays with no sound and no explanation, which
     // is the failure this whole feature exists to remove.
     sharedWorker.addEventListener('error', (event) => {
-      console.log(`[iu] transcode step=worker-error error=${String(event.message ?? event)}`);
+      logDecoder('worker-error', { error: String(event.message ?? event) });
     });
     return sharedWorker;
   } catch (error) {
-    console.log(`[iu] transcode step=worker-FAILED error=${String(error?.message ?? error)}`);
+    logDecoder('worker-failed', { error: String(error?.message ?? error) });
     return null;
   }
 }
@@ -488,7 +490,7 @@ export async function transcodeForElement(file, video, options = {}) {
     }
     if (message.type === 'media') {
       if (seekAskedAt) {
-        console.log(`[iu] transcode step=seek-first-fragment ms=${Date.now() - seekAskedAt}`);
+        logDecoder('seek-first-fragment', { ms: Date.now() - seekAskedAt });
         seekAskedAt = 0;
       }
       producedMedia += 1;
@@ -519,7 +521,7 @@ export async function transcodeForElement(file, video, options = {}) {
       // A conversion failure means silence with no other symptom, so it is logged rather
       // than swallowed.
       failure = new Error(message.message);
-      console.log(`[iu] transcode step=error message=${message.message}`);
+      logDecoder('error');
     }
   };
 
@@ -560,7 +562,7 @@ export async function transcodeForElement(file, video, options = {}) {
           requestMore();
         } catch (error) {
           failure = error;
-          console.log(`[iu] transcode step=sourcebuffer-failed error=${String(error?.message ?? error)}`);
+          logDecoder('sourcebuffer-failed', { error: String(error?.message ?? error) });
         }
       })();
     },
@@ -591,11 +593,11 @@ export async function transcodeForElement(file, video, options = {}) {
       if (waited > limit) {
         if (!startFallbackTried && video.currentTime > 5) {
           startFallbackTried = true;
-          console.log(`[iu] transcode step=stuck-fallback from=${video.currentTime.toFixed(1)}`);
+          logDecoder('stuck-fallback', { from: Number(video.currentTime.toFixed(1)) });
           requestSeek(0);
           return;
         }
-        console.log(`[iu] transcode step=stuck-retry t=${video.currentTime.toFixed(1)}`);
+        logDecoder('stuck-retry', { at: Number(video.currentTime.toFixed(1)) });
         requestSeek(video.currentTime);
         return;
       }
@@ -612,7 +614,12 @@ export async function transcodeForElement(file, video, options = {}) {
     // is what an underrun sounds like (a stutter). Logged so it is visible in a paste
     // rather than only felt, and the ask below is what recovers it.
     const ahead = bufferedAheadEnd(video.currentTime) - video.currentTime;
-    if (ahead < runway(LEAD_MIN)) console.log(`[iu] transcode step=underrun ahead=${ahead.toFixed(1)} rate=${(Number(video.playbackRate) || 1).toFixed(2)}`);
+    if (ahead < runway(LEAD_MIN)) {
+      logDecoder('underrun', {
+        ahead: Number(ahead.toFixed(1)),
+        rate: Number((Number(video.playbackRate) || 1).toFixed(2)),
+      });
+    }
     if (ahead > runway(LEAD_MAX)) requestPause();
     else requestMore();
   }, WATCHDOG_MS);

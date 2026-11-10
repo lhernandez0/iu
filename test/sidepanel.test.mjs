@@ -63,11 +63,14 @@ const PANEL_IDS = [
   'transcript',
   'settings-toggle',
   'settings-view',
+  'settings-title',
   'settings-body',
+  'licences-toggle',
+  'diagnostics-toggle',
 ];
 
 /** Ids the real sidepanel.html starts hidden. */
-const HIDDEN_IDS = ['translate-target-row'];
+const HIDDEN_IDS = ['translate-target-row', 'settings-view'];
 
 /**
  * Evaluate a fresh copy of the panel against fresh stubs.
@@ -264,6 +267,83 @@ section('worker errors are shown as errors');
 
   check('message shown verbatim', textOf(byId.get('status')), 'This video has no captions.');
   check('flagged as an error', byId.get('status').classList.contains('error'), true);
+}
+
+section('codes stay in the log, not in the reading status');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  const status = byId.get('status');
+  const codePattern = /\b[A-Z]{2,6}\d{3}\b/;
+
+  lastPort().emit({ type: 'error', error: 'VIDEO001 This video has no captions.' });
+  check('a coded error becomes a sentence', textOf(status), 'This video has no captions.');
+  check('the code is not shown', codePattern.test(textOf(status)), false);
+  check('and it is a normal state, not a failure', status.classList.contains('error'), false);
+
+  lastPort().emit({ type: 'error', error: 'CONN005 No supported video is open in the active tab. (YouTube)' });
+  check('a missing video is plain', textOf(status), 'No video on this tab.');
+  check('no code here either', codePattern.test(textOf(status)), false);
+
+  lastPort().emit({ type: 'error', error: 'VIDEO002 This page has no video player.' });
+  check('a missing player is plain', textOf(status), 'This page has no video.');
+  check('still no code', codePattern.test(textOf(status)), false);
+
+  lastPort().emit({ type: 'error', error: 'TRACK003 The track could not be read.' });
+  check('a real track failure still explains itself', textOf(status), 'Could not load captions.');
+  check('and is flagged', status.classList.contains('error'), true);
+  check('without the code', codePattern.test(textOf(status)), false);
+}
+
+section('a loading state says so, without pretending it failed');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings({}, { loading: true, rows: [] }) });
+  check('the status says it is loading', textOf(byId.get('status')), 'Loading captions…');
+  check('it is not an error', byId.get('status').classList.contains('error'), false);
+}
+
+section('diagnostics is a mode under settings, not reading chrome');
+
+{
+  const { lastPort, byId } = await bootPanel();
+  lastPort().emit({ type: 'state', state: stateWithSettings() });
+  await settle();
+
+  const toggle = byId.get('diagnostics-toggle');
+  const title = byId.get('settings-title');
+  const body = byId.get('settings-body');
+  const view = byId.get('settings-view');
+
+  check('the diagnostics control exists', Boolean(toggle), true);
+  check('it is not pressed to start', toggle.getAttribute('aria-pressed'), 'false');
+  check('and it is not in the reading view', view.hidden, true);
+
+  byId.get('settings-toggle').dispatch('click');
+  toggle.dispatch('click');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  check('settings swaps its title', title.textContent, 'Diagnostics');
+  check('the button is pressed', toggle.getAttribute('aria-pressed'), 'true');
+  check('the licences mode is not', byId.get('licences-toggle').getAttribute('aria-pressed'), 'false');
+  check('the transcript stays hidden', byId.get('transcript').hidden, true);
+  check('the panel shows the empty state', textOf(body).includes('No diagnostics recorded'), true);
+  check('no error code leaks into the view', /\b[A-Z]{2,6}\d{3}\b/.test(textOf(body)), false);
+
+  // Export and clear are actions inside the mode, not reading controls.
+  check('the view offers export', textOf(body).includes('Export log'), true);
+  check('and clear', textOf(body).includes('Clear log'), true);
+
+  // Leaving diagnostics restores the settings title and lets licences open.
+  byId.get('settings-toggle').dispatch('click');
+  byId.get('settings-toggle').dispatch('click');
+  await settle();
+  check('reopening shows Settings again', title.textContent, 'Settings');
+  byId.get('licences-toggle').dispatch('click');
+  await settle();
+  check('licences still opens', title.textContent, 'Licences');
+  check('and diagnostics is not pressed', toggle.getAttribute('aria-pressed'), 'false');
 }
 
 // --- 7. Intents -------------------------------------------------------------

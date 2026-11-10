@@ -52,6 +52,7 @@
     CONTENT_SEEK: 'content-seek',
     CONTENT_POSITION: 'content-position',
     CONTENT_VIDEO_CHANGED: 'content-video-changed',
+    DIAGNOSTIC: 'diagnostic',
   };
   const TARGET = { BACKGROUND: 'background', CONTENT: 'content' };
 
@@ -788,6 +789,24 @@
     console.warn('[IU] The extension was reloaded or updated. Reload this tab to reconnect.');
   }
 
+  /**
+   * Record one local diagnostic event through the worker.
+   *
+   * Best effort, never awaited, and never allowed to affect the page.
+   *
+   * @param {'info'|'warn'|'error'} level
+   * @param {string} event
+   * @param {Record<string, string|number|boolean>} [detail]
+   * @param {string|null} [code]
+   */
+  function diagnostic(level, event, detail = {}, code = null) {
+    post({
+      type: MSG.DIAGNOSTIC,
+      target: TARGET.BACKGROUND,
+      entry: { level, scope: 'content', event, code, detail },
+    });
+  }
+
   /** @param {object} payload */
   function post(payload) {
     if (!contextAlive()) {
@@ -834,6 +853,7 @@
         // Announce it ourselves rather than waiting to be asked, so the panel
         // corrects itself even when the user is not touching it.
         if (video.videoId !== before) {
+          diagnostic('info', 'content.video-changed');
           post({ type: MSG.CONTENT_VIDEO_CHANGED, target: TARGET.BACKGROUND });
         }
       })();

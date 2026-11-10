@@ -406,7 +406,19 @@ export function installChromeStubForPanel({ failWith = null } = {}) {
     id: 'test-extension',
   };
 
-  globalThis.chrome = { runtime };
+  globalThis.chrome = {
+    runtime,
+    // The panel reads the diagnostics log from storage, and exports it. The
+    // side-panel suite does not need a real log, only a storage surface that
+    // returns an empty bucket instead of throwing.
+    storage: {
+      local: {
+        get: async () => ({}),
+        set: async () => {},
+        remove: async () => {},
+      },
+    },
+  };
 
   return {
     chrome: globalThis.chrome,

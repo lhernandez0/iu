@@ -15,7 +15,8 @@ import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp } from '../common/transcript.js';
 import { definition, forSettingsView } from '../common/settings.js';
 import { SOURCES } from '../common/sources.js';
-import { providerNames } from '../common/providers.js';
+import { errorMessage } from '../common/errors.js';
+import { createDiagnostics, RETENTION_DAYS, summarise } from '../common/diagnostics.js';
 import { attachHover, showEntry, hide as hidePopover, renderTokens, renderReading, setReadingSettings } from '../common/marks.js';
 
 /**
@@ -25,6 +26,38 @@ import { attachHover, showEntry, hide as hidePopover, renderTokens, renderReadin
  * longer note in `src/background/service-worker.js`.
  */
 const api = globalThis.browser ?? globalThis.chrome;
+
+const diagnostics = createDiagnostics(api, {
+  version: api.runtime?.getManifest?.()?.version ?? '',
+  target: api.sidePanel ? 'chrome' : 'firefox',
+});
+
+/** Panel events waiting for a worker port. */
+const pendingPanelLogs = [];
+
+/**
+ * Send one event to the worker, the only log writer.
+ *
+ * If the port is down the event waits and is flushed on reconnect. A log write is
+ * never allowed to change what the panel renders.
+ *
+ * @param {'info'|'warn'|'error'} level
+ * @param {string} event
+ * @param {Record<string, string|number|boolean>} [detail]
+ * @param {string|null} [code]
+ */
+function logPanel(level, event, detail = {}, code = null) {
+  const entry = { level, scope: 'panel', event, detail, code };
+  if (!send({ type: MSG.DIAGNOSTIC, entry })) pendingPanelLogs.push(entry);
+}
+
+function flushPanelLogs() {
+  while (pendingPanelLogs.length) {
+    const entry = pendingPanelLogs[0];
+    if (!send({ type: MSG.DIAGNOSTIC, entry })) return;
+    pendingPanelLogs.shift();
+  }
+}
 
 /**
  * Options for the settings this panel renders itself.
@@ -77,6 +110,7 @@ const els = {
   settingsTitle: /** @type {HTMLElement} */ (document.getElementById('settings-title')),
   settingsBody: /** @type {HTMLElement} */ (document.getElementById('settings-body')),
   licencesToggle: /** @type {HTMLButtonElement} */ (document.getElementById('licences-toggle')),
+  diagnosticsToggle: /** @type {HTMLButtonElement} */ (document.getElementById('diagnostics-toggle')),
   learningBar: /** @type {HTMLElement} */ (document.querySelector('.bar.learning')),
 };
 
@@ -123,6 +157,8 @@ const view = {
    * body, so a reader glances at the licences and is one click from where they were.
    */
   licencesOpen: false,
+  /** Whether the settings body is showing Diagnostics instead of settings. */
+  diagnosticsOpen: false,
   /**
    * The last cue the worker reported, kept across a row rebuild.
    *
@@ -184,6 +220,7 @@ function connectToWorker() {
 
   reconnectDelay = INITIAL_RECONNECT_MS;
   reconnectAttempts = 0;
+  flushPanelLogs();
 
   // The worker resolves the current tab when the port connects, so no outgoing
   // request is needed here.
@@ -201,6 +238,7 @@ function scheduleReconnect(reason) {
   }
 
   setStatus(`Lost the extension worker (${reason}). Reconnecting…`, true);
+  logPanel('warn', 'panel.worker-lost');
   reconnectTimer = setTimeout(connectToWorker, reconnectDelay);
   reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_MS);
 }
@@ -234,12 +272,18 @@ function onWorkerMessage(message) {
       return;
     }
     if (message.type === MSG.ERROR) {
-      setStatus(message.error, true);
+      const { text, isError } = describeStatusError(message.error, true);
+      setStatus(text, isError);
+      return;
+    }
+    if (message.type === MSG.DIAGNOSTICS_CHANGED) {
+      if (view.diagnosticsOpen) void renderDiagnosticsView();
     }
   } catch (error) {
     // Surface it. A render failure would otherwise leave the placeholder text on
     // screen, which looks exactly like the extension doing nothing.
-    setStatus(`Panel error: ${error?.message ?? error}`, true);
+    setStatus('The panel could not finish drawing.', true);
+    logPanel('error', 'panel.render-failed');
   }
 }
 
@@ -459,12 +503,43 @@ function shortName(state, code) {
   return (found?.name ?? code).split(' (')[0];
 }
 
+/**
+ * Turn a coded worker/panel error into a sentence for the reading status.
+ *
+ * Codes belong in the log and the Diagnostics view, not in the line above the
+ * transcript. The mapping is deliberately small: the states that are NOT failures
+ * (no video, no player, no captions, a track that cannot be picked) are muted, and
+ * only a genuine failure is red.
+ *
+ * @param {string} error
+ * @param {boolean} [isEvent] True for an explicit ERROR message rather than the
+ *   error carried inside a state. An uncoded event is a failure; an uncoded state
+ *   is usually an ordinary status and keeps the quiet treatment.
+ * @returns {{text: string, isError: boolean}}
+ */
+function describeStatusError(error, isEvent = false) {
+  const code = /^([A-Z]{2,6}\d{3})\b/.exec(error)?.[1] ?? null;
+  if (!code) return { text: error, isError: isEvent };
+  if (code === 'CONN005') return { text: 'No video on this tab.', isError: false };
+  if (code === 'VIDEO002') return { text: 'This page has no video.', isError: false };
+  if (code === 'VIDEO001') return { text: 'This video has no captions.', isError: false };
+  if (code === 'TRACK001' || code === 'TRACK002') {
+    return { text: errorMessage(code) ?? 'This caption track cannot be used.', isError: false };
+  }
+  return { text: errorMessage(code) ?? 'Something went wrong.', isError: true };
+}
+
 /** @param {object} state */
 function renderStatus(state) {
   view.title = state.title ?? '';
 
   if (state.error) {
-    setStatus(state.error, true);
+    const { text, isError } = describeStatusError(state.error);
+    setStatus(text, isError);
+    return;
+  }
+  if (state.loading) {
+    setStatus('Loading captions…');
     return;
   }
   if (!state.rows?.length) {
@@ -582,11 +657,16 @@ function renderLearning(state) {
 function renderSettingsView(learning, state) {
   if (!els.settingsBody) return;
 
-  // The licences mode REPLACES the settings, so it is decided here rather than by a
-  // second renderer the open path would have to call. One place builds the body, so
-  // the two modes cannot both append and leave the other's rows behind.
+  // The licences and diagnostics modes REPLACE the settings, so they are decided
+  // here rather than by a second renderer the open path would have to call. One
+  // place builds the body, so two modes cannot both append and leave the other's
+  // rows behind.
   if (view.licencesOpen) {
     renderLicencesView();
+    return;
+  }
+  if (view.diagnosticsOpen) {
+    void renderDiagnosticsView();
     return;
   }
 
@@ -694,10 +774,17 @@ function renderLicencesView() {
  */
 function refreshSettingsChrome() {
   const licences = view.licencesOpen;
-  if (els.settingsTitle) els.settingsTitle.textContent = licences ? 'Licences' : 'Settings';
+  const diagnosticsOpen = view.diagnosticsOpen;
+  if (els.settingsTitle) {
+    els.settingsTitle.textContent = diagnosticsOpen ? 'Diagnostics' : licences ? 'Licences' : 'Settings';
+  }
   if (els.licencesToggle) {
     els.licencesToggle.textContent = licences ? 'Settings' : 'Licences';
     els.licencesToggle.setAttribute('aria-pressed', String(licences));
+  }
+  if (els.diagnosticsToggle) {
+    els.diagnosticsToggle.textContent = diagnosticsOpen ? 'Settings' : 'Diagnostics';
+    els.diagnosticsToggle.setAttribute('aria-pressed', String(diagnosticsOpen));
   }
   renderSettingsView(view.state?.learning ?? {}, view.state ?? {});
 }
@@ -712,7 +799,103 @@ function refreshSettingsChrome() {
  */
 function setLicencesOpen(open) {
   view.licencesOpen = open;
+  if (open) view.diagnosticsOpen = false;
   refreshSettingsChrome();
+}
+
+/** Show Diagnostics instead of the settings, in the same view. */
+function setDiagnosticsOpen(open) {
+  view.diagnosticsOpen = open;
+  if (open) view.licencesOpen = false;
+  refreshSettingsChrome();
+}
+
+/** A short local time for the diagnostics range. */
+function shortTime(ms) {
+  return new Date(ms).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * The diagnostics view.
+ *
+ * A mode inside Settings, not a reading control. It says how many events are kept,
+ * how far back they go, and offers export and clear. It never shows an error code
+ * in the panel's status line.
+ */
+async function renderDiagnosticsView() {
+  if (!els.settingsBody || !view.diagnosticsOpen) return;
+  const log = await diagnostics.read();
+  if (!view.diagnosticsOpen) return;
+
+  const body = els.settingsBody;
+  body.replaceChildren();
+  body.dataset.signature = 'diagnostics';
+
+  const summary = summarise(log);
+  const line = document.createElement('p');
+  line.className = summary.count ? 'diagnostics-summary' : 'diagnostics-summary diagnostics-empty';
+  line.textContent = summary.count
+    ? `${summary.count} entries · ${shortTime(summary.oldest)} to ${shortTime(summary.newest)}`
+    : 'No diagnostics recorded.';
+  body.append(line);
+
+  const row = document.createElement('label');
+  row.className = 'settings-row diagnostics-retention';
+  const label = document.createElement('span');
+  label.className = 'settings-label';
+  label.textContent = 'Keep for';
+  const select = document.createElement('select');
+  select.setAttribute('aria-label', 'How long to keep diagnostics');
+  for (const days of RETENTION_DAYS) {
+    const option = new Option(`${days} days`, String(days));
+    option.selected = days === summary.retentionDays;
+    select.append(option);
+  }
+  select.addEventListener('change', () => {
+    send({ type: MSG.SET_DIAGNOSTICS_RETENTION, days: Number(select.value) });
+    logPanel('info', 'diagnostics.retention', { days: Number(select.value) });
+  });
+  row.append(label, select);
+  body.append(row);
+
+  const actions = document.createElement('div');
+  actions.className = 'diagnostics-actions';
+
+  const exportButton = document.createElement('button');
+  exportButton.type = 'button';
+  exportButton.textContent = 'Export log';
+  exportButton.addEventListener('click', () => {
+    void diagnostics.exportText(log).then((text) => {
+      const blob = new Blob([text], { type: 'application/jsonl' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+      link.href = url;
+      link.download = `iu-diagnostics-${stamp}.jsonl`;
+      link.click();
+      URL.revokeObjectURL(url);
+      logPanel('info', 'diagnostics.export', { count: summary.count });
+    });
+  });
+
+  const clearButton = document.createElement('button');
+  clearButton.type = 'button';
+  clearButton.textContent = 'Clear log';
+  clearButton.disabled = summary.count === 0;
+  clearButton.addEventListener('click', () => {
+    // No log entry after clearing: that would re-create the log the reader just
+    // asked us to empty. The clear itself is the action, not an event to keep.
+    send({ type: MSG.CLEAR_DIAGNOSTICS });
+    void renderDiagnosticsView();
+  });
+
+  actions.append(exportButton, clearButton);
+  body.append(actions);
 }
 
 /**
@@ -891,6 +1074,7 @@ function setSettingsOpen(open) {
   // than a state the panel can be left in. Closing resets it too, so the next open is
   // predictable whatever the last one ended on.
   view.licencesOpen = false;
+  view.diagnosticsOpen = false;
   if (els.settingsView) els.settingsView.hidden = !open;
   if (els.transcript) els.transcript.hidden = open;
   if (els.status) els.status.hidden = open;
@@ -920,6 +1104,15 @@ if (els.settingsToggle) {
 if (els.licencesToggle) {
   els.licencesToggle.addEventListener('click', () => setLicencesOpen(!view.licencesOpen));
 }
+
+if (els.diagnosticsToggle) {
+  els.diagnosticsToggle.addEventListener('click', () => setDiagnosticsOpen(!view.diagnosticsOpen));
+}
+
+// Set the header and both mode buttons once at boot, so the first paint says
+// "Settings" and neither mode claims to be open. Without this the HTML happens to
+// look right until the first mode change, and any future rename would diverge.
+refreshSettingsChrome();
 
 /**
  * Fill a select from a list of {value,label}, rebuilding only when it differs.
@@ -1412,14 +1605,6 @@ function setActive(index, speaking = true) {
 function setStatus(text, isError = false) {
   els.status.textContent = text;
   els.status.classList.toggle('error', isError);
-
-  // Expose the code as its own attribute, so it can be read or copied without
-  // hunting through the sentence, and so `document.getElementById('status')
-  // .dataset.code` in the console answers "which error is this" directly. The
-  // text already leads with the code; this makes it addressable.
-  const code = /^([A-Z]{2,6}\d{3})\b/.exec(text ?? '');
-  if (code) els.status.dataset.code = code[1];
-  else delete els.status.dataset.code;
 }
 
 // --- Parked audio path -------------------------------------------------------
@@ -1455,5 +1640,5 @@ if (USE_AUDIO_CAPTURE) void enableAudioCapture();
 
 // --- Boot -------------------------------------------------------------------
 
-setStatus(`Looking for a ${providerNames()} video…`);
+setStatus('Looking for a video…');
 connectToWorker();
