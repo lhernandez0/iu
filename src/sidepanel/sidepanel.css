@@ -145,11 +145,17 @@ body {
   font-size: calc(11px * var(--text-scale));
 }
 
-/* The Licences button, in the settings header. A plain button rather than a link:
-   it is a navigation control in a header, and it toggles to say "Settings" when the
-   licences are showing, so the same control is how you get back. */
-.settings-licences {
+/* The mode buttons, in the settings header. Plain buttons rather than links: they
+   are navigation controls in a header, and the active one toggles to say "Settings"
+   when its mode is showing, so the same control is how you get back. */
+.settings-modes {
+  display: flex;
+  gap: 6px;
+  align-items: center;
   margin-left: auto;
+}
+
+.settings-licences {
   padding: 3px 9px;
   border: 1px solid var(--edge);
   border-radius: var(--radius-sm);
@@ -273,7 +279,13 @@ body.collapsed .status {
 
 .settings-head {
   display: flex;
+  /* The two mode buttons and the title can exceed a 360px panel at the largest
+     text size. Wrapping keeps every control reachable instead of pushing the
+     last one off the edge. */
+  flex-wrap: wrap;
   align-items: center;
+  gap: 8px;
+  row-gap: 6px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--edge);
   /* Pinned, so the heading stays put however far the list is scrolled. */
@@ -890,4 +902,51 @@ select:disabled {
 
 .row.active .secondary {
   color: var(--muted-active);
+}
+
+/* --- Diagnostics ---------------------------------------------------------- */
+
+.diagnostics-summary {
+  margin: 0;
+  padding: 10px;
+  border-bottom: 1px solid var(--edge-soft);
+  color: var(--fg);
+  font-size: calc(11px * var(--text-scale));
+}
+
+.diagnostics-empty {
+  color: var(--muted);
+}
+
+.diagnostics-retention select {
+  max-width: min(12ch, 45%);
+}
+
+.diagnostics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--edge-soft);
+}
+
+.diagnostics-actions button {
+  padding: 5px 9px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: calc(11px * var(--text-scale));
+  cursor: pointer;
+}
+
+.diagnostics-actions button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.diagnostics-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }

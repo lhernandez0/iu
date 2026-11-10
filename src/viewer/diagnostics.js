@@ -1,49 +1,36 @@
 /**
- * Console diagnostics for what a file actually contains.
+ * Local diagnostics for what the viewer is doing.
  *
- * **Temporary, and deliberately loud.** `WIDELY_PLAYABLE` in `audio-tracks.js` is a
- * static allowlist used to warn that a file's audio may not decode, and it is a
- * guess: AC-3 plays in Chrome on Windows and not in Chromium on Linux, and this
- * list cannot see which build it is running on. The `UNKNOWN` and `AC3` messages
- * users have reported are that guess firing, and there is no way to tell a correct
- * warning from a false one without seeing the files.
+ * These used to be console lines. A console line is invisible unless someone is
+ * already looking, and it vanishes when the page reloads. They now go to the
+ * extension's local log, which the panel exports under Settings > Diagnostics.
  *
- * So this logs the raw facts and nothing else, in one block per file, under a
- * single prefix so a user can paste back just the relevant lines:
+ * What is NOT sent: file names, file titles, transcript text, subtitle text, page
+ * URLs, cookies, word lookups. The log is for "which step, which codec, which
+ * count", not for what the user was reading. File extension, size, codec, cue
+ * count and error code are technical facts and are kept.
  *
- *   1. Open the viewer, open the file, look at the console.
- *   2. Filter for `[iu]`.
- *   3. Paste the result into the issue.
- *
- * One block per file rather than a line per fact, because the interaction between a
- * container, its tracks and the Browser's own answer is the thing being diagnosed,
- * and those are only meaningful together.
- *
- * ## What it does NOT log
- *
- * Never the file's `name` beyond what the viewer already shows, never its bytes,
- * and never a URL. A container's internal tags can carry anything (a `TITLE` tag can
- * be a release name), so tags are summarised by KEY and count rather than dumped.
- * This is a privacy-respecting extension and a diagnostic must not be the thing that
- * leaks, which is also why nothing here is sent anywhere: it is `console.log`, and
- * the user decides what to share.
+ * The worker is the only writer of the log. This page sends events to it.
  */
 
-const PREFIX = '[iu]';
+import { MSG, TARGET } from '../common/messages.js';
 
-/**
- * Map a container's short codec name to the RFC 6381 string `canPlayType` wants.
- *
- * **This matters, and getting it wrong is how this diagnostic lied.** Asked with the
- * container's own spelling, `canPlayType('video/mp4; codecs="avc1.42E01E,aac"')`
- * answers `""` (a refusal), because `aac` is not a valid codec parameter: the RFC
- * spelling is `mp4a.40.2`. So a naive probe reports that nothing is playable,
- * including files that play perfectly. Measured: `aac` -> `""`, `mp4a.40.2` ->
- * `"probably"`, same browser, same moment.
- *
- * A short name with no entry is reported as `(unmapped)` rather than guessed, so an
- * empty answer is legible as a gap in this table instead of a verdict on the codec.
- */
+const api = globalThis.browser ?? globalThis.chrome;
+
+/** @param {'info'|'warn'|'error'} level @param {string} event @param {object} [detail] @param {string|null} [code] */
+function report(level, event, detail = {}, code = null) {
+  try {
+    const sending = api.runtime?.sendMessage?.({
+      target: TARGET.BACKGROUND,
+      type: MSG.DIAGNOSTIC,
+      entry: { level, scope: 'viewer', event, code, detail },
+    });
+    sending?.catch?.(() => {});
+  } catch {
+    // Diagnostics must never break playback.
+  }
+}
+
 const RFC_CODEC = new Map([
   ['aac', 'mp4a.40.2'],
   ['mp3', 'mp4a.40.34'],
@@ -60,17 +47,6 @@ const RFC_CODEC = new Map([
   ['pcm-s24', 'l24'],
 ]);
 
-/**
- * Is `canPlayType` willing to say yes?
- *
- * The Browser's own opinion, which is the ONLY authority on whether a codec will
- * actually decode. The static allowlist in `audio-tracks.js` exists because
- * `canPlayType` answers "maybe" for containers it cannot fully predict, so both
- * answers are worth seeing side by side.
- *
- * @param {string} mime
- * @returns {string}
- */
 function canPlay(mime) {
   try {
     return document.createElement('video').canPlayType(mime) || 'no';
@@ -79,178 +55,125 @@ function canPlay(mime) {
   }
 }
 
-/**
- * Ask `canPlayType` properly, in the RFC spelling.
- *
- * @param {string} codec The container's short name.
- * @returns {string}
- */
 function canPlayAudioCodec(codec) {
   const rfc = RFC_CODEC.get(codec);
   if (!rfc) return `(unmapped:${codec})`;
   return canPlay(`video/mp4; codecs="avc1.42E01E,${rfc}"`);
 }
 
-/** @param {string} label @param {Record<string, unknown>} fields */
-function line(label, fields) {
-  const parts = Object.entries(fields)
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${key}=${value === null ? 'null' : String(value)}`);
-  console.log(`${PREFIX} ${label} ${parts.join(' ')}`);
+const extension = (name) => (String(name).match(/\.[^.]+$/) ?? ['(none)'])[0].toLowerCase().slice(1);
+
+/**
+ * Pull a viewer error code out of a message so it reaches the log even when the
+ * sentence is what the page shows. Codes are diagnostic data, not UI copy.
+ *
+ * @param {Record<string, unknown>} fields
+ * @returns {string|null}
+ */
+function codeIn(fields) {
+  const text = [fields.error, fields.reason].find((value) => typeof value === 'string');
+  return /\b([A-Z]{2,6}\d{3})\b/.exec(text ?? '')?.[1] ?? null;
+}
+
+/** A viewer boot event. */
+export function logBanner() {
+  report('info', 'viewer.boot');
 }
 
 /**
- * Log the video FILE and what the element made of it.
- *
- * `videoWidth`/`duration` are the element's own decode result, so a non-zero size
- * here means the container and its VIDEO codec were accepted, which is what makes
- * an audio-only complaint believable. Called from the `loadedmetadata` handler.
+ * The file and what the element made of it.
  *
  * @param {File|undefined} file
  * @param {HTMLVideoElement} video
  */
 export function logFile(file, video) {
   if (!file) return;
-  console.log(`${PREFIX} --- file ---`);
-  line('file', {
-    type: file.type || '(none)',
+  report('info', 'viewer.file', {
+    ext: extension(file.name),
     bytes: file.size,
-    ext: (file.name.match(/\.[^.]+$/) ?? ['(none)'])[0].toLowerCase(),
-  });
-  line('element', {
+    type: file.type || undefined,
     readyState: video.readyState,
     networkState: video.networkState,
-    videoWidth: video.videoWidth,
-    videoHeight: video.videoHeight,
-    duration: Number.isFinite(video.duration) ? video.duration.toFixed(2) : String(video.duration),
-    error: video.error ? `${video.error.code}:${video.error.message || 'no message'}` : 'none',
+    ok: !video.error,
+    errorCode: video.error?.code,
   });
 }
 
 /**
- * Log every audio track the container declares, plus the Browser's verdict on each.
- *
- * The two facts that decide the `UNKNOWN` and `AC3` messages: the codec STRING as the
- * container spells it, and whether `canPlayType` agrees with `WIDELY_PLAYABLE`. When
- * they disagree, the warning is wrong and this is what shows it.
+ * Every audio track the container declares, plus the Browser's verdict.
  *
  * @param {Array<{index: number, number: number, codec: string, language: string|null,
  *   channels: number|null, label: string, playable: boolean}>} tracks
  * @param {string} [videoCodec]
  */
 export function logAudioTracks(tracks, videoCodec) {
-  console.log(`${PREFIX} --- audio ---`);
-  line('audioTracks', { count: tracks.length, videoCodec: videoCodec || '(not read here)' });
+  report('info', 'viewer.audio', { count: tracks.length, codec: videoCodec || undefined });
   for (const track of tracks) {
     const verdict = canPlayAudioCodec(track.codec);
-    line('audio', {
-      i: track.index,
+    report('info', 'viewer.audio-track', {
+      index: track.index,
       codec: track.codec,
-      lang: track.language,
-      ch: track.channels,
-      // What `audio-tracks.js` will use to decide whether to warn.
-      allowlisted: track.playable,
-      // What the browser says when asked PROPERLY. When these disagree, the warning
-      // is wrong, which is the whole reason for logging both.
-      canPlayType: verdict,
-      agree: String(track.playable === (verdict !== 'no' && !verdict.startsWith('('))),
+      channels: track.channels ?? undefined,
+      playable: track.playable,
+      canPlay: verdict,
     });
   }
 }
 
 /**
- * Log a subtitle FILE as parsed, which is where a sidecar goes wrong.
- *
- * `cues` and `error` together say whether the file was understood; `encoding` is
- * worth logging because a Chinese `.srt` is very often GBK and decoding it as UTF-8
- * yields replacement characters that parse cleanly into garbage.
+ * A sidecar subtitle file as parsed.
  *
  * @param {{name: string}} file
  * @param {{segments: unknown[], format: string, encoding: string, error: string|null}} parsed
  * @param {string} languageCode
  */
 export function logSubtitle(file, parsed, languageCode) {
-  console.log(`${PREFIX} --- subtitle ---`);
-  line('subtitle', {
-    ext: (file.name.match(/\.[^.]+$/) ?? ['(none)'])[0].toLowerCase(),
-    bytes: /** @type {{size?: number}} */ (file).size ?? '(n/a)',
-    detected: parsed.format,
+  report(parsed.error ? 'warn' : 'info', 'viewer.subtitle', {
+    ext: extension(file.name),
+    bytes: /** @type {{size?: number}} */ (file).size ?? undefined,
+    format: parsed.format,
     encoding: parsed.encoding,
     cues: parsed.segments.length,
-    language: languageCode,
-    error: parsed.error ?? 'none',
-    first: parsed.segments[0]?.text ? JSON.stringify(String(parsed.segments[0].text).slice(0, 24)) : '(none)',
+    ok: !parsed.error,
+    // The language code is a technical tag, not the text.
+    source: languageCode || undefined,
   });
 }
 
 /**
- * Log the subtitle tracks found INSIDE a container.
- *
- * Image-based subtitles (PGS, VobSub) are the common surprise here: they are real
- * tracks with no text in them, so they appear in the list and can never be read.
+ * The subtitle tracks found inside a container.
  *
  * @param {Array<{number: number, codec: string, kind?: string, language?: string, name?: string|null}>} found
  */
 export function logEmbeddedTracks(found) {
-  console.log(`${PREFIX} --- embedded ---`);
-  line('embeddedTracks', { count: found.length });
+  report('info', 'viewer.embedded', { count: found.length });
   for (const track of found) {
-    line('embedded', {
-      n: track.number,
+    report('info', 'viewer.embedded-track', {
+      index: track.number,
       codec: track.codec,
-      kind: track.kind ?? '(none)',
-      lang: track.language ?? '(none)',
-      title: track.name ? JSON.stringify(track.name.slice(0, 24)) : '(none)',
+      kind: track.kind ?? undefined,
     });
   }
 }
 
 /**
- * What the decoder attempt is doing, logged at each step.
- *
- * This exists because "I hear nothing and there is no selector" has several possible
- * causes and no way to tell them apart from outside: the capability probe said no, the
- * import failed, the demux threw, the decode produced silence, or nothing ran at all.
- * Each step logs, so the answer is in the paste rather than in a round trip.
+ * A decoder step.
  *
  * @param {string} step
  * @param {Record<string, unknown>} [fields]
  */
 export function logDecoder(step, fields = {}) {
-  line('decoder', { step, ...fields });
+  const level = /fail|error|abandon/i.test(step) ? 'error' : 'info';
+  report(level, `viewer.decoder.${step}`, fields, codeIn(fields));
 }
 
 /**
- * Trace one step of the subtitle path, so a caption that never appears can be located.
+ * A subtitle-path step.
  *
- * **Added because "no subtitles at all" is a chain of silent branches.** The viewer picks
- * a track, reads its cues from the container, marks them, and draws the cue that should be
- * on screen right now. Any one of those can yield nothing without an error: no track was
- * picked, the read never started, the read never finished, it returned zero cues, the mark
- * pass skipped, or the cue exists but the playhead is between cues. From outside they all
- * look identical, an empty caption line. Each step logs here so the paste says WHICH.
- *
- * `phase` is deliberately terse and greppable: pick, resolve, read-start, read-done,
- * read-failed, mark, redraw.
- *
- * @param {string} phase
+ * @param {string} step
  * @param {Record<string, unknown>} [fields]
  */
-export function logSubs(phase, fields = {}) {
-  line('subs', { phase, ...fields });
-}
-
-/** Announce once per page, so a pasted log says which build it came from. */
-export function logBanner() {
-  line('viewer', {
-    ua: navigator.userAgent,
-    audioTracksApi: 'audioTracks' in HTMLMediaElement.prototype,
-    // The codecs users have reported being warned about. Asked in the RFC spelling,
-    // because the short name answers `""` for everything and would report this browser
-    // as unable to play anything at all.
-    canPlayAc3: canPlayAudioCodec('ac-3'),
-    canPlayEac3: canPlayAudioCodec('ec-3'),
-    canPlayDts: canPlayAudioCodec('dts'),
-    canPlayAac: canPlayAudioCodec('aac'),
-  });
+export function logSubs(step, fields = {}) {
+  const level = /fail|error/i.test(step) ? 'error' : 'info';
+  report(level, `viewer.subs.${step}`, fields, codeIn(fields));
 }

@@ -172,15 +172,18 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     const watch = await openWatchPage(context, 'nocaps1');
     const { page } = await openPanel(context, extensionId, watch);
 
-    // Nothing should ever render here, so wait for the error instead of rows.
-    await page.waitForFunction(() => document.getElementById('status')?.classList.contains('error'), null, {
+    // Nothing should ever render here, so wait for the sentence instead of rows.
+    // No captions is a normal state, not a failure: the status is muted and the
+    // red treatment is reserved for something that actually went wrong.
+    await page.waitForFunction(() => /no captions/i.test(document.getElementById('status')?.textContent ?? ''), null, {
       timeout: 20000,
     });
     const state = await panelState(page);
     const status = state.status;
 
-    check('an error is shown', state.isError, true);
-    check('the message names the problem', status.includes('no captions'), true);
+    check('the problem is stated', status.includes('no captions'), true);
+    check('without the code', /\b[A-Z]{2,6}\d{3}\b/.test(status), false);
+    check('and it is not flagged as a failure', state.isError, false);
     check('no rows', state.rows.length, 0);
   }
 
@@ -1355,5 +1358,73 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('the transcript rendered anyway', state.rows.length, 3);
     check('with its real text', state.rows[0]?.text, 'Hey there');
     check('and no error was reported', state.isError, false);
+  }
+
+  // --- Diagnostics -----------------------------------------------------------
+
+  section('diagnostics lives under settings and exports a local file');
+
+  {
+    await routeYouTube(context, { videoId: 'diagvideo1', tracks: [ENGLISH] });
+    const watch = await openWatchPage(context, 'diagvideo1');
+    const { page, errors } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 3);
+
+    await page.click('#settings-toggle');
+    await page.click('#diagnostics-toggle');
+    await page.waitForTimeout(400);
+
+    const view = await page.evaluate(() => ({
+      title: document.getElementById('settings-title')?.textContent,
+      text: document.getElementById('settings-body')?.textContent ?? '',
+      transcriptHidden: document.getElementById('transcript')?.hidden,
+      statusHidden: document.getElementById('status')?.hidden,
+      buttons: [...document.querySelectorAll('.diagnostics-actions button')].map((b) => b.textContent.trim()),
+      retention: document.querySelector('.diagnostics-retention select')?.value,
+    }));
+
+    check('the mode is Diagnostics', view.title, 'Diagnostics');
+    check('the transcript is gone while looking at it', view.transcriptHidden, true);
+    check('the reading status is gone too', view.statusHidden, true);
+    check('it offers export and clear', view.buttons, ['Export log', 'Clear log']);
+    check('the retention selector starts at 30', view.retention, '30');
+    check('the count is shown', /No diagnostics recorded|\d+ entries/.test(view.text), true);
+    check('no error code is shown', /\b[A-Z]{2,6}\d{3}\b/.test(view.text), false);
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('.diagnostics-actions button:has-text("Export log")'),
+    ]);
+    check('the file is JSONL', download.suggestedFilename().endsWith('.jsonl'), true);
+    check('named as a diagnostics export', download.suggestedFilename().startsWith('iu-diagnostics-'), true);
+
+    const stream = await download.createReadStream();
+    let body = '';
+    for await (const chunk of stream) body += chunk;
+    const lines = body.trim().split('\n').map((line) => JSON.parse(line));
+    check('the header comes first', lines[0]?.type, 'header');
+    check('the header says chrome', lines[0]?.target, 'chrome');
+    check('there is at least one event', lines[0]?.count > 0, true);
+    check('the entries follow the header', lines.length, lines[0].count + 1);
+    check('no page URL is in the export', /https?:\/\//.test(body), false);
+    check('no video title is in the export', /Fixture Video/.test(body), false);
+    check('no caption text is in the export', /Hey there/.test(body), false);
+
+    await page.click('.diagnostics-actions button:has-text("Clear log")');
+    await page.waitForTimeout(500);
+    const cleared = await page.evaluate(() => document.getElementById('settings-body')?.textContent ?? '');
+    check('clearing empties the log', cleared.includes('No diagnostics recorded'), true);
+    check('and the clear button is disabled', await page.evaluate(() => document.querySelector('.diagnostics-actions button:last-child')?.disabled), true);
+    check('no console errors from the panel', errors, []);
+
+    // Leaving diagnostics restores the settings view and the transcript.
+    await page.click('#diagnostics-toggle');
+    await page.waitForTimeout(200);
+    const back = await page.evaluate(() => ({
+      title: document.getElementById('settings-title')?.textContent,
+      transcriptHidden: document.getElementById('transcript')?.hidden,
+    }));
+    check('the mode returns to Settings', back.title, 'Settings');
+    check('and the transcript is still under the settings view', back.transcriptHidden, true);
   }
 });

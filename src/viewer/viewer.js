@@ -34,7 +34,7 @@
  */
 
 import { MSG, TARGET } from '../common/messages.js';
-import { errorText } from '../common/errors.js';
+import { errorText, errorMessage } from '../common/errors.js';
 import { findActiveIndex, findPlayingIndex, captionHoldSeconds, alignSecondary } from '../common/transcript.js';
 import { parseSubtitles, languageFromFileName, SUBTITLE_EXTENSIONS } from './subtitles.js';
 import { readMatroskaTracks, readMatroska, imageCodecName } from './matroska.js';
@@ -603,7 +603,7 @@ async function acceptFiles(files) {
   if (subs.length) await loadSubtitles(subs);
 
   if (!video && !subs.length) {
-    setStatus(errorText('VIEWER002', 'no video or subtitle file in that selection'), true);
+    setStatus(errorMessage('VIEWER002'), true);
     return;
   }
   render();
@@ -708,7 +708,7 @@ async function loadVideo(file) {
     'error',
     () => {
       const code = els.video.error?.code;
-      setStatus(errorText('VIEWER003', code ? `media error ${code}` : undefined), true);
+      setStatus(errorMessage('VIEWER003'), true);
     },
     { once: true },
   );
@@ -910,7 +910,7 @@ async function loadSubtitles(files) {
   const usable = tracks.filter((track) => track.segments?.length);
   if (!usable.length) {
     const first = tracks[0];
-    setStatus(errorText('VIEWER002', first?.error ?? 'no subtitle cues'), true);
+    setStatus(errorMessage('VIEWER002'), true);
   } else if (usable.length === 1) {
     setStatus(`${usable[0].segments.length} cues · ${usable[0].format} · ${usable[0].encoding}`);
   } else {
@@ -993,7 +993,7 @@ async function loadEmbeddedTracks(file) {
   tracks = [...fromFiles, ...embedded];
 
   if (!tracks.length) {
-    setStatus(errorText('VIEWER005'), true);
+    setStatus(errorMessage('VIEWER005'), true);
     return;
   }
 

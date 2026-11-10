@@ -122,18 +122,17 @@ function allowProduce(id) {
 }
 
 /**
- * Log one step under the extension's diagnostic prefix.
+ * A worker-side step marker.
  *
- * A worker's own console is easy to lose, so the bridge forwards worker errors to the
- * main console. This prefix is what makes them findable in either.
+ * Deliberately silent. A worker console is invisible unless DevTools is already
+ * open on that worker, and it bypasses the extension's local log. The main thread
+ * logs the steps it can see, including worker errors, so this stays a marker that
+ * can be given a body later without changing the call sites.
  *
- * @param {string} step
- * @param {Record<string, unknown>} [fields]
+ * @param {string} _step
+ * @param {Record<string, unknown>} [_fields]
  */
-function trace(step, fields = {}) {
-  const parts = Object.entries(fields).map(([key, value]) => `${key}=${String(value)}`);
-  console.log(`[iu] transcode step=${step}${parts.length ? ' ' + parts.join(' ') : ''}`);
-}
+function trace(_step, _fields = {}) {}
 
 /** The conversion currently running, so a seek can cancel it. @type {any} */
 let current = null;

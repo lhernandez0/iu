@@ -203,6 +203,19 @@ export function errorText(code, detail) {
 }
 
 /**
+ * The learner-facing sentence for a code, without the code or any detail.
+ *
+ * The status line and the viewer use this. `errorText` remains the diagnostic
+ * form for logs and tests, where the code and detail are the point.
+ *
+ * @param {string} code
+ * @returns {string|null}
+ */
+export function errorMessage(code) {
+  return ERRORS[code]?.message ?? null;
+}
+
+/**
  * Wrap a caught error, unless it is already coded.
  *
  * Codes propagate outward: the layer closest to the failure knows best what

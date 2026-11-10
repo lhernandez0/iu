@@ -50,6 +50,16 @@ export const MSG = Object.freeze({
   /** panel -> background. Payload: { id, value }, one setting changed. */
   SET_SETTING: 'set-setting',
 
+  // --- Local diagnostics ------------------------------------------------------
+  /** any context -> background. Payload: { entry }, one local log record. */
+  DIAGNOSTIC: 'diagnostic',
+  /** panel -> background. Payload: { days }, change the local log retention. */
+  SET_DIAGNOSTICS_RETENTION: 'set-diagnostics-retention',
+  /** panel -> background. Clear the local log. */
+  CLEAR_DIAGNOSTICS: 'clear-diagnostics',
+  /** background -> panel. The local log or its retention changed. */
+  DIAGNOSTICS_CHANGED: 'diagnostics-changed',
+
   // --- Learning layer --------------------------------------------------------
   /** panel -> background. Payload: { listId }, which word list to grade against. */
   SET_LIST: 'set-list',

@@ -21,6 +21,7 @@ import { errorText, codeError } from '../common/errors.js';
 import { alignSecondary } from '../common/transcript.js';
 import { defaults, normalise, storageKey, definition, SETTINGS_AREA } from '../common/settings.js';
 import { providerFor, providerNames } from '../common/providers.js';
+import { createDiagnostics } from '../common/diagnostics.js';
 import {
   loadDictionary,
   loadIndex,
@@ -59,6 +60,41 @@ import { markLine, listCoversLanguage } from '../learn/marking.js';
  */
 const api = globalThis.browser ?? globalThis.chrome;
 
+const diagnostics = createDiagnostics(api, {
+  version: api.runtime?.getManifest?.()?.version ?? '',
+  // The per-browser build is the reliable place to ask; the API namespace is
+  // not, because recent Chrome exposes `browser` too.
+  target: api.sidePanel ? 'chrome' : 'firefox',
+});
+
+/**
+ * Record one worker event in the local diagnostics ring.
+ *
+ * Fire and forget on purpose: a log write must never delay a caption read or a
+ * state broadcast. The store catches its own storage failures.
+ *
+ * @param {'info'|'warn'|'error'} level
+ * @param {string} event
+ * @param {Record<string, string|number|boolean>} [detail]
+ * @param {string|null} [code]
+ */
+function logEvent(level, event, detail = {}, code = null) {
+  void diagnostics.append({ level, scope: 'worker', event, detail, code });
+}
+
+/** @param {object} message */
+function logIncoming(message) {
+  const entry = message?.entry;
+  if (!entry || typeof entry !== 'object') return;
+  void diagnostics.append({
+    level: entry.level,
+    scope: entry.scope,
+    event: entry.event,
+    code: entry.code,
+    detail: entry.detail,
+  });
+}
+
 /**
  * Whether to log how long each stage of a caption load took.
  *
@@ -80,7 +116,7 @@ let TIMING = false;
  */
 function reportTiming(stage, detail, started) {
   if (!TIMING) return;
-  console.log(`[IU] ${stage}: ${detail} ${Date.now() - started}ms`);
+  logEvent('info', 'worker.timing', { stage, ms: Date.now() - started });
 }
 
 // Reachable from the service-worker console, which is the only place these
@@ -185,8 +221,10 @@ api.runtime.onConnect.addListener((port) => {
   port.onDisconnect.addListener(() => {
     port.onMessage.removeListener(onMessage);
     if (panelPort === port) panelPort = null;
+    logEvent('info', 'panel.disconnect');
   });
 
+  logEvent('info', 'panel.connect');
   // A fresh panel has nothing to render, so resolve the current tab now. The
   // panel relies on this rather than asking itself, so there is one inbound
   // path for state.
@@ -209,6 +247,21 @@ function handlePanelMessage(message) {
       return;
     case MSG.SEEK:
       void forwardSeek(message.seconds);
+      return;
+
+    // --- Local diagnostics ---------------------------------------------------
+    case MSG.DIAGNOSTIC:
+      logIncoming(message);
+      return;
+    case MSG.SET_DIAGNOSTICS_RETENTION:
+      void diagnostics.setRetention(Number(message.days)).then(() => {
+        panelPort?.postMessage({ type: MSG.DIAGNOSTICS_CHANGED });
+      });
+      return;
+    case MSG.CLEAR_DIAGNOSTICS:
+      void diagnostics.clear().then(() => {
+        panelPort?.postMessage({ type: MSG.DIAGNOSTICS_CHANGED });
+      });
       return;
 
     // --- Learning layer ------------------------------------------------------
@@ -371,6 +424,7 @@ let activePaused = false;
 
 /** @type {string|null} */
 let pendingError = null;
+let loading = false;
 
 /**
  * A translation that could not be produced, kept apart from the transcript.
@@ -461,6 +515,22 @@ api.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   switch (message.type) {
     // --- From content scripts ------------------------------------------------
+    case MSG.DIAGNOSTIC:
+      logIncoming(message);
+      return false;
+
+    case MSG.SET_DIAGNOSTICS_RETENTION:
+      void diagnostics.setRetention(Number(message.days)).then(() => {
+        panelPort?.postMessage({ type: MSG.DIAGNOSTICS_CHANGED });
+      });
+      return false;
+
+    case MSG.CLEAR_DIAGNOSTICS:
+      void diagnostics.clear().then(() => {
+        panelPort?.postMessage({ type: MSG.DIAGNOSTICS_CHANGED });
+      });
+      return false;
+
     case MSG.VIEWER_READY:
       // One of our own sources announcing itself, so the panel resolves it
       // immediately rather than on the next tab switch.
@@ -716,8 +786,12 @@ async function onTabActivated(tabId) {
   // unreadable, otherwise switching TO the viewer tab does nothing at all, which
   // is exactly what it did.
   if (tab?.id !== undefined && !registeredSources.has(tabId)) await registerOpenViewerTabs();
-  if (!isReadable(tab)) return;
+  if (!isReadable(tab)) {
+    logEvent('info', 'tab.ignored');
+    return;
+  }
   trackedTabId = tabId;
+  logEvent('info', 'tab.followed', { source: providerFor(tab.url)?.id ?? 'viewer' });
   await refresh();
 }
 
@@ -742,6 +816,7 @@ async function onContentVideoChanged(tabId) {
   }
 
   trackedTabId = tabId;
+  logEvent('info', 'source.video-changed');
   const before = currentVideoId;
   await refresh();
   if (currentVideoId !== before) broadcastState();
@@ -913,6 +988,8 @@ async function refresh() {
     await refreshInner();
   } catch (error) {
     pendingError = codeError('CONN004', error);
+    loading = false;
+    logEvent('error', 'worker.refresh-failed', {}, 'CONN004');
     broadcastState();
   }
 }
@@ -939,6 +1016,8 @@ async function refreshInner() {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !isReadable(tab)) {
       pendingError = errorText('CONN005', providerNames());
+      loading = false;
+      logEvent('info', 'source.none', {}, 'CONN005');
       broadcastState();
       return;
     }
@@ -959,12 +1038,18 @@ async function refreshInner() {
     // Pass-through: `sendToContent` already raised a CONN code and that one
     // names the real fault (a timeout, say) better than this layer can.
     pendingError = codeError('CONN003', error);
+    loading = false;
+    logEvent('error', 'source.describe-failed', {}, 'CONN003');
     broadcastState();
     return;
   }
 
-  if (!described?.video) {
-    pendingError = described?.error ?? errorText('CONN004');
+  // A page can answer with a truthy video object that has no id when it is not a
+  // watch page at all. That is "no player", not "no captions".
+  if (!described?.video?.videoId) {
+    pendingError = described?.error ?? errorText('VIDEO002');
+    loading = false;
+    logEvent('info', 'source.no-video', {}, 'VIDEO002');
     broadcastState();
     return;
   }
@@ -989,6 +1074,8 @@ async function refreshInner() {
   if (!entry.trackList.length && !entry.stale) {
     entry.error = errorText('VIDEO001');
     entry.rows = [];
+    loading = false;
+    logEvent('info', 'source.no-captions', { count: 0 }, 'VIDEO001');
     broadcastState();
     return;
   }
@@ -996,12 +1083,14 @@ async function refreshInner() {
   // Already in hand: this is what makes swapping between YouTube tabs instant,
   // and what keeps a video's transcript alive while you look at others.
   if (isCached(entry)) {
+    loading = false;
     rebuildRows(entry);
     // Hand the transcript over before saying anything. The content script keys
     // its position reporting off the segments it holds, and nothing was fetched,
     // so without this a freshly loaded page, or a panel opened after a reload,
     // reports no cue at all and the panel never learns where playback is.
     void primeContentPosition(entry);
+    logEvent('info', 'source.cached', { count: entry.rows.length });
     broadcastState();
     return;
   }
@@ -1017,6 +1106,9 @@ async function refreshInner() {
   // translated, so the provider is asked for the plain track.
   let provided;
   const fetchStarted = Date.now();
+  loading = true;
+  logEvent('info', 'source.loading');
+  broadcastState();
   try {
     provided = await sendToContent(trackedTabId, {
       type: MSG.PROVIDE,
@@ -1028,6 +1120,8 @@ async function refreshInner() {
     // rather than being relabelled as a caption fault, which is what made this
     // report ambiguous in the first place.
     pendingError = codeError('TRACK003', error);
+    loading = false;
+    logEvent('error', 'source.provide-failed', {}, 'TRACK003');
     broadcastState();
     return;
   }
@@ -1035,6 +1129,8 @@ async function refreshInner() {
 
   if (!provided?.ok && !provided?.fetched) {
     entry.error = provided?.error ?? errorText('TRACK004');
+    loading = false;
+    logEvent('error', 'source.provide-empty', {}, 'TRACK004');
     broadcastState();
     return;
   }
@@ -1050,7 +1146,9 @@ async function refreshInner() {
     if (failed) translationError = provided.fetched.error;
   }
 
+  loading = false;
   rebuildRows(entry);
+  logEvent('info', 'source.ready', { count: entry.rows.length });
 
   // Show the study line immediately, then fill in the gloss.
   //
@@ -1745,7 +1843,8 @@ function deriveState() {
       rows: [],
       activeIndex,
       activePaused,
-      error: pendingError ?? (trackedTabId === null ? `No ${providerNames()} tab is active.` : null),
+      error: pendingError ?? (trackedTabId === null ? 'No video on this tab.' : null),
+      loading,
       // No entry, so no language to filter by: every list is offered rather than
       // none, because an empty dropdown before a video is chosen would leave
       // nothing to pick and no way to find out why.
@@ -1793,6 +1892,7 @@ function deriveState() {
     // True when that line is the one that just finished rather than the one being
     // spoken. The panel dims in that case rather than dropping the highlight.
     activePaused,
+    loading,
     // A translation failure is reported BEFORE the track error. They are
     // separate on purpose: a track error replaces the transcript and blocks the
     // cache, while a translation error means "the text below is the original,
@@ -2336,7 +2436,12 @@ async function ensureOffscreenDocument() {
 // connects during this read cannot seed a video's languages from the defaults
 // before the stored ones have landed.
 settingsReady = restoreSettings();
-void settingsReady.then(primeDictionary);
+void settingsReady.then(() => {
+  logEvent('info', 'worker.ready', {
+    source: providerNames(),
+  });
+  primeDictionary();
+});
 
 /**
  * Load the list index once at startup so the panel knows what it can offer, then
