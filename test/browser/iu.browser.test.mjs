@@ -250,7 +250,16 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
 
     const watch = await openWatchPage(context, 'tabsA000001');
     const { page } = await openPanel(context, extensionId, watch);
-    await waitForRows(page, 3);
+    // Wait for THIS video's title, not merely three rows. The section above leaves
+    // three English rows on screen, so a row-count wait can return against the
+    // previous video and assert its text. The title says which video is loaded,
+    // and it is read from the status line rather than the rows under test.
+    await page.waitForFunction(
+      () => (document.getElementById('status')?.textContent ?? '').includes('First In Tab'),
+      null,
+      { timeout: 20000 },
+    );
+    await waitForRows(page, 3, { text: 'Hey there' });
     check('the first video loaded', (await panelState(page)).rows[0]?.text, 'Hey there');
 
     // Navigate inside the tab. The page global is left stale, as YouTube leaves it.
