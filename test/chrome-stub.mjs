@@ -64,6 +64,7 @@ export function installChromeStub(options = {}) {
     executeScript: [],
     sendMessage: [],
     sidePanelOpen: [],
+    sidePanelBehavior: [],
     offscreen: [],
     menusCreated: [],
     menusRemoved: 0,
@@ -240,6 +241,9 @@ export function installChromeStub(options = {}) {
     sidePanel: {
       open: async (arg) => {
         calls.sidePanelOpen.push(arg);
+      },
+      setPanelBehavior: async (arg) => {
+        calls.sidePanelBehavior.push(arg);
       },
     },
     offscreen: {

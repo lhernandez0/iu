@@ -2259,29 +2259,36 @@ async function applySetting(id, value) {
 // --- Action -----------------------------------------------------------------
 
 /**
- * Reveal the transcript panel when the toolbar icon is clicked.
+ * Make the toolbar icon toggle the transcript panel.
  *
- * The ONE genuinely browser-specific call in the extension. Chrome and Firefox
- * provide incompatible sidebar APIs, `sidePanel` with `open()` on one,
- * `sidebarAction` with `toggle()` on the other, and neither implements the
- * other's. This is the whole of the difference on the code side.
+ * Chrome and Firefox expose the same product behaviour through different APIs.
+ * Chrome has a native action policy that opens AND closes the side panel;
+ * Firefox has `sidebarAction.toggle()`. Both are two-state. The one thing not to
+ * do is call `sidePanel.open()` manually on every Chrome click: that call can
+ * only open, so the icon has no way back.
  *
  * Feature-detected rather than browser-detected. Sniffing the user agent would
  * be a guess that goes stale; asking whether the API exists is the thing that
  * actually matters, and it stays correct if a browser adds the other one.
  *
- * Firefox's `toggle()` takes no argument because its sidebar is a per-window
- * toggle rather than something a call can open into a specific window, and on a
- * fresh install it starts hidden, so the first click shows it and the second
- * hides it. That is Firefox's own affordance and not something to work around.
+ * Chrome's policy is persistent, so it is set once per worker start. Firefox's
+ * handler is registered only when Chrome's policy is absent, which also keeps
+ * the Chrome action click from reaching a manual open path.
  */
-api.action.onClicked.addListener((tab) => {
-  if (api.sidePanel?.open && tab.windowId !== undefined) {
-    api.sidePanel.open({ windowId: tab.windowId });
-  } else if (api.sidebarAction?.toggle) {
-    void api.sidebarAction.toggle();
+function wirePanelToggle() {
+  if (api.sidePanel?.setPanelBehavior) {
+    void api.sidePanel
+      .setPanelBehavior({ openPanelOnActionClick: true })
+      .catch(() => logEvent('warn', 'panel.behavior-failed'));
+    return;
   }
-});
+
+  api.action.onClicked.addListener(() => {
+    if (api.sidebarAction?.toggle) void api.sidebarAction.toggle();
+  });
+}
+
+wirePanelToggle();
 
 // --- The action menu: how every source is reached ----------------------------
 

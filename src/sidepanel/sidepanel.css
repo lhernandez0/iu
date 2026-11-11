@@ -1,3 +1,17 @@
+/*
+ * The panel's first paint can beat the worker's first state. Hide the body until
+ * the stored theme has been applied, so a Firefox sidebar never shows the default
+ * token set before the chosen theme. `Canvas` is the browser's neutral surface;
+ * it avoids a default-panel-colour flash while still giving the frame a colour.
+ */
+html[data-booting] {
+  background: Canvas;
+}
+
+html[data-booting] body {
+  visibility: hidden;
+}
+
 :root {
   --bg: #16181d;
   --fg: #e7e9ee;

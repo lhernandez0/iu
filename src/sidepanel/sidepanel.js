@@ -13,7 +13,7 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp } from '../common/transcript.js';
-import { definition, forSettingsView } from '../common/settings.js';
+import { definition, forSettingsView, normalise, storageKey } from '../common/settings.js';
 import { SOURCES } from '../common/sources.js';
 import { errorMessage } from '../common/errors.js';
 import { createDiagnostics, RETENTION_DAYS, summarise } from '../common/diagnostics.js';
@@ -34,6 +34,32 @@ const diagnostics = createDiagnostics(api, {
 
 /** Panel events waiting for a worker port. */
 const pendingPanelLogs = [];
+
+/**
+ * Apply the stored panel theme before the first visible paint.
+ *
+ * The worker's state also applies the theme, but a sidebar can paint before the
+ * first state arrives. Reading the one existing `settings` key here is the same
+ * read the viewer already makes; it is a read-through of the settings source,
+ * not a second writer. `data-booting` keeps the default token set off screen
+ * until the stored theme is on the document.
+ *
+ * The timeout is the failure path: if storage or the worker never answers, reveal
+ * the panel with the default rather than leaving it blank forever.
+ */
+async function applyBootTheme() {
+  try {
+    const stored = await api.storage.local.get(storageKey);
+    applyTheme(normalise(stored?.[storageKey]).theme);
+  } catch {
+    // Storage unavailable. The worker state or the timeout will reveal default.
+  } finally {
+    document.documentElement.removeAttribute('data-booting');
+  }
+}
+
+void applyBootTheme();
+setTimeout(() => document.documentElement.removeAttribute('data-booting'), 1000);
 
 /**
  * Send one event to the worker, the only log writer.

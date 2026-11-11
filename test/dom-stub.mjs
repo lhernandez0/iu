@@ -152,6 +152,11 @@ export class FakeElement {
     return this.attributes.get(name) ?? null;
   }
 
+  /** @param {string} name */
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  }
+
   /**
    * Focus, recorded rather than performed.
    *
@@ -365,7 +370,7 @@ function define(name, value) {
  *   is what an invalidated extension context does.
  * @returns {{chrome: object, ports: object[], lastErrorRead: () => boolean, ...}}
  */
-export function installChromeStubForPanel({ failWith = null } = {}) {
+export function installChromeStubForPanel({ failWith = null, storage = {} } = {}) {
   /** Every port the panel has opened, in order. */
   const ports = [];
   let lastErrorWasRead = false;
@@ -413,9 +418,11 @@ export function installChromeStubForPanel({ failWith = null } = {}) {
     // returns an empty bucket instead of throwing.
     storage: {
       local: {
-        get: async () => ({}),
-        set: async () => {},
-        remove: async () => {},
+        get: async (key) => ({ [key]: storage[key] }),
+        set: async (value) => Object.assign(storage, value),
+        remove: async (key) => {
+          delete storage[key];
+        },
       },
     },
   };

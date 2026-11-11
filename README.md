@@ -269,9 +269,10 @@ side by side, and each browser ignores the key it does not know. Code reads
 `globalThis.browser ?? globalThis.chrome` at each use site, so no bundler or
 polyfill is involved.
 
-The one genuinely browser-specific call is opening the panel: Chrome's
-`sidePanel.open` and Firefox's `sidebarAction.toggle` are incompatible, and that
-handler feature-detects. Everything else is identical.
+The one genuinely browser-specific call is the panel toggle: Chrome's native
+action behavior (`sidePanel.setPanelBehavior`) and Firefox's
+`sidebarAction.toggle` are different APIs, and that seam feature-detects.
+Everything else is identical.
 
 Adding a third target means checking `world: "MAIN"` support and the sidebar API
 for that browser; the rest is the same source.
