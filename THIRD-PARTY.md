@@ -38,8 +38,9 @@ The 友 glyph in `icons/icon.svg` and the generated `icons/icon-16.png`,
 `icons/icon-32.png`, `icons/icon-48.png` and `icons/icon-128.png` is outlined
 from **Zen Kurenaido**, © 2021 The Zen Kurenaido Project Authors, under the SIL
 Open Font License 1.1. The font file is not shipped; the outline is. The full
-licence is [`icons/OFL-ZenKurenaido.txt`](icons/OFL-ZenKurenaido.txt). The mark
-is provisional and may be replaced.
+licence is [`icons/OFL-ZenKurenaido.txt`](icons/OFL-ZenKurenaido.txt). The mark is
+final for 0.1.0. It can be replaced by re-outlining another glyph and
+regenerating the PNGs; the licence remains with the outline.
 
 ## Bundled dictionaries
 
