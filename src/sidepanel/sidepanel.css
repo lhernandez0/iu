@@ -1,3 +1,34 @@
+/*
+ * The boot mark is shown only while the last theme is being found. It uses the
+ * brand paper and ink, not the default panel tokens, so the first frame is never
+ * a blank window or a flash of the wrong theme. The normal panel is hidden
+ * behind it and is revealed by `applyTheme()`.
+ */
+#boot {
+  display: none;
+}
+
+html[data-booting] {
+  background: #efe5d1;
+}
+
+html[data-booting] body > *:not(#boot) {
+  visibility: hidden;
+}
+
+html[data-booting] #boot {
+  display: flex;
+  position: fixed;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  background: #efe5d1;
+  color: #17130d;
+  font-family: var(--font-reading);
+  font-size: 22px;
+  line-height: 1;
+}
+
 :root {
   --bg: #16181d;
   --fg: #e7e9ee;

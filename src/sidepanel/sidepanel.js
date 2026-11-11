@@ -13,7 +13,7 @@
 
 import { MSG, TARGET } from '../common/messages.js';
 import { formatTimestamp } from '../common/transcript.js';
-import { definition, forSettingsView } from '../common/settings.js';
+import { definition, forSettingsView, normalise, storageKey } from '../common/settings.js';
 import { SOURCES } from '../common/sources.js';
 import { errorMessage } from '../common/errors.js';
 import { createDiagnostics, RETENTION_DAYS, summarise } from '../common/diagnostics.js';
@@ -34,6 +34,29 @@ const diagnostics = createDiagnostics(api, {
 
 /** Panel events waiting for a worker port. */
 const pendingPanelLogs = [];
+
+/**
+ * Apply the stored panel theme as early as the panel can read it.
+ *
+ * `theme-boot.js` handles the case where this panel has opened before, using a
+ * synchronous cache of the same theme. This read covers the first open and any
+ * change made in another context. The worker state still applies the theme later,
+ * so there is one real source and one boot cache.
+ */
+async function applyBootTheme() {
+  try {
+    const stored = await api.storage.local.get(storageKey);
+    applyTheme(normalise(stored?.[storageKey]).theme);
+  } catch {
+    // Storage unavailable. The default theme is a fine answer.
+    applyTheme('default');
+  } finally {
+    document.documentElement.removeAttribute('data-booting');
+  }
+}
+
+void applyBootTheme();
+setTimeout(() => document.documentElement.removeAttribute('data-booting'), 1000);
 
 /**
  * Send one event to the worker, the only log writer.
@@ -1227,6 +1250,15 @@ function applyTheme(theme) {
   const root = document.documentElement;
   if (!theme || theme === 'default') delete root.dataset.theme;
   else root.dataset.theme = theme;
+
+  // Sync the boot cache. The storage read is the source; this only makes the next
+  // open paint in the right theme without waiting for that read.
+  try {
+    localStorage.setItem('iu-panel-theme', theme && theme !== 'default' ? theme : 'default');
+  } catch {
+    // Local storage disabled. The next open falls back to the storage read.
+  }
+  root.removeAttribute('data-booting');
 }
 
 /**

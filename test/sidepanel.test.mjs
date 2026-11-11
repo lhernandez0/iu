@@ -12,6 +12,8 @@
  */
 
 import { installDomStub, installChromeStubForPanel } from './dom-stub.mjs';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 // `PANEL_IDS` is the set of controls the real HTML declares, so the schema and the
 // markup can be checked against each other rather than only in isolation.
 import { SETTINGS } from '../src/common/settings.js';
@@ -75,7 +77,7 @@ const HIDDEN_IDS = ['translate-target-row', 'settings-view'];
 /**
  * Evaluate a fresh copy of the panel against fresh stubs.
  *
- * @param {{failWith?: string}} [options]
+ * @param {{failWith?: string, storage?: object}} [options]
  * @returns {Promise<{ports: object[], lastPort: Function, lastErrorRead: Function, created: object[], byId: Map<string, object>, dom: object}>}
  */
 async function bootPanel(options = {}) {
@@ -866,6 +868,24 @@ section('a state push carries the paused flag, so a panel opened mid-gap agrees'
   check('and not yet dimmed', rows[0].classList.contains('paused'), false);
   await new Promise((resolve) => setTimeout(resolve, 350));
   check('then it dims, because it is a gap', rows[0].classList.contains('paused'), true);
+}
+
+section('the stored theme is applied before the worker state');
+
+{
+  const { dom, lastPort } = await bootPanel({ storage: { settings: { theme: 'swiss' } } });
+  await settle();
+  check('the stored theme is applied without a state push', dom.document.documentElement.dataset.theme, 'swiss');
+  check('no state was needed for it', lastPort().sent.filter((m) => m.type === 'state').length, 0);
+}
+
+section('the first paint can read the last theme synchronously');
+
+{
+  const html = readFileSync(join(import.meta.dirname, '../src/sidepanel/sidepanel.html'), 'utf8');
+  const boot = readFileSync(join(import.meta.dirname, '../src/sidepanel/theme-boot.js'), 'utf8');
+  check('the boot script is loaded before the stylesheets', html.indexOf('theme-boot.js') < html.indexOf('sidepanel.css'), true);
+  check('it reads the panel theme cache', boot.includes("localStorage.getItem('iu-panel-theme')"), true);
 }
 
 // --- Result ------------------------------------------------------------------

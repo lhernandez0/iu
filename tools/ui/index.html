@@ -17,6 +17,10 @@
     <link rel="stylesheet" href="/tools/ui/preview.css" />
   </head>
   <body>
+    <!-- Matches the shipped panel's one-time boot mark; the preview has no
+         asynchronous storage read, so it stays hidden. -->
+    <div id="boot" class="boot" aria-hidden="true">友</div>
+
     <header class="preview-bar">
       <span class="preview-title">Preview</span>
       <nav id="preview-scenarios" class="preview-scenarios"></nav>

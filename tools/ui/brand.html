@@ -790,7 +790,7 @@
           <p>
             The logo is the hanzi. Choose the CJK face first; the wordmark is a
             descriptor in the UI font, not the logo. Every face is SIL OFL, and
-            the final icon will outline the chosen glyph rather than ship a live
+            the shipped icon outlines the chosen glyph rather than shipping a live
             font.
           </p>
         </div>
@@ -804,11 +804,11 @@
           <p class="specimen-cjk" id="specimen-cjk" lang="zh-Hans">友</p>
         </div>
         <p class="note">
-          The page opens at the provisional: Paper, Rounded Square, Paper and
+          The page opens at the 0.1.0 mark: Paper, Rounded Square, Paper and
           ink, Zen Kurenaido 400. The selector changes 友 in the mark, the
           ladder, the logo preview, the lockups and the specimen. The wordmark stays in the UI font; it is a
           descriptor, not the logo. The page's UI, headings, controls and h1 stay
-          fixed. The chosen face is previewed with the live font, and the final
+          fixed. The chosen face is previewed with the live font, and the shipped
           icon outlines it from the same OFL file. The IBM Plex Sans SC subset is
           local in <code>tools/ui/fonts/</code> with its OFL; the other CJK faces
           load from Google Fonts for review. Do not ship a live font.
@@ -905,16 +905,15 @@
           <span class="num">08</span>
           <h2>Decision</h2>
           <p>
-            Provisional choice: Paper, Rounded Square, Paper and ink, Zen
-            Kurenaido 400. The icon in <code>icons/</code> now uses that
-            outlined 友. It is not final.
+            Final for 0.1.0: Paper, Rounded Square, Paper and ink, Zen Kurenaido
+            400. The icon in <code>icons/</code> uses that outlined 友.
           </p>
         </div>
         <div class="decision">
           <p>
-            The page opens at that state. Zen Kurenaido is provisional; it can be
+            The page opens at that state. Zen Kurenaido is the 0.1.0 face; it can be
             replaced with another face, weight, tile or colour, and the icon
-            re-outlined. The wordmark is a descriptor in the UI font; the mark is
+            re-outlined for a future release. The wordmark is a descriptor in the UI font; the mark is
             the 友.
           </p>
           <p>
@@ -924,8 +923,8 @@
             fallback if the face fails at 16px.
           </p>
           <p class="aside">
-            The book in <code>docs/BRAND-BOOK.md</code> records the provisional and
-            the constraints. The icon licence is in
+            The book in <code>docs/BRAND-BOOK.md</code> records the 0.1.0 decision and
+            the change procedure. The icon licence is in
             <code>icons/OFL-ZenKurenaido.txt</code> and the notices.
           </p>
         </div>
@@ -1239,7 +1238,7 @@
         $('#copy-source').disabled = previewOnly;
         $('#copy').disabled = previewOnly;
         $('#copy-note').textContent = previewOnly
-          ? 'Typeset preview. The final icon outlines this glyph.'
+          ? 'Typeset preview. The shipped icon outlines this glyph.'
           : 'This is the 16px constructed master.';
         $('#copy').textContent = previewOnly ? 'Outline needed' : 'Copy SVG';
         $('#copy-source').textContent = previewOnly ? 'Outline needed' : 'Copy SVG';

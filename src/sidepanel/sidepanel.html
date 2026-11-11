@@ -3,11 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <title>IU</title>
+    <script src="theme-boot.js"></script>
     <link rel="stylesheet" href="../common/marks.css" />
     <link rel="stylesheet" href="sidepanel.css" />
     <link rel="stylesheet" href="../common/themes.css" />
   </head>
   <body>
+    <!-- One-time boot mark. `theme-boot.js` removes the gate as soon as the last
+         theme is available synchronously; a first open falls back to the stored
+         theme and clears it. The mark keeps the first frame from being a blank
+         browser-coloured rectangle. -->
+    <div id="boot" class="boot" aria-hidden="true">友</div>
+
     <!--
       The chrome toggle sits in the LANGUAGE row, not the reading row.
 

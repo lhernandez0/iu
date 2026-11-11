@@ -135,8 +135,8 @@ section('the code reads each browser API through a feature test, not a global');
   // whole point of the split is that the seam is real, and a seam nobody checks is
   // a seam that closes on the next refactor.
   const worker = readFileSync(join(ROOT, 'src', 'background', 'service-worker.js'), 'utf8');
-  check('the worker detects the Chrome panel API', /api\.sidePanel\?\.open/.test(worker), true);
-  check('and falls back to the Firefox sidebar API', /api\.sidebarAction\?\.toggle/.test(worker), true);
+  check('the worker uses Chrome native action behavior', /api\.sidePanel\?\.setPanelBehavior/.test(worker), true);
+  check('and keeps the Firefox sidebar toggle', /api\.sidebarAction\?\.toggle/.test(worker), true);
 
   // The content script world, which differs between the browsers and is declared in
   // the manifest rather than detected at runtime.

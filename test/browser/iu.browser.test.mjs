@@ -1436,4 +1436,27 @@ await runBrowserSuite(async ({ context, extensionId, close }, report) => {
     check('the mode returns to Settings', back.title, 'Settings');
     check('and the transcript is still under the settings view', back.transcriptHidden, true);
   }
+
+  // --- Chrome toolbar behavior -----------------------------------------------
+  //
+  // Playwright cannot click the browser's own extension toolbar, but it can read
+  // the behavior Chrome will use for that click. The unit test proves the call was
+  // made; this proves the browser accepted it.
+
+  section('Chrome uses its native toggle for the toolbar icon');
+
+  {
+    await routeYouTube(context, { videoId: 'behavior1', tracks: [ENGLISH] });
+    const watch = await openWatchPage(context, 'behavior1');
+    const { page } = await openPanel(context, extensionId, watch);
+    await waitForRows(page, 3);
+
+    const behavior = await page.evaluate(async () => {
+      if (!chrome.sidePanel?.getPanelBehavior) return null;
+      return chrome.sidePanel.getPanelBehavior();
+    });
+
+    check('the panel behavior is readable', behavior !== null, true);
+    check('the toolbar click is a toggle', behavior?.openPanelOnActionClick, true);
+  }
 });

@@ -269,9 +269,10 @@ side by side, and each browser ignores the key it does not know. Code reads
 `globalThis.browser ?? globalThis.chrome` at each use site, so no bundler or
 polyfill is involved.
 
-The one genuinely browser-specific call is opening the panel: Chrome's
-`sidePanel.open` and Firefox's `sidebarAction.toggle` are incompatible, and that
-handler feature-detects. Everything else is identical.
+The one genuinely browser-specific call is the panel toggle: Chrome's native
+action behavior (`sidePanel.setPanelBehavior`) and Firefox's
+`sidebarAction.toggle` are different APIs, and that seam feature-detects.
+Everything else is identical.
 
 Adding a third target means checking `world: "MAIN"` support and the sidebar API
 for that browser; the rest is the same source.
@@ -319,7 +320,9 @@ Nothing is collected.
 
 The caption fetch is the only request the extension makes outside itself, and a
 test fails the build if another host or transport appears. See
-[`TESTING.md`](TESTING.md#the-privacy-claim-is-a-check-not-a-paragraph).
+[`PRIVACY.md`](PRIVACY.md) for the full policy and
+[`TESTING.md`](TESTING.md#the-privacy-claim-is-a-check-not-a-paragraph) for the
+test that pins the claim.
 
 The extension also ships a small number of third-party files, each named in
 [`THIRD-PARTY.md`](THIRD-PARTY.md). They are local code, not requests: the coder
@@ -348,7 +351,7 @@ packages are WebAssembly that runs entirely inside the browser and sends nothing
   both わたし and あたし), so hover shows one reading. 156 spellings are affected.
 - **Bilingual alignment is approximate.** Cues are matched by start time; a pair
   more than 1.5s apart is left blank.
-- **Videos without captions show an error** rather than a fallback.
+- **Videos without captions show a quiet no-captions state** rather than a fallback.
 - **Live streams** have unstable caption timing, so seeking may not line up.
 - **Transcripts are not persisted** past a browser restart. The 6 most recent
   videos are cached.

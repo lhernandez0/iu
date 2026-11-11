@@ -2275,6 +2275,15 @@ section('the worker does not re-broadcast its own write');
   check('the count does not grow again on the echo', stub.received.filter((m) => m.type === 'state').length, after);
 }
 
+section('the toolbar icon uses the browser native panel toggle');
+
+{
+  const { calls, listeners } = await boot();
+  check('Chrome panel behavior is enabled', calls.sidePanelBehavior, [{ openPanelOnActionClick: true }]);
+  check('Chrome does not register a manual action listener', listeners.actionClicked.length, 0);
+  check('Chrome does not call the one-way open path', calls.sidePanelOpen, []);
+}
+
 // --- Result -----------------------------------------------------------------
 
 console.log(`\n${checks - failures}/${checks} checks passed`);
