@@ -90,13 +90,12 @@ experimental would reduce its visibility for a reason that does not apply.
 
 ### This add-on has a privacy policy
 
-**No**, and the box should stay unchecked, because nothing is transmitted off the
-device. Firefox reads `data_collection_permissions` from the manifest, which
-declares `required: ["none"]`, and shows "no data collected" on the install prompt.
+**Yes.** https://github.com/lhernandez0/iu/blob/main/PRIVACY.md
 
-A privacy policy is required when data is transmitted; none is. One is still worth
-publishing eventually because it answers the question a suspicious user actually
-asks, and `CHROMEWEBSTORE.md` says the same. If it is written, it goes here.
+Firefox reads `data_collection_permissions` from the manifest, which declares
+`required: ["none"]`, and shows "no data collected" on the install prompt. The
+policy explains that caption content is processed locally, settings and the
+optional diagnostics log stay in the browser, and local files are never uploaded.
 
 ---
 
@@ -135,12 +134,19 @@ The Chrome-facing store package declares the Chrome equivalents instead.
 
 The bundled dictionary data (CC-CEDICT, JMdict, and the Korean sources) is not code
 and is attributed in THIRD-PARTY.md, which ships in the package.
+
+The extension also declares `content_security_policy` with `wasm-unsafe-eval` for
+the bundled mediabunny WebAssembly. No WebAssembly is fetched remotely. The
+`page-bridge.js` content script uses `world: "MAIN"` because the YouTube player
+response is a page global; it is local, host-limited to YouTube, and the isolated
+content script still does the caption fetching and parsing.
 ```
 
 ---
 
 ## What is NOT here yet
 
-**Screenshots.** AMO wants at least one, 1280×800 recommended, and none are taken.
-They are the last item on purpose: the UI is still changing, so a screenshot taken
-now is a screenshot to retake. Everything else AMO asks for is answered above.
+**Screenshots and the manual Firefox page pass.** AMO wants at least one
+screenshot, 1280×800 recommended. The automated Firefox test installs the add-on
+and starts its background script, but Firefox's `moz-extension://` pages still
+need a human pass. Everything else in the AMO form is answered above.

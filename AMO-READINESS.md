@@ -18,11 +18,13 @@ that remains is Android-only and explained in `tools/check-lint.mjs`. The linter
 **fails** on an unclassified warning rather than printing it, so the accepted set
 cannot grow quietly.
 
-**What is left.** Screenshots, and only screenshots. Everything else AMO asks for is
-written: `AMO-LISTING.md` holds the listing fields, including the three that exist
-only on AMO (up to two categories, support contact, and Notes for Reviewers, where
-the source package and the library links are pointed at). Screenshots are last
-because the UI is still changing, so one taken now is one to retake.
+**What is left.** Screenshots, the manual Firefox page pass, and keeping the
+listing copy in sync with the app. `AMO-LISTING.md` holds the listing fields,
+including the three that exist only on AMO (up to two categories, support contact,
+and Notes for Reviewers, where the source package and the library links are
+pointed at). The automated Firefox test proves installation and background
+startup; it cannot drive `moz-extension://` pages, so the sidebar and viewer need
+a human pass on a clean profile.
 
 **The extension runs in Firefox, in the test suite.** `test/browser/firefox.test.mjs`
 installs it into a real Firefox and asserts, against Firefox's own add-on registry,

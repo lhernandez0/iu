@@ -1,6 +1,6 @@
 # Chrome Web Store Listing, IU Language Buddy
 
-> Last Updated: 2026-10-07
+> Last Updated: 2026-11-11
 > **Status: draft.** Nothing here has been submitted. Kept current so publishing is
 > a copy-paste rather than a scramble.
 
@@ -46,20 +46,21 @@ Chinese shows pinyin, Japanese shows kana, and a word appears under every list
 that knows it. HSK 2.0 and HSK 3.0 often disagree, and both are shown.
 TWO SUBTITLES AT ONCE
 
-Your target language with a second line beneath it, another subtitle track or a
-machine translation of the same one. Translated lines are tagged, so you always
-know which you are reading.
+Your target language with a second line beneath it, another subtitle track or,
+on YouTube, a machine translation where the video offers one. Translated lines are
+tagged, so you always know which you are reading.
 
 YOUR OWN VIDEO FILES
 
-Not everything is on YouTube. Open an MKV or MP4 from your computer in the
-extension's own viewer, and the subtitles inside the file become the transcript. A
-file with more than one audio track gets a picker, so you can keep the original
-language rather than a dub.
+Not everything is on YouTube. Open an MKV with embedded text subtitle tracks, or
+any supported video with SRT, VTT or ASS sidecar files. MP4 and WebM play with
+sidecar subtitles. A file with more than one audio track gets a picker, so you can
+keep the original language rather than a dub.
 
-TAKE IT WITH YOU
+THEMES
 
-Export the transcript as plain text or an SRT subtitle file.
+Choose a visual theme for the reading panel and a separate theme for the video
+viewer. They are independent, and Default restores the original look.
 
 HOW TO USE IT
 
@@ -118,8 +119,8 @@ English
 Use the **per-browser** package rather than the combined one. Both load, but the Chrome
 one carries no Firefox-only keys, so nothing has to be ignored.
 
-Chrome asks for **no source code**. The minified bundle is only a problem for Mozilla's
-review, which is why `make source` exists and this store never needs it.
+Chrome does not require a source upload by default. The source is public, and a
+source ZIP can be supplied if review asks about the minified bundle.
 
 ### Screenshot Notes
 
@@ -206,7 +207,7 @@ claim is that it works on a real video, and a reviewer can tell.
 | Location | No | No | - | No |
 | Web history | No | No | - | No |
 | User activity | No | No | - | No |
-| Website content | No | No | - | No |
+| Website content | No | No | Read locally for the active video; not retained after the in-memory cache | No |
 
 <!-- "Website content" is No deliberately, and it is the row worth reading twice.
 
@@ -225,19 +226,18 @@ claim is that it works on a real video, and a reviewer can tell.
 
 ### Privacy Policy
 
-**Not yet published.** A privacy policy URL is required by the store if an
-extension collects data; this one does not, so it is optional. It is still worth
-publishing one for an extension that reads a page's content at all, because it
-answers the question a suspicious user actually has. When written it should say,
-in the user's language rather than a lawyer's: nothing leaves your browser, there
-is no account, there is no server, and the only network requests are for the
-subtitles of the video you are already watching.
+**Published at** https://github.com/lhernandez0/iu/blob/main/PRIVACY.md
+
+The extension reads the active video's caption content locally. It does not
+collect, retain or transmit that content to the developer. The policy explains
+what stays in the browser, what the local settings and diagnostics log contain,
+and why the only external request is to YouTube's caption endpoint.
 
 ## Version History
 
 | Version | Date | Summary |
 |---------|------|---------|
-| 0.1.0 | - | Not submitted. Reading YouTube subtitles in the side panel with word-list marking, hover definitions, bilingual tracks; plus a viewer for a local MKV or MP4 that reads the subtitle tracks inside the file and lets you choose the audio track. |
+| 0.1.0 | - | Not submitted. Reading YouTube subtitles in the side panel with word-list marking, hover definitions, bilingual tracks; plus a viewer for a local MKV with embedded text subtitles or a video with sidecar subtitles, and an audio-track picker. |
 
 <!-- No entry above is a real submission. The table exists so the first real one
      has somewhere to go. -->
@@ -249,17 +249,17 @@ From the store review checklist. The ones that apply to this extension:
 - [ ] **Every permission has a specific justification**, done above; re-read it
       against `manifest.json` before submitting, since the two drift.
 - [x] **Icons are real files at correct dimensions**, 16/32/48/128 verified.
-- [ ] **At least one screenshot at 1280×800 or 640×400**, none taken yet. This is
-      the only item outstanding for either store.
+- [ ] **At least one screenshot at 1280×800 or 640×400**, none taken yet.
+- [ ] **Firefox manual page QA** is complete, if the Firefox package is part of the release.
 - [x] **ZIP excludes `node_modules/`, `.git/`, `docs/`, `test/`, `tools/` and every
       dotfile**, scripted. `make release` stages the shipping set, lints it, zips it
       and then asserts the archive contains exactly what the Makefile declares.
-      Measured: **10.2 MB unpacked, 2.8 MB zipped**, 58 files, of which most of the
+      Measured: **10.3 MB unpacked, 2.7 MB zipped**, 63 files, of which most of the
       unpacked size is the three bundled dictionaries. (The figures here used to say
       5.3 MB and 1.5 MB, which stopped being true when the Japanese and Korean
       dictionaries were added.)
-- [ ] **Privacy policy URL live**, optional here (no data collection), not written.
-- [ ] **Version bumped in `manifest.json`**, 0.1.0 is the development version.
+- [x] **Privacy policy URL live**, `PRIVACY.md` in the repository.
+- [x] **Version set in `manifest.json`**, 0.1.0 for this submission.
 
 ### Which artefact goes to which store
 
