@@ -1253,6 +1253,10 @@ function applyTheme(theme) {
   const root = document.documentElement;
   if (!theme || theme === 'default') delete root.dataset.theme;
   else root.dataset.theme = theme;
+  // The first real theme, from storage or the worker state, is what reveals the
+  // panel. Removing this here rather than only after the boot read means a fast
+  // worker state cannot leave a correctly themed panel hidden behind the gate.
+  root.removeAttribute('data-booting');
 }
 
 /**
