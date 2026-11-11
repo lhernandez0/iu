@@ -170,6 +170,8 @@ contains one third-party file, the vendored bundle above, and nothing else.
 | `koroman` | MIT | Generates and verifies the Korean reading table; not shipped |
 | `wanakana` | MIT | Generates and verifies the Japanese reading table; not shipped |
 | `lightningcss`, `lightningcss-linux-x64-gnu` | MPL-2.0 | Pulled in transitively by Vite |
+| `geckodriver` | MIT | Firefox page tests through WebDriver |
+| `selenium-webdriver` | Apache-2.0 | Firefox page tests through WebDriver |
 
 The two MPL-2.0 development packages are unmodified and never bundled, so they impose
 nothing here.

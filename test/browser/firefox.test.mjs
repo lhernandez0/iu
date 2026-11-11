@@ -46,13 +46,13 @@
  * other tier can see it. A manifest Firefox silently ignored would report
  * `NOT_STARTED` here.
  *
- * NOT asserted: driving the extension's own PAGES. Playwright's `connect()` returns a
- * browser with ZERO contexts, and a context created afterwards cannot navigate to a
- * `moz-extension://` origin; it hangs until the timeout while the same origin is
- * demonstrably installed and its worker running. That is a harness limitation, and it
- * is stated rather than hidden. The Chromium tier drives the panel and the viewer in
- * full, so the pages are covered; what is not covered is those pages specifically
- * under Firefox.
+ * NOT asserted here: driving the extension's own PAGES through Playwright. Its
+ * `connect()` returns a browser with ZERO contexts, and a context created afterwards
+ * cannot navigate to a `moz-extension://` origin; it hangs until the timeout while the
+ * same origin is demonstrably installed and its worker running. That is a Playwright
+ * limitation, not a Firefox one. `firefox-pages.test.mjs` uses geckodriver and
+ * Selenium WebDriver to drive the panel, Settings, diagnostics and viewer pages
+ * instead. Real YouTube playback under Firefox remains a manual pass.
  *
  * Run with: `npm run test:browser`
  */

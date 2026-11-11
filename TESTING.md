@@ -541,3 +541,14 @@ browser tier did **not** skip for exactly this reason; `history.test.mjs` prints
 `(no git repository, history checks skipped)` and returns `0/0`, which the runner
 reports as `ok`. A future pass should make that a failure or an explicit
 `SKIP` line, so the count cannot be mistaken for coverage.
+
+
+## Firefox page smoke
+
+`test/browser/firefox-pages.test.mjs` installs `build/stage-firefox` into Firefox,
+using geckodriver and Selenium WebDriver rather than Playwright. Playwright can
+install the add-on and see its background script, but it cannot navigate to a
+`moz-extension://` page. The WebDriver test opens the panel, checks the plain
+no-source status, opens Settings, changes and reloads the stored panel theme,
+opens Diagnostics and loads the viewer. Real YouTube playback remains a manual
+Firefox pass.

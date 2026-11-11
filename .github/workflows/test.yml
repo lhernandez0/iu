@@ -108,6 +108,10 @@ jobs:
       # browser.
       - run: make stage
 
+      # The Firefox page test installs the PER-BROWSER package, not the shared
+      # stage. It is the artifact a reviewer receives.
+      - run: make stage TARGET=firefox
+
       # Run ONCE, capturing the output, then assert on what was captured. The
       # obvious version of this runs the whole tier a second time inside the check,
       # which doubles the slowest job in the file to answer a question the first

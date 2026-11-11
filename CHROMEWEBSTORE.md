@@ -250,7 +250,7 @@ From the store review checklist. The ones that apply to this extension:
       against `manifest.json` before submitting, since the two drift.
 - [x] **Icons are real files at correct dimensions**, 16/32/48/128 verified.
 - [ ] **At least one screenshot at 1280×800 or 640×400**, none taken yet.
-- [ ] **Firefox manual page QA** is complete, if the Firefox package is part of the release.
+- [ ] **Firefox real YouTube QA** is complete, if the Firefox package is part of the release.
 - [x] **ZIP excludes `node_modules/`, `.git/`, `docs/`, `test/`, `tools/` and every
       dotfile**, scripted. `make release` stages the shipping set, lints it, zips it
       and then asserts the archive contains exactly what the Makefile declares.

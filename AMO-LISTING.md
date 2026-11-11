@@ -146,7 +146,8 @@ content script still does the caption fetching and parsing.
 
 ## What is NOT here yet
 
-**Screenshots and the manual Firefox page pass.** AMO wants at least one
-screenshot, 1280×800 recommended. The automated Firefox test installs the add-on
-and starts its background script, but Firefox's `moz-extension://` pages still
-need a human pass. Everything else in the AMO form is answered above.
+**Screenshots and real YouTube playback.** AMO wants at least one screenshot,
+1280×800 recommended. The automated Firefox tests install the add-on, start its
+background script and drive the panel, Settings, Diagnostics and viewer through
+WebDriver. A human still needs to play a real YouTube video and check the sidebar
+experience. Everything else in the AMO form is answered above.
