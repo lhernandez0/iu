@@ -36,23 +36,20 @@ const diagnostics = createDiagnostics(api, {
 const pendingPanelLogs = [];
 
 /**
- * Apply the stored panel theme before the first visible paint.
+ * Apply the stored panel theme as early as the panel can read it.
  *
- * The worker's state also applies the theme, but a sidebar can paint before the
- * first state arrives. Reading the one existing `settings` key here is the same
- * read the viewer already makes; it is a read-through of the settings source,
- * not a second writer. `data-booting` keeps the default token set off screen
- * until the stored theme is on the document.
- *
- * The timeout is the failure path: if storage or the worker never answers, reveal
- * the panel with the default rather than leaving it blank forever.
+ * `theme-boot.js` handles the case where this panel has opened before, using a
+ * synchronous cache of the same theme. This read covers the first open and any
+ * change made in another context. The worker state still applies the theme later,
+ * so there is one real source and one boot cache.
  */
 async function applyBootTheme() {
   try {
     const stored = await api.storage.local.get(storageKey);
     applyTheme(normalise(stored?.[storageKey]).theme);
   } catch {
-    // Storage unavailable. The worker state or the timeout will reveal default.
+    // Storage unavailable. The default theme is a fine answer.
+    applyTheme('default');
   } finally {
     document.documentElement.removeAttribute('data-booting');
   }
@@ -1253,9 +1250,14 @@ function applyTheme(theme) {
   const root = document.documentElement;
   if (!theme || theme === 'default') delete root.dataset.theme;
   else root.dataset.theme = theme;
-  // The first real theme, from storage or the worker state, is what reveals the
-  // panel. Removing this here rather than only after the boot read means a fast
-  // worker state cannot leave a correctly themed panel hidden behind the gate.
+
+  // Sync the boot cache. The storage read is the source; this only makes the next
+  // open paint in the right theme without waiting for that read.
+  try {
+    localStorage.setItem('iu-panel-theme', theme && theme !== 'default' ? theme : 'default');
+  } catch {
+    // Local storage disabled. The next open falls back to the storage read.
+  }
   root.removeAttribute('data-booting');
 }
 

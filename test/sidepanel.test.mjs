@@ -876,17 +876,16 @@ section('the stored theme is applied before the worker state');
   const { dom, lastPort } = await bootPanel({ storage: { settings: { theme: 'swiss' } } });
   await settle();
   check('the stored theme is applied without a state push', dom.document.documentElement.dataset.theme, 'swiss');
-  check('the boot gate is gone', dom.document.documentElement.getAttribute('data-booting'), null);
   check('no state was needed for it', lastPort().sent.filter((m) => m.type === 'state').length, 0);
 }
 
-section('the panel markup starts hidden until its theme is known');
+section('the first paint can read the last theme synchronously');
 
 {
   const html = readFileSync(join(import.meta.dirname, '../src/sidepanel/sidepanel.html'), 'utf8');
-  const css = readFileSync(join(import.meta.dirname, '../src/sidepanel/sidepanel.css'), 'utf8');
-  check('the html starts in the boot state', /<html[^>]*data-booting/.test(html), true);
-  check('the css hides the body in that state', /html\[data-booting\]\s+body\s*\{[^}]*visibility:\s*hidden/.test(css), true);
+  const boot = readFileSync(join(import.meta.dirname, '../src/sidepanel/theme-boot.js'), 'utf8');
+  check('the boot script is loaded before the stylesheets', html.indexOf('theme-boot.js') < html.indexOf('sidepanel.css'), true);
+  check('it reads the panel theme cache', boot.includes("localStorage.getItem('iu-panel-theme')"), true);
 }
 
 // --- Result ------------------------------------------------------------------
